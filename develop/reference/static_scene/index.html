@@ -6718,7 +6718,17 @@ title filed beside each pair — see :meth:<code>_registered_index</code>.</p>
 <span class="normal"><a href="#__codelineno-0-2627">2627</a></span>
 <span class="normal"><a href="#__codelineno-0-2628">2628</a></span>
 <span class="normal"><a href="#__codelineno-0-2629">2629</a></span>
-<span class="normal"><a href="#__codelineno-0-2630">2630</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-376" name="__codelineno-0-376"></a><span class="k">class</span><span class="w"> </span><span class="nc">Scene</span><span class="p">(</span><span class="n">WatermarkMixin</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-2630">2630</a></span>
+<span class="normal"><a href="#__codelineno-0-2631">2631</a></span>
+<span class="normal"><a href="#__codelineno-0-2632">2632</a></span>
+<span class="normal"><a href="#__codelineno-0-2633">2633</a></span>
+<span class="normal"><a href="#__codelineno-0-2634">2634</a></span>
+<span class="normal"><a href="#__codelineno-0-2635">2635</a></span>
+<span class="normal"><a href="#__codelineno-0-2636">2636</a></span>
+<span class="normal"><a href="#__codelineno-0-2637">2637</a></span>
+<span class="normal"><a href="#__codelineno-0-2638">2638</a></span>
+<span class="normal"><a href="#__codelineno-0-2639">2639</a></span>
+<span class="normal"><a href="#__codelineno-0-2640">2640</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-376" name="__codelineno-0-376"></a><span class="k">class</span><span class="w"> </span><span class="nc">Scene</span><span class="p">(</span><span class="n">WatermarkMixin</span><span class="p">):</span>
 <a id="__codelineno-0-377" name="__codelineno-0-377"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A shared-axes host for composing cleopatra glyph layers into one figure.</span>
 <a id="__codelineno-0-378" name="__codelineno-0-378"></a>
 <a id="__codelineno-0-379" name="__codelineno-0-379"></a><span class="sd">    Inherits cleopatra&#39;s ``WatermarkMixin``, whose surface comes with it as-is: :meth:`stamp` below is this</span>
@@ -8714,265 +8724,275 @@ title filed beside each pair — see :meth:<code>_registered_index</code>.</p>
 <a id="__codelineno-0-2369" name="__codelineno-0-2369"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Stop delivering picks to one callback, or to all of them.</span>
 <a id="__codelineno-0-2370" name="__codelineno-0-2370"></a>
 <a id="__codelineno-0-2371" name="__codelineno-0-2371"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-2372" name="__codelineno-0-2372"></a><span class="sd">            callback: The callback to take off — the very object that was registered. ``None`` (the</span>
-<a id="__codelineno-0-2373" name="__codelineno-0-2373"></a><span class="sd">                default) takes every one off, which is what a caller tearing a session down wants.</span>
-<a id="__codelineno-0-2374" name="__codelineno-0-2374"></a>
-<a id="__codelineno-0-2375" name="__codelineno-0-2375"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-2376" name="__codelineno-0-2376"></a><span class="sd">            This scene (chainable).</span>
-<a id="__codelineno-0-2377" name="__codelineno-0-2377"></a>
-<a id="__codelineno-0-2378" name="__codelineno-0-2378"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-2379" name="__codelineno-0-2379"></a><span class="sd">            ValueError: when `callback` was never registered, naming how many are. A silent no-op here</span>
-<a id="__codelineno-0-2380" name="__codelineno-0-2380"></a><span class="sd">                would look exactly like a callback that refused to go away — the reason</span>
-<a id="__codelineno-0-2381" name="__codelineno-0-2381"></a><span class="sd">                :meth:`remove_layer` refuses an unknown id rather than ignoring it.</span>
+<a id="__codelineno-0-2372" name="__codelineno-0-2372"></a><span class="sd">            callback: The callback to take off, matched by **equality** — ``==``, the way ``list.remove``</span>
+<a id="__codelineno-0-2373" name="__codelineno-0-2373"></a><span class="sd">                and ``atexit.unregister`` match what they were given, not by identity. That is what makes</span>
+<a id="__codelineno-0-2374" name="__codelineno-0-2374"></a><span class="sd">                the ordinary idiom work: ``list.append`` builds a *new* bound method on every attribute</span>
+<a id="__codelineno-0-2375" name="__codelineno-0-2375"></a><span class="sd">                access, so ``m.on_pick(picked.append).off_pick(picked.append)`` hands over two distinct</span>
+<a id="__codelineno-0-2376" name="__codelineno-0-2376"></a><span class="sd">                objects that compare equal, and identity matching would refuse the second (measured:</span>
+<a id="__codelineno-0-2377" name="__codelineno-0-2377"></a><span class="sd">                ``ValueError: &lt;built-in method append of list object …&gt; is not registered``). The</span>
+<a id="__codelineno-0-2378" name="__codelineno-0-2378"></a><span class="sd">                consequence is the other way round too — a callable whose own ``__eq__`` reports equal to</span>
+<a id="__codelineno-0-2379" name="__codelineno-0-2379"></a><span class="sd">                its siblings is matched by that ``__eq__``, so a handler that wants to be taken off by</span>
+<a id="__codelineno-0-2380" name="__codelineno-0-2380"></a><span class="sd">                identity alone leaves ``__eq__`` as ``object`` defines it. ``None`` (the default) takes</span>
+<a id="__codelineno-0-2381" name="__codelineno-0-2381"></a><span class="sd">                every one off, which is what a caller tearing a session down wants.</span>
 <a id="__codelineno-0-2382" name="__codelineno-0-2382"></a>
-<a id="__codelineno-0-2383" name="__codelineno-0-2383"></a><span class="sd">        Note:</span>
-<a id="__codelineno-0-2384" name="__codelineno-0-2384"></a><span class="sd">            The canvas connection is dropped with the **last** callback, so a scene nobody is listening to</span>
-<a id="__codelineno-0-2385" name="__codelineno-0-2385"></a><span class="sd">            no longer has a handler on its canvas; the next :meth:`on_pick` makes it again.</span>
-<a id="__codelineno-0-2386" name="__codelineno-0-2386"></a>
-<a id="__codelineno-0-2387" name="__codelineno-0-2387"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-2388" name="__codelineno-0-2388"></a><span class="sd">            - A callback taken off hears nothing more:</span>
-<a id="__codelineno-0-2389" name="__codelineno-0-2389"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-2390" name="__codelineno-0-2390"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2391" name="__codelineno-0-2391"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2392" name="__codelineno-0-2392"></a><span class="sd">                &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-2393" name="__codelineno-0-2393"></a><span class="sd">                &gt;&gt;&gt; from matplotlib.backend_bases import MouseEvent</span>
-<a id="__codelineno-0-2394" name="__codelineno-0-2394"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-2395" name="__codelineno-0-2395"></a><span class="sd">                &gt;&gt;&gt; m = Map(globe=False)</span>
-<a id="__codelineno-0-2396" name="__codelineno-0-2396"></a><span class="sd">                &gt;&gt;&gt; _ = m.field(np.arange(16.0).reshape(4, 4), name=&quot;grid&quot;)</span>
-<a id="__codelineno-0-2397" name="__codelineno-0-2397"></a><span class="sd">                &gt;&gt;&gt; picked = []</span>
-<a id="__codelineno-0-2398" name="__codelineno-0-2398"></a><span class="sd">                &gt;&gt;&gt; _ = m.on_pick(picked.append).off_pick(picked.append)</span>
-<a id="__codelineno-0-2399" name="__codelineno-0-2399"></a><span class="sd">                &gt;&gt;&gt; m.fig.canvas.draw()</span>
-<a id="__codelineno-0-2400" name="__codelineno-0-2400"></a><span class="sd">                &gt;&gt;&gt; px, py = m.ax.transData.transform((1.5, 2.0))</span>
-<a id="__codelineno-0-2401" name="__codelineno-0-2401"></a><span class="sd">                &gt;&gt;&gt; click = MouseEvent(&quot;button_press_event&quot;, m.fig.canvas, px, py, button=1)</span>
-<a id="__codelineno-0-2402" name="__codelineno-0-2402"></a><span class="sd">                &gt;&gt;&gt; m.fig.canvas.callbacks.process(&quot;button_press_event&quot;, click)</span>
-<a id="__codelineno-0-2403" name="__codelineno-0-2403"></a><span class="sd">                &gt;&gt;&gt; picked</span>
-<a id="__codelineno-0-2404" name="__codelineno-0-2404"></a><span class="sd">                []</span>
-<a id="__codelineno-0-2405" name="__codelineno-0-2405"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-2406" name="__codelineno-0-2406"></a>
-<a id="__codelineno-0-2407" name="__codelineno-0-2407"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-2408" name="__codelineno-0-2408"></a><span class="sd">            - No argument takes every callback off and drops the canvas connection with the last of them;</span>
-<a id="__codelineno-0-2409" name="__codelineno-0-2409"></a><span class="sd">              a callback that was never registered is refused rather than ignored:</span>
-<a id="__codelineno-0-2410" name="__codelineno-0-2410"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-2411" name="__codelineno-0-2411"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2412" name="__codelineno-0-2412"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2413" name="__codelineno-0-2413"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-2414" name="__codelineno-0-2414"></a><span class="sd">                &gt;&gt;&gt; m = Map(globe=False)</span>
-<a id="__codelineno-0-2415" name="__codelineno-0-2415"></a><span class="sd">                &gt;&gt;&gt; seen = []</span>
-<a id="__codelineno-0-2416" name="__codelineno-0-2416"></a><span class="sd">                &gt;&gt;&gt; _ = m.on_pick(seen.append)</span>
-<a id="__codelineno-0-2417" name="__codelineno-0-2417"></a><span class="sd">                &gt;&gt;&gt; m._pick_cid is None</span>
-<a id="__codelineno-0-2418" name="__codelineno-0-2418"></a><span class="sd">                False</span>
-<a id="__codelineno-0-2419" name="__codelineno-0-2419"></a><span class="sd">                &gt;&gt;&gt; _ = m.off_pick()</span>
-<a id="__codelineno-0-2420" name="__codelineno-0-2420"></a><span class="sd">                &gt;&gt;&gt; m._pick_cid is None</span>
-<a id="__codelineno-0-2421" name="__codelineno-0-2421"></a><span class="sd">                True</span>
-<a id="__codelineno-0-2422" name="__codelineno-0-2422"></a><span class="sd">                &gt;&gt;&gt; m.off_pick(print)  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-2423" name="__codelineno-0-2423"></a><span class="sd">                Traceback (most recent call last):</span>
-<a id="__codelineno-0-2424" name="__codelineno-0-2424"></a><span class="sd">                    ...</span>
-<a id="__codelineno-0-2425" name="__codelineno-0-2425"></a><span class="sd">                ValueError: ...is not registered on this figure...0 callback(s) are</span>
-<a id="__codelineno-0-2426" name="__codelineno-0-2426"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-2427" name="__codelineno-0-2427"></a>
-<a id="__codelineno-0-2428" name="__codelineno-0-2428"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-2429" name="__codelineno-0-2429"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2430" name="__codelineno-0-2430"></a>        <span class="k">if</span> <span class="n">callback</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2431" name="__codelineno-0-2431"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-2432" name="__codelineno-0-2432"></a>        <span class="k">elif</span> <span class="n">callback</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">:</span>
-<a id="__codelineno-0-2433" name="__codelineno-0-2433"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">callback</span><span class="p">)</span>
-<a id="__codelineno-0-2434" name="__codelineno-0-2434"></a>        <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-2435" name="__codelineno-0-2435"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2436" name="__codelineno-0-2436"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">callback</span><span class="si">!r}</span><span class="s2"> is not registered on this figure, so there is nothing to take off; &quot;</span>
-<a id="__codelineno-0-2437" name="__codelineno-0-2437"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">)</span><span class="si">}</span><span class="s2"> callback(s) are&quot;</span>
-<a id="__codelineno-0-2438" name="__codelineno-0-2438"></a>            <span class="p">)</span>
-<a id="__codelineno-0-2439" name="__codelineno-0-2439"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">:</span>
-<a id="__codelineno-0-2440" name="__codelineno-0-2440"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
-<a id="__codelineno-0-2441" name="__codelineno-0-2441"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-2442" name="__codelineno-0-2442"></a>
-<a id="__codelineno-0-2443" name="__codelineno-0-2443"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_disconnect_picks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2444" name="__codelineno-0-2444"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Take this scene&#39;s click handler off its canvas, if it has one.</span>
-<a id="__codelineno-0-2445" name="__codelineno-0-2445"></a>
-<a id="__codelineno-0-2446" name="__codelineno-0-2446"></a><span class="sd">        Written once because three callers need it: :meth:`off_pick` when the last callback goes,</span>
-<a id="__codelineno-0-2447" name="__codelineno-0-2447"></a><span class="sd">        :meth:`close` so a closed figure delivers nothing, and itself a second time harmlessly — the</span>
-<a id="__codelineno-0-2448" name="__codelineno-0-2448"></a><span class="sd">        connection id is cleared, so disconnecting twice is a no-op rather than an error.</span>
-<a id="__codelineno-0-2449" name="__codelineno-0-2449"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2450" name="__codelineno-0-2450"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pick_cid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2451" name="__codelineno-0-2451"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">mpl_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pick_cid</span><span class="p">)</span>
-<a id="__codelineno-0-2452" name="__codelineno-0-2452"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_pick_cid</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-2453" name="__codelineno-0-2453"></a>
-<a id="__codelineno-0-2454" name="__codelineno-0-2454"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_deliver_pick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2455" name="__codelineno-0-2455"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Turn one canvas click into a :class:`Pick` and hand it to every registered callback.</span>
-<a id="__codelineno-0-2456" name="__codelineno-0-2456"></a>
-<a id="__codelineno-0-2457" name="__codelineno-0-2457"></a><span class="sd">        The scene&#39;s half of the gesture: it is what knows which axes is its own, and what builds the</span>
-<a id="__codelineno-0-2458" name="__codelineno-0-2458"></a><span class="sd">        public value out of the renderer&#39;s answer. The hit test itself is</span>
-<a id="__codelineno-0-2459" name="__codelineno-0-2459"></a><span class="sd">        :meth:`~digitalearth.static.renderer.Renderer.hits`, which holds the artist-to-layer mapping.</span>
-<a id="__codelineno-0-2460" name="__codelineno-0-2460"></a>
-<a id="__codelineno-0-2461" name="__codelineno-0-2461"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-2462" name="__codelineno-0-2462"></a><span class="sd">            event: The matplotlib ``MouseEvent`` the canvas delivered.</span>
+<a id="__codelineno-0-2383" name="__codelineno-0-2383"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-2384" name="__codelineno-0-2384"></a><span class="sd">            This scene (chainable).</span>
+<a id="__codelineno-0-2385" name="__codelineno-0-2385"></a>
+<a id="__codelineno-0-2386" name="__codelineno-0-2386"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-2387" name="__codelineno-0-2387"></a><span class="sd">            ValueError: when `callback` was never registered, naming how many are. A silent no-op here</span>
+<a id="__codelineno-0-2388" name="__codelineno-0-2388"></a><span class="sd">                would look exactly like a callback that refused to go away — the reason</span>
+<a id="__codelineno-0-2389" name="__codelineno-0-2389"></a><span class="sd">                :meth:`remove_layer` refuses an unknown id rather than ignoring it.</span>
+<a id="__codelineno-0-2390" name="__codelineno-0-2390"></a>
+<a id="__codelineno-0-2391" name="__codelineno-0-2391"></a><span class="sd">        Note:</span>
+<a id="__codelineno-0-2392" name="__codelineno-0-2392"></a><span class="sd">            The canvas connection is dropped with the **last** callback, so a scene nobody is listening to</span>
+<a id="__codelineno-0-2393" name="__codelineno-0-2393"></a><span class="sd">            no longer has a handler on its canvas; the next :meth:`on_pick` makes it again.</span>
+<a id="__codelineno-0-2394" name="__codelineno-0-2394"></a>
+<a id="__codelineno-0-2395" name="__codelineno-0-2395"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-2396" name="__codelineno-0-2396"></a><span class="sd">            - A callback taken off hears nothing more:</span>
+<a id="__codelineno-0-2397" name="__codelineno-0-2397"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-2398" name="__codelineno-0-2398"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2399" name="__codelineno-0-2399"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2400" name="__codelineno-0-2400"></a><span class="sd">                &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-2401" name="__codelineno-0-2401"></a><span class="sd">                &gt;&gt;&gt; from matplotlib.backend_bases import MouseEvent</span>
+<a id="__codelineno-0-2402" name="__codelineno-0-2402"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-2403" name="__codelineno-0-2403"></a><span class="sd">                &gt;&gt;&gt; m = Map(globe=False)</span>
+<a id="__codelineno-0-2404" name="__codelineno-0-2404"></a><span class="sd">                &gt;&gt;&gt; _ = m.field(np.arange(16.0).reshape(4, 4), name=&quot;grid&quot;)</span>
+<a id="__codelineno-0-2405" name="__codelineno-0-2405"></a><span class="sd">                &gt;&gt;&gt; picked = []</span>
+<a id="__codelineno-0-2406" name="__codelineno-0-2406"></a><span class="sd">                &gt;&gt;&gt; _ = m.on_pick(picked.append).off_pick(picked.append)</span>
+<a id="__codelineno-0-2407" name="__codelineno-0-2407"></a><span class="sd">                &gt;&gt;&gt; m.fig.canvas.draw()</span>
+<a id="__codelineno-0-2408" name="__codelineno-0-2408"></a><span class="sd">                &gt;&gt;&gt; px, py = m.ax.transData.transform((1.5, 2.0))</span>
+<a id="__codelineno-0-2409" name="__codelineno-0-2409"></a><span class="sd">                &gt;&gt;&gt; click = MouseEvent(&quot;button_press_event&quot;, m.fig.canvas, px, py, button=1)</span>
+<a id="__codelineno-0-2410" name="__codelineno-0-2410"></a><span class="sd">                &gt;&gt;&gt; m.fig.canvas.callbacks.process(&quot;button_press_event&quot;, click)</span>
+<a id="__codelineno-0-2411" name="__codelineno-0-2411"></a><span class="sd">                &gt;&gt;&gt; picked</span>
+<a id="__codelineno-0-2412" name="__codelineno-0-2412"></a><span class="sd">                []</span>
+<a id="__codelineno-0-2413" name="__codelineno-0-2413"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-2414" name="__codelineno-0-2414"></a>
+<a id="__codelineno-0-2415" name="__codelineno-0-2415"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-2416" name="__codelineno-0-2416"></a><span class="sd">            - No argument takes every callback off and drops the canvas connection with the last of them;</span>
+<a id="__codelineno-0-2417" name="__codelineno-0-2417"></a><span class="sd">              a callback that was never registered is refused rather than ignored:</span>
+<a id="__codelineno-0-2418" name="__codelineno-0-2418"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-2419" name="__codelineno-0-2419"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2420" name="__codelineno-0-2420"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2421" name="__codelineno-0-2421"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-2422" name="__codelineno-0-2422"></a><span class="sd">                &gt;&gt;&gt; m = Map(globe=False)</span>
+<a id="__codelineno-0-2423" name="__codelineno-0-2423"></a><span class="sd">                &gt;&gt;&gt; seen = []</span>
+<a id="__codelineno-0-2424" name="__codelineno-0-2424"></a><span class="sd">                &gt;&gt;&gt; _ = m.on_pick(seen.append)</span>
+<a id="__codelineno-0-2425" name="__codelineno-0-2425"></a><span class="sd">                &gt;&gt;&gt; m._pick_cid is None</span>
+<a id="__codelineno-0-2426" name="__codelineno-0-2426"></a><span class="sd">                False</span>
+<a id="__codelineno-0-2427" name="__codelineno-0-2427"></a><span class="sd">                &gt;&gt;&gt; _ = m.off_pick()</span>
+<a id="__codelineno-0-2428" name="__codelineno-0-2428"></a><span class="sd">                &gt;&gt;&gt; m._pick_cid is None</span>
+<a id="__codelineno-0-2429" name="__codelineno-0-2429"></a><span class="sd">                True</span>
+<a id="__codelineno-0-2430" name="__codelineno-0-2430"></a><span class="sd">                &gt;&gt;&gt; m.off_pick(print)  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-2431" name="__codelineno-0-2431"></a><span class="sd">                Traceback (most recent call last):</span>
+<a id="__codelineno-0-2432" name="__codelineno-0-2432"></a><span class="sd">                    ...</span>
+<a id="__codelineno-0-2433" name="__codelineno-0-2433"></a><span class="sd">                ValueError: ...is not registered on this figure...0 callback(s) are</span>
+<a id="__codelineno-0-2434" name="__codelineno-0-2434"></a><span class="sd">                &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-2435" name="__codelineno-0-2435"></a>
+<a id="__codelineno-0-2436" name="__codelineno-0-2436"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-2437" name="__codelineno-0-2437"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2438" name="__codelineno-0-2438"></a>        <span class="k">if</span> <span class="n">callback</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2439" name="__codelineno-0-2439"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-2440" name="__codelineno-0-2440"></a>        <span class="c1"># `in` and `remove` are both `==`, which is the documented rule rather than an accident of the</span>
+<a id="__codelineno-0-2441" name="__codelineno-0-2441"></a>        <span class="c1"># spelling: see the `callback` argument above for why identity would refuse `picked.append`.</span>
+<a id="__codelineno-0-2442" name="__codelineno-0-2442"></a>        <span class="k">elif</span> <span class="n">callback</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">:</span>
+<a id="__codelineno-0-2443" name="__codelineno-0-2443"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">callback</span><span class="p">)</span>
+<a id="__codelineno-0-2444" name="__codelineno-0-2444"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-2445" name="__codelineno-0-2445"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2446" name="__codelineno-0-2446"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">callback</span><span class="si">!r}</span><span class="s2"> is not registered on this figure, so there is nothing to take off; &quot;</span>
+<a id="__codelineno-0-2447" name="__codelineno-0-2447"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">)</span><span class="si">}</span><span class="s2"> callback(s) are&quot;</span>
+<a id="__codelineno-0-2448" name="__codelineno-0-2448"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2449" name="__codelineno-0-2449"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">:</span>
+<a id="__codelineno-0-2450" name="__codelineno-0-2450"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
+<a id="__codelineno-0-2451" name="__codelineno-0-2451"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-2452" name="__codelineno-0-2452"></a>
+<a id="__codelineno-0-2453" name="__codelineno-0-2453"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_disconnect_picks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2454" name="__codelineno-0-2454"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Take this scene&#39;s click handler off its canvas, if it has one.</span>
+<a id="__codelineno-0-2455" name="__codelineno-0-2455"></a>
+<a id="__codelineno-0-2456" name="__codelineno-0-2456"></a><span class="sd">        Written once because three callers need it: :meth:`off_pick` when the last callback goes,</span>
+<a id="__codelineno-0-2457" name="__codelineno-0-2457"></a><span class="sd">        :meth:`close` so a closed figure delivers nothing, and itself a second time harmlessly — the</span>
+<a id="__codelineno-0-2458" name="__codelineno-0-2458"></a><span class="sd">        connection id is cleared, so disconnecting twice is a no-op rather than an error.</span>
+<a id="__codelineno-0-2459" name="__codelineno-0-2459"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2460" name="__codelineno-0-2460"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pick_cid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2461" name="__codelineno-0-2461"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">mpl_disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pick_cid</span><span class="p">)</span>
+<a id="__codelineno-0-2462" name="__codelineno-0-2462"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_pick_cid</span> <span class="o">=</span> <span class="kc">None</span>
 <a id="__codelineno-0-2463" name="__codelineno-0-2463"></a>
-<a id="__codelineno-0-2464" name="__codelineno-0-2464"></a><span class="sd">        Note:</span>
-<a id="__codelineno-0-2465" name="__codelineno-0-2465"></a><span class="sd">            Three clicks deliver nothing: one outside this scene&#39;s axes (``inaxes`` is another axes, or</span>
-<a id="__codelineno-0-2466" name="__codelineno-0-2466"></a><span class="sd">            none at all — the colorbar&#39;s axes is on this figure too and is not the map), one on no layer,</span>
-<a id="__codelineno-0-2467" name="__codelineno-0-2467"></a><span class="sd">            and one on a figure whose callbacks have all been taken off. The callbacks are iterated over a</span>
-<a id="__codelineno-0-2468" name="__codelineno-0-2468"></a><span class="sd">            **copy**, so a callback that calls :meth:`off_pick` — a &quot;pick once&quot; handler — does not change</span>
-<a id="__codelineno-0-2469" name="__codelineno-0-2469"></a><span class="sd">            the list being walked underneath it.</span>
-<a id="__codelineno-0-2470" name="__codelineno-0-2470"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2471" name="__codelineno-0-2471"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s2">&quot;inaxes&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">:</span>
-<a id="__codelineno-0-2472" name="__codelineno-0-2472"></a>            <span class="k">return</span>
-<a id="__codelineno-0-2473" name="__codelineno-0-2473"></a>        <span class="n">hits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">hits</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
-<a id="__codelineno-0-2474" name="__codelineno-0-2474"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">hits</span><span class="p">:</span>
-<a id="__codelineno-0-2475" name="__codelineno-0-2475"></a>            <span class="k">return</span>
-<a id="__codelineno-0-2476" name="__codelineno-0-2476"></a>        <span class="n">pick</span> <span class="o">=</span> <span class="n">Pick</span><span class="p">(</span><span class="n">hits</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">float</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">xdata</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">ydata</span><span class="p">),</span> <span class="n">hits</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
-<a id="__codelineno-0-2477" name="__codelineno-0-2477"></a>        <span class="k">for</span> <span class="n">callback</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">):</span>
-<a id="__codelineno-0-2478" name="__codelineno-0-2478"></a>            <span class="n">callback</span><span class="p">(</span><span class="n">pick</span><span class="p">)</span>
-<a id="__codelineno-0-2479" name="__codelineno-0-2479"></a>
-<a id="__codelineno-0-2480" name="__codelineno-0-2480"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">stamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mark</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2481" name="__codelineno-0-2481"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Stamp a logo / watermark onto the figure (delegates to cleopatra&#39;s ``WatermarkMixin.stamp_mark``).</span>
-<a id="__codelineno-0-2482" name="__codelineno-0-2482"></a>
-<a id="__codelineno-0-2483" name="__codelineno-0-2483"></a><span class="sd">        The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction</span>
-<a id="__codelineno-0-2484" name="__codelineno-0-2484"></a><span class="sd">        coordinates, so it keeps its proportion and corner offset at whatever dpi the figure is later saved</span>
-<a id="__codelineno-0-2485" name="__codelineno-0-2485"></a><span class="sd">        at. Because it is figure-level rather than axes-level it sits above every layer, and works on any</span>
-<a id="__codelineno-0-2486" name="__codelineno-0-2486"></a><span class="sd">        scene — a :class:`~digitalearth.static.map.Map`, a chart, or a bare :class:`Scene`.</span>
-<a id="__codelineno-0-2487" name="__codelineno-0-2487"></a>
-<a id="__codelineno-0-2488" name="__codelineno-0-2488"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-2489" name="__codelineno-0-2489"></a><span class="sd">            mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /</span>
-<a id="__codelineno-0-2490" name="__codelineno-0-2490"></a><span class="sd">                ``(H, W, 4)`` array, either ``uint8`` ``0-255`` or float ``0-1``.</span>
-<a id="__codelineno-0-2491" name="__codelineno-0-2491"></a><span class="sd">            **kwargs: Forwarded to ``stamp_mark`` — ``frac`` (the mark&#39;s longer side as a fraction of the</span>
-<a id="__codelineno-0-2492" name="__codelineno-0-2492"></a><span class="sd">                figure, default ``0.11``), ``corner`` (``&quot;lower right&quot;`` / ``&quot;lower left&quot;`` /</span>
-<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a><span class="sd">                ``&quot;upper right&quot;`` / ``&quot;upper left&quot;``), ``margin``, ``shadow`` and ``blur``.</span>
-<a id="__codelineno-0-2494" name="__codelineno-0-2494"></a>
-<a id="__codelineno-0-2495" name="__codelineno-0-2495"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-2496" name="__codelineno-0-2496"></a><span class="sd">            The frameless inset ``Axes`` the mark was drawn on.</span>
+<a id="__codelineno-0-2464" name="__codelineno-0-2464"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_deliver_pick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2465" name="__codelineno-0-2465"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Turn one canvas click into a :class:`Pick` and hand it to every registered callback.</span>
+<a id="__codelineno-0-2466" name="__codelineno-0-2466"></a>
+<a id="__codelineno-0-2467" name="__codelineno-0-2467"></a><span class="sd">        The scene&#39;s half of the gesture: it is what knows which axes is its own, and what builds the</span>
+<a id="__codelineno-0-2468" name="__codelineno-0-2468"></a><span class="sd">        public value out of the renderer&#39;s answer. The hit test itself is</span>
+<a id="__codelineno-0-2469" name="__codelineno-0-2469"></a><span class="sd">        :meth:`~digitalearth.static.renderer.Renderer.hits`, which holds the artist-to-layer mapping.</span>
+<a id="__codelineno-0-2470" name="__codelineno-0-2470"></a>
+<a id="__codelineno-0-2471" name="__codelineno-0-2471"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-2472" name="__codelineno-0-2472"></a><span class="sd">            event: The matplotlib ``MouseEvent`` the canvas delivered.</span>
+<a id="__codelineno-0-2473" name="__codelineno-0-2473"></a>
+<a id="__codelineno-0-2474" name="__codelineno-0-2474"></a><span class="sd">        Note:</span>
+<a id="__codelineno-0-2475" name="__codelineno-0-2475"></a><span class="sd">            Three clicks deliver nothing: one outside this scene&#39;s axes (``inaxes`` is another axes, or</span>
+<a id="__codelineno-0-2476" name="__codelineno-0-2476"></a><span class="sd">            none at all — the colorbar&#39;s axes is on this figure too and is not the map), one on no layer,</span>
+<a id="__codelineno-0-2477" name="__codelineno-0-2477"></a><span class="sd">            and one on a figure whose callbacks have all been taken off. The callbacks are iterated over a</span>
+<a id="__codelineno-0-2478" name="__codelineno-0-2478"></a><span class="sd">            **copy**, so a callback that calls :meth:`off_pick` — a &quot;pick once&quot; handler — does not change</span>
+<a id="__codelineno-0-2479" name="__codelineno-0-2479"></a><span class="sd">            the list being walked underneath it.</span>
+<a id="__codelineno-0-2480" name="__codelineno-0-2480"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2481" name="__codelineno-0-2481"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s2">&quot;inaxes&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">ax</span><span class="p">:</span>
+<a id="__codelineno-0-2482" name="__codelineno-0-2482"></a>            <span class="k">return</span>
+<a id="__codelineno-0-2483" name="__codelineno-0-2483"></a>        <span class="n">hits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">hits</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+<a id="__codelineno-0-2484" name="__codelineno-0-2484"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">hits</span><span class="p">:</span>
+<a id="__codelineno-0-2485" name="__codelineno-0-2485"></a>            <span class="k">return</span>
+<a id="__codelineno-0-2486" name="__codelineno-0-2486"></a>        <span class="n">pick</span> <span class="o">=</span> <span class="n">Pick</span><span class="p">(</span><span class="n">hits</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">float</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">xdata</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">ydata</span><span class="p">),</span> <span class="n">hits</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+<a id="__codelineno-0-2487" name="__codelineno-0-2487"></a>        <span class="k">for</span> <span class="n">callback</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span><span class="p">):</span>
+<a id="__codelineno-0-2488" name="__codelineno-0-2488"></a>            <span class="n">callback</span><span class="p">(</span><span class="n">pick</span><span class="p">)</span>
+<a id="__codelineno-0-2489" name="__codelineno-0-2489"></a>
+<a id="__codelineno-0-2490" name="__codelineno-0-2490"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">stamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mark</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2491" name="__codelineno-0-2491"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Stamp a logo / watermark onto the figure (delegates to cleopatra&#39;s ``WatermarkMixin.stamp_mark``).</span>
+<a id="__codelineno-0-2492" name="__codelineno-0-2492"></a>
+<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a><span class="sd">        The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction</span>
+<a id="__codelineno-0-2494" name="__codelineno-0-2494"></a><span class="sd">        coordinates, so it keeps its proportion and corner offset at whatever dpi the figure is later saved</span>
+<a id="__codelineno-0-2495" name="__codelineno-0-2495"></a><span class="sd">        at. Because it is figure-level rather than axes-level it sits above every layer, and works on any</span>
+<a id="__codelineno-0-2496" name="__codelineno-0-2496"></a><span class="sd">        scene — a :class:`~digitalearth.static.map.Map`, a chart, or a bare :class:`Scene`.</span>
 <a id="__codelineno-0-2497" name="__codelineno-0-2497"></a>
-<a id="__codelineno-0-2498" name="__codelineno-0-2498"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-2499" name="__codelineno-0-2499"></a><span class="sd">            ValueError: if ``corner``, ``frac``, ``margin`` or ``blur`` is out of contract, if the mark plus</span>
-<a id="__codelineno-0-2500" name="__codelineno-0-2500"></a><span class="sd">                its margin would not fit the figure, or if an array mark has a bad shape/dtype/range.</span>
-<a id="__codelineno-0-2501" name="__codelineno-0-2501"></a><span class="sd">            FileNotFoundError: if ``mark`` is a path that does not exist.</span>
-<a id="__codelineno-0-2502" name="__codelineno-0-2502"></a>
-<a id="__codelineno-0-2503" name="__codelineno-0-2503"></a><span class="sd">        Warning:</span>
-<a id="__codelineno-0-2504" name="__codelineno-0-2504"></a><span class="sd">            Stamp **last** — the mark is baked from the figure&#39;s current size, so call this after any</span>
-<a id="__codelineno-0-2505" name="__codelineno-0-2505"></a><span class="sd">            ``tight_layout()`` and after the final ``set_size_inches``. Note also that :meth:`save` defaults</span>
-<a id="__codelineno-0-2506" name="__codelineno-0-2506"></a><span class="sd">            to ``bbox_inches=&quot;tight&quot;``, which crops surrounding whitespace and so shifts the mark&#39;s relative</span>
-<a id="__codelineno-0-2507" name="__codelineno-0-2507"></a><span class="sd">            margin; pass ``bbox_inches=None`` to :meth:`save` to preserve the placement exactly.</span>
-<a id="__codelineno-0-2508" name="__codelineno-0-2508"></a>
-<a id="__codelineno-0-2509" name="__codelineno-0-2509"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-2510" name="__codelineno-0-2510"></a><span class="sd">            - Stamp a small opaque mark into the lower-right corner:</span>
-<a id="__codelineno-0-2511" name="__codelineno-0-2511"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-2512" name="__codelineno-0-2512"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2513" name="__codelineno-0-2513"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2514" name="__codelineno-0-2514"></a><span class="sd">                &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-2515" name="__codelineno-0-2515"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2516" name="__codelineno-0-2516"></a><span class="sd">                &gt;&gt;&gt; scene = Scene(figsize=(8, 6))</span>
-<a id="__codelineno-0-2517" name="__codelineno-0-2517"></a><span class="sd">                &gt;&gt;&gt; logo = np.zeros((40, 80, 4), dtype=np.uint8)</span>
-<a id="__codelineno-0-2518" name="__codelineno-0-2518"></a><span class="sd">                &gt;&gt;&gt; logo[..., :3] = 255</span>
-<a id="__codelineno-0-2519" name="__codelineno-0-2519"></a><span class="sd">                &gt;&gt;&gt; logo[..., 3] = 255</span>
-<a id="__codelineno-0-2520" name="__codelineno-0-2520"></a><span class="sd">                &gt;&gt;&gt; mark_ax = scene.stamp(logo, frac=0.2, shadow=False)</span>
-<a id="__codelineno-0-2521" name="__codelineno-0-2521"></a><span class="sd">                &gt;&gt;&gt; [round(float(v), 3) for v in mark_ax.get_position().bounds]</span>
-<a id="__codelineno-0-2522" name="__codelineno-0-2522"></a><span class="sd">                [0.775, 0.025, 0.2, 0.133]</span>
-<a id="__codelineno-0-2523" name="__codelineno-0-2523"></a>
-<a id="__codelineno-0-2524" name="__codelineno-0-2524"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-2525" name="__codelineno-0-2525"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2526" name="__codelineno-0-2526"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">stamp_mark</span><span class="p">(</span><span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-<a id="__codelineno-0-2527" name="__codelineno-0-2527"></a>
-<a id="__codelineno-0-2528" name="__codelineno-0-2528"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-<a id="__codelineno-0-2529" name="__codelineno-0-2529"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Save the figure to ``path`` (``bbox_inches=&quot;tight&quot;`` by default).</span>
-<a id="__codelineno-0-2530" name="__codelineno-0-2530"></a>
-<a id="__codelineno-0-2531" name="__codelineno-0-2531"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-2532" name="__codelineno-0-2532"></a><span class="sd">            path: Destination file path; the extension picks the format matplotlib writes.</span>
-<a id="__codelineno-0-2533" name="__codelineno-0-2533"></a><span class="sd">            **kwargs: Forwarded to ``Figure.savefig`` (e.g. ``dpi``, ``bbox_inches``, ``transparent``).</span>
-<a id="__codelineno-0-2534" name="__codelineno-0-2534"></a>
-<a id="__codelineno-0-2535" name="__codelineno-0-2535"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-2536" name="__codelineno-0-2536"></a><span class="sd">            The path that was written, as a :class:`pathlib.Path` — every backend&#39;s ``save`` returns one, so</span>
-<a id="__codelineno-0-2537" name="__codelineno-0-2537"></a><span class="sd">            a caller can chain onto the result without re-deriving it.</span>
-<a id="__codelineno-0-2538" name="__codelineno-0-2538"></a>
-<a id="__codelineno-0-2539" name="__codelineno-0-2539"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-2540" name="__codelineno-0-2540"></a><span class="sd">            - Save a scene and read the written file back off the return value:</span>
-<a id="__codelineno-0-2541" name="__codelineno-0-2541"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-2542" name="__codelineno-0-2542"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2543" name="__codelineno-0-2543"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2544" name="__codelineno-0-2544"></a><span class="sd">                &gt;&gt;&gt; import tempfile</span>
-<a id="__codelineno-0-2545" name="__codelineno-0-2545"></a><span class="sd">                &gt;&gt;&gt; from pathlib import Path</span>
-<a id="__codelineno-0-2546" name="__codelineno-0-2546"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2547" name="__codelineno-0-2547"></a><span class="sd">                &gt;&gt;&gt; out = Scene().save(Path(tempfile.mkdtemp()) / &quot;scene.png&quot;)</span>
-<a id="__codelineno-0-2548" name="__codelineno-0-2548"></a><span class="sd">                &gt;&gt;&gt; out.suffix</span>
-<a id="__codelineno-0-2549" name="__codelineno-0-2549"></a><span class="sd">                &#39;.png&#39;</span>
-<a id="__codelineno-0-2550" name="__codelineno-0-2550"></a><span class="sd">                &gt;&gt;&gt; out.exists()</span>
-<a id="__codelineno-0-2551" name="__codelineno-0-2551"></a><span class="sd">                True</span>
-<a id="__codelineno-0-2552" name="__codelineno-0-2552"></a>
-<a id="__codelineno-0-2553" name="__codelineno-0-2553"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-2554" name="__codelineno-0-2554"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2555" name="__codelineno-0-2555"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="s2">&quot;bbox_inches&quot;</span><span class="p">:</span> <span class="s2">&quot;tight&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">})</span>
-<a id="__codelineno-0-2556" name="__codelineno-0-2556"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-<a id="__codelineno-0-2557" name="__codelineno-0-2557"></a>
-<a id="__codelineno-0-2558" name="__codelineno-0-2558"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2559" name="__codelineno-0-2559"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Show the figure via ``matplotlib.pyplot.show``.&quot;&quot;&quot;</span>
-<a id="__codelineno-0-2560" name="__codelineno-0-2560"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-<a id="__codelineno-0-2561" name="__codelineno-0-2561"></a>
-<a id="__codelineno-0-2562" name="__codelineno-0-2562"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2563" name="__codelineno-0-2563"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
-<a id="__codelineno-0-2564" name="__codelineno-0-2564"></a>
-<a id="__codelineno-0-2565" name="__codelineno-0-2565"></a><span class="sd">        Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
-<a id="__codelineno-0-2566" name="__codelineno-0-2566"></a><span class="sd">        and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
-<a id="__codelineno-0-2567" name="__codelineno-0-2567"></a><span class="sd">        package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
-<a id="__codelineno-0-2568" name="__codelineno-0-2568"></a><span class="sd">        every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
-<a id="__codelineno-0-2569" name="__codelineno-0-2569"></a><span class="sd">        ``with`` calls on the way out.</span>
-<a id="__codelineno-0-2570" name="__codelineno-0-2570"></a>
-<a id="__codelineno-0-2571" name="__codelineno-0-2571"></a><span class="sd">        Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
-<a id="__codelineno-0-2572" name="__codelineno-0-2572"></a>
-<a id="__codelineno-0-2573" name="__codelineno-0-2573"></a><span class="sd">        An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
-<a id="__codelineno-0-2574" name="__codelineno-0-2574"></a><span class="sd">        — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
-<a id="__codelineno-0-2575" name="__codelineno-0-2575"></a><span class="sd">        reference it by path to keep such a figure readable.</span>
-<a id="__codelineno-0-2576" name="__codelineno-0-2576"></a>
-<a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="sd">        .. warning::</span>
-<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="sd">            This closes the **entire** ``self.fig``. The panels returned by</span>
-<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a><span class="sd">            :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
-<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a><span class="sd">            close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
-<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">            whole workflow or call :meth:`save` and close the figure yourself instead.</span>
+<a id="__codelineno-0-2498" name="__codelineno-0-2498"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-2499" name="__codelineno-0-2499"></a><span class="sd">            mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /</span>
+<a id="__codelineno-0-2500" name="__codelineno-0-2500"></a><span class="sd">                ``(H, W, 4)`` array, either ``uint8`` ``0-255`` or float ``0-1``.</span>
+<a id="__codelineno-0-2501" name="__codelineno-0-2501"></a><span class="sd">            **kwargs: Forwarded to ``stamp_mark`` — ``frac`` (the mark&#39;s longer side as a fraction of the</span>
+<a id="__codelineno-0-2502" name="__codelineno-0-2502"></a><span class="sd">                figure, default ``0.11``), ``corner`` (``&quot;lower right&quot;`` / ``&quot;lower left&quot;`` /</span>
+<a id="__codelineno-0-2503" name="__codelineno-0-2503"></a><span class="sd">                ``&quot;upper right&quot;`` / ``&quot;upper left&quot;``), ``margin``, ``shadow`` and ``blur``.</span>
+<a id="__codelineno-0-2504" name="__codelineno-0-2504"></a>
+<a id="__codelineno-0-2505" name="__codelineno-0-2505"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-2506" name="__codelineno-0-2506"></a><span class="sd">            The frameless inset ``Axes`` the mark was drawn on.</span>
+<a id="__codelineno-0-2507" name="__codelineno-0-2507"></a>
+<a id="__codelineno-0-2508" name="__codelineno-0-2508"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-2509" name="__codelineno-0-2509"></a><span class="sd">            ValueError: if ``corner``, ``frac``, ``margin`` or ``blur`` is out of contract, if the mark plus</span>
+<a id="__codelineno-0-2510" name="__codelineno-0-2510"></a><span class="sd">                its margin would not fit the figure, or if an array mark has a bad shape/dtype/range.</span>
+<a id="__codelineno-0-2511" name="__codelineno-0-2511"></a><span class="sd">            FileNotFoundError: if ``mark`` is a path that does not exist.</span>
+<a id="__codelineno-0-2512" name="__codelineno-0-2512"></a>
+<a id="__codelineno-0-2513" name="__codelineno-0-2513"></a><span class="sd">        Warning:</span>
+<a id="__codelineno-0-2514" name="__codelineno-0-2514"></a><span class="sd">            Stamp **last** — the mark is baked from the figure&#39;s current size, so call this after any</span>
+<a id="__codelineno-0-2515" name="__codelineno-0-2515"></a><span class="sd">            ``tight_layout()`` and after the final ``set_size_inches``. Note also that :meth:`save` defaults</span>
+<a id="__codelineno-0-2516" name="__codelineno-0-2516"></a><span class="sd">            to ``bbox_inches=&quot;tight&quot;``, which crops surrounding whitespace and so shifts the mark&#39;s relative</span>
+<a id="__codelineno-0-2517" name="__codelineno-0-2517"></a><span class="sd">            margin; pass ``bbox_inches=None`` to :meth:`save` to preserve the placement exactly.</span>
+<a id="__codelineno-0-2518" name="__codelineno-0-2518"></a>
+<a id="__codelineno-0-2519" name="__codelineno-0-2519"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-2520" name="__codelineno-0-2520"></a><span class="sd">            - Stamp a small opaque mark into the lower-right corner:</span>
+<a id="__codelineno-0-2521" name="__codelineno-0-2521"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-2522" name="__codelineno-0-2522"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2523" name="__codelineno-0-2523"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2524" name="__codelineno-0-2524"></a><span class="sd">                &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-2525" name="__codelineno-0-2525"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2526" name="__codelineno-0-2526"></a><span class="sd">                &gt;&gt;&gt; scene = Scene(figsize=(8, 6))</span>
+<a id="__codelineno-0-2527" name="__codelineno-0-2527"></a><span class="sd">                &gt;&gt;&gt; logo = np.zeros((40, 80, 4), dtype=np.uint8)</span>
+<a id="__codelineno-0-2528" name="__codelineno-0-2528"></a><span class="sd">                &gt;&gt;&gt; logo[..., :3] = 255</span>
+<a id="__codelineno-0-2529" name="__codelineno-0-2529"></a><span class="sd">                &gt;&gt;&gt; logo[..., 3] = 255</span>
+<a id="__codelineno-0-2530" name="__codelineno-0-2530"></a><span class="sd">                &gt;&gt;&gt; mark_ax = scene.stamp(logo, frac=0.2, shadow=False)</span>
+<a id="__codelineno-0-2531" name="__codelineno-0-2531"></a><span class="sd">                &gt;&gt;&gt; [round(float(v), 3) for v in mark_ax.get_position().bounds]</span>
+<a id="__codelineno-0-2532" name="__codelineno-0-2532"></a><span class="sd">                [0.775, 0.025, 0.2, 0.133]</span>
+<a id="__codelineno-0-2533" name="__codelineno-0-2533"></a>
+<a id="__codelineno-0-2534" name="__codelineno-0-2534"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-2535" name="__codelineno-0-2535"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2536" name="__codelineno-0-2536"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">stamp_mark</span><span class="p">(</span><span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-2537" name="__codelineno-0-2537"></a>
+<a id="__codelineno-0-2538" name="__codelineno-0-2538"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-0-2539" name="__codelineno-0-2539"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Save the figure to ``path`` (``bbox_inches=&quot;tight&quot;`` by default).</span>
+<a id="__codelineno-0-2540" name="__codelineno-0-2540"></a>
+<a id="__codelineno-0-2541" name="__codelineno-0-2541"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-2542" name="__codelineno-0-2542"></a><span class="sd">            path: Destination file path; the extension picks the format matplotlib writes.</span>
+<a id="__codelineno-0-2543" name="__codelineno-0-2543"></a><span class="sd">            **kwargs: Forwarded to ``Figure.savefig`` (e.g. ``dpi``, ``bbox_inches``, ``transparent``).</span>
+<a id="__codelineno-0-2544" name="__codelineno-0-2544"></a>
+<a id="__codelineno-0-2545" name="__codelineno-0-2545"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-2546" name="__codelineno-0-2546"></a><span class="sd">            The path that was written, as a :class:`pathlib.Path` — every backend&#39;s ``save`` returns one, so</span>
+<a id="__codelineno-0-2547" name="__codelineno-0-2547"></a><span class="sd">            a caller can chain onto the result without re-deriving it.</span>
+<a id="__codelineno-0-2548" name="__codelineno-0-2548"></a>
+<a id="__codelineno-0-2549" name="__codelineno-0-2549"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-2550" name="__codelineno-0-2550"></a><span class="sd">            - Save a scene and read the written file back off the return value:</span>
+<a id="__codelineno-0-2551" name="__codelineno-0-2551"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-2552" name="__codelineno-0-2552"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2553" name="__codelineno-0-2553"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2554" name="__codelineno-0-2554"></a><span class="sd">                &gt;&gt;&gt; import tempfile</span>
+<a id="__codelineno-0-2555" name="__codelineno-0-2555"></a><span class="sd">                &gt;&gt;&gt; from pathlib import Path</span>
+<a id="__codelineno-0-2556" name="__codelineno-0-2556"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2557" name="__codelineno-0-2557"></a><span class="sd">                &gt;&gt;&gt; out = Scene().save(Path(tempfile.mkdtemp()) / &quot;scene.png&quot;)</span>
+<a id="__codelineno-0-2558" name="__codelineno-0-2558"></a><span class="sd">                &gt;&gt;&gt; out.suffix</span>
+<a id="__codelineno-0-2559" name="__codelineno-0-2559"></a><span class="sd">                &#39;.png&#39;</span>
+<a id="__codelineno-0-2560" name="__codelineno-0-2560"></a><span class="sd">                &gt;&gt;&gt; out.exists()</span>
+<a id="__codelineno-0-2561" name="__codelineno-0-2561"></a><span class="sd">                True</span>
+<a id="__codelineno-0-2562" name="__codelineno-0-2562"></a>
+<a id="__codelineno-0-2563" name="__codelineno-0-2563"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-2564" name="__codelineno-0-2564"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2565" name="__codelineno-0-2565"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="s2">&quot;bbox_inches&quot;</span><span class="p">:</span> <span class="s2">&quot;tight&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">})</span>
+<a id="__codelineno-0-2566" name="__codelineno-0-2566"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<a id="__codelineno-0-2567" name="__codelineno-0-2567"></a>
+<a id="__codelineno-0-2568" name="__codelineno-0-2568"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2569" name="__codelineno-0-2569"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Show the figure via ``matplotlib.pyplot.show``.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-2570" name="__codelineno-0-2570"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<a id="__codelineno-0-2571" name="__codelineno-0-2571"></a>
+<a id="__codelineno-0-2572" name="__codelineno-0-2572"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2573" name="__codelineno-0-2573"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
+<a id="__codelineno-0-2574" name="__codelineno-0-2574"></a>
+<a id="__codelineno-0-2575" name="__codelineno-0-2575"></a><span class="sd">        Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
+<a id="__codelineno-0-2576" name="__codelineno-0-2576"></a><span class="sd">        and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
+<a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="sd">        package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
+<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="sd">        every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
+<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a><span class="sd">        ``with`` calls on the way out.</span>
+<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a>
+<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">        Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
 <a id="__codelineno-0-2582" name="__codelineno-0-2582"></a>
-<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">            - A scene that drew nothing closes quietly:</span>
-<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">                &gt;&gt;&gt; Scene().close()</span>
-<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a>
-<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">        An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
+<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">        — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
+<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a><span class="sd">        reference it by path to keep such a figure readable.</span>
+<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a>
+<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a><span class="sd">        .. warning::</span>
+<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">            This closes the **entire** ``self.fig``. The panels returned by</span>
+<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">            :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
+<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a><span class="sd">            close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
+<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a><span class="sd">            whole workflow or call :meth:`save` and close the figure yourself instead.</span>
 <a id="__codelineno-0-2592" name="__codelineno-0-2592"></a>
-<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">        See Also:</span>
-<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a><span class="sd">            __exit__: calls this on the way out of a ``with`` block.</span>
-<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a>        <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
-<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a>        <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
-<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a>        <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
-<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a>        <span class="c1"># whose data has just been let go (see `on_pick`).</span>
-<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
-<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
-<a id="__codelineno-0-2606" name="__codelineno-0-2606"></a>
-<a id="__codelineno-0-2607" name="__codelineno-0-2607"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scene&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-2608" name="__codelineno-0-2608"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Enter the runtime context, returning the scene so ``with Scene(...) as s:`` binds it.</span>
-<a id="__codelineno-0-2609" name="__codelineno-0-2609"></a>
-<a id="__codelineno-0-2610" name="__codelineno-0-2610"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-2611" name="__codelineno-0-2611"></a><span class="sd">            This scene.</span>
-<a id="__codelineno-0-2612" name="__codelineno-0-2612"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2613" name="__codelineno-0-2613"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-2614" name="__codelineno-0-2614"></a>
-<a id="__codelineno-0-2615" name="__codelineno-0-2615"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">tb</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<a id="__codelineno-0-2616" name="__codelineno-0-2616"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Close the scene on exit so a long run of them stays memory-bounded.</span>
-<a id="__codelineno-0-2617" name="__codelineno-0-2617"></a>
-<a id="__codelineno-0-2618" name="__codelineno-0-2618"></a><span class="sd">        The scene is closed whether or not the body raised; any exception propagates (``__exit__`` returns</span>
-<a id="__codelineno-0-2619" name="__codelineno-0-2619"></a><span class="sd">        ``False``), so ``with`` never silences errors.</span>
-<a id="__codelineno-0-2620" name="__codelineno-0-2620"></a>
-<a id="__codelineno-0-2621" name="__codelineno-0-2621"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-2622" name="__codelineno-0-2622"></a><span class="sd">            exc_type: The exception type, ignored — closing is unconditional, as it is for a file.</span>
-<a id="__codelineno-0-2623" name="__codelineno-0-2623"></a><span class="sd">            exc: The exception, ignored.</span>
-<a id="__codelineno-0-2624" name="__codelineno-0-2624"></a><span class="sd">            tb: The traceback, ignored.</span>
-<a id="__codelineno-0-2625" name="__codelineno-0-2625"></a>
-<a id="__codelineno-0-2626" name="__codelineno-0-2626"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-2627" name="__codelineno-0-2627"></a><span class="sd">            ``False`` — exceptions are not suppressed.</span>
-<a id="__codelineno-0-2628" name="__codelineno-0-2628"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2629" name="__codelineno-0-2629"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-<a id="__codelineno-0-2630" name="__codelineno-0-2630"></a>        <span class="k">return</span> <span class="kc">False</span>
+<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a><span class="sd">            - A scene that drew nothing closes quietly:</span>
+<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a><span class="sd">                &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a><span class="sd">                &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a><span class="sd">                &gt;&gt;&gt; Scene().close()</span>
+<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a>
+<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a>
+<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a><span class="sd">        See Also:</span>
+<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a><span class="sd">            __exit__: calls this on the way out of a ``with`` block.</span>
+<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2606" name="__codelineno-0-2606"></a>        <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
+<a id="__codelineno-0-2607" name="__codelineno-0-2607"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2608" name="__codelineno-0-2608"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2609" name="__codelineno-0-2609"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2610" name="__codelineno-0-2610"></a>        <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
+<a id="__codelineno-0-2611" name="__codelineno-0-2611"></a>        <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
+<a id="__codelineno-0-2612" name="__codelineno-0-2612"></a>        <span class="c1"># whose data has just been let go (see `on_pick`).</span>
+<a id="__codelineno-0-2613" name="__codelineno-0-2613"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
+<a id="__codelineno-0-2614" name="__codelineno-0-2614"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-2615" name="__codelineno-0-2615"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
+<a id="__codelineno-0-2616" name="__codelineno-0-2616"></a>
+<a id="__codelineno-0-2617" name="__codelineno-0-2617"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scene&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-2618" name="__codelineno-0-2618"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Enter the runtime context, returning the scene so ``with Scene(...) as s:`` binds it.</span>
+<a id="__codelineno-0-2619" name="__codelineno-0-2619"></a>
+<a id="__codelineno-0-2620" name="__codelineno-0-2620"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-2621" name="__codelineno-0-2621"></a><span class="sd">            This scene.</span>
+<a id="__codelineno-0-2622" name="__codelineno-0-2622"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2623" name="__codelineno-0-2623"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-2624" name="__codelineno-0-2624"></a>
+<a id="__codelineno-0-2625" name="__codelineno-0-2625"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">tb</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="__codelineno-0-2626" name="__codelineno-0-2626"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Close the scene on exit so a long run of them stays memory-bounded.</span>
+<a id="__codelineno-0-2627" name="__codelineno-0-2627"></a>
+<a id="__codelineno-0-2628" name="__codelineno-0-2628"></a><span class="sd">        The scene is closed whether or not the body raised; any exception propagates (``__exit__`` returns</span>
+<a id="__codelineno-0-2629" name="__codelineno-0-2629"></a><span class="sd">        ``False``), so ``with`` never silences errors.</span>
+<a id="__codelineno-0-2630" name="__codelineno-0-2630"></a>
+<a id="__codelineno-0-2631" name="__codelineno-0-2631"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-2632" name="__codelineno-0-2632"></a><span class="sd">            exc_type: The exception type, ignored — closing is unconditional, as it is for a file.</span>
+<a id="__codelineno-0-2633" name="__codelineno-0-2633"></a><span class="sd">            exc: The exception, ignored.</span>
+<a id="__codelineno-0-2634" name="__codelineno-0-2634"></a><span class="sd">            tb: The traceback, ignored.</span>
+<a id="__codelineno-0-2635" name="__codelineno-0-2635"></a>
+<a id="__codelineno-0-2636" name="__codelineno-0-2636"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-2637" name="__codelineno-0-2637"></a><span class="sd">            ``False`` — exceptions are not suppressed.</span>
+<a id="__codelineno-0-2638" name="__codelineno-0-2638"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2639" name="__codelineno-0-2639"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<a id="__codelineno-0-2640" name="__codelineno-0-2640"></a>        <span class="k">return</span> <span class="kc">False</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -11761,17 +11781,7 @@ margin; pass <code>bbox_inches=None</code> to :meth:<code>save</code> to preserv
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2480">2480</a></span>
-<span class="normal"><a href="#__codelineno-0-2481">2481</a></span>
-<span class="normal"><a href="#__codelineno-0-2482">2482</a></span>
-<span class="normal"><a href="#__codelineno-0-2483">2483</a></span>
-<span class="normal"><a href="#__codelineno-0-2484">2484</a></span>
-<span class="normal"><a href="#__codelineno-0-2485">2485</a></span>
-<span class="normal"><a href="#__codelineno-0-2486">2486</a></span>
-<span class="normal"><a href="#__codelineno-0-2487">2487</a></span>
-<span class="normal"><a href="#__codelineno-0-2488">2488</a></span>
-<span class="normal"><a href="#__codelineno-0-2489">2489</a></span>
-<span class="normal"><a href="#__codelineno-0-2490">2490</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2490">2490</a></span>
 <span class="normal"><a href="#__codelineno-0-2491">2491</a></span>
 <span class="normal"><a href="#__codelineno-0-2492">2492</a></span>
 <span class="normal"><a href="#__codelineno-0-2493">2493</a></span>
@@ -11807,53 +11817,63 @@ margin; pass <code>bbox_inches=None</code> to :meth:<code>save</code> to preserv
 <span class="normal"><a href="#__codelineno-0-2523">2523</a></span>
 <span class="normal"><a href="#__codelineno-0-2524">2524</a></span>
 <span class="normal"><a href="#__codelineno-0-2525">2525</a></span>
-<span class="normal"><a href="#__codelineno-0-2526">2526</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2480" name="__codelineno-0-2480"></a><span class="k">def</span><span class="w"> </span><span class="nf">stamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mark</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2481" name="__codelineno-0-2481"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Stamp a logo / watermark onto the figure (delegates to cleopatra&#39;s ``WatermarkMixin.stamp_mark``).</span>
-<a id="__codelineno-0-2482" name="__codelineno-0-2482"></a>
-<a id="__codelineno-0-2483" name="__codelineno-0-2483"></a><span class="sd">    The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction</span>
-<a id="__codelineno-0-2484" name="__codelineno-0-2484"></a><span class="sd">    coordinates, so it keeps its proportion and corner offset at whatever dpi the figure is later saved</span>
-<a id="__codelineno-0-2485" name="__codelineno-0-2485"></a><span class="sd">    at. Because it is figure-level rather than axes-level it sits above every layer, and works on any</span>
-<a id="__codelineno-0-2486" name="__codelineno-0-2486"></a><span class="sd">    scene — a :class:`~digitalearth.static.map.Map`, a chart, or a bare :class:`Scene`.</span>
-<a id="__codelineno-0-2487" name="__codelineno-0-2487"></a>
-<a id="__codelineno-0-2488" name="__codelineno-0-2488"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2489" name="__codelineno-0-2489"></a><span class="sd">        mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /</span>
-<a id="__codelineno-0-2490" name="__codelineno-0-2490"></a><span class="sd">            ``(H, W, 4)`` array, either ``uint8`` ``0-255`` or float ``0-1``.</span>
-<a id="__codelineno-0-2491" name="__codelineno-0-2491"></a><span class="sd">        **kwargs: Forwarded to ``stamp_mark`` — ``frac`` (the mark&#39;s longer side as a fraction of the</span>
-<a id="__codelineno-0-2492" name="__codelineno-0-2492"></a><span class="sd">            figure, default ``0.11``), ``corner`` (``&quot;lower right&quot;`` / ``&quot;lower left&quot;`` /</span>
-<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a><span class="sd">            ``&quot;upper right&quot;`` / ``&quot;upper left&quot;``), ``margin``, ``shadow`` and ``blur``.</span>
-<a id="__codelineno-0-2494" name="__codelineno-0-2494"></a>
-<a id="__codelineno-0-2495" name="__codelineno-0-2495"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2496" name="__codelineno-0-2496"></a><span class="sd">        The frameless inset ``Axes`` the mark was drawn on.</span>
+<span class="normal"><a href="#__codelineno-0-2526">2526</a></span>
+<span class="normal"><a href="#__codelineno-0-2527">2527</a></span>
+<span class="normal"><a href="#__codelineno-0-2528">2528</a></span>
+<span class="normal"><a href="#__codelineno-0-2529">2529</a></span>
+<span class="normal"><a href="#__codelineno-0-2530">2530</a></span>
+<span class="normal"><a href="#__codelineno-0-2531">2531</a></span>
+<span class="normal"><a href="#__codelineno-0-2532">2532</a></span>
+<span class="normal"><a href="#__codelineno-0-2533">2533</a></span>
+<span class="normal"><a href="#__codelineno-0-2534">2534</a></span>
+<span class="normal"><a href="#__codelineno-0-2535">2535</a></span>
+<span class="normal"><a href="#__codelineno-0-2536">2536</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2490" name="__codelineno-0-2490"></a><span class="k">def</span><span class="w"> </span><span class="nf">stamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mark</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2491" name="__codelineno-0-2491"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Stamp a logo / watermark onto the figure (delegates to cleopatra&#39;s ``WatermarkMixin.stamp_mark``).</span>
+<a id="__codelineno-0-2492" name="__codelineno-0-2492"></a>
+<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a><span class="sd">    The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction</span>
+<a id="__codelineno-0-2494" name="__codelineno-0-2494"></a><span class="sd">    coordinates, so it keeps its proportion and corner offset at whatever dpi the figure is later saved</span>
+<a id="__codelineno-0-2495" name="__codelineno-0-2495"></a><span class="sd">    at. Because it is figure-level rather than axes-level it sits above every layer, and works on any</span>
+<a id="__codelineno-0-2496" name="__codelineno-0-2496"></a><span class="sd">    scene — a :class:`~digitalearth.static.map.Map`, a chart, or a bare :class:`Scene`.</span>
 <a id="__codelineno-0-2497" name="__codelineno-0-2497"></a>
-<a id="__codelineno-0-2498" name="__codelineno-0-2498"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2499" name="__codelineno-0-2499"></a><span class="sd">        ValueError: if ``corner``, ``frac``, ``margin`` or ``blur`` is out of contract, if the mark plus</span>
-<a id="__codelineno-0-2500" name="__codelineno-0-2500"></a><span class="sd">            its margin would not fit the figure, or if an array mark has a bad shape/dtype/range.</span>
-<a id="__codelineno-0-2501" name="__codelineno-0-2501"></a><span class="sd">        FileNotFoundError: if ``mark`` is a path that does not exist.</span>
-<a id="__codelineno-0-2502" name="__codelineno-0-2502"></a>
-<a id="__codelineno-0-2503" name="__codelineno-0-2503"></a><span class="sd">    Warning:</span>
-<a id="__codelineno-0-2504" name="__codelineno-0-2504"></a><span class="sd">        Stamp **last** — the mark is baked from the figure&#39;s current size, so call this after any</span>
-<a id="__codelineno-0-2505" name="__codelineno-0-2505"></a><span class="sd">        ``tight_layout()`` and after the final ``set_size_inches``. Note also that :meth:`save` defaults</span>
-<a id="__codelineno-0-2506" name="__codelineno-0-2506"></a><span class="sd">        to ``bbox_inches=&quot;tight&quot;``, which crops surrounding whitespace and so shifts the mark&#39;s relative</span>
-<a id="__codelineno-0-2507" name="__codelineno-0-2507"></a><span class="sd">        margin; pass ``bbox_inches=None`` to :meth:`save` to preserve the placement exactly.</span>
-<a id="__codelineno-0-2508" name="__codelineno-0-2508"></a>
-<a id="__codelineno-0-2509" name="__codelineno-0-2509"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2510" name="__codelineno-0-2510"></a><span class="sd">        - Stamp a small opaque mark into the lower-right corner:</span>
-<a id="__codelineno-0-2511" name="__codelineno-0-2511"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2512" name="__codelineno-0-2512"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2513" name="__codelineno-0-2513"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2514" name="__codelineno-0-2514"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-2515" name="__codelineno-0-2515"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2516" name="__codelineno-0-2516"></a><span class="sd">            &gt;&gt;&gt; scene = Scene(figsize=(8, 6))</span>
-<a id="__codelineno-0-2517" name="__codelineno-0-2517"></a><span class="sd">            &gt;&gt;&gt; logo = np.zeros((40, 80, 4), dtype=np.uint8)</span>
-<a id="__codelineno-0-2518" name="__codelineno-0-2518"></a><span class="sd">            &gt;&gt;&gt; logo[..., :3] = 255</span>
-<a id="__codelineno-0-2519" name="__codelineno-0-2519"></a><span class="sd">            &gt;&gt;&gt; logo[..., 3] = 255</span>
-<a id="__codelineno-0-2520" name="__codelineno-0-2520"></a><span class="sd">            &gt;&gt;&gt; mark_ax = scene.stamp(logo, frac=0.2, shadow=False)</span>
-<a id="__codelineno-0-2521" name="__codelineno-0-2521"></a><span class="sd">            &gt;&gt;&gt; [round(float(v), 3) for v in mark_ax.get_position().bounds]</span>
-<a id="__codelineno-0-2522" name="__codelineno-0-2522"></a><span class="sd">            [0.775, 0.025, 0.2, 0.133]</span>
-<a id="__codelineno-0-2523" name="__codelineno-0-2523"></a>
-<a id="__codelineno-0-2524" name="__codelineno-0-2524"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2525" name="__codelineno-0-2525"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2526" name="__codelineno-0-2526"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">stamp_mark</span><span class="p">(</span><span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-2498" name="__codelineno-0-2498"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2499" name="__codelineno-0-2499"></a><span class="sd">        mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /</span>
+<a id="__codelineno-0-2500" name="__codelineno-0-2500"></a><span class="sd">            ``(H, W, 4)`` array, either ``uint8`` ``0-255`` or float ``0-1``.</span>
+<a id="__codelineno-0-2501" name="__codelineno-0-2501"></a><span class="sd">        **kwargs: Forwarded to ``stamp_mark`` — ``frac`` (the mark&#39;s longer side as a fraction of the</span>
+<a id="__codelineno-0-2502" name="__codelineno-0-2502"></a><span class="sd">            figure, default ``0.11``), ``corner`` (``&quot;lower right&quot;`` / ``&quot;lower left&quot;`` /</span>
+<a id="__codelineno-0-2503" name="__codelineno-0-2503"></a><span class="sd">            ``&quot;upper right&quot;`` / ``&quot;upper left&quot;``), ``margin``, ``shadow`` and ``blur``.</span>
+<a id="__codelineno-0-2504" name="__codelineno-0-2504"></a>
+<a id="__codelineno-0-2505" name="__codelineno-0-2505"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2506" name="__codelineno-0-2506"></a><span class="sd">        The frameless inset ``Axes`` the mark was drawn on.</span>
+<a id="__codelineno-0-2507" name="__codelineno-0-2507"></a>
+<a id="__codelineno-0-2508" name="__codelineno-0-2508"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2509" name="__codelineno-0-2509"></a><span class="sd">        ValueError: if ``corner``, ``frac``, ``margin`` or ``blur`` is out of contract, if the mark plus</span>
+<a id="__codelineno-0-2510" name="__codelineno-0-2510"></a><span class="sd">            its margin would not fit the figure, or if an array mark has a bad shape/dtype/range.</span>
+<a id="__codelineno-0-2511" name="__codelineno-0-2511"></a><span class="sd">        FileNotFoundError: if ``mark`` is a path that does not exist.</span>
+<a id="__codelineno-0-2512" name="__codelineno-0-2512"></a>
+<a id="__codelineno-0-2513" name="__codelineno-0-2513"></a><span class="sd">    Warning:</span>
+<a id="__codelineno-0-2514" name="__codelineno-0-2514"></a><span class="sd">        Stamp **last** — the mark is baked from the figure&#39;s current size, so call this after any</span>
+<a id="__codelineno-0-2515" name="__codelineno-0-2515"></a><span class="sd">        ``tight_layout()`` and after the final ``set_size_inches``. Note also that :meth:`save` defaults</span>
+<a id="__codelineno-0-2516" name="__codelineno-0-2516"></a><span class="sd">        to ``bbox_inches=&quot;tight&quot;``, which crops surrounding whitespace and so shifts the mark&#39;s relative</span>
+<a id="__codelineno-0-2517" name="__codelineno-0-2517"></a><span class="sd">        margin; pass ``bbox_inches=None`` to :meth:`save` to preserve the placement exactly.</span>
+<a id="__codelineno-0-2518" name="__codelineno-0-2518"></a>
+<a id="__codelineno-0-2519" name="__codelineno-0-2519"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2520" name="__codelineno-0-2520"></a><span class="sd">        - Stamp a small opaque mark into the lower-right corner:</span>
+<a id="__codelineno-0-2521" name="__codelineno-0-2521"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2522" name="__codelineno-0-2522"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2523" name="__codelineno-0-2523"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2524" name="__codelineno-0-2524"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-2525" name="__codelineno-0-2525"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2526" name="__codelineno-0-2526"></a><span class="sd">            &gt;&gt;&gt; scene = Scene(figsize=(8, 6))</span>
+<a id="__codelineno-0-2527" name="__codelineno-0-2527"></a><span class="sd">            &gt;&gt;&gt; logo = np.zeros((40, 80, 4), dtype=np.uint8)</span>
+<a id="__codelineno-0-2528" name="__codelineno-0-2528"></a><span class="sd">            &gt;&gt;&gt; logo[..., :3] = 255</span>
+<a id="__codelineno-0-2529" name="__codelineno-0-2529"></a><span class="sd">            &gt;&gt;&gt; logo[..., 3] = 255</span>
+<a id="__codelineno-0-2530" name="__codelineno-0-2530"></a><span class="sd">            &gt;&gt;&gt; mark_ax = scene.stamp(logo, frac=0.2, shadow=False)</span>
+<a id="__codelineno-0-2531" name="__codelineno-0-2531"></a><span class="sd">            &gt;&gt;&gt; [round(float(v), 3) for v in mark_ax.get_position().bounds]</span>
+<a id="__codelineno-0-2532" name="__codelineno-0-2532"></a><span class="sd">            [0.775, 0.025, 0.2, 0.133]</span>
+<a id="__codelineno-0-2533" name="__codelineno-0-2533"></a>
+<a id="__codelineno-0-2534" name="__codelineno-0-2534"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2535" name="__codelineno-0-2535"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2536" name="__codelineno-0-2536"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">stamp_mark</span><span class="p">(</span><span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12340,17 +12360,7 @@ the heading, because where a tier paints it is not what travels.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2528">2528</a></span>
-<span class="normal"><a href="#__codelineno-0-2529">2529</a></span>
-<span class="normal"><a href="#__codelineno-0-2530">2530</a></span>
-<span class="normal"><a href="#__codelineno-0-2531">2531</a></span>
-<span class="normal"><a href="#__codelineno-0-2532">2532</a></span>
-<span class="normal"><a href="#__codelineno-0-2533">2533</a></span>
-<span class="normal"><a href="#__codelineno-0-2534">2534</a></span>
-<span class="normal"><a href="#__codelineno-0-2535">2535</a></span>
-<span class="normal"><a href="#__codelineno-0-2536">2536</a></span>
-<span class="normal"><a href="#__codelineno-0-2537">2537</a></span>
-<span class="normal"><a href="#__codelineno-0-2538">2538</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2538">2538</a></span>
 <span class="normal"><a href="#__codelineno-0-2539">2539</a></span>
 <span class="normal"><a href="#__codelineno-0-2540">2540</a></span>
 <span class="normal"><a href="#__codelineno-0-2541">2541</a></span>
@@ -12368,35 +12378,45 @@ the heading, because where a tier paints it is not what travels.</p>
 <span class="normal"><a href="#__codelineno-0-2553">2553</a></span>
 <span class="normal"><a href="#__codelineno-0-2554">2554</a></span>
 <span class="normal"><a href="#__codelineno-0-2555">2555</a></span>
-<span class="normal"><a href="#__codelineno-0-2556">2556</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2528" name="__codelineno-0-2528"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-<a id="__codelineno-0-2529" name="__codelineno-0-2529"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the figure to ``path`` (``bbox_inches=&quot;tight&quot;`` by default).</span>
-<a id="__codelineno-0-2530" name="__codelineno-0-2530"></a>
-<a id="__codelineno-0-2531" name="__codelineno-0-2531"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2532" name="__codelineno-0-2532"></a><span class="sd">        path: Destination file path; the extension picks the format matplotlib writes.</span>
-<a id="__codelineno-0-2533" name="__codelineno-0-2533"></a><span class="sd">        **kwargs: Forwarded to ``Figure.savefig`` (e.g. ``dpi``, ``bbox_inches``, ``transparent``).</span>
-<a id="__codelineno-0-2534" name="__codelineno-0-2534"></a>
-<a id="__codelineno-0-2535" name="__codelineno-0-2535"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2536" name="__codelineno-0-2536"></a><span class="sd">        The path that was written, as a :class:`pathlib.Path` — every backend&#39;s ``save`` returns one, so</span>
-<a id="__codelineno-0-2537" name="__codelineno-0-2537"></a><span class="sd">        a caller can chain onto the result without re-deriving it.</span>
-<a id="__codelineno-0-2538" name="__codelineno-0-2538"></a>
-<a id="__codelineno-0-2539" name="__codelineno-0-2539"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2540" name="__codelineno-0-2540"></a><span class="sd">        - Save a scene and read the written file back off the return value:</span>
-<a id="__codelineno-0-2541" name="__codelineno-0-2541"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2542" name="__codelineno-0-2542"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2543" name="__codelineno-0-2543"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2544" name="__codelineno-0-2544"></a><span class="sd">            &gt;&gt;&gt; import tempfile</span>
-<a id="__codelineno-0-2545" name="__codelineno-0-2545"></a><span class="sd">            &gt;&gt;&gt; from pathlib import Path</span>
-<a id="__codelineno-0-2546" name="__codelineno-0-2546"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2547" name="__codelineno-0-2547"></a><span class="sd">            &gt;&gt;&gt; out = Scene().save(Path(tempfile.mkdtemp()) / &quot;scene.png&quot;)</span>
-<a id="__codelineno-0-2548" name="__codelineno-0-2548"></a><span class="sd">            &gt;&gt;&gt; out.suffix</span>
-<a id="__codelineno-0-2549" name="__codelineno-0-2549"></a><span class="sd">            &#39;.png&#39;</span>
-<a id="__codelineno-0-2550" name="__codelineno-0-2550"></a><span class="sd">            &gt;&gt;&gt; out.exists()</span>
-<a id="__codelineno-0-2551" name="__codelineno-0-2551"></a><span class="sd">            True</span>
-<a id="__codelineno-0-2552" name="__codelineno-0-2552"></a>
-<a id="__codelineno-0-2553" name="__codelineno-0-2553"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2554" name="__codelineno-0-2554"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2555" name="__codelineno-0-2555"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="s2">&quot;bbox_inches&quot;</span><span class="p">:</span> <span class="s2">&quot;tight&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">})</span>
-<a id="__codelineno-0-2556" name="__codelineno-0-2556"></a>    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-2556">2556</a></span>
+<span class="normal"><a href="#__codelineno-0-2557">2557</a></span>
+<span class="normal"><a href="#__codelineno-0-2558">2558</a></span>
+<span class="normal"><a href="#__codelineno-0-2559">2559</a></span>
+<span class="normal"><a href="#__codelineno-0-2560">2560</a></span>
+<span class="normal"><a href="#__codelineno-0-2561">2561</a></span>
+<span class="normal"><a href="#__codelineno-0-2562">2562</a></span>
+<span class="normal"><a href="#__codelineno-0-2563">2563</a></span>
+<span class="normal"><a href="#__codelineno-0-2564">2564</a></span>
+<span class="normal"><a href="#__codelineno-0-2565">2565</a></span>
+<span class="normal"><a href="#__codelineno-0-2566">2566</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2538" name="__codelineno-0-2538"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-0-2539" name="__codelineno-0-2539"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the figure to ``path`` (``bbox_inches=&quot;tight&quot;`` by default).</span>
+<a id="__codelineno-0-2540" name="__codelineno-0-2540"></a>
+<a id="__codelineno-0-2541" name="__codelineno-0-2541"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2542" name="__codelineno-0-2542"></a><span class="sd">        path: Destination file path; the extension picks the format matplotlib writes.</span>
+<a id="__codelineno-0-2543" name="__codelineno-0-2543"></a><span class="sd">        **kwargs: Forwarded to ``Figure.savefig`` (e.g. ``dpi``, ``bbox_inches``, ``transparent``).</span>
+<a id="__codelineno-0-2544" name="__codelineno-0-2544"></a>
+<a id="__codelineno-0-2545" name="__codelineno-0-2545"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2546" name="__codelineno-0-2546"></a><span class="sd">        The path that was written, as a :class:`pathlib.Path` — every backend&#39;s ``save`` returns one, so</span>
+<a id="__codelineno-0-2547" name="__codelineno-0-2547"></a><span class="sd">        a caller can chain onto the result without re-deriving it.</span>
+<a id="__codelineno-0-2548" name="__codelineno-0-2548"></a>
+<a id="__codelineno-0-2549" name="__codelineno-0-2549"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2550" name="__codelineno-0-2550"></a><span class="sd">        - Save a scene and read the written file back off the return value:</span>
+<a id="__codelineno-0-2551" name="__codelineno-0-2551"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2552" name="__codelineno-0-2552"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2553" name="__codelineno-0-2553"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2554" name="__codelineno-0-2554"></a><span class="sd">            &gt;&gt;&gt; import tempfile</span>
+<a id="__codelineno-0-2555" name="__codelineno-0-2555"></a><span class="sd">            &gt;&gt;&gt; from pathlib import Path</span>
+<a id="__codelineno-0-2556" name="__codelineno-0-2556"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2557" name="__codelineno-0-2557"></a><span class="sd">            &gt;&gt;&gt; out = Scene().save(Path(tempfile.mkdtemp()) / &quot;scene.png&quot;)</span>
+<a id="__codelineno-0-2558" name="__codelineno-0-2558"></a><span class="sd">            &gt;&gt;&gt; out.suffix</span>
+<a id="__codelineno-0-2559" name="__codelineno-0-2559"></a><span class="sd">            &#39;.png&#39;</span>
+<a id="__codelineno-0-2560" name="__codelineno-0-2560"></a><span class="sd">            &gt;&gt;&gt; out.exists()</span>
+<a id="__codelineno-0-2561" name="__codelineno-0-2561"></a><span class="sd">            True</span>
+<a id="__codelineno-0-2562" name="__codelineno-0-2562"></a>
+<a id="__codelineno-0-2563" name="__codelineno-0-2563"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2564" name="__codelineno-0-2564"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2565" name="__codelineno-0-2565"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="s2">&quot;bbox_inches&quot;</span><span class="p">:</span> <span class="s2">&quot;tight&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">})</span>
+<a id="__codelineno-0-2566" name="__codelineno-0-2566"></a>    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12419,11 +12439,11 @@ the heading, because where a tier paints it is not what travels.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2558">2558</a></span>
-<span class="normal"><a href="#__codelineno-0-2559">2559</a></span>
-<span class="normal"><a href="#__codelineno-0-2560">2560</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2558" name="__codelineno-0-2558"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2559" name="__codelineno-0-2559"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Show the figure via ``matplotlib.pyplot.show``.&quot;&quot;&quot;</span>
-<a id="__codelineno-0-2560" name="__codelineno-0-2560"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2568">2568</a></span>
+<span class="normal"><a href="#__codelineno-0-2569">2569</a></span>
+<span class="normal"><a href="#__codelineno-0-2570">2570</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2568" name="__codelineno-0-2568"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2569" name="__codelineno-0-2569"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Show the figure via ``matplotlib.pyplot.show``.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-2570" name="__codelineno-0-2570"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12476,17 +12496,7 @@ reference it by path to keep such a figure readable.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2562">2562</a></span>
-<span class="normal"><a href="#__codelineno-0-2563">2563</a></span>
-<span class="normal"><a href="#__codelineno-0-2564">2564</a></span>
-<span class="normal"><a href="#__codelineno-0-2565">2565</a></span>
-<span class="normal"><a href="#__codelineno-0-2566">2566</a></span>
-<span class="normal"><a href="#__codelineno-0-2567">2567</a></span>
-<span class="normal"><a href="#__codelineno-0-2568">2568</a></span>
-<span class="normal"><a href="#__codelineno-0-2569">2569</a></span>
-<span class="normal"><a href="#__codelineno-0-2570">2570</a></span>
-<span class="normal"><a href="#__codelineno-0-2571">2571</a></span>
-<span class="normal"><a href="#__codelineno-0-2572">2572</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2572">2572</a></span>
 <span class="normal"><a href="#__codelineno-0-2573">2573</a></span>
 <span class="normal"><a href="#__codelineno-0-2574">2574</a></span>
 <span class="normal"><a href="#__codelineno-0-2575">2575</a></span>
@@ -12519,50 +12529,60 @@ reference it by path to keep such a figure readable.</p>
 <span class="normal"><a href="#__codelineno-0-2602">2602</a></span>
 <span class="normal"><a href="#__codelineno-0-2603">2603</a></span>
 <span class="normal"><a href="#__codelineno-0-2604">2604</a></span>
-<span class="normal"><a href="#__codelineno-0-2605">2605</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2562" name="__codelineno-0-2562"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2563" name="__codelineno-0-2563"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
-<a id="__codelineno-0-2564" name="__codelineno-0-2564"></a>
-<a id="__codelineno-0-2565" name="__codelineno-0-2565"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
-<a id="__codelineno-0-2566" name="__codelineno-0-2566"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
-<a id="__codelineno-0-2567" name="__codelineno-0-2567"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
-<a id="__codelineno-0-2568" name="__codelineno-0-2568"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
-<a id="__codelineno-0-2569" name="__codelineno-0-2569"></a><span class="sd">    ``with`` calls on the way out.</span>
-<a id="__codelineno-0-2570" name="__codelineno-0-2570"></a>
-<a id="__codelineno-0-2571" name="__codelineno-0-2571"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
-<a id="__codelineno-0-2572" name="__codelineno-0-2572"></a>
-<a id="__codelineno-0-2573" name="__codelineno-0-2573"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
-<a id="__codelineno-0-2574" name="__codelineno-0-2574"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
-<a id="__codelineno-0-2575" name="__codelineno-0-2575"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
-<a id="__codelineno-0-2576" name="__codelineno-0-2576"></a>
-<a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="sd">    .. warning::</span>
-<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="sd">        This closes the **entire** ``self.fig``. The panels returned by</span>
-<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
-<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a><span class="sd">        close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
-<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">        whole workflow or call :meth:`save` and close the figure yourself instead.</span>
+<span class="normal"><a href="#__codelineno-0-2605">2605</a></span>
+<span class="normal"><a href="#__codelineno-0-2606">2606</a></span>
+<span class="normal"><a href="#__codelineno-0-2607">2607</a></span>
+<span class="normal"><a href="#__codelineno-0-2608">2608</a></span>
+<span class="normal"><a href="#__codelineno-0-2609">2609</a></span>
+<span class="normal"><a href="#__codelineno-0-2610">2610</a></span>
+<span class="normal"><a href="#__codelineno-0-2611">2611</a></span>
+<span class="normal"><a href="#__codelineno-0-2612">2612</a></span>
+<span class="normal"><a href="#__codelineno-0-2613">2613</a></span>
+<span class="normal"><a href="#__codelineno-0-2614">2614</a></span>
+<span class="normal"><a href="#__codelineno-0-2615">2615</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2572" name="__codelineno-0-2572"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2573" name="__codelineno-0-2573"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
+<a id="__codelineno-0-2574" name="__codelineno-0-2574"></a>
+<a id="__codelineno-0-2575" name="__codelineno-0-2575"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
+<a id="__codelineno-0-2576" name="__codelineno-0-2576"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
+<a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
+<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
+<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a><span class="sd">    ``with`` calls on the way out.</span>
+<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a>
+<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
 <a id="__codelineno-0-2582" name="__codelineno-0-2582"></a>
-<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
-<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
-<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a>
-<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
+<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
+<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
+<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a>
+<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a><span class="sd">    .. warning::</span>
+<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">        This closes the **entire** ``self.fig``. The panels returned by</span>
+<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would</span>
+<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a><span class="sd">        close the figure for *all* panels — don&#39;t context-manage an individual ``grid`` panel; wrap the</span>
+<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a><span class="sd">        whole workflow or call :meth:`save` and close the figure yourself instead.</span>
 <a id="__codelineno-0-2592" name="__codelineno-0-2592"></a>
-<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
-<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
-<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
-<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
-<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a>    <span class="c1"># whose data has just been let go (see `on_pick`).</span>
-<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
-<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
+<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
+<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
+<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a>
+<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a>
+<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
+<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2606" name="__codelineno-0-2606"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
+<a id="__codelineno-0-2607" name="__codelineno-0-2607"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2608" name="__codelineno-0-2608"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2609" name="__codelineno-0-2609"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2610" name="__codelineno-0-2610"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
+<a id="__codelineno-0-2611" name="__codelineno-0-2611"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
+<a id="__codelineno-0-2612" name="__codelineno-0-2612"></a>    <span class="c1"># whose data has just been let go (see `on_pick`).</span>
+<a id="__codelineno-0-2613" name="__codelineno-0-2613"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
+<a id="__codelineno-0-2614" name="__codelineno-0-2614"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-2615" name="__codelineno-0-2615"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
