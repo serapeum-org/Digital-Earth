@@ -673,6 +673,66 @@ class TestDeliveringOnePickToSeveralCallbacks:
             )
 
 
+class TestTheArtistAccessorDoesNotTeachThePrivateRecord:
+    """`Scene.artist` exists to replace `scene._renderer.drawn[...]`, and its own examples read it (R2-L8).
+
+    `ff42be5e` closed three of four such public-doctest reads and counted the `Examples:` of `artist`
+    itself out of the census, on the ground that `.artists` -- the *set* a layer owns -- has no public
+    accessor the way `.artist` does. The counts those examples measure are the **axes'**, though, and the
+    axes is public: a labelled graticule puts one `LineCollection` plus one `Text` per labelled gridline
+    on it, which `ax.collections`/`ax.texts`/`ax.lines` report exactly on a figure holding one layer. So
+    the examples say it that way now, and the sentence naming `DrawnLayer.artists` as the renderer's
+    internal record stays in the prose, where it is a statement about the surface rather than a route to
+    copy.
+    """
+
+    @staticmethod
+    def _doctest_lines(member):
+        """Return the runnable lines of a member's docstring.
+
+        Args:
+            member: The function or property whose examples to collect.
+
+        Returns:
+            Every ``>>>`` / ``...`` line, which is what a reader copies and what doctest executes.
+        """
+        return [
+            line.strip()
+            for line in (member.__doc__ or "").splitlines()
+            if line.strip().startswith((">>>", "..."))
+        ]
+
+    def test_the_accessors_examples_do_not_read_the_renderers_record(self):
+        """No runnable line under `Scene.artist` reaches `_renderer.drawn`.
+
+        Test scenario:
+            Scoped to the ``>>>`` lines, because the defect is what the examples *teach*: a reader who
+            copies one copies the private route the accessor was added to retire. The prose above them
+            still names that route, in the past tense, as the thing `artist` replaced -- and naming it
+            is not demonstrating it. The doctest sweep proves the replacements measure the same figures.
+        """
+        offenders = [
+            line
+            for line in self._doctest_lines(Scene.artist)
+            if "_renderer.drawn" in line
+        ]
+        assert offenders == [], (
+            f"Scene.artist's examples should not teach the private record they replace; got {offenders}"
+        )
+
+    def test_the_prose_still_names_the_record_that_has_no_public_route(self):
+        """The gap is named rather than papered over: a layer's artist *set* is not public surface.
+
+        Test scenario:
+            Rewriting the examples must not delete the one true statement they carried -- that the set a
+            layer owns lives in the renderer's record, which `set_visible` and `remove_layer` act on.
+            Dropping it would leave a reader thinking `ax.lines` *is* the layer's set.
+        """
+        assert "DrawnLayer.artists" in (Scene.artist.__doc__ or ""), (
+            "Scene.artist should still name the record that has no public accessor"
+        )
+
+
 @pytest.fixture
 def borrowed_axes():
     """An axes a caller laid out themselves, as `plt.subplots` hands it over.

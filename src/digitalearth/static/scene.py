@@ -1136,7 +1136,12 @@ class Scene(WatermarkMixin):
             A layer like that — a graticule, a limb-split coastline — owns a whole set of artists, and
             that set is the renderer's own record (`DrawnLayer.artists`), which is what
             :meth:`set_visible` and :meth:`remove_layer` act on rather than part of this tier's public
-            surface.
+            surface. **There is no public accessor for it**, and that is a gap rather than a nicety: the
+            examples below count the axes' own lists (``ax.lines``, ``ax.collections``, ``ax.texts``)
+            instead, which is only the layer's set on a figure carrying one layer. A caller who needs to
+            act on the set should go through :meth:`set_visible` / :meth:`remove_layer`; one who needs to
+            *read* it has nowhere public to go, and reaching into `_renderer.drawn` is not a supported
+            route (R2-L8).
 
         Raises:
             KeyError: when `layer_id` names no layer on this figure, naming the ids that do. The test is
@@ -1179,42 +1184,42 @@ class Scene(WatermarkMixin):
                 >>> m.close()
 
                 ```
-            - A graticule's drawer hands back its projected lines rather than one artist. Its set of
-              on-axes artists lives in the renderer's internal record, shown here only to make the
-              difference between the two counts concrete; and a figure with nothing drawn has no "last"
-              to hand back:
+            - A graticule's drawer hands back its projected lines rather than one artist. What the axes
+              holds is counted off the **axes** — ``ax.collections`` and ``ax.texts``, which on a figure
+              carrying this one layer are exactly its artists: one ``LineCollection`` for the lines plus
+              one ``Text`` per labelled gridline, 19 against the drawer's 18 polylines:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
                 >>> m = Map(crs=4326)
                 >>> _ = m.graticule(spacing=30.0)
-                >>> len(m.artist("graticule-1")), len(m._renderer.drawn["graticule-1"].artists)
+                >>> len(m.artist("graticule-1")), len(m.ax.collections) + len(m.ax.texts)
                 (18, 19)
                 >>> m.close()
                 >>> coarse = Map(crs=4326)
                 >>> _ = coarse.graticule(spacing=60.0)
-                >>> len(coarse.artist("graticule-1")), len(coarse._renderer.drawn["graticule-1"].artists)
+                >>> len(coarse.artist("graticule-1")), len(coarse.ax.collections) + len(coarse.ax.texts)
                 (9, 11)
                 >>> coarse.close()
 
                 ```
             - On a globe the drawer's value is unchanged while the axes holds nothing until
               :meth:`render` paints the grid as `Line2D` — so a described layer with no artists yet is
-              answered, not refused:
+              answered, not refused. ``ax.lines`` is the count to watch here, because that is what the
+              projection frame paints the grid as:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
                 >>> globe = Map(crs=4326, globe=True)
                 >>> _ = globe.graticule(spacing=30.0)
-                >>> len(globe.artist("graticule-1")), len(globe._renderer.drawn["graticule-1"].artists)
+                >>> len(globe.artist("graticule-1")), len(globe.ax.lines)
                 (18, 0)
                 >>> globe.render()
-                >>> drawn = globe._renderer.drawn["graticule-1"].artists
-                >>> len(globe.artist("graticule-1")), len(drawn)
+                >>> len(globe.artist("graticule-1")), len(globe.ax.lines)
                 (18, 18)
-                >>> sorted({type(artist).__name__ for artist in drawn})
+                >>> sorted({type(artist).__name__ for artist in globe.ax.lines})
                 ['Line2D']
                 >>> globe.close()
 
