@@ -239,7 +239,8 @@ class TestOffTheLimb:
 
         canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
         getattr(canvas, builder)(rivers)
-        assert dict(canvas._renderer.drawn) == {}, canvas._renderer.drawn
+        with pytest.raises(ValueError, match="has nothing to hand back"):
+            canvas.artist()
         assert canvas.layer_ids == [], canvas.layer_ids
 
 

@@ -565,8 +565,8 @@ class TestTriangulatingPointsThatDoNotAllSurviveTheWarp:
         canvas = Map(crs=32618)
         try:
             canvas.tricontourf(self._two_of_three_finite(), column="v")
-            drawn = dict(canvas._renderer.drawn)
-            assert drawn == {}, f"a layer that cannot be triangulated drew {drawn!r}"
+            with pytest.raises(ValueError, match="has nothing to hand back"):
+                canvas.artist()
             assert canvas.layers == [], (
                 f"a skipped layer must register nothing; got {canvas.layers}"
             )
