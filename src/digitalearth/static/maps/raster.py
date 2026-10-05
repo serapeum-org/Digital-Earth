@@ -558,7 +558,9 @@ class FieldColors:
         ramp centred outside the data draws every value in one arm, which is worse than the sequential ramp
         it would replace. That case keeps the resolved ramp and says so at ``WARNING``, because a silent
         decline reads as the option not working. cleopatra still symmetrises the limits — that is its
-        keyword, not this decision.
+        keyword, not this decision — so the decline is of the *ramp* only, and the warning says that too: an
+        off-band centre still widens the colour domain to reach the centre. Measured, a band running ``12``
+        to ``88`` with ``center=0`` draws through ``(-88.0, 88.0)`` on the sequential ramp that was kept.
 
         Measuring the domain costs one pass over the band, which is why it is behind the centre check rather
         than done for every field.
@@ -604,9 +606,12 @@ class FieldColors:
         if not scale.straddles(self.center):
             low, high = scale.as_limits()
             logger.warning(
-                "field(): a diverging scale centred at %s is not drawn — the band runs %s to %s, so one "
-                "arm of the ramp would hold every value; the sequential colormap is kept. Centre it inside "
-                "the data, or drop the centre.",
+                "field(): the diverging ramp a centre of %s asks for is not drawn — the band runs %s to "
+                "%s, so one arm of the ramp would hold every value; the sequential colormap is kept. Only "
+                "the ramp is declined: `center=` is cleopatra's keyword and still symmetrises the colour "
+                "limits on it, so an off-band centre widens the colour domain to reach the centre (a "
+                '`color_scale="midpoint"` scale leaves the limits alone). Centre it inside the data, or '
+                "drop the centre.",
                 self.center,
                 low,
                 high,
@@ -1297,7 +1302,10 @@ class RasterMixin(_MixinBase):
                   limits on it, and this tier supplies the diverging **ramp** — built from the resolved
                   colormap's own two ends — but only when the caller named no ``cmap`` of their own and
                   the band straddles the centre. A centre outside the band keeps the sequential ramp and
-                  says so at ``WARNING``, because one arm would otherwise hold every value.
+                  says so at ``WARNING``, because one arm would otherwise hold every value — the *ramp* is
+                  what is declined there, not the centre: cleopatra symmetrises the limits either way, so an
+                  off-band centre also widens the domain to reach it (measured: a band running ``12`` to
+                  ``88`` with ``center=0`` draws through ``(-88.0, 88.0)``).
                 * ``missing=``, ``over=`` and ``under=`` colour what the ramp cannot place: a nodata cell,
                   a value above the upper limit and one below the lower. They are this tier's own keywords
                   (:class:`FieldColors`), folded onto the drawn colormap *and* onto the scale the layer

@@ -73,8 +73,16 @@ m.field(anomaly, color_scale="midpoint", midpoint=0)   # asymmetric limits, colo
 
 The ramp is only substituted where no colormap was named: `cmap=` is always what draws. And the centre has to
 be **inside** the data — a ramp centred outside it draws every value in one arm, which is worse than the
-sequential ramp it would replace — so a centre the band does not straddle is declined, the resolved colormap
-is kept, and the decline is logged at `WARNING` naming the centre and the range it measured.
+sequential ramp it would replace — so for a centre the band does not straddle the *diverging ramp* is
+declined, the resolved colormap is kept, and the decline is logged at `WARNING` naming the centre and the
+range it measured.
+
+Only the ramp is declined. `center=` is cleopatra's own keyword and it symmetrises the colour limits whether
+the band straddles the centre or not, so an off-band centre still widens the colour domain to reach it:
+measured, a band running `12` to `88` drawn with `center=0` goes through limits `(-88.0, 88.0)` instead of
+`(12.0, 88.0)`, leaving the data in the top 43% of the ramp. The `color_scale="midpoint", midpoint=`
+spelling has no such effect — it keeps the data's own limits — so an off-band centre there costs nothing but
+the ramp. Either way the remedy the warning names is the same: move the centre inside the data, or drop it.
 
 ## The colours a ramp cannot place
 

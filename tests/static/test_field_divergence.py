@@ -331,6 +331,43 @@ class TestACentreOutsideTheDataIsDeclined:
             f"the message must name the domain it measured; got {caplog.text!r}"
         )
 
+    def test_the_declined_centre_still_widens_the_colour_domain(self, caplog):
+        """Only the *ramp* is declined: `center=` is cleopatra's keyword and still symmetrises the limits.
+
+        Args:
+            caplog: pytest's log capture, so the decline does not reach the test report.
+
+        Test scenario:
+            A band running 12..88 centred at zero draws through ``(-88.0, 88.0)`` — the data then occupies
+            the top 43% of the ramp. That is the half of the request that *is* honoured, and the message
+            and the reference page have to say so rather than reading as "the centre was ignored".
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(POSITIVE, center=0.0)
+                drawn = canvas.artist().get_clim()
+        assert drawn == (-88.0, 88.0), (
+            f"a declined centre must still symmetrise the limits on it; got {drawn}"
+        )
+
+    def test_the_message_says_the_limits_are_still_symmetrised(self, caplog):
+        """A decline that is only half a decline has to name the half it is not.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            The message said the scale "is not drawn" and the sequential colormap "is kept", which a
+            reader takes to mean the centre was ignored — while the colour domain silently went from
+            ``(12.0, 88.0)`` to ``(-88.0, 88.0)``, a far larger change than the ramp swap it describes.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(POSITIVE, center=0.0)
+        assert "symmetris" in caplog.text, (
+            f"the message must say the limits are still symmetrised on the centre; got {caplog.text!r}"
+        )
+
     def test_nothing_is_logged_when_the_centre_is_inside_the_data(self, caplog):
         """The ordinary case is quiet.
 

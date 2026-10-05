@@ -187,7 +187,11 @@ ROBUST_KEY = "robust"
 #: through ``(-2.0, 2.0)``. ``FieldColors._center_on`` in the raster mixin states the same rule.
 #: Declared here beside ``robust`` for the same reason, and honoured one
 #: step further — :class:`~digitalearth.static.maps.raster.FieldColors` supplies the diverging *ramp*
-#: cleopatra would have defaulted to, which this tier's own colormap resolution suppresses.
+#: cleopatra would have defaulted to, which this tier's own colormap resolution suppresses. The two halves
+#: are honoured on different conditions: the symmetrisation above happens whenever a centre is stated, while
+#: the ramp is supplied only when the caller named no colormap **and** the band straddles the centre. So a
+#: centre the band does not straddle is declined as a *ramp* and still symmetrised as *limits*, which is what
+#: the ``WARNING`` it logs says.
 CENTER_KEY = "center"
 
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
@@ -292,7 +296,8 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     StyleKey(
         CENTER_KEY,
         "The value a diverging scale is built around: the limits are symmetrised on it and, unless a "
-        "colormap was named, the ramp becomes a diverging one centred there.",
+        "colormap was named, the ramp becomes a diverging one centred there. The ramp needs the band to "
+        "straddle the centre; the limits are symmetrised either way.",
     ),
     # -- the colours for what the ramp cannot place (ST-10)
     StyleKey("missing", "Colour of a cell with no value, on a field render."),
