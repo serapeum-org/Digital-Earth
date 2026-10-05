@@ -113,9 +113,14 @@ class Map(
         figure = retarget_via(figure)
         self._sources = dict(figure.sources)
         self._change(figure)
-        # The layer diff does not re-read the figure's title, so a title carried across from a tier whose
-        # figure_spec records one would be lost; set it best-effort. This tier's own figure_spec emits no
-        # panel title, so a same-tier round trip has nothing to restore here.
+        # The layer diff does not re-read the figure's title, so a title the diff cannot carry would be
+        # lost; set it best-effort. Both halves of the pair are live now, and a same-tier round trip does
+        # restore a title: this tier's `figure_spec` records the panel title `set_title` wrote (ST-18) and,
+        # since M4, a `FigureSpec.title` derived from the figure's own suptitle. Measured on one field:
+        # `figure.title=None, panels[0].title='January'` for a plain map, `('rainfall', 'January')` for one
+        # carrying a suptitle too, and `ax.get_title()` comes back `'January'` for the first. A figure
+        # carrying both is headed with `figure.title`, which this sets as the *axes* title — so the panel
+        # title it also carries is not redrawn, and `ax.get_title()` reads `'rainfall'` for that case.
         title = figure.title or figure.panels[0].title
         if title:
             self.set_title(title)
