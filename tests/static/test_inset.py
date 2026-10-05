@@ -904,6 +904,177 @@ class TestARefusedInsetNamesWhatWasWrong:
             main.inset(size=bad)
 
 
+class TestAnExplicitRectangleIsAPlacementOrARefusal:
+    """``inset(position=(x0, y0, w, h))`` is checked, not taken on trust (round 2, L10).
+
+    Round 1's L1 bounded the **named corner** at :data:`LARGEST_CORNER`, and the refusal it added ends
+    *"or place the inset yourself with explicit fractions"* — steering the caller onto the sibling
+    spelling, which took any four numbers. So the escape hatch the refusal recommends is how a caller
+    lands outside the axes, with a zero-sized locator, or with a NaN one.
+
+    The split the checks draw: a rectangle that **overlaps** the axes but hangs over its edge is a
+    deliberate placement and only warned about — that is what the escape hatch is for, and matplotlib
+    allows it. A rectangle that could not be a placement at all is refused by name: a non-finite edge, a
+    side of zero or less, a side too small to survive the thousandth-of-the-axes precision
+    ``_InsetFrame.as_bounds`` reports, and a rectangle entirely off the axes.
+    """
+
+    #: Rectangles that describe no inset. Each is ``(position, the word the refusal must carry)``.
+    IMPOSSIBLE = [
+        pytest.param((0.6, 0.6, 0.0, 0.3), "zero", id="zero-width"),
+        pytest.param((0.6, 0.6, 0.3, 0.0), "zero", id="zero-height"),
+        pytest.param((0.6, 0.6, -0.3, 0.3), "zero", id="negative-width"),
+        pytest.param((0.6, 0.6, 0.3, -0.3), "zero", id="negative-height"),
+        pytest.param((0.6, 0.6, 0.0001, 0.3), "thousandth", id="side-rounds-away"),
+        pytest.param((float("nan"), 0.0, 0.3, 0.3), "finite", id="nan-x0"),
+        pytest.param((0.0, 0.0, float("nan"), 0.3), "finite", id="nan-width"),
+        pytest.param((float("inf"), 0.0, 0.3, 0.3), "finite", id="inf-x0"),
+        pytest.param((0.0, -0.5, 0.3, 0.3), "outside", id="wholly-below"),
+        pytest.param((-0.4, 0.0, 0.3, 0.3), "outside", id="wholly-left"),
+        pytest.param((1.0, 0.0, 0.3, 0.3), "outside", id="starts-at-right-edge"),
+        pytest.param((0.0, 1.2, 0.3, 0.3), "outside", id="wholly-above"),
+    ]
+
+    @pytest.mark.parametrize("position, word", IMPOSSIBLE)
+    def test_a_rectangle_that_is_no_placement_is_refused_naming_the_call(
+        self, position, word, framed
+    ):
+        """Every one of them says ``inset(position=...)`` and what is wrong with it.
+
+        Args:
+            position: The rectangle asked for.
+            word: The word the message has to carry, so the twelve cases are not all proved by one
+                generic sentence.
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            Three of these were accepted and drawn (the zero sides, and the rectangles off the axes),
+            three more were accepted as NaN geometry, and the negative side was refused by *matplotlib*
+            with "Width and height specified must be non-negative" — a message that mentions neither
+            ``inset`` nor ``position``, against round 1's L2.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(position=") as refusal:
+            main.inset(position=position)
+        assert word in str(refusal.value), (
+            f"the refusal should say what is wrong ({word!r}); got {refusal.value}"
+        )
+
+    @pytest.mark.parametrize("position, word", IMPOSSIBLE)
+    def test_a_refused_rectangle_leaves_no_axes_behind(self, position, word, framed):
+        """The check runs before ``ax.inset_axes``, so a refused call draws nothing.
+
+        Args:
+            position: The rectangle asked for.
+            word: Unused here; the parametrisation is shared with the refusal above.
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            ``inset`` answers everything a caller can get wrong first, for exactly this reason — a
+            half-built locator on the figure is worse than the refusal.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(position="):
+            main.inset(position=position)
+        assert main.ax.child_axes == [], (
+            f"a refused rectangle should leave no inset axes; got {main.ax.child_axes}"
+        )
+
+    def test_a_rectangle_hanging_over_the_edge_is_warned_about_not_refused(
+        self, framed, caplog
+    ):
+        """The escape hatch stays open: an overlapping rectangle is a placement, and it is honoured.
+
+        Args:
+            framed: Factory for the framed main map.
+            caplog: Captures the warning.
+
+        Test scenario:
+            ``(0.9, 0.9, 0.5, 0.5)`` puts 60% of the inset past the axes' top-right corner. Refusing it
+            would close the spelling the corner refusal points callers at; saying nothing is how the
+            review found it. So it draws, and says which edges it crosses.
+        """
+        main = framed(4326)
+        with caplog.at_level("WARNING", logger="digitalearth.static.maps.inset"):
+            main.inset(position=(0.9, 0.9, 0.5, 0.5), reference=())
+        assert "outside" in caplog.text, (
+            f"an overhanging rectangle should be reported; log was {caplog.text!r}"
+        )
+
+    def test_the_overhanging_rectangle_is_still_the_one_that_was_asked_for(
+        self, framed
+    ):
+        """Warned about, not adjusted — the fractions reach ``ax.inset_axes`` as written.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            Clamping it into the axes would be a third behaviour, and a caller placing a locator
+            deliberately off the edge would silently get a different figure.
+        """
+        main = framed(4326)
+        main.inset(position=(0.9, 0.9, 0.5, 0.5), reference=())
+        box = main.locator.ax.get_position()
+        parent = main.ax.get_position()
+        width = round((box.x1 - box.x0) / parent.width, 3)
+        assert width == 0.5, (
+            f"the inset should keep the width that was asked for; got {width}"
+        )
+
+    def test_a_contained_rectangle_says_nothing(self, framed, caplog):
+        """The ordinary case must stay quiet, or the warning trains the caller to ignore it.
+
+        Args:
+            framed: Factory for the framed main map.
+            caplog: Captures anything logged.
+
+        Test scenario:
+            ``(0.6, 0.6, 0.3, 0.3)`` sits wholly inside the axes, which is what the spelling is normally
+            used for.
+        """
+        main = framed(4326)
+        with caplog.at_level("WARNING", logger="digitalearth.static.maps.inset"):
+            main.inset(position=(0.6, 0.6, 0.3, 0.3), reference=())
+        assert caplog.text == "", (
+            f"a contained rectangle has nothing to report; log was {caplog.text!r}"
+        )
+
+    def test_the_rectangle_flush_with_the_axes_is_contained(self, framed, caplog):
+        """``(0, 0, 1, 1)`` is the whole axes exactly, and is neither refused nor warned about.
+
+        Args:
+            framed: Factory for the framed main map.
+            caplog: Captures anything logged.
+
+        Test scenario:
+            The boundary of the containment test. A strict comparison would call the flush rectangle an
+            overhang and warn about the one placement that fills the map exactly.
+        """
+        main = framed(4326)
+        with caplog.at_level("WARNING", logger="digitalearth.static.maps.inset"):
+            main.inset(position=(0.0, 0.0, 1.0, 1.0), reference=())
+        assert caplog.text == "", (
+            f"the flush rectangle is contained; log was {caplog.text!r}"
+        )
+
+    def test_a_size_too_small_to_survive_the_rounding_is_refused_too(self, framed):
+        """The sibling spelling has the same zero-area hole, through the rounding rather than the input.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            ``size=0.0001`` is a fraction in ``(0, 1]``, so the range check passes — and
+            ``_InsetFrame.as_bounds`` then rounds the side to ``0.0``, which is the invisible locator the
+            explicit rectangle is refused for. Both spellings are answered, or the refusal is only about
+            how the inset was spelled.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(size=0.0001\)"):
+            main.inset(size=0.0001)
+
+
 class TestALocatorOnAGlobe:
     """A globe's locator is a globe, so its geography is limb-clipped and its frame is drawn (M6).
 

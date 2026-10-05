@@ -19,6 +19,7 @@ marks the parent's extent — the one call.
 
 import logging
 from dataclasses import dataclass
+from math import isfinite
 from numbers import Real
 from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Sequence, Tuple
 
@@ -60,6 +61,11 @@ _LARGEST_CORNER = 1.0 - 2.0 * _CORNER_PAD
 
 #: The inset's side, as a fraction of the map it sits in.
 _DEFAULT_SIZE = 0.28
+
+#: Decimal places a placement is reported to by :meth:`_InsetFrame.as_bounds`. A thousandth of the axes is
+#: well under a pixel, and it is also the floor a placement has to clear: a side that rounds to ``0.0``
+#: here reaches ``ax.inset_axes`` as zero, whatever it was asked as (round 2, L10).
+_PRECISION = 3
 
 #: The reference geography a locator draws by default: filled land under a coastline.
 _DEFAULT_REFERENCE: Tuple[str, ...] = ("land", "coastlines")
@@ -355,12 +361,15 @@ class _InsetFrame:
         Raises:
             ValueError: for a ``size`` that is not a fraction in ``(0, 1]`` — ``0`` draws an inset with no
                 area and anything above ``1`` hangs outside the map, neither of which matplotlib refuses
-                on its own — for a string that is not one of the four corners, for a ``size`` above
-                :data:`_LARGEST_CORNER` *beside a named corner*, which cannot keep its pad on both sides
-                and so hangs outside the map from the other end (round 1, L1), and for a sequence that
-                does not hold four numbers. The corner bound is not applied to an explicit rectangle:
-                that spelling places the inset itself, pad and all, and ``size`` is then only read to
-                refuse a value that could not be a fraction at all.
+                on its own — for a ``size`` positive but too small to survive :meth:`as_bounds`'
+                thousandth-of-the-axes rounding, which is the same invisible locator reached through the
+                rounding instead of through the input; for a string that is not one of the four corners;
+                for a ``size`` above :data:`_LARGEST_CORNER` *beside a named corner*, which cannot keep
+                its pad on both sides and so hangs outside the map from the other end (round 1, L1); for
+                a sequence that does not hold four numbers; and, from :meth:`_placed`, for four numbers
+                that describe no inset at all (round 2, L10). The corner bound is not applied to an
+                explicit rectangle: that spelling places the inset itself, pad and all, and ``size`` is
+                then only read to refuse a value that could not be a fraction at all.
         """
         fraction = float(size) if isinstance(size, Real) else None
         if fraction is None or isinstance(size, bool) or not 0.0 < fraction <= 1.0:
@@ -368,6 +377,15 @@ class _InsetFrame:
             raise ValueError(
                 "inset(size=) is the inset's side as a fraction of the map it sits in, in (0, 1]; got "
                 f"{size!r}"
+            )
+        if round(fraction, _PRECISION) <= 0.0:
+            # In (0, 1] and still nothing: `as_bounds` reports the placement to a thousandth of the axes,
+            # so a side below 0.0005 reaches `inset_axes` as 0.0 -- the zero-area locator an explicit
+            # rectangle is refused for, reached through the rounding rather than through the input.
+            raise ValueError(
+                f"inset(size={size!r}) is too small to place: a placement is taken to a thousandth of "
+                f"the axes, so this side reaches matplotlib as {round(fraction, _PRECISION)} and the "
+                "locator has no area. Ask for a larger size"
             )
         if isinstance(position, str):
             if position not in _CORNERS:
@@ -397,6 +415,99 @@ class _InsetFrame:
                 f"inset(position=) takes one of {sorted(_CORNERS)} or four axes fractions "
                 f"(x0, y0, width, height); got {position!r}"
             ) from error
+        return cls._placed(x0, y0, width, height, asked=position)
+
+    @classmethod
+    def _placed(
+        cls, x0: float, y0: float, width: float, height: float, *, asked: Any
+    ) -> "_InsetFrame":
+        """Return the explicit rectangle ``asked`` for, refusing the ones that place no inset.
+
+        The named-corner spelling is bounded arithmetic — round 1's L1 capped it at
+        :data:`_LARGEST_CORNER` and the four corners then sit inside the axes by construction. The
+        explicit spelling is the caller's own four numbers, and it is where that refusal *sends* them
+        ("or place the inset yourself with four axes fractions"), so it is the one that has to be read
+        (round 2, L10). Measured before this existed: ``position=(0.9, 0.9, 0.5, 0.5)`` drew an inset
+        spanning ``x=[0.90, 1.40]``, ``(0.0, -0.5, 0.3, 0.3)`` one entirely below the map,
+        ``(0.6, 0.6, 0.0, 0.3)`` one of zero width, and ``(nan, 0.0, 0.3, 0.3)`` one whose position was
+        ``nan`` — all four silently.
+
+        **The line drawn here**: a rectangle that *overlaps* the axes and hangs over an edge is a
+        placement, honoured as written and only reported at ``WARNING`` — that is what the escape hatch
+        is for, matplotlib allows it, and clamping it would hand back a different figure from the one
+        asked for. A rectangle that could not be a placement at all is refused.
+
+        Args:
+            x0: Left edge, as a fraction of the parent axes.
+            y0: Bottom edge.
+            width: Width, as a fraction of the parent axes.
+            height: Height.
+            asked: What the caller wrote, so the refusal quotes it rather than the unpacked numbers.
+
+        Returns:
+            The rectangle, in axes-fraction coordinates.
+
+        Raises:
+            ValueError: for a non-finite edge or side; for a width or height of zero or less, or one too
+                small to survive :meth:`as_bounds`' thousandth-of-the-axes rounding, either of which is
+                an invisible locator rather than a placed one; and for a rectangle that does not meet the
+                axes anywhere, which is a locator drawn off the map it locates. A negative side was
+                already refused — by *matplotlib*, as "Width and height specified must be non-negative",
+                which names neither this call nor the keyword; it is answered here instead.
+
+        Examples:
+            - A contained rectangle is taken as given, and each impossible one is refused naming the
+              call and the keyword:
+                ```python
+                >>> from digitalearth.static.maps.inset import _InsetFrame
+                >>> _InsetFrame.resolve((0.1, 0.2, 0.3, 0.4), 0.28).as_bounds()
+                (0.1, 0.2, 0.3, 0.4)
+                >>> for bad in ((0.6, 0.6, 0.0, 0.3), (float("nan"), 0.0, 0.3, 0.3),
+                ...             (0.0, -0.5, 0.3, 0.3)):
+                ...     try:
+                ...         _InsetFrame.resolve(bad, 0.28)
+                ...     except ValueError as error:
+                ...         print(str(error).split(":")[0])
+                inset(position=(0.6, 0.6, 0.0, 0.3)) has a side of zero or less
+                inset(position=(nan, 0.0, 0.3, 0.3)) is not a rectangle
+                inset(position=(0.0, -0.5, 0.3, 0.3)) places the inset outside the map altogether
+
+                ```
+        """
+        if not all(isfinite(value) for value in (x0, y0, width, height)):
+            raise ValueError(
+                f"inset(position={asked!r}) is not a rectangle: every one of (x0, y0, width, height) "
+                "has to be a finite fraction of the map the inset sits in"
+            )
+        if width <= 0.0 or height <= 0.0:
+            raise ValueError(
+                f"inset(position={asked!r}) has a side of zero or less: width={width}, "
+                f"height={height}, so there is no locator to draw. Ask for a positive width and height"
+            )
+        if round(width, _PRECISION) <= 0.0 or round(height, _PRECISION) <= 0.0:
+            raise ValueError(
+                f"inset(position={asked!r}) is too small to place: a placement is taken to a thousandth "
+                "of the axes, so this rectangle reaches matplotlib with a side of 0.0 and the locator "
+                "has no area. Ask for a larger width and height"
+            )
+        if x0 >= 1.0 or y0 >= 1.0 or x0 + width <= 0.0 or y0 + height <= 0.0:
+            raise ValueError(
+                f"inset(position={asked!r}) places the inset outside the map altogether: (x0, y0) and "
+                "(x0 + width, y0 + height) are fractions of the axes the inset sits in, so the "
+                "rectangle has to meet [0, 1] in both directions. Ask for a rectangle on the map, or "
+                f"name a corner — one of {sorted(_CORNERS)}"
+            )
+        if x0 < 0.0 or y0 < 0.0 or x0 + width > 1.0 or y0 + height > 1.0:
+            logger.warning(
+                "inset(position=%r): the inset reaches x=[%s, %s], y=[%s, %s] as a fraction of the map, "
+                "so part of it is drawn outside the map it locates. It is placed as asked for — name a "
+                "corner, or keep the rectangle inside [0, 1], if that was not intended",
+                asked,
+                round(x0, _PRECISION),
+                round(x0 + width, _PRECISION),
+                round(y0, _PRECISION),
+                round(y0 + height, _PRECISION),
+            )
         return cls(x0=x0, y0=y0, width=width, height=height)
 
     def as_bounds(self) -> Tuple[float, float, float, float]:
@@ -404,14 +515,15 @@ class _InsetFrame:
 
         Returns:
             ``(x0, y0, width, height)`` in axes-fraction coordinates — the tuple ``Axes.inset_axes`` is
-            typed for — rounded to the precision the arithmetic is meaningful at (a thousandth of the
-            axes is well under a pixel).
+            typed for — rounded to :data:`_PRECISION`, the precision the arithmetic is meaningful at (a
+            thousandth of the axes is well under a pixel). That rounding is also a floor on the sides,
+            which is why :meth:`resolve` refuses a placement that would not survive it.
         """
         return (
-            round(self.x0, 3),
-            round(self.y0, 3),
-            round(self.width, 3),
-            round(self.height, 3),
+            round(self.x0, _PRECISION),
+            round(self.y0, _PRECISION),
+            round(self.width, _PRECISION),
+            round(self.height, _PRECISION),
         )
 
 
@@ -664,11 +776,18 @@ class InsetMixin(_MixinBase):
                 Naming an `extent` implies `False` (see below).
             position: Where the inset sits — `"upper right"` (default), `"upper left"`,
                 `"lower right"`, `"lower left"`, or four axes fractions
-                `(x0, y0, width, height)` used as given.
+                `(x0, y0, width, height)` used as given. The rectangle is the spelling the corner bound
+                below points callers at, so it is **read rather than trusted** (round 2, L10): a
+                non-finite edge, a side of zero or less, a side too small to survive the
+                thousandth-of-the-axes precision a placement is taken to, and a rectangle that does not
+                meet the axes anywhere are each refused by name. A rectangle that overlaps the axes and
+                hangs over an edge is a placement, drawn exactly as asked for and reported at `WARNING`.
             size: The inset's side as a fraction of this map, for the named corners. Default `0.28`, and
                 at most `0.94` there — the inset keeps a `0.03` pad on both sides of itself, so a larger
-                side would hang outside the map. An explicit `position` rectangle places the inset
-                itself and is not bounded that way.
+                side would hang outside the map. Positive but below `0.0005` is refused too: a placement
+                is taken to a thousandth of the axes, so such a side reaches matplotlib as `0.0`. An
+                explicit `position` rectangle places the inset itself and is not bounded by the corner
+                pad.
             extent: The wider area the locator shows, as `(west, south, east, north)` in the locator's
                 CRS. `None` (default) shows the whole projection domain. A globe frame cannot hold one
                 — it sets the projection's own limits, measured: a globe locator asked for
