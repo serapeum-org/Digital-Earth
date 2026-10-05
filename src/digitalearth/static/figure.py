@@ -102,7 +102,9 @@ def grid(
         suptitle: One title over the whole figure (``Figure.suptitle``). ``None`` (default) adds none.
             This is **not** a panel title: every panel's own ``set_title`` is untouched, so a shared
             heading and one caption per panel coexist. Style it by calling ``fig.suptitle`` yourself on
-            the returned figure.
+            the returned figure — which each panel describes as its figure's heading either way, since
+            every panel reads the heading off the figure it shares
+            (:attr:`~digitalearth.static.scene.Scene.figure_spec`).
         **kwargs: Forwarded to each ``Map`` (e.g. ``domain``).
 
     Returns:
@@ -197,6 +199,19 @@ def grid(
             >>> _ = maps[0].set_title("January")
             >>> [t.get_text() for t in fig.texts], maps[0].ax.get_title()
             (['rainfall, 2020'], 'January')
+            >>> maps[0].close()
+
+            ```
+        - Both headings are described, each in its own place, so a stored figure keeps them (M4):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.figure import grid
+            >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
+            >>> _ = maps[0].set_title("January")
+            >>> spec = maps[0].figure_spec
+            >>> spec.title, spec.panels[0].title
+            ('rainfall, 2020', 'January')
             >>> maps[0].close()
 
             ```

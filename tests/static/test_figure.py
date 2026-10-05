@@ -355,3 +355,54 @@ class TestGridFigureTitle:
         assert (fig.texts[0].get_text(), maps[0].ax.get_title()) == ("whole", "left"), (
             "the figure title and the panel title should both stand"
         )
+
+    def test_the_figure_title_is_described(self, closed_figures):
+        """The heading a grid draws is carried in the figure's description, not only on the canvas.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            ST-18's premise is that a figure written down lost its heading. ``set_title`` records the
+            panel's; this is the figure's, which is what ``FigureSpec.title`` holds and what
+            :meth:`~digitalearth.static.map.Map.draw_figure` prefers when it restores one (M4).
+        """
+        _fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
+        assert maps[0].figure_spec.title == "rainfall, 2020", (
+            f"the grid's heading should be described; got {maps[0].figure_spec.title!r}"
+        )
+
+    def test_a_heading_set_on_the_figure_afterwards_is_described(self, closed_figures):
+        """A ``fig.suptitle`` call of the caller's own is described as the figure's heading too.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            ``grid``'s own docstring sends a caller who wants to style the heading to ``fig.suptitle``, so
+            the description reads the figure rather than remembering what ``grid`` was passed — one answer
+            to "what heading does this figure carry", whoever wrote it.
+        """
+        fig, maps = grid(1, 1, crs=4326)
+        fig.suptitle("styled by hand")
+        assert maps[0].figure_spec.title == "styled by hand", (
+            f"a heading set on the figure should be described; got {maps[0].figure_spec.title!r}"
+        )
+
+    def test_the_described_heading_is_restored_from_the_description(
+        self, closed_figures
+    ):
+        """A panel's description, drawn again, comes back carrying the heading.
+
+        Args:
+            closed_figures: Teardown fixture closing the figure.
+
+        Test scenario:
+            The round trip is what the record is for: ``draw_figure`` restores
+            ``figure.title or figure.panels[0].title``, so a described heading reaches the new figure while
+            an undescribed one was lost between the two.
+        """
+        _fig, maps = grid(1, 1, crs=4326, suptitle="rainfall, 2020")
+        assert (
+            Map.from_figure(maps[0].figure_spec).ax.get_title() == "rainfall, 2020"
+        ), "the heading should survive a round trip through the description"

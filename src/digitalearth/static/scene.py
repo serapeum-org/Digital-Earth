@@ -921,13 +921,22 @@ class Scene(WatermarkMixin):
         The panel is **derived** rather than maintained beside the tree: this tier draws one axes, so its one
         panel shows every layer, and a figure whose panel named a layer the tree does not hold is refused by
         `FigureSpec` — correctly. Writing that derivation once is what lets :meth:`_change` take a tree and
-        keep the panel — and the figure's heading, which rides on it (:meth:`set_title`) — in step with it.
+        keep the panel — and the panel's title, which rides on it (:meth:`set_title`) — in step with it.
+
+        The **figure's** heading is read off the figure itself rather than remembered, because this tier's
+        figure is not always this scene's alone: :func:`~digitalearth.static.figure.grid` titles a figure
+        several panels share, and tells a caller who wants to style that heading to call ``fig.suptitle``
+        on the returned figure. One derivation covers both, and covers a scene whose figure was handed in
+        (``Map(fig=...)``). It is normalised by the same :meth:`_recorded_title` the panel's title goes
+        through, so matplotlib's empty ``''`` is the ``None`` `FigureSpec` spells "no title" as.
 
         Args:
             tree: The layers the figure describes.
 
         Returns:
-            The figure, with the sources of exactly those layers.
+            The figure, with the sources of exactly those layers, the panel's title (:meth:`set_title`) and
+            the figure's heading (``Figure.suptitle``) — the two places a heading can live, described
+            separately because `draw_figure` prefers the figure's and falls back to the panel's.
         """
         panel = PanelSpec(
             PANEL_ID, self.viewport, layers=tuple(tree.ids), title=self._title
@@ -938,6 +947,7 @@ class Scene(WatermarkMixin):
             sources={
                 key: ref for key, ref in self._sources.items() if key in set(tree.ids)
             },
+            title=self._recorded_title(self.fig.get_suptitle()),
         )
 
     def _change(self, figure: FigureSpec) -> None:
