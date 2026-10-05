@@ -877,21 +877,28 @@ class TestAFailingGraticuleLeavesNothingBehind:
     one, and the funnel only knows how to add. The rollback went with it, so a refused call left the figure
     naming a layer nothing drew — the invariant ``Scene._draw``'s own docstring states — and a refused
     *replacement* rewrote the description of a graticule that was still on the axes (round 2, M1).
+
+    The step these tests refuse with is now rejected one stage **earlier** — ``graticule()`` refuses a step
+    that is not a finite number of degrees greater than zero by the keyword that carried it, before the
+    layer is described (review R2-L4), where it used to reach the projection and divide by zero. So the
+    refusal is a ``ValueError`` rather than a ``ZeroDivisionError``, and each claim below holds because
+    there was never a description to put back rather than because the rollback put one back. The rollback
+    itself stays: it still guards every other way a drawer can fail after the layer is described.
     """
 
     def test_a_refused_graticule_is_not_in_the_figure(self):
-        """A spacing of zero divides by zero inside the projection; the layer goes with the refusal."""
+        """A spacing of zero is refused by name before the layer is described; nothing is left over."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         described = canvas.layer_ids
         canvas.close()
         assert described == [], described
 
     def test_a_refused_graticule_leaves_the_renderer_owning_nothing(self):
-        """The other spacing reaches the same divide, and the renderer must record neither."""
+        """The other spacing is refused the same way, and the renderer must record neither."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lat_step=0)
         recorded = sorted(canvas._renderer.drawn)
         canvas.close()
@@ -900,7 +907,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
     def test_a_refused_graticule_leaves_the_map_pointing_at_no_graticule(self):
         """The map remembers its graticule so a later call replaces it; a refused one must not be it."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         pointer = canvas._graticule_id
         canvas.close()
@@ -909,7 +916,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
     def test_a_graticule_after_a_refused_one_is_the_only_one_described(self):
         """A caller who watches one fail and asks again gets one graticule, not a ghost beside it."""
         canvas = Map(crs=4326)
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         canvas.graticule(lon_step=30.0)
         described = canvas.layer_ids
@@ -921,7 +928,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
         canvas = Map(crs=4326)
         canvas.graticule(lon_step=30.0)
         described = canvas.layer_ids[0]
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lon_step=0)
         spacing = canvas.figure_spec.layers.get(described).symbology.props["lon_step"]
         canvas.close()
@@ -932,7 +939,7 @@ class TestAFailingGraticuleLeavesNothingBehind:
         canvas = Map(crs=4326)
         canvas.graticule(lon_step=30.0)
         drawing = canvas._graticule_lines
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(ValueError):
             canvas.graticule(lat_step=0)
         kept = canvas._graticule_lines is drawing
         canvas.close()

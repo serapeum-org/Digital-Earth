@@ -552,7 +552,10 @@ class _Graticule:
         Raises:
             ZeroDivisionError: from the projection, for a step of zero. Raised here, before anything is
                 drawn or recorded, which is what lets a refused *replacement* leave the grid the map is
-                still drawing exactly as it was (round 2, M1).
+                still drawing exactly as it was (round 2, M1). Not reachable through
+                :meth:`ProjectionMixin.graticule` any more: :func:`_checked_step` refuses such a step by
+                the keyword that carried it before the layer is described (review R2-L4), so this is what
+                a caller building the grid by hand still gets.
         """
         self._scene = scene
         self._lon_step = props["lon_step"]
@@ -782,6 +785,55 @@ class _Graticule:
         )
 
 
+def _checked_step(keyword: str, value: Optional[float]) -> Optional[float]:
+    """Return a spacing a grid can be cut at, or refuse it by name.
+
+    Args:
+        keyword: The :meth:`ProjectionMixin.graticule` keyword the value arrived through — ``spacing``,
+            ``lon_step`` or ``lat_step`` — which is what the refusal names. Those three are the method's
+            whole numeric surface; it takes no count or ``n`` beside them.
+        value: What the caller wrote, or ``None`` for an argument they did not name.
+
+    Returns:
+        The value unchanged, ``None`` included: an argument nobody named is not a step to check, and is
+        the one case that means "keep what the grid carries".
+
+    Raises:
+        ValueError: when the value is not a finite number of degrees greater than zero. Zero divided by
+            zero inside the projection, ``nan`` and ``inf`` came back as ``arange: cannot compute
+            length``, and a **negative** step raised nothing at all — it described a graticule layer and
+            put an empty ``LineCollection`` on the axes, which is the figure naming a grid it does not
+            draw (review R2-L4). None of the three messages named the method or the keyword.
+
+    Examples:
+        - A positive step comes back as it was, fractions included, and so does an argument nobody wrote:
+            ```python
+            >>> from digitalearth.static.maps.projection import _checked_step
+            >>> (_checked_step("spacing", 7.5), _checked_step("lon_step", None))
+            (7.5, None)
+
+            ```
+        - A step no grid can be cut at is refused, naming the keyword that carried it:
+            ```python
+            >>> from digitalearth.static.maps.projection import _checked_step
+            >>> _checked_step("lat_step", -30.0)  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: graticule() was given lat_step=-30.0, which is not a spacing...
+
+            ```
+    """
+    if value is None or (isfinite(value) and value > 0.0):
+        return value
+    raise ValueError(
+        f"graticule() was given {keyword}={value!r}, which is not a spacing it can cut a grid at: a step "
+        "is a finite number of degrees greater than zero, because the lines are stepped out from zero to "
+        f"the poles and the datelines. Pass a positive step — {DEFAULT_GRATICULE_STEP} is the default and "
+        "a fraction such as 7.5 is drawn here — or leave the argument out, which keeps the step the grid "
+        "already carries."
+    )
+
+
 class _GraticuleSteps(NamedTuple):
     """The meridian and parallel spacing one :meth:`ProjectionMixin.graticule` call settles on, in degrees.
 
@@ -861,7 +913,17 @@ class _GraticuleSteps(NamedTuple):
             UserWarning: when ``spacing`` is given beside either step, because the call has then had two of
                 its own arguments thrown away (review R2-L3). ``stacklevel=3`` so it still names the line
                 that called ``graticule()``: this frame and ``graticule``'s both sit under it.
+
+        Raises:
+            ValueError: from :func:`_checked_step`, for a step that is not a finite number of degrees
+                greater than zero — named by its keyword, and refused here rather than in the drawer so
+                that nothing has been described, let alone drawn, when the caller hears about it.
         """
+        # In the precedence order the rest of this method follows, so the refusal names the argument that
+        # would have cut the grid rather than one `spacing` was about to discard anyway.
+        spacing = _checked_step("spacing", spacing)
+        lon_step = _checked_step("lon_step", lon_step)
+        lat_step = _checked_step("lat_step", lat_step)
         if spacing is not None:
             if lon_step is not None or lat_step is not None:
                 warnings.warn(
@@ -950,7 +1012,9 @@ def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
         the lines alone on a globe, whose artists the projection frame attaches later.
 
     Raises:
-        ZeroDivisionError: from the projection, for a spacing of zero — before anything is drawn.
+        ZeroDivisionError: from the projection, for a spacing of zero — before anything is drawn, and only
+            for a layer described by hand: :func:`_checked_step` refuses such a spacing by name on the way
+            in to :meth:`ProjectionMixin.graticule` (review R2-L4).
 
     Warns:
         UserWarning: naming any degree the frame cannot place.
@@ -1352,7 +1416,9 @@ class ProjectionMixin(_MixinBase):
         Args:
             lon_step: Meridian spacing in degrees; ``None`` (default) means
                 :data:`DEFAULT_GRATICULE_STEP` on the call that **creates** the graticule, and the step
-                the grid already carries on a *replacing* one.
+                the grid already carries on a *replacing* one. Any of the three must be a finite number
+                greater than zero — ``0``, a negative, ``nan`` and ``inf`` are each refused by the keyword
+                that carried them (see *Raises*).
             lat_step: Parallel spacing in degrees, the same way round.
             spacing: One step for both, for a caller who wants a square grid; it overrides the two
                 above, and **warns** when it does, because a call that names all three has had two of
@@ -1410,12 +1476,15 @@ class ProjectionMixin(_MixinBase):
 
         Raises:
             ValueError: for ``labels=True`` on a ``globe=True`` map, which cannot carry them — see
-                :meth:`_labels_asked`. Raised before anything is described, so the refusal costs the figure
-                nothing.
-            Exception: whatever computing the grid raises — a spacing of zero divides by zero in the
-                projection — after the description has been put back as it was. A figure must not name a
-                layer that was not drawn, and a refused *replacement* must not restyle the graticule the
-                map is still drawing (round 2, M1).
+                :meth:`_labels_asked`; and for a step that is not a finite number of degrees greater than
+                zero, naming the keyword that carried it — see :func:`_checked_step`. ``0`` used to divide
+                by zero inside the projection, ``nan`` and ``inf`` to come back as ``arange: cannot
+                compute length``, and a **negative** step to describe a layer and draw an empty grid for
+                it without a word (review R2-L4). Both refusals land before anything is described, so they
+                cost the figure nothing.
+            Exception: whatever computing the grid raises, after the description has been put back as it
+                was. A figure must not name a layer that was not drawn, and a refused *replacement* must
+                not restyle the graticule the map is still drawing (round 2, M1).
 
         Examples:
             - A flat map's grid is one collection, and every line in view carries its degree:
