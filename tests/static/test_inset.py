@@ -71,6 +71,52 @@ class TestMarkExtent:
         with pytest.raises(ValueError, match="has not been framed"):
             locator.mark_extent(unframed)
 
+    def test_a_map_framed_on_the_unit_square_is_marked_rather_than_refused(
+        self, framed
+    ):
+        """A map whose real extent *is* ``(0, 0, 1, 1)`` has an extent, and it is drawn.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            One degree square at the prime meridian is a legitimate frame, and it collides exactly with
+            the limits an untouched axes holds. The refusal therefore cannot be a coordinate comparison:
+            it reads whether the axes was ever framed at all (round 1, M5).
+        """
+        main = framed(4326, (0.0, 0.0, 1.0, 1.0))
+        ring = np.asarray(Map(crs=4326).mark_extent(main).get_xy(), dtype=float)
+        envelope = (
+            float(ring[:, 0].min()),
+            float(ring[:, 1].min()),
+            float(ring[:, 0].max()),
+            float(ring[:, 1].max()),
+        )
+        assert envelope == (0.0, 0.0, 1.0, 1.0), (
+            f"a map framed on the unit square should be marked on it; got {envelope}"
+        )
+
+    def test_a_map_autoscaled_to_the_unit_square_by_its_data_is_marked(
+        self, closed_figures
+    ):
+        """A raster covering ``(0, 0, 1, 1)`` frames the axes on it without ever setting a limit.
+
+        Args:
+            closed_figures: Teardown fixture closing the figures.
+
+        Test scenario:
+            The second half of M5's collision, and the one autoscaling alone does not catch: an image
+            drawn with ``extent=(0, 1, 0, 1)`` leaves the limits at exactly ``(0, 1)`` *and* leaves
+            autoscaling on (sticky edges), so only the presence of an artist separates it from an axes
+            nothing has touched.
+        """
+        main = Map(crs=4326)
+        main.ax.imshow(np.arange(4.0).reshape(2, 2), extent=(0.0, 1.0, 0.0, 1.0))
+        marked = Map(crs=4326).mark_extent(main)
+        assert marked is not None, (
+            "a map framed by its own data should have an extent to mark"
+        )
+
     def test_something_that_is_not_a_scene_is_refused(self, closed_figures):
         """An object with no axes cannot have an extent, and says so.
 

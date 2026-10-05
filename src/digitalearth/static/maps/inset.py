@@ -159,9 +159,13 @@ class _ExtentBox:
         Raises:
             TypeError: when ``scene`` has no axes to read an extent off, which a bare sequence of four
                 numbers (the plausible mistake) does not.
-            ValueError: when the axes still holds matplotlib's default ``(0, 1)`` unit square. Nothing has
-                been drawn or framed, and marking that would draw a one-by-one box off the coast of Africa
-                and label it the map's extent — a wrong picture rather than an empty one.
+            ValueError: when the axes is still the one matplotlib made — autoscaling on both axes, no
+                artist on it — and so still holds the default ``(0, 1)`` unit square. Nothing has been
+                drawn or framed, and marking that would draw a one-by-one box off the coast of Africa and
+                label it the map's extent — a wrong picture rather than an empty one. The state is what
+                is read and **not** the four numbers: a map framed on one degree square holds exactly
+                those limits legitimately, and used to be refused with a message that was simply false
+                (round 1, M5).
         """
         axes: Any = getattr(scene, "ax", None)
         if not hasattr(axes, "get_xlim"):
@@ -171,12 +175,38 @@ class _ExtentBox:
             )
         west, east = (float(value) for value in axes.get_xlim())
         south, north = (float(value) for value in axes.get_ylim())
-        if (west, south, east, north) == (0.0, 0.0, 1.0, 1.0):
+        # The two tests are kept together so the message stays literally true: an untouched axes holds the
+        # unit square, so the coordinate half can only ever fire on one that is also in the default state.
+        if cls._untouched(axes) and (west, south, east, north) == (0.0, 0.0, 1.0, 1.0):
             raise ValueError(
                 "mark_extent(): the map has not been framed — its axes still hold matplotlib's default "
                 "unit square, so there is no extent to mark. Draw a layer or call set_bounds() first"
             )
         return cls(west, south, east, north, getattr(scene, "crs", None))
+
+    @staticmethod
+    def _untouched(axes: Any) -> bool:
+        """Whether ``axes`` is still the axes matplotlib made, rather than one framed on a real extent.
+
+        Both halves are matplotlib's own state rather than anything this package records, so the answer
+        holds for any axes a scene hands over — including one framed by ``ax.set_xlim`` directly, which a
+        scene-level flag would not see.
+
+        Args:
+            axes: The matplotlib axes to read.
+
+        Returns:
+            ``True`` when neither limit has been set and nothing has been drawn. ``set_xlim`` /
+            ``set_ylim`` turn autoscaling off, which covers every framing call; and an artist leaves
+            ``has_data()`` ``True`` even when it autoscaled the view to exactly ``(0, 1)``, which an
+            image drawn with ``extent=(0, 1, 0, 1)`` does (its sticky edges take the margins away while
+            autoscaling stays on), so neither half answers alone.
+        """
+        return (
+            bool(axes.get_autoscalex_on())
+            and bool(axes.get_autoscaley_on())
+            and not bool(axes.has_data())
+        )
 
     def outline(self) -> np.ndarray:
         """Return the box's outline, sampled along all four edges and closed.
