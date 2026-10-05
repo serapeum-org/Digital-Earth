@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -11493,10 +11493,7 @@ numbers, which a ramp and a width scale both need.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3356">3356</a></span>
-<span class="normal"><a href="#__codelineno-0-3357">3357</a></span>
-<span class="normal"><a href="#__codelineno-0-3358">3358</a></span>
-<span class="normal"><a href="#__codelineno-0-3359">3359</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3359">3359</a></span>
 <span class="normal"><a href="#__codelineno-0-3360">3360</a></span>
 <span class="normal"><a href="#__codelineno-0-3361">3361</a></span>
 <span class="normal"><a href="#__codelineno-0-3362">3362</a></span>
@@ -11705,219 +11702,222 @@ numbers, which a ramp and a width scale both need.</p>
 <span class="normal"><a href="#__codelineno-0-3565">3565</a></span>
 <span class="normal"><a href="#__codelineno-0-3566">3566</a></span>
 <span class="normal"><a href="#__codelineno-0-3567">3567</a></span>
-<span class="normal"><a href="#__codelineno-0-3568">3568</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3356" name="__codelineno-0-3356"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-3357" name="__codelineno-0-3357"></a><span class="k">def</span><span class="w"> </span><span class="nf">lines</span><span class="p">(</span>
-<a id="__codelineno-0-3358" name="__codelineno-0-3358"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-3359" name="__codelineno-0-3359"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-3360" name="__codelineno-0-3360"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-3361" name="__codelineno-0-3361"></a>    <span class="n">column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3362" name="__codelineno-0-3362"></a>    <span class="n">scheme</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3363" name="__codelineno-0-3363"></a>    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
-<a id="__codelineno-0-3364" name="__codelineno-0-3364"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3365" name="__codelineno-0-3365"></a>    <span class="n">width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3366" name="__codelineno-0-3366"></a>    <span class="n">color</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3367" name="__codelineno-0-3367"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3368" name="__codelineno-0-3368"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3369" name="__codelineno-0-3369"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-3370" name="__codelineno-0-3370"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-3371" name="__codelineno-0-3371"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-3372" name="__codelineno-0-3372"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw line features — rivers, roads, tracks, reach networks (pyramids lines → ``FlowGlyph``).</span>
-<a id="__codelineno-0-3373" name="__codelineno-0-3373"></a>
-<a id="__codelineno-0-3374" name="__codelineno-0-3374"></a><span class="sd">    The Core contract&#39;s ``lines``, with the web tier&#39;s keywords: a constant colour, or a colour per</span>
-<a id="__codelineno-0-3375" name="__codelineno-0-3375"></a><span class="sd">    feature from ``column`` (classified by ``scheme``/``k``), and a width that is either one number or a</span>
-<a id="__codelineno-0-3376" name="__codelineno-0-3376"></a><span class="sd">    column. ``MultiLineString`` features draw one path per part, each carrying its feature&#39;s values.</span>
-<a id="__codelineno-0-3377" name="__codelineno-0-3377"></a><span class="sd">    :meth:`sankey` draws the same geometry as a flow map, with flow defaults.</span>
-<a id="__codelineno-0-3378" name="__codelineno-0-3378"></a>
-<a id="__codelineno-0-3379" name="__codelineno-0-3379"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-3380" name="__codelineno-0-3380"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries, or a</span>
-<a id="__codelineno-0-3381" name="__codelineno-0-3381"></a><span class="sd">            path or URL to one (reprojected to the display CRS). Only a path-backed layer can be written</span>
-<a id="__codelineno-0-3382" name="__codelineno-0-3382"></a><span class="sd">            down.</span>
-<a id="__codelineno-0-3383" name="__codelineno-0-3383"></a><span class="sd">        column: Numeric column whose value colours each line; ``None`` (default) draws one colour.</span>
-<a id="__codelineno-0-3384" name="__codelineno-0-3384"></a><span class="sd">        scheme: A classification scheme cutting ``column`` into ``k`` classes (``&quot;quantiles&quot;``,</span>
-<a id="__codelineno-0-3385" name="__codelineno-0-3385"></a><span class="sd">            ``&quot;equal_interval&quot;``, …); ``None`` (default) is a continuous ramp.</span>
-<a id="__codelineno-0-3386" name="__codelineno-0-3386"></a><span class="sd">        k: Number of classes for ``scheme``.</span>
-<a id="__codelineno-0-3387" name="__codelineno-0-3387"></a><span class="sd">        cmap: The colormap ``column`` is coloured through; ``None`` leaves cleopatra&#39;s default.</span>
-<a id="__codelineno-0-3388" name="__codelineno-0-3388"></a><span class="sd">        width: Line width in points — a positive number — or the name of a numeric column whose values</span>
-<a id="__codelineno-0-3389" name="__codelineno-0-3389"></a><span class="sd">            scale each line&#39;s width (between ``width_limits``, a ``FlowGlyph`` option). ``None``</span>
-<a id="__codelineno-0-3390" name="__codelineno-0-3390"></a><span class="sd">            leaves cleopatra&#39;s width.</span>
-<a id="__codelineno-0-3391" name="__codelineno-0-3391"></a><span class="sd">        color: The colour of every line when ``column`` is ``None`` — any matplotlib colour. A built</span>
-<a id="__codelineno-0-3392" name="__codelineno-0-3392"></a><span class="sd">            ``ColorScaling`` or ``Normalize`` is instead the colour *scaling* of ``column``, as it is on</span>
-<a id="__codelineno-0-3393" name="__codelineno-0-3393"></a><span class="sd">            every other static builder. A string that is not a colour is refused rather than passed on,</span>
-<a id="__codelineno-0-3394" name="__codelineno-0-3394"></a><span class="sd">            with ``column=`` named as what takes a column&#39;s name.</span>
-<a id="__codelineno-0-3395" name="__codelineno-0-3395"></a><span class="sd">        opacity: Layer opacity, 0 transparent to 1 opaque.</span>
-<a id="__codelineno-0-3396" name="__codelineno-0-3396"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-3397" name="__codelineno-0-3397"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-3398" name="__codelineno-0-3398"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-3399" name="__codelineno-0-3399"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-3400" name="__codelineno-0-3400"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-3401" name="__codelineno-0-3401"></a><span class="sd">        **opts: Further ``FlowGlyph`` options (``width_limits``, ``width_scale``, ``draw_order``,</span>
-<a id="__codelineno-0-3402" name="__codelineno-0-3402"></a><span class="sd">            ``glow``, …).</span>
-<a id="__codelineno-0-3403" name="__codelineno-0-3403"></a>
-<a id="__codelineno-0-3404" name="__codelineno-0-3404"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-3405" name="__codelineno-0-3405"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-3406" name="__codelineno-0-3406"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
-<a id="__codelineno-0-3407" name="__codelineno-0-3407"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
-<a id="__codelineno-0-3408" name="__codelineno-0-3408"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-3409" name="__codelineno-0-3409"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
-<a id="__codelineno-0-3410" name="__codelineno-0-3410"></a><span class="sd">        map rather than the artist (ST-20).</span>
-<a id="__codelineno-0-3411" name="__codelineno-0-3411"></a>
-<a id="__codelineno-0-3412" name="__codelineno-0-3412"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-3413" name="__codelineno-0-3413"></a><span class="sd">        ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a</span>
-<a id="__codelineno-0-3414" name="__codelineno-0-3414"></a><span class="sd">            positive finite number (a line has no negative thickness); if ``color`` is a string that</span>
-<a id="__codelineno-0-3415" name="__codelineno-0-3415"></a><span class="sd">            is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a</span>
-<a id="__codelineno-0-3416" name="__codelineno-0-3416"></a><span class="sd">            column&#39;s name; or if ``column`` or a column ``width`` names a column that does not hold</span>
-<a id="__codelineno-0-3417" name="__codelineno-0-3417"></a><span class="sd">            numbers, which a ramp and a width scale both need.</span>
-<a id="__codelineno-0-3418" name="__codelineno-0-3418"></a><span class="sd">        KeyError: if ``column`` or a column ``width`` names no feature attribute — the refusal names</span>
-<a id="__codelineno-0-3419" name="__codelineno-0-3419"></a><span class="sd">            ``Map.lines()``, the keyword and the column, and lists the columns there are.</span>
-<a id="__codelineno-0-3420" name="__codelineno-0-3420"></a>
-<a id="__codelineno-0-3421" name="__codelineno-0-3421"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-3422" name="__codelineno-0-3422"></a><span class="sd">        - Colour reaches by discharge, classified into three classes, with one width:</span>
-<a id="__codelineno-0-3423" name="__codelineno-0-3423"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3424" name="__codelineno-0-3424"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3425" name="__codelineno-0-3425"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3426" name="__codelineno-0-3426"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3427" name="__codelineno-0-3427"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
-<a id="__codelineno-0-3428" name="__codelineno-0-3428"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3429" name="__codelineno-0-3429"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3430" name="__codelineno-0-3430"></a><span class="sd">            &gt;&gt;&gt; reaches = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3431" name="__codelineno-0-3431"></a><span class="sd">            ...     {&quot;discharge&quot;: [10.0, 40.0, 25.0]},</span>
-<a id="__codelineno-0-3432" name="__codelineno-0-3432"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(1, 1), (2, 1)]),</span>
-<a id="__codelineno-0-3433" name="__codelineno-0-3433"></a><span class="sd">            ...               LineString([(2, 1), (3, 2)])],</span>
-<a id="__codelineno-0-3434" name="__codelineno-0-3434"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3435" name="__codelineno-0-3435"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3436" name="__codelineno-0-3436"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=4326) as m:</span>
-<a id="__codelineno-0-3437" name="__codelineno-0-3437"></a><span class="sd">            ...     _ = m.lines(reaches, column=&quot;discharge&quot;, scheme=&quot;equal_interval&quot;, k=3, width=2.0)</span>
-<a id="__codelineno-0-3438" name="__codelineno-0-3438"></a><span class="sd">            ...     lc = m.artist()</span>
-<a id="__codelineno-0-3439" name="__codelineno-0-3439"></a><span class="sd">            ...     lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})</span>
-<a id="__codelineno-0-3440" name="__codelineno-0-3440"></a><span class="sd">            ...     m.figure_spec.layers.get(m.layer_ids[-1]).kind</span>
-<a id="__codelineno-0-3441" name="__codelineno-0-3441"></a><span class="sd">            ([10.0, 40.0, 25.0], [2.0])</span>
-<a id="__codelineno-0-3442" name="__codelineno-0-3442"></a><span class="sd">            &#39;lines&#39;</span>
-<a id="__codelineno-0-3443" name="__codelineno-0-3443"></a>
-<a id="__codelineno-0-3444" name="__codelineno-0-3444"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3445" name="__codelineno-0-3445"></a><span class="sd">        - One colour, widths scaled by a column:</span>
-<a id="__codelineno-0-3446" name="__codelineno-0-3446"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3447" name="__codelineno-0-3447"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3448" name="__codelineno-0-3448"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3449" name="__codelineno-0-3449"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3450" name="__codelineno-0-3450"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
-<a id="__codelineno-0-3451" name="__codelineno-0-3451"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3452" name="__codelineno-0-3452"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3453" name="__codelineno-0-3453"></a><span class="sd">            &gt;&gt;&gt; roads = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3454" name="__codelineno-0-3454"></a><span class="sd">            ...     {&quot;lanes&quot;: [1, 4]},</span>
-<a id="__codelineno-0-3455" name="__codelineno-0-3455"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],</span>
-<a id="__codelineno-0-3456" name="__codelineno-0-3456"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3457" name="__codelineno-0-3457"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3458" name="__codelineno-0-3458"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=4326) as m:</span>
-<a id="__codelineno-0-3459" name="__codelineno-0-3459"></a><span class="sd">            ...     _ = m.lines(roads, width=&quot;lanes&quot;, color=&quot;dimgray&quot;)</span>
-<a id="__codelineno-0-3460" name="__codelineno-0-3460"></a><span class="sd">            ...     widths = m.artist().get_linewidths()</span>
-<a id="__codelineno-0-3461" name="__codelineno-0-3461"></a><span class="sd">            &gt;&gt;&gt; bool(widths[1] &gt; widths[0])</span>
-<a id="__codelineno-0-3462" name="__codelineno-0-3462"></a><span class="sd">            True</span>
-<a id="__codelineno-0-3463" name="__codelineno-0-3463"></a>
-<a id="__codelineno-0-3464" name="__codelineno-0-3464"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3465" name="__codelineno-0-3465"></a><span class="sd">        - A width a line cannot have, a column name under ``color=``, and a text column under</span>
-<a id="__codelineno-0-3466" name="__codelineno-0-3466"></a><span class="sd">          ``column=`` are each refused by name — and the colour refusal points at the keyword that does</span>
-<a id="__codelineno-0-3467" name="__codelineno-0-3467"></a><span class="sd">          take a column&#39;s name:</span>
-<a id="__codelineno-0-3468" name="__codelineno-0-3468"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3469" name="__codelineno-0-3469"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3470" name="__codelineno-0-3470"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3471" name="__codelineno-0-3471"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3472" name="__codelineno-0-3472"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
-<a id="__codelineno-0-3473" name="__codelineno-0-3473"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3474" name="__codelineno-0-3474"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3475" name="__codelineno-0-3475"></a><span class="sd">            &gt;&gt;&gt; roads = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3476" name="__codelineno-0-3476"></a><span class="sd">            ...     {&quot;name&quot;: [&quot;a&quot;, &quot;b&quot;], &quot;lanes&quot;: [1.0, 4.0]},</span>
-<a id="__codelineno-0-3477" name="__codelineno-0-3477"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],</span>
-<a id="__codelineno-0-3478" name="__codelineno-0-3478"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3479" name="__codelineno-0-3479"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3480" name="__codelineno-0-3480"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-3481" name="__codelineno-0-3481"></a><span class="sd">            &gt;&gt;&gt; for wrong in ({&quot;width&quot;: -2.0}, {&quot;color&quot;: &quot;lanes&quot;}, {&quot;column&quot;: &quot;name&quot;}):</span>
-<a id="__codelineno-0-3482" name="__codelineno-0-3482"></a><span class="sd">            ...     try:</span>
-<a id="__codelineno-0-3483" name="__codelineno-0-3483"></a><span class="sd">            ...         m.lines(roads, **wrong)</span>
-<a id="__codelineno-0-3484" name="__codelineno-0-3484"></a><span class="sd">            ...     except ValueError as error:</span>
-<a id="__codelineno-0-3485" name="__codelineno-0-3485"></a><span class="sd">            ...         print(str(error)[:63])</span>
-<a id="__codelineno-0-3486" name="__codelineno-0-3486"></a><span class="sd">            Map.lines() needs width= as a positive number of points, or the</span>
-<a id="__codelineno-0-3487" name="__codelineno-0-3487"></a><span class="sd">            Map.lines() needs color= as one matplotlib colour for every lin</span>
-<a id="__codelineno-0-3488" name="__codelineno-0-3488"></a><span class="sd">            Map.lines() needs column=&#39;name&#39; to name a column of numbers, an</span>
-<a id="__codelineno-0-3489" name="__codelineno-0-3489"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-3490" name="__codelineno-0-3490"></a>
-<a id="__codelineno-0-3491" name="__codelineno-0-3491"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3492" name="__codelineno-0-3492"></a><span class="sd">        - A column name these features do not carry is named under the keyword it was given under,</span>
-<a id="__codelineno-0-3493" name="__codelineno-0-3493"></a><span class="sd">          with the columns they do carry listed:</span>
-<a id="__codelineno-0-3494" name="__codelineno-0-3494"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3495" name="__codelineno-0-3495"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3496" name="__codelineno-0-3496"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3497" name="__codelineno-0-3497"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3498" name="__codelineno-0-3498"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
-<a id="__codelineno-0-3499" name="__codelineno-0-3499"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3500" name="__codelineno-0-3500"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3501" name="__codelineno-0-3501"></a><span class="sd">            &gt;&gt;&gt; roads = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3502" name="__codelineno-0-3502"></a><span class="sd">            ...     {&quot;name&quot;: [&quot;a&quot;, &quot;b&quot;], &quot;lanes&quot;: [1.0, 4.0]},</span>
-<a id="__codelineno-0-3503" name="__codelineno-0-3503"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],</span>
-<a id="__codelineno-0-3504" name="__codelineno-0-3504"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3505" name="__codelineno-0-3505"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3506" name="__codelineno-0-3506"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-3507" name="__codelineno-0-3507"></a><span class="sd">            &gt;&gt;&gt; for wrong in ({&quot;column&quot;: &quot;flow&quot;}, {&quot;width&quot;: &quot;order&quot;}):</span>
-<a id="__codelineno-0-3508" name="__codelineno-0-3508"></a><span class="sd">            ...     try:</span>
-<a id="__codelineno-0-3509" name="__codelineno-0-3509"></a><span class="sd">            ...         m.lines(roads, **wrong)</span>
-<a id="__codelineno-0-3510" name="__codelineno-0-3510"></a><span class="sd">            ...     except KeyError as error:</span>
-<a id="__codelineno-0-3511" name="__codelineno-0-3511"></a><span class="sd">            ...         print(error.args[0])</span>
-<a id="__codelineno-0-3512" name="__codelineno-0-3512"></a><span class="sd">            Map.lines(): column=&#39;flow&#39; is not a property of these features; available: [&#39;lanes&#39;, &#39;name&#39;]</span>
-<a id="__codelineno-0-3513" name="__codelineno-0-3513"></a><span class="sd">            Map.lines(): width=&#39;order&#39; is not a property of these features; available: [&#39;lanes&#39;, &#39;name&#39;]</span>
-<a id="__codelineno-0-3514" name="__codelineno-0-3514"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-3515" name="__codelineno-0-3515"></a>
-<a id="__codelineno-0-3516" name="__codelineno-0-3516"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3517" name="__codelineno-0-3517"></a>
-<a id="__codelineno-0-3518" name="__codelineno-0-3518"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-3519" name="__codelineno-0-3519"></a><span class="sd">        sankey: the same geometry drawn as a flow map.</span>
-<a id="__codelineno-0-3520" name="__codelineno-0-3520"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-3521" name="__codelineno-0-3521"></a>    <span class="k">if</span> <span class="n">width</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-<a id="__codelineno-0-3522" name="__codelineno-0-3522"></a>        <span class="c1"># A scalar width reached the collection exactly as written, negatives included</span>
-<a id="__codelineno-0-3523" name="__codelineno-0-3523"></a>        <span class="c1"># (`get_linewidths() == [-2.0]`), and zero drew lines of no width at all (review L4).</span>
-<a id="__codelineno-0-3524" name="__codelineno-0-3524"></a>        <span class="k">if</span> <span class="n">_as_finite</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="n">_LINES_CALLER</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mf">0.0</span><span class="p">:</span>
-<a id="__codelineno-0-3525" name="__codelineno-0-3525"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-3526" name="__codelineno-0-3526"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_LINES_CALLER</span><span class="si">}</span><span class="s2"> needs width= as a positive number of points, or the name of a &quot;</span>
-<a id="__codelineno-0-3527" name="__codelineno-0-3527"></a>                <span class="sa">f</span><span class="s2">&quot;column to scale the widths by; got </span><span class="si">{</span><span class="n">width</span><span class="si">!r}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-3528" name="__codelineno-0-3528"></a>            <span class="p">)</span>
-<a id="__codelineno-0-3529" name="__codelineno-0-3529"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">is_color_like</span><span class="p">(</span><span class="n">color</span><span class="p">)):</span>
-<a id="__codelineno-0-3530" name="__codelineno-0-3530"></a>        <span class="c1"># `color=` and `column=` sit next to each other in the signature, so a column name under</span>
-<a id="__codelineno-0-3531" name="__codelineno-0-3531"></a>        <span class="c1"># `color=` is a plausible slip — and `to_hex` answered it with matplotlib&#39;s &quot;Invalid RGBA</span>
-<a id="__codelineno-0-3532" name="__codelineno-0-3532"></a>        <span class="c1"># argument&quot;, which names neither this method nor either keyword (review L4).</span>
-<a id="__codelineno-0-3533" name="__codelineno-0-3533"></a>        <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-3534" name="__codelineno-0-3534"></a>            <span class="n">line_color</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_hex</span><span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="n">keep_alpha</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-0-3535" name="__codelineno-0-3535"></a>        <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
-<a id="__codelineno-0-3536" name="__codelineno-0-3536"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-3537" name="__codelineno-0-3537"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_LINES_CALLER</span><span class="si">}</span><span class="s2"> needs color= as one matplotlib colour for every line, and &quot;</span>
-<a id="__codelineno-0-3538" name="__codelineno-0-3538"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">color</span><span class="si">!r}</span><span class="s2"> is not one. To colour the lines by a column&#39;s values instead, pass &quot;</span>
-<a id="__codelineno-0-3539" name="__codelineno-0-3539"></a>                <span class="sa">f</span><span class="s2">&quot;column=</span><span class="si">{</span><span class="n">color</span><span class="si">!r}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-3540" name="__codelineno-0-3540"></a>            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
-<a id="__codelineno-0-3541" name="__codelineno-0-3541"></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-3542" name="__codelineno-0-3542"></a>        <span class="n">line_color</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-3543" name="__codelineno-0-3543"></a>        <span class="k">if</span> <span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-3544" name="__codelineno-0-3544"></a>            <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;color&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">color</span>
-<a id="__codelineno-0-3545" name="__codelineno-0-3545"></a>    <span class="k">if</span> <span class="n">cmap</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-3546" name="__codelineno-0-3546"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;cmap&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cmap</span>
-<a id="__codelineno-0-3547" name="__codelineno-0-3547"></a>    <span class="k">if</span> <span class="n">scheme</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-3548" name="__codelineno-0-3548"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">scheme</span>
-<a id="__codelineno-0-3549" name="__codelineno-0-3549"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span>
-<a id="__codelineno-0-3550" name="__codelineno-0-3550"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
-<a id="__codelineno-0-3551" name="__codelineno-0-3551"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
-<a id="__codelineno-0-3552" name="__codelineno-0-3552"></a>            <span class="s2">&quot;lines&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-3553" name="__codelineno-0-3553"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
-<a id="__codelineno-0-3554" name="__codelineno-0-3554"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-3555" name="__codelineno-0-3555"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-3556" name="__codelineno-0-3556"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-3557" name="__codelineno-0-3557"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-3558" name="__codelineno-0-3558"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;lines&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-3559" name="__codelineno-0-3559"></a>                    <span class="s2">&quot;column&quot;</span><span class="p">:</span> <span class="n">column</span><span class="p">,</span>
-<a id="__codelineno-0-3560" name="__codelineno-0-3560"></a>                    <span class="s2">&quot;width&quot;</span><span class="p">:</span> <span class="n">width</span><span class="p">,</span>
-<a id="__codelineno-0-3561" name="__codelineno-0-3561"></a>                    <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">line_color</span><span class="p">,</span>
-<a id="__codelineno-0-3562" name="__codelineno-0-3562"></a>                    <span class="s2">&quot;opacity&quot;</span><span class="p">:</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">opacity</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">opacity</span><span class="p">),</span>
-<a id="__codelineno-0-3563" name="__codelineno-0-3563"></a>                <span class="p">}</span>
-<a id="__codelineno-0-3564" name="__codelineno-0-3564"></a>            <span class="p">),</span>
-<a id="__codelineno-0-3565" name="__codelineno-0-3565"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-3566" name="__codelineno-0-3566"></a>        <span class="p">)</span>
-<a id="__codelineno-0-3567" name="__codelineno-0-3567"></a>    <span class="p">)</span>
-<a id="__codelineno-0-3568" name="__codelineno-0-3568"></a>    <span class="k">return</span> <span class="bp">self</span>
+<span class="normal"><a href="#__codelineno-0-3568">3568</a></span>
+<span class="normal"><a href="#__codelineno-0-3569">3569</a></span>
+<span class="normal"><a href="#__codelineno-0-3570">3570</a></span>
+<span class="normal"><a href="#__codelineno-0-3571">3571</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3359" name="__codelineno-0-3359"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-3360" name="__codelineno-0-3360"></a><span class="k">def</span><span class="w"> </span><span class="nf">lines</span><span class="p">(</span>
+<a id="__codelineno-0-3361" name="__codelineno-0-3361"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-3362" name="__codelineno-0-3362"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-3363" name="__codelineno-0-3363"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-3364" name="__codelineno-0-3364"></a>    <span class="n">column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3365" name="__codelineno-0-3365"></a>    <span class="n">scheme</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3366" name="__codelineno-0-3366"></a>    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-0-3367" name="__codelineno-0-3367"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3368" name="__codelineno-0-3368"></a>    <span class="n">width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3369" name="__codelineno-0-3369"></a>    <span class="n">color</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3370" name="__codelineno-0-3370"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3371" name="__codelineno-0-3371"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3372" name="__codelineno-0-3372"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-3373" name="__codelineno-0-3373"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-3374" name="__codelineno-0-3374"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-3375" name="__codelineno-0-3375"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw line features — rivers, roads, tracks, reach networks (pyramids lines → ``FlowGlyph``).</span>
+<a id="__codelineno-0-3376" name="__codelineno-0-3376"></a>
+<a id="__codelineno-0-3377" name="__codelineno-0-3377"></a><span class="sd">    The Core contract&#39;s ``lines``, with the web tier&#39;s keywords: a constant colour, or a colour per</span>
+<a id="__codelineno-0-3378" name="__codelineno-0-3378"></a><span class="sd">    feature from ``column`` (classified by ``scheme``/``k``), and a width that is either one number or a</span>
+<a id="__codelineno-0-3379" name="__codelineno-0-3379"></a><span class="sd">    column. ``MultiLineString`` features draw one path per part, each carrying its feature&#39;s values.</span>
+<a id="__codelineno-0-3380" name="__codelineno-0-3380"></a><span class="sd">    :meth:`sankey` draws the same geometry as a flow map, with flow defaults.</span>
+<a id="__codelineno-0-3381" name="__codelineno-0-3381"></a>
+<a id="__codelineno-0-3382" name="__codelineno-0-3382"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-3383" name="__codelineno-0-3383"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries, or a</span>
+<a id="__codelineno-0-3384" name="__codelineno-0-3384"></a><span class="sd">            path or URL to one (reprojected to the display CRS). Only a path-backed layer can be written</span>
+<a id="__codelineno-0-3385" name="__codelineno-0-3385"></a><span class="sd">            down.</span>
+<a id="__codelineno-0-3386" name="__codelineno-0-3386"></a><span class="sd">        column: Numeric column whose value colours each line; ``None`` (default) draws one colour.</span>
+<a id="__codelineno-0-3387" name="__codelineno-0-3387"></a><span class="sd">        scheme: A classification scheme cutting ``column`` into ``k`` classes (``&quot;quantiles&quot;``,</span>
+<a id="__codelineno-0-3388" name="__codelineno-0-3388"></a><span class="sd">            ``&quot;equal_interval&quot;``, …); ``None`` (default) is a continuous ramp.</span>
+<a id="__codelineno-0-3389" name="__codelineno-0-3389"></a><span class="sd">        k: Number of classes for ``scheme``.</span>
+<a id="__codelineno-0-3390" name="__codelineno-0-3390"></a><span class="sd">        cmap: The colormap ``column`` is coloured through; ``None`` leaves cleopatra&#39;s default.</span>
+<a id="__codelineno-0-3391" name="__codelineno-0-3391"></a><span class="sd">        width: Line width in points — a positive number — or the name of a numeric column whose values</span>
+<a id="__codelineno-0-3392" name="__codelineno-0-3392"></a><span class="sd">            scale each line&#39;s width (between ``width_limits``, a ``FlowGlyph`` option). ``None``</span>
+<a id="__codelineno-0-3393" name="__codelineno-0-3393"></a><span class="sd">            leaves cleopatra&#39;s width.</span>
+<a id="__codelineno-0-3394" name="__codelineno-0-3394"></a><span class="sd">        color: The colour of every line when ``column`` is ``None`` — any matplotlib colour. A built</span>
+<a id="__codelineno-0-3395" name="__codelineno-0-3395"></a><span class="sd">            ``ColorScaling`` or ``Normalize`` is instead the colour *scaling* of ``column``, as it is on</span>
+<a id="__codelineno-0-3396" name="__codelineno-0-3396"></a><span class="sd">            every other static builder. A string that is not a colour is refused rather than passed on,</span>
+<a id="__codelineno-0-3397" name="__codelineno-0-3397"></a><span class="sd">            with ``column=`` named as what takes a column&#39;s name.</span>
+<a id="__codelineno-0-3398" name="__codelineno-0-3398"></a><span class="sd">        opacity: Layer opacity, 0 transparent to 1 opaque.</span>
+<a id="__codelineno-0-3399" name="__codelineno-0-3399"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-3400" name="__codelineno-0-3400"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-3401" name="__codelineno-0-3401"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-3402" name="__codelineno-0-3402"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-3403" name="__codelineno-0-3403"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-3404" name="__codelineno-0-3404"></a><span class="sd">        **opts: Further ``FlowGlyph`` options (``width_limits``, ``width_scale``, ``draw_order``,</span>
+<a id="__codelineno-0-3405" name="__codelineno-0-3405"></a><span class="sd">            ``glow``, …).</span>
+<a id="__codelineno-0-3406" name="__codelineno-0-3406"></a>
+<a id="__codelineno-0-3407" name="__codelineno-0-3407"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-3408" name="__codelineno-0-3408"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
+<a id="__codelineno-0-3409" name="__codelineno-0-3409"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-3410" name="__codelineno-0-3410"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
+<a id="__codelineno-0-3411" name="__codelineno-0-3411"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
+<a id="__codelineno-0-3412" name="__codelineno-0-3412"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-3413" name="__codelineno-0-3413"></a><span class="sd">        map rather than the artist (ST-20).</span>
+<a id="__codelineno-0-3414" name="__codelineno-0-3414"></a>
+<a id="__codelineno-0-3415" name="__codelineno-0-3415"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-3416" name="__codelineno-0-3416"></a><span class="sd">        ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a</span>
+<a id="__codelineno-0-3417" name="__codelineno-0-3417"></a><span class="sd">            positive finite number (a line has no negative thickness); if ``color`` is a string that</span>
+<a id="__codelineno-0-3418" name="__codelineno-0-3418"></a><span class="sd">            is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a</span>
+<a id="__codelineno-0-3419" name="__codelineno-0-3419"></a><span class="sd">            column&#39;s name; or if ``column`` or a column ``width`` names a column that does not hold</span>
+<a id="__codelineno-0-3420" name="__codelineno-0-3420"></a><span class="sd">            numbers, which a ramp and a width scale both need.</span>
+<a id="__codelineno-0-3421" name="__codelineno-0-3421"></a><span class="sd">        KeyError: if ``column`` or a column ``width`` names no feature attribute — the refusal names</span>
+<a id="__codelineno-0-3422" name="__codelineno-0-3422"></a><span class="sd">            ``Map.lines()``, the keyword and the column, and lists the columns there are.</span>
+<a id="__codelineno-0-3423" name="__codelineno-0-3423"></a>
+<a id="__codelineno-0-3424" name="__codelineno-0-3424"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-3425" name="__codelineno-0-3425"></a><span class="sd">        - Colour reaches by discharge, classified into three classes, with one width:</span>
+<a id="__codelineno-0-3426" name="__codelineno-0-3426"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3427" name="__codelineno-0-3427"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3428" name="__codelineno-0-3428"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3429" name="__codelineno-0-3429"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3430" name="__codelineno-0-3430"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
+<a id="__codelineno-0-3431" name="__codelineno-0-3431"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3432" name="__codelineno-0-3432"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3433" name="__codelineno-0-3433"></a><span class="sd">            &gt;&gt;&gt; reaches = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3434" name="__codelineno-0-3434"></a><span class="sd">            ...     {&quot;discharge&quot;: [10.0, 40.0, 25.0]},</span>
+<a id="__codelineno-0-3435" name="__codelineno-0-3435"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(1, 1), (2, 1)]),</span>
+<a id="__codelineno-0-3436" name="__codelineno-0-3436"></a><span class="sd">            ...               LineString([(2, 1), (3, 2)])],</span>
+<a id="__codelineno-0-3437" name="__codelineno-0-3437"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3438" name="__codelineno-0-3438"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3439" name="__codelineno-0-3439"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=4326) as m:</span>
+<a id="__codelineno-0-3440" name="__codelineno-0-3440"></a><span class="sd">            ...     _ = m.lines(reaches, column=&quot;discharge&quot;, scheme=&quot;equal_interval&quot;, k=3, width=2.0)</span>
+<a id="__codelineno-0-3441" name="__codelineno-0-3441"></a><span class="sd">            ...     lc = m.artist()</span>
+<a id="__codelineno-0-3442" name="__codelineno-0-3442"></a><span class="sd">            ...     lc.get_array().tolist(), sorted({float(w) for w in lc.get_linewidths()})</span>
+<a id="__codelineno-0-3443" name="__codelineno-0-3443"></a><span class="sd">            ...     m.figure_spec.layers.get(m.layer_ids[-1]).kind</span>
+<a id="__codelineno-0-3444" name="__codelineno-0-3444"></a><span class="sd">            ([10.0, 40.0, 25.0], [2.0])</span>
+<a id="__codelineno-0-3445" name="__codelineno-0-3445"></a><span class="sd">            &#39;lines&#39;</span>
+<a id="__codelineno-0-3446" name="__codelineno-0-3446"></a>
+<a id="__codelineno-0-3447" name="__codelineno-0-3447"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3448" name="__codelineno-0-3448"></a><span class="sd">        - One colour, widths scaled by a column:</span>
+<a id="__codelineno-0-3449" name="__codelineno-0-3449"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3450" name="__codelineno-0-3450"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3451" name="__codelineno-0-3451"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3452" name="__codelineno-0-3452"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3453" name="__codelineno-0-3453"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
+<a id="__codelineno-0-3454" name="__codelineno-0-3454"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3455" name="__codelineno-0-3455"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3456" name="__codelineno-0-3456"></a><span class="sd">            &gt;&gt;&gt; roads = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3457" name="__codelineno-0-3457"></a><span class="sd">            ...     {&quot;lanes&quot;: [1, 4]},</span>
+<a id="__codelineno-0-3458" name="__codelineno-0-3458"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],</span>
+<a id="__codelineno-0-3459" name="__codelineno-0-3459"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3460" name="__codelineno-0-3460"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3461" name="__codelineno-0-3461"></a><span class="sd">            &gt;&gt;&gt; with Map(crs=4326) as m:</span>
+<a id="__codelineno-0-3462" name="__codelineno-0-3462"></a><span class="sd">            ...     _ = m.lines(roads, width=&quot;lanes&quot;, color=&quot;dimgray&quot;)</span>
+<a id="__codelineno-0-3463" name="__codelineno-0-3463"></a><span class="sd">            ...     widths = m.artist().get_linewidths()</span>
+<a id="__codelineno-0-3464" name="__codelineno-0-3464"></a><span class="sd">            &gt;&gt;&gt; bool(widths[1] &gt; widths[0])</span>
+<a id="__codelineno-0-3465" name="__codelineno-0-3465"></a><span class="sd">            True</span>
+<a id="__codelineno-0-3466" name="__codelineno-0-3466"></a>
+<a id="__codelineno-0-3467" name="__codelineno-0-3467"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3468" name="__codelineno-0-3468"></a><span class="sd">        - A width a line cannot have, a column name under ``color=``, and a text column under</span>
+<a id="__codelineno-0-3469" name="__codelineno-0-3469"></a><span class="sd">          ``column=`` are each refused by name — and the colour refusal points at the keyword that does</span>
+<a id="__codelineno-0-3470" name="__codelineno-0-3470"></a><span class="sd">          take a column&#39;s name:</span>
+<a id="__codelineno-0-3471" name="__codelineno-0-3471"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3472" name="__codelineno-0-3472"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3473" name="__codelineno-0-3473"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3474" name="__codelineno-0-3474"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3475" name="__codelineno-0-3475"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
+<a id="__codelineno-0-3476" name="__codelineno-0-3476"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3477" name="__codelineno-0-3477"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3478" name="__codelineno-0-3478"></a><span class="sd">            &gt;&gt;&gt; roads = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3479" name="__codelineno-0-3479"></a><span class="sd">            ...     {&quot;name&quot;: [&quot;a&quot;, &quot;b&quot;], &quot;lanes&quot;: [1.0, 4.0]},</span>
+<a id="__codelineno-0-3480" name="__codelineno-0-3480"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],</span>
+<a id="__codelineno-0-3481" name="__codelineno-0-3481"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3482" name="__codelineno-0-3482"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3483" name="__codelineno-0-3483"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-3484" name="__codelineno-0-3484"></a><span class="sd">            &gt;&gt;&gt; for wrong in ({&quot;width&quot;: -2.0}, {&quot;color&quot;: &quot;lanes&quot;}, {&quot;column&quot;: &quot;name&quot;}):</span>
+<a id="__codelineno-0-3485" name="__codelineno-0-3485"></a><span class="sd">            ...     try:</span>
+<a id="__codelineno-0-3486" name="__codelineno-0-3486"></a><span class="sd">            ...         m.lines(roads, **wrong)</span>
+<a id="__codelineno-0-3487" name="__codelineno-0-3487"></a><span class="sd">            ...     except ValueError as error:</span>
+<a id="__codelineno-0-3488" name="__codelineno-0-3488"></a><span class="sd">            ...         print(str(error)[:63])</span>
+<a id="__codelineno-0-3489" name="__codelineno-0-3489"></a><span class="sd">            Map.lines() needs width= as a positive number of points, or the</span>
+<a id="__codelineno-0-3490" name="__codelineno-0-3490"></a><span class="sd">            Map.lines() needs color= as one matplotlib colour for every lin</span>
+<a id="__codelineno-0-3491" name="__codelineno-0-3491"></a><span class="sd">            Map.lines() needs column=&#39;name&#39; to name a column of numbers, an</span>
+<a id="__codelineno-0-3492" name="__codelineno-0-3492"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-3493" name="__codelineno-0-3493"></a>
+<a id="__codelineno-0-3494" name="__codelineno-0-3494"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3495" name="__codelineno-0-3495"></a><span class="sd">        - A column name these features do not carry is named under the keyword it was given under,</span>
+<a id="__codelineno-0-3496" name="__codelineno-0-3496"></a><span class="sd">          with the columns they do carry listed:</span>
+<a id="__codelineno-0-3497" name="__codelineno-0-3497"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3498" name="__codelineno-0-3498"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3499" name="__codelineno-0-3499"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3500" name="__codelineno-0-3500"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3501" name="__codelineno-0-3501"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import LineString</span>
+<a id="__codelineno-0-3502" name="__codelineno-0-3502"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3503" name="__codelineno-0-3503"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3504" name="__codelineno-0-3504"></a><span class="sd">            &gt;&gt;&gt; roads = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3505" name="__codelineno-0-3505"></a><span class="sd">            ...     {&quot;name&quot;: [&quot;a&quot;, &quot;b&quot;], &quot;lanes&quot;: [1.0, 4.0]},</span>
+<a id="__codelineno-0-3506" name="__codelineno-0-3506"></a><span class="sd">            ...     geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 1), (1, 1)])],</span>
+<a id="__codelineno-0-3507" name="__codelineno-0-3507"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3508" name="__codelineno-0-3508"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3509" name="__codelineno-0-3509"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-3510" name="__codelineno-0-3510"></a><span class="sd">            &gt;&gt;&gt; for wrong in ({&quot;column&quot;: &quot;flow&quot;}, {&quot;width&quot;: &quot;order&quot;}):</span>
+<a id="__codelineno-0-3511" name="__codelineno-0-3511"></a><span class="sd">            ...     try:</span>
+<a id="__codelineno-0-3512" name="__codelineno-0-3512"></a><span class="sd">            ...         m.lines(roads, **wrong)</span>
+<a id="__codelineno-0-3513" name="__codelineno-0-3513"></a><span class="sd">            ...     except KeyError as error:</span>
+<a id="__codelineno-0-3514" name="__codelineno-0-3514"></a><span class="sd">            ...         print(error.args[0])</span>
+<a id="__codelineno-0-3515" name="__codelineno-0-3515"></a><span class="sd">            Map.lines(): column=&#39;flow&#39; is not a property of these features; available: [&#39;lanes&#39;, &#39;name&#39;]</span>
+<a id="__codelineno-0-3516" name="__codelineno-0-3516"></a><span class="sd">            Map.lines(): width=&#39;order&#39; is not a property of these features; available: [&#39;lanes&#39;, &#39;name&#39;]</span>
+<a id="__codelineno-0-3517" name="__codelineno-0-3517"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-3518" name="__codelineno-0-3518"></a>
+<a id="__codelineno-0-3519" name="__codelineno-0-3519"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3520" name="__codelineno-0-3520"></a>
+<a id="__codelineno-0-3521" name="__codelineno-0-3521"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-3522" name="__codelineno-0-3522"></a><span class="sd">        sankey: the same geometry drawn as a flow map.</span>
+<a id="__codelineno-0-3523" name="__codelineno-0-3523"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-3524" name="__codelineno-0-3524"></a>    <span class="k">if</span> <span class="n">width</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-3525" name="__codelineno-0-3525"></a>        <span class="c1"># A scalar width reached the collection exactly as written, negatives included</span>
+<a id="__codelineno-0-3526" name="__codelineno-0-3526"></a>        <span class="c1"># (`get_linewidths() == [-2.0]`), and zero drew lines of no width at all (review L4).</span>
+<a id="__codelineno-0-3527" name="__codelineno-0-3527"></a>        <span class="k">if</span> <span class="n">_as_finite</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="n">_LINES_CALLER</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mf">0.0</span><span class="p">:</span>
+<a id="__codelineno-0-3528" name="__codelineno-0-3528"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-3529" name="__codelineno-0-3529"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_LINES_CALLER</span><span class="si">}</span><span class="s2"> needs width= as a positive number of points, or the name of a &quot;</span>
+<a id="__codelineno-0-3530" name="__codelineno-0-3530"></a>                <span class="sa">f</span><span class="s2">&quot;column to scale the widths by; got </span><span class="si">{</span><span class="n">width</span><span class="si">!r}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-3531" name="__codelineno-0-3531"></a>            <span class="p">)</span>
+<a id="__codelineno-0-3532" name="__codelineno-0-3532"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">is_color_like</span><span class="p">(</span><span class="n">color</span><span class="p">)):</span>
+<a id="__codelineno-0-3533" name="__codelineno-0-3533"></a>        <span class="c1"># `color=` and `column=` sit next to each other in the signature, so a column name under</span>
+<a id="__codelineno-0-3534" name="__codelineno-0-3534"></a>        <span class="c1"># `color=` is a plausible slip — and `to_hex` answered it with matplotlib&#39;s &quot;Invalid RGBA</span>
+<a id="__codelineno-0-3535" name="__codelineno-0-3535"></a>        <span class="c1"># argument&quot;, which names neither this method nor either keyword (review L4).</span>
+<a id="__codelineno-0-3536" name="__codelineno-0-3536"></a>        <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-3537" name="__codelineno-0-3537"></a>            <span class="n">line_color</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_hex</span><span class="p">(</span><span class="n">color</span><span class="p">,</span> <span class="n">keep_alpha</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-3538" name="__codelineno-0-3538"></a>        <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+<a id="__codelineno-0-3539" name="__codelineno-0-3539"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-3540" name="__codelineno-0-3540"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_LINES_CALLER</span><span class="si">}</span><span class="s2"> needs color= as one matplotlib colour for every line, and &quot;</span>
+<a id="__codelineno-0-3541" name="__codelineno-0-3541"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">color</span><span class="si">!r}</span><span class="s2"> is not one. To colour the lines by a column&#39;s values instead, pass &quot;</span>
+<a id="__codelineno-0-3542" name="__codelineno-0-3542"></a>                <span class="sa">f</span><span class="s2">&quot;column=</span><span class="si">{</span><span class="n">color</span><span class="si">!r}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-3543" name="__codelineno-0-3543"></a>            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+<a id="__codelineno-0-3544" name="__codelineno-0-3544"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-3545" name="__codelineno-0-3545"></a>        <span class="n">line_color</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-3546" name="__codelineno-0-3546"></a>        <span class="k">if</span> <span class="n">color</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3547" name="__codelineno-0-3547"></a>            <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;color&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">color</span>
+<a id="__codelineno-0-3548" name="__codelineno-0-3548"></a>    <span class="k">if</span> <span class="n">cmap</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3549" name="__codelineno-0-3549"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;cmap&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cmap</span>
+<a id="__codelineno-0-3550" name="__codelineno-0-3550"></a>    <span class="k">if</span> <span class="n">scheme</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-3551" name="__codelineno-0-3551"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">scheme</span>
+<a id="__codelineno-0-3552" name="__codelineno-0-3552"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span>
+<a id="__codelineno-0-3553" name="__codelineno-0-3553"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
+<a id="__codelineno-0-3554" name="__codelineno-0-3554"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
+<a id="__codelineno-0-3555" name="__codelineno-0-3555"></a>            <span class="s2">&quot;lines&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3556" name="__codelineno-0-3556"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
+<a id="__codelineno-0-3557" name="__codelineno-0-3557"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-3558" name="__codelineno-0-3558"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-3559" name="__codelineno-0-3559"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-3560" name="__codelineno-0-3560"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-3561" name="__codelineno-0-3561"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;lines&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3562" name="__codelineno-0-3562"></a>                    <span class="s2">&quot;column&quot;</span><span class="p">:</span> <span class="n">column</span><span class="p">,</span>
+<a id="__codelineno-0-3563" name="__codelineno-0-3563"></a>                    <span class="s2">&quot;width&quot;</span><span class="p">:</span> <span class="n">width</span><span class="p">,</span>
+<a id="__codelineno-0-3564" name="__codelineno-0-3564"></a>                    <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">line_color</span><span class="p">,</span>
+<a id="__codelineno-0-3565" name="__codelineno-0-3565"></a>                    <span class="s2">&quot;opacity&quot;</span><span class="p">:</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">opacity</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">opacity</span><span class="p">),</span>
+<a id="__codelineno-0-3566" name="__codelineno-0-3566"></a>                <span class="p">}</span>
+<a id="__codelineno-0-3567" name="__codelineno-0-3567"></a>            <span class="p">),</span>
+<a id="__codelineno-0-3568" name="__codelineno-0-3568"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-3569" name="__codelineno-0-3569"></a>        <span class="p">)</span>
+<a id="__codelineno-0-3570" name="__codelineno-0-3570"></a>    <span class="p">)</span>
+<a id="__codelineno-0-3571" name="__codelineno-0-3571"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12096,10 +12096,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2638">2638</a></span>
-<span class="normal"><a href="#__codelineno-0-2639">2639</a></span>
-<span class="normal"><a href="#__codelineno-0-2640">2640</a></span>
-<span class="normal"><a href="#__codelineno-0-2641">2641</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2641">2641</a></span>
 <span class="normal"><a href="#__codelineno-0-2642">2642</a></span>
 <span class="normal"><a href="#__codelineno-0-2643">2643</a></span>
 <span class="normal"><a href="#__codelineno-0-2644">2644</a></span>
@@ -12135,46 +12132,49 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
 <span class="normal"><a href="#__codelineno-0-2674">2674</a></span>
 <span class="normal"><a href="#__codelineno-0-2675">2675</a></span>
 <span class="normal"><a href="#__codelineno-0-2676">2676</a></span>
-<span class="normal"><a href="#__codelineno-0-2677">2677</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2638" name="__codelineno-0-2638"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-2639" name="__codelineno-0-2639"></a><span class="k">def</span><span class="w"> </span><span class="nf">polygons</span><span class="p">(</span>
-<a id="__codelineno-0-2640" name="__codelineno-0-2640"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-2641" name="__codelineno-0-2641"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2642" name="__codelineno-0-2642"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-2643" name="__codelineno-0-2643"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2644" name="__codelineno-0-2644"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2645" name="__codelineno-0-2645"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2646" name="__codelineno-0-2646"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-2647" name="__codelineno-0-2647"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).</span>
-<a id="__codelineno-0-2648" name="__codelineno-0-2648"></a>
-<a id="__codelineno-0-2649" name="__codelineno-0-2649"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2650" name="__codelineno-0-2650"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one</span>
-<a id="__codelineno-0-2651" name="__codelineno-0-2651"></a><span class="sd">            (reprojected to the display CRS). Only a path-backed layer can be written down.</span>
-<a id="__codelineno-0-2652" name="__codelineno-0-2652"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-2653" name="__codelineno-0-2653"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-2654" name="__codelineno-0-2654"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-2655" name="__codelineno-0-2655"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-2656" name="__codelineno-0-2656"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-2657" name="__codelineno-0-2657"></a><span class="sd">        **opts: Styling kwargs, filtered to ``PolygonGlyph``&#39;s accepted options.</span>
-<a id="__codelineno-0-2658" name="__codelineno-0-2658"></a>
-<a id="__codelineno-0-2659" name="__codelineno-0-2659"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2660" name="__codelineno-0-2660"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2661" name="__codelineno-0-2661"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
-<a id="__codelineno-0-2662" name="__codelineno-0-2662"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
-<a id="__codelineno-0-2663" name="__codelineno-0-2663"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2664" name="__codelineno-0-2664"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
-<a id="__codelineno-0-2665" name="__codelineno-0-2665"></a><span class="sd">        map rather than the artist (ST-20).</span>
-<a id="__codelineno-0-2666" name="__codelineno-0-2666"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2667" name="__codelineno-0-2667"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
-<a id="__codelineno-0-2668" name="__codelineno-0-2668"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
-<a id="__codelineno-0-2669" name="__codelineno-0-2669"></a>            <span class="n">_polygon_kind</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span>  <span class="c1"># outlines only, whatever the collection carries</span>
-<a id="__codelineno-0-2670" name="__codelineno-0-2670"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
-<a id="__codelineno-0-2671" name="__codelineno-0-2671"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-2672" name="__codelineno-0-2672"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-2673" name="__codelineno-0-2673"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span><span class="n">props</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;shapes&quot;</span><span class="p">}),</span>
-<a id="__codelineno-0-2674" name="__codelineno-0-2674"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-2675" name="__codelineno-0-2675"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2676" name="__codelineno-0-2676"></a>    <span class="p">)</span>
-<a id="__codelineno-0-2677" name="__codelineno-0-2677"></a>    <span class="k">return</span> <span class="bp">self</span>
+<span class="normal"><a href="#__codelineno-0-2677">2677</a></span>
+<span class="normal"><a href="#__codelineno-0-2678">2678</a></span>
+<span class="normal"><a href="#__codelineno-0-2679">2679</a></span>
+<span class="normal"><a href="#__codelineno-0-2680">2680</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2641" name="__codelineno-0-2641"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-2642" name="__codelineno-0-2642"></a><span class="k">def</span><span class="w"> </span><span class="nf">polygons</span><span class="p">(</span>
+<a id="__codelineno-0-2643" name="__codelineno-0-2643"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-2644" name="__codelineno-0-2644"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2645" name="__codelineno-0-2645"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-2646" name="__codelineno-0-2646"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2647" name="__codelineno-0-2647"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-2648" name="__codelineno-0-2648"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2649" name="__codelineno-0-2649"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-2650" name="__codelineno-0-2650"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).</span>
+<a id="__codelineno-0-2651" name="__codelineno-0-2651"></a>
+<a id="__codelineno-0-2652" name="__codelineno-0-2652"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2653" name="__codelineno-0-2653"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one</span>
+<a id="__codelineno-0-2654" name="__codelineno-0-2654"></a><span class="sd">            (reprojected to the display CRS). Only a path-backed layer can be written down.</span>
+<a id="__codelineno-0-2655" name="__codelineno-0-2655"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-2656" name="__codelineno-0-2656"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-2657" name="__codelineno-0-2657"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-2658" name="__codelineno-0-2658"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-2659" name="__codelineno-0-2659"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-2660" name="__codelineno-0-2660"></a><span class="sd">        **opts: Styling kwargs, filtered to ``PolygonGlyph``&#39;s accepted options.</span>
+<a id="__codelineno-0-2661" name="__codelineno-0-2661"></a>
+<a id="__codelineno-0-2662" name="__codelineno-0-2662"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2663" name="__codelineno-0-2663"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
+<a id="__codelineno-0-2664" name="__codelineno-0-2664"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2665" name="__codelineno-0-2665"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
+<a id="__codelineno-0-2666" name="__codelineno-0-2666"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
+<a id="__codelineno-0-2667" name="__codelineno-0-2667"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2668" name="__codelineno-0-2668"></a><span class="sd">        map rather than the artist (ST-20).</span>
+<a id="__codelineno-0-2669" name="__codelineno-0-2669"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2670" name="__codelineno-0-2670"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
+<a id="__codelineno-0-2671" name="__codelineno-0-2671"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
+<a id="__codelineno-0-2672" name="__codelineno-0-2672"></a>            <span class="n">_polygon_kind</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span>  <span class="c1"># outlines only, whatever the collection carries</span>
+<a id="__codelineno-0-2673" name="__codelineno-0-2673"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
+<a id="__codelineno-0-2674" name="__codelineno-0-2674"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-2675" name="__codelineno-0-2675"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-2676" name="__codelineno-0-2676"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span><span class="n">props</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;shapes&quot;</span><span class="p">}),</span>
+<a id="__codelineno-0-2677" name="__codelineno-0-2677"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-2678" name="__codelineno-0-2678"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2679" name="__codelineno-0-2679"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2680" name="__codelineno-0-2680"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12493,10 +12493,7 @@ web/interactive tiers either way.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2508">2508</a></span>
-<span class="normal"><a href="#__codelineno-0-2509">2509</a></span>
-<span class="normal"><a href="#__codelineno-0-2510">2510</a></span>
-<span class="normal"><a href="#__codelineno-0-2511">2511</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2511">2511</a></span>
 <span class="normal"><a href="#__codelineno-0-2512">2512</a></span>
 <span class="normal"><a href="#__codelineno-0-2513">2513</a></span>
 <span class="normal"><a href="#__codelineno-0-2514">2514</a></span>
@@ -12621,135 +12618,138 @@ web/interactive tiers either way.</p>
 <span class="normal"><a href="#__codelineno-0-2633">2633</a></span>
 <span class="normal"><a href="#__codelineno-0-2634">2634</a></span>
 <span class="normal"><a href="#__codelineno-0-2635">2635</a></span>
-<span class="normal"><a href="#__codelineno-0-2636">2636</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2508" name="__codelineno-0-2508"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-2509" name="__codelineno-0-2509"></a><span class="k">def</span><span class="w"> </span><span class="nf">choropleth</span><span class="p">(</span>
-<a id="__codelineno-0-2510" name="__codelineno-0-2510"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-2511" name="__codelineno-0-2511"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2512" name="__codelineno-0-2512"></a>    <span class="n">column</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-<a id="__codelineno-0-2513" name="__codelineno-0-2513"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-2514" name="__codelineno-0-2514"></a>    <span class="n">scheme</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2515" name="__codelineno-0-2515"></a>    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
-<a id="__codelineno-0-2516" name="__codelineno-0-2516"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2517" name="__codelineno-0-2517"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2518" name="__codelineno-0-2518"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2519" name="__codelineno-0-2519"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2520" name="__codelineno-0-2520"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2521" name="__codelineno-0-2521"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-2522" name="__codelineno-0-2522"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).</span>
-<a id="__codelineno-0-2523" name="__codelineno-0-2523"></a>
-<a id="__codelineno-0-2524" name="__codelineno-0-2524"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2525" name="__codelineno-0-2525"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one</span>
-<a id="__codelineno-0-2526" name="__codelineno-0-2526"></a><span class="sd">            (reprojected to the display CRS). Only a path-backed layer can be written down.</span>
-<a id="__codelineno-0-2527" name="__codelineno-0-2527"></a><span class="sd">        column: Name of the column whose values colour the polygons — numeric for a continuous or</span>
-<a id="__codelineno-0-2528" name="__codelineno-0-2528"></a><span class="sd">            graduated scale, or any nominal labels (strings, region codes, …) under</span>
-<a id="__codelineno-0-2529" name="__codelineno-0-2529"></a><span class="sd">            ``scheme=&quot;categorical&quot;``.</span>
-<a id="__codelineno-0-2530" name="__codelineno-0-2530"></a><span class="sd">        scheme: How the values are classified. ``None`` (default) is a **continuous** ramp; a named</span>
-<a id="__codelineno-0-2531" name="__codelineno-0-2531"></a><span class="sd">            scheme (``&quot;quantiles&quot;``, ``&quot;fisher_jenks&quot;``, ``&quot;equal_interval&quot;``, …) or an explicit</span>
-<a id="__codelineno-0-2532" name="__codelineno-0-2532"></a><span class="sd">            sequence of bin edges is graduated into ``k`` classes; ``&quot;categorical&quot;`` gives every</span>
-<a id="__codelineno-0-2533" name="__codelineno-0-2533"></a><span class="sd">            distinct value its own colour (an unordered attribute such as a land-use class or region</span>
-<a id="__codelineno-0-2534" name="__codelineno-0-2534"></a><span class="sd">            name — ``k`` does not apply, and ``vmin``/``vmax``/``levels``/``color_scale`` are ignored),</span>
-<a id="__codelineno-0-2535" name="__codelineno-0-2535"></a><span class="sd">            keyed by a swatch legend rather than a colorbar. Spelled the same way, with the same</span>
-<a id="__codelineno-0-2536" name="__codelineno-0-2536"></a><span class="sd">            default, on every backend: ``scheme=None`` is a continuous ramp everywhere, so the same</span>
-<a id="__codelineno-0-2537" name="__codelineno-0-2537"></a><span class="sd">            call classifies identically on all four tiers. Either kind of classification leaves a</span>
-<a id="__codelineno-0-2538" name="__codelineno-0-2538"></a><span class="sd">            missing value (``NaN``/``None``/``pd.NA``) outside every class, so those features are</span>
-<a id="__codelineno-0-2539" name="__codelineno-0-2539"></a><span class="sd">            drawn a neutral grey — not dropped, and not painted as the lowest class. A continuous</span>
-<a id="__codelineno-0-2540" name="__codelineno-0-2540"></a><span class="sd">            ramp has no classes and is left to matplotlib.</span>
-<a id="__codelineno-0-2541" name="__codelineno-0-2541"></a><span class="sd">        k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or</span>
-<a id="__codelineno-0-2542" name="__codelineno-0-2542"></a><span class="sd">            ``&quot;categorical&quot;``).</span>
-<a id="__codelineno-0-2543" name="__codelineno-0-2543"></a><span class="sd">        opacity: How opaque the fill is, in ``[0, 1]``. This is the spelling `CHANNELS` (in</span>
-<a id="__codelineno-0-2544" name="__codelineno-0-2544"></a><span class="sd">            `digitalearth.base.spec.encoding`) and the Core contract use, so the same channel is</span>
-<a id="__codelineno-0-2545" name="__codelineno-0-2545"></a><span class="sd">            written the same way wherever it is offered (#332). Measured, `choropleth` names it on</span>
-<a id="__codelineno-0-2546" name="__codelineno-0-2546"></a><span class="sd">            all three 2-D tiers — static, web and interactive; the 3-D tier names it only on</span>
-<a id="__codelineno-0-2547" name="__codelineno-0-2547"></a><span class="sd">            `volume`, not on its polygon builder `extruded_polygons`.</span>
-<a id="__codelineno-0-2548" name="__codelineno-0-2548"></a><span class="sd">            matplotlib&#39;s own ``alpha`` is what it arrives as. ``None`` (default) sets no opacity at</span>
-<a id="__codelineno-0-2549" name="__codelineno-0-2549"></a><span class="sd">            all, which is not the same as ``1.0``: measured, `opacity=None` leaves</span>
-<a id="__codelineno-0-2550" name="__codelineno-0-2550"></a><span class="sd">            `artist.get_alpha()` at `None` — the colormap&#39;s own alpha channel still in force —</span>
-<a id="__codelineno-0-2551" name="__codelineno-0-2551"></a><span class="sd">            while `opacity=1.0` sets it to `1.0`.</span>
-<a id="__codelineno-0-2552" name="__codelineno-0-2552"></a><span class="sd">        cmap: The colormap the fill is drawn with, forwarded to ``PolygonGlyph`` exactly as a</span>
-<a id="__codelineno-0-2553" name="__codelineno-0-2553"></a><span class="sd">            ``cmap=`` in ``**opts`` always was. Named in the signature because the Core declares it</span>
-<a id="__codelineno-0-2554" name="__codelineno-0-2554"></a><span class="sd">            as a keyword of ``choropleth`` on every tier, and a keyword that works but is not</span>
-<a id="__codelineno-0-2555" name="__codelineno-0-2555"></a><span class="sd">            written down is one a caller has to read the source to find (#324).</span>
-<a id="__codelineno-0-2556" name="__codelineno-0-2556"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-2557" name="__codelineno-0-2557"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-2558" name="__codelineno-0-2558"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-2559" name="__codelineno-0-2559"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-2560" name="__codelineno-0-2560"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-2561" name="__codelineno-0-2561"></a><span class="sd">        **opts: Styling kwargs forwarded to ``PolygonGlyph``. For a categorical scheme, ``cmap`` should</span>
-<a id="__codelineno-0-2562" name="__codelineno-0-2562"></a><span class="sd">            be a **qualitative** (``ListedColormap``) map — ``&quot;tab10&quot;`` (the default), ``&quot;Set2&quot;``,</span>
-<a id="__codelineno-0-2563" name="__codelineno-0-2563"></a><span class="sd">            ``&quot;Paired&quot;``, … A continuous ``LinearSegmentedColormap`` (``&quot;coolwarm&quot;``, ``&quot;RdBu&quot;``) is</span>
-<a id="__codelineno-0-2564" name="__codelineno-0-2564"></a><span class="sd">            sampled at evenly-spaced points so the categories stay distinct; a perceptual</span>
-<a id="__codelineno-0-2565" name="__codelineno-0-2565"></a><span class="sd">            ``ListedColormap`` (``&quot;viridis&quot;``, ``&quot;plasma&quot;``) is accepted but reads poorly (its first</span>
-<a id="__codelineno-0-2566" name="__codelineno-0-2566"></a><span class="sd">            *n* of 256 entries are near-identical shades). The colours are identical to the</span>
-<a id="__codelineno-0-2567" name="__codelineno-0-2567"></a><span class="sd">            web/interactive tiers either way.</span>
-<a id="__codelineno-0-2568" name="__codelineno-0-2568"></a>
-<a id="__codelineno-0-2569" name="__codelineno-0-2569"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2570" name="__codelineno-0-2570"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2571" name="__codelineno-0-2571"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
-<a id="__codelineno-0-2572" name="__codelineno-0-2572"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
-<a id="__codelineno-0-2573" name="__codelineno-0-2573"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2574" name="__codelineno-0-2574"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
-<a id="__codelineno-0-2575" name="__codelineno-0-2575"></a><span class="sd">        map rather than the artist (ST-20).</span>
-<a id="__codelineno-0-2576" name="__codelineno-0-2576"></a>
-<a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="sd">        - Colour buffered point features by their ``fid`` column and count the drawn polygons:</span>
-<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2582" name="__codelineno-0-2582"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
-<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">            &gt;&gt;&gt; fc = FeatureCollection.read_file(&quot;tests/data/points.geojson&quot;)</span>
-<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a><span class="sd">            &gt;&gt;&gt; fc[&quot;geometry&quot;] = fc.geometry.buffer(500.0)</span>
-<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=fc.epsg)</span>
-<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a><span class="sd">            &gt;&gt;&gt; _ = m.choropleth(fc, column=&quot;fid&quot;, name=&quot;zones&quot;)</span>
-<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">            &gt;&gt;&gt; len(m.artist(&quot;zones&quot;).get_paths()) &gt;= len(fc)</span>
-<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">            True</span>
-<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a>
-<a id="__codelineno-0-2592" name="__codelineno-0-2592"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">        - Colour by an unordered attribute — one colour per distinct class, keyed by a swatch legend:</span>
-<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">            &gt;&gt;&gt; fc[&quot;zone&quot;] = [&quot;urban&quot;, &quot;rural&quot;] * (len(fc) // 2) + [&quot;urban&quot;] * (len(fc) % 2)</span>
-<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=fc.epsg)</span>
-<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a><span class="sd">            &gt;&gt;&gt; _ = m.choropleth(fc, column=&quot;zone&quot;, scheme=&quot;categorical&quot;, name=&quot;zoning&quot;)</span>
-<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a><span class="sd">            &gt;&gt;&gt; from matplotlib.colors import BoundaryNorm</span>
-<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a><span class="sd">            &gt;&gt;&gt; norm = m.artist(&quot;zoning&quot;).norm</span>
-<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a><span class="sd">            &gt;&gt;&gt; isinstance(norm, BoundaryNorm)  # discrete class codes, not a continuous scale</span>
-<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a><span class="sd">            True</span>
-<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a><span class="sd">            &gt;&gt;&gt; [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]</span>
-<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a><span class="sd">            [&#39;rural&#39;, &#39;urban&#39;]</span>
-<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a>
-<a id="__codelineno-0-2606" name="__codelineno-0-2606"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2607" name="__codelineno-0-2607"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2608" name="__codelineno-0-2608"></a>    <span class="k">if</span> <span class="n">cmap</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2609" name="__codelineno-0-2609"></a>        <span class="c1"># Straight back into the caller&#39;s keywords: this is where `cmap=` has always travelled, so</span>
-<a id="__codelineno-0-2610" name="__codelineno-0-2610"></a>        <span class="c1"># naming it in the signature documents the keyword without moving it.</span>
-<a id="__codelineno-0-2611" name="__codelineno-0-2611"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;cmap&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cmap</span>
-<a id="__codelineno-0-2612" name="__codelineno-0-2612"></a>    <span class="c1"># The channel is named `opacity` here and `alpha` where it reaches matplotlib, so it travels on</span>
-<a id="__codelineno-0-2613" name="__codelineno-0-2613"></a>    <span class="c1"># under the engine&#39;s own spelling — exactly where a caller&#39;s `alpha=` always went.</span>
-<a id="__codelineno-0-2614" name="__codelineno-0-2614"></a>    <span class="k">if</span> <span class="n">opacity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2615" name="__codelineno-0-2615"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;alpha&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">opacity</span>
-<a id="__codelineno-0-2616" name="__codelineno-0-2616"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
-<a id="__codelineno-0-2617" name="__codelineno-0-2617"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
-<a id="__codelineno-0-2618" name="__codelineno-0-2618"></a>            <span class="c1"># A column is required, so the polygons are always filled by a value: a choropleth.</span>
-<a id="__codelineno-0-2619" name="__codelineno-0-2619"></a>            <span class="n">_polygon_kind</span><span class="p">(</span><span class="n">column</span><span class="p">),</span>
-<a id="__codelineno-0-2620" name="__codelineno-0-2620"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
-<a id="__codelineno-0-2621" name="__codelineno-0-2621"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-2622" name="__codelineno-0-2622"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-2623" name="__codelineno-0-2623"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-2624" name="__codelineno-0-2624"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-2625" name="__codelineno-0-2625"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;choropleth&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-2626" name="__codelineno-0-2626"></a>                    <span class="s2">&quot;column&quot;</span><span class="p">:</span> <span class="n">column</span><span class="p">,</span>
-<a id="__codelineno-0-2627" name="__codelineno-0-2627"></a>                    <span class="s2">&quot;scheme&quot;</span><span class="p">:</span> <span class="n">scheme</span><span class="p">,</span>
-<a id="__codelineno-0-2628" name="__codelineno-0-2628"></a>                    <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
-<a id="__codelineno-0-2629" name="__codelineno-0-2629"></a>                <span class="p">}</span>
-<a id="__codelineno-0-2630" name="__codelineno-0-2630"></a>            <span class="p">),</span>
-<a id="__codelineno-0-2631" name="__codelineno-0-2631"></a>            <span class="c1"># The classification is folded into the glyph&#39;s keywords by the drawer, so what the figure</span>
-<a id="__codelineno-0-2632" name="__codelineno-0-2632"></a>            <span class="c1"># records is the call the caller made; their own engine keywords travel beside it.</span>
-<a id="__codelineno-0-2633" name="__codelineno-0-2633"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-2634" name="__codelineno-0-2634"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2635" name="__codelineno-0-2635"></a>    <span class="p">)</span>
-<a id="__codelineno-0-2636" name="__codelineno-0-2636"></a>    <span class="k">return</span> <span class="bp">self</span>
+<span class="normal"><a href="#__codelineno-0-2636">2636</a></span>
+<span class="normal"><a href="#__codelineno-0-2637">2637</a></span>
+<span class="normal"><a href="#__codelineno-0-2638">2638</a></span>
+<span class="normal"><a href="#__codelineno-0-2639">2639</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2511" name="__codelineno-0-2511"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-2512" name="__codelineno-0-2512"></a><span class="k">def</span><span class="w"> </span><span class="nf">choropleth</span><span class="p">(</span>
+<a id="__codelineno-0-2513" name="__codelineno-0-2513"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-2514" name="__codelineno-0-2514"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2515" name="__codelineno-0-2515"></a>    <span class="n">column</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-2516" name="__codelineno-0-2516"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-2517" name="__codelineno-0-2517"></a>    <span class="n">scheme</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2518" name="__codelineno-0-2518"></a>    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-0-2519" name="__codelineno-0-2519"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2520" name="__codelineno-0-2520"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2521" name="__codelineno-0-2521"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-2522" name="__codelineno-0-2522"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-2523" name="__codelineno-0-2523"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-2524" name="__codelineno-0-2524"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-2525" name="__codelineno-0-2525"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).</span>
+<a id="__codelineno-0-2526" name="__codelineno-0-2526"></a>
+<a id="__codelineno-0-2527" name="__codelineno-0-2527"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2528" name="__codelineno-0-2528"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one</span>
+<a id="__codelineno-0-2529" name="__codelineno-0-2529"></a><span class="sd">            (reprojected to the display CRS). Only a path-backed layer can be written down.</span>
+<a id="__codelineno-0-2530" name="__codelineno-0-2530"></a><span class="sd">        column: Name of the column whose values colour the polygons — numeric for a continuous or</span>
+<a id="__codelineno-0-2531" name="__codelineno-0-2531"></a><span class="sd">            graduated scale, or any nominal labels (strings, region codes, …) under</span>
+<a id="__codelineno-0-2532" name="__codelineno-0-2532"></a><span class="sd">            ``scheme=&quot;categorical&quot;``.</span>
+<a id="__codelineno-0-2533" name="__codelineno-0-2533"></a><span class="sd">        scheme: How the values are classified. ``None`` (default) is a **continuous** ramp; a named</span>
+<a id="__codelineno-0-2534" name="__codelineno-0-2534"></a><span class="sd">            scheme (``&quot;quantiles&quot;``, ``&quot;fisher_jenks&quot;``, ``&quot;equal_interval&quot;``, …) or an explicit</span>
+<a id="__codelineno-0-2535" name="__codelineno-0-2535"></a><span class="sd">            sequence of bin edges is graduated into ``k`` classes; ``&quot;categorical&quot;`` gives every</span>
+<a id="__codelineno-0-2536" name="__codelineno-0-2536"></a><span class="sd">            distinct value its own colour (an unordered attribute such as a land-use class or region</span>
+<a id="__codelineno-0-2537" name="__codelineno-0-2537"></a><span class="sd">            name — ``k`` does not apply, and ``vmin``/``vmax``/``levels``/``color_scale`` are ignored),</span>
+<a id="__codelineno-0-2538" name="__codelineno-0-2538"></a><span class="sd">            keyed by a swatch legend rather than a colorbar. Spelled the same way, with the same</span>
+<a id="__codelineno-0-2539" name="__codelineno-0-2539"></a><span class="sd">            default, on every backend: ``scheme=None`` is a continuous ramp everywhere, so the same</span>
+<a id="__codelineno-0-2540" name="__codelineno-0-2540"></a><span class="sd">            call classifies identically on all four tiers. Either kind of classification leaves a</span>
+<a id="__codelineno-0-2541" name="__codelineno-0-2541"></a><span class="sd">            missing value (``NaN``/``None``/``pd.NA``) outside every class, so those features are</span>
+<a id="__codelineno-0-2542" name="__codelineno-0-2542"></a><span class="sd">            drawn a neutral grey — not dropped, and not painted as the lowest class. A continuous</span>
+<a id="__codelineno-0-2543" name="__codelineno-0-2543"></a><span class="sd">            ramp has no classes and is left to matplotlib.</span>
+<a id="__codelineno-0-2544" name="__codelineno-0-2544"></a><span class="sd">        k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or</span>
+<a id="__codelineno-0-2545" name="__codelineno-0-2545"></a><span class="sd">            ``&quot;categorical&quot;``).</span>
+<a id="__codelineno-0-2546" name="__codelineno-0-2546"></a><span class="sd">        opacity: How opaque the fill is, in ``[0, 1]``. This is the spelling `CHANNELS` (in</span>
+<a id="__codelineno-0-2547" name="__codelineno-0-2547"></a><span class="sd">            `digitalearth.base.spec.encoding`) and the Core contract use, so the same channel is</span>
+<a id="__codelineno-0-2548" name="__codelineno-0-2548"></a><span class="sd">            written the same way wherever it is offered (#332). Measured, `choropleth` names it on</span>
+<a id="__codelineno-0-2549" name="__codelineno-0-2549"></a><span class="sd">            all three 2-D tiers — static, web and interactive; the 3-D tier names it only on</span>
+<a id="__codelineno-0-2550" name="__codelineno-0-2550"></a><span class="sd">            `volume`, not on its polygon builder `extruded_polygons`.</span>
+<a id="__codelineno-0-2551" name="__codelineno-0-2551"></a><span class="sd">            matplotlib&#39;s own ``alpha`` is what it arrives as. ``None`` (default) sets no opacity at</span>
+<a id="__codelineno-0-2552" name="__codelineno-0-2552"></a><span class="sd">            all, which is not the same as ``1.0``: measured, `opacity=None` leaves</span>
+<a id="__codelineno-0-2553" name="__codelineno-0-2553"></a><span class="sd">            `artist.get_alpha()` at `None` — the colormap&#39;s own alpha channel still in force —</span>
+<a id="__codelineno-0-2554" name="__codelineno-0-2554"></a><span class="sd">            while `opacity=1.0` sets it to `1.0`.</span>
+<a id="__codelineno-0-2555" name="__codelineno-0-2555"></a><span class="sd">        cmap: The colormap the fill is drawn with, forwarded to ``PolygonGlyph`` exactly as a</span>
+<a id="__codelineno-0-2556" name="__codelineno-0-2556"></a><span class="sd">            ``cmap=`` in ``**opts`` always was. Named in the signature because the Core declares it</span>
+<a id="__codelineno-0-2557" name="__codelineno-0-2557"></a><span class="sd">            as a keyword of ``choropleth`` on every tier, and a keyword that works but is not</span>
+<a id="__codelineno-0-2558" name="__codelineno-0-2558"></a><span class="sd">            written down is one a caller has to read the source to find (#324).</span>
+<a id="__codelineno-0-2559" name="__codelineno-0-2559"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-2560" name="__codelineno-0-2560"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-2561" name="__codelineno-0-2561"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-2562" name="__codelineno-0-2562"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-2563" name="__codelineno-0-2563"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-2564" name="__codelineno-0-2564"></a><span class="sd">        **opts: Styling kwargs forwarded to ``PolygonGlyph``. For a categorical scheme, ``cmap`` should</span>
+<a id="__codelineno-0-2565" name="__codelineno-0-2565"></a><span class="sd">            be a **qualitative** (``ListedColormap``) map — ``&quot;tab10&quot;`` (the default), ``&quot;Set2&quot;``,</span>
+<a id="__codelineno-0-2566" name="__codelineno-0-2566"></a><span class="sd">            ``&quot;Paired&quot;``, … A continuous ``LinearSegmentedColormap`` (``&quot;coolwarm&quot;``, ``&quot;RdBu&quot;``) is</span>
+<a id="__codelineno-0-2567" name="__codelineno-0-2567"></a><span class="sd">            sampled at evenly-spaced points so the categories stay distinct; a perceptual</span>
+<a id="__codelineno-0-2568" name="__codelineno-0-2568"></a><span class="sd">            ``ListedColormap`` (``&quot;viridis&quot;``, ``&quot;plasma&quot;``) is accepted but reads poorly (its first</span>
+<a id="__codelineno-0-2569" name="__codelineno-0-2569"></a><span class="sd">            *n* of 256 entries are near-identical shades). The colours are identical to the</span>
+<a id="__codelineno-0-2570" name="__codelineno-0-2570"></a><span class="sd">            web/interactive tiers either way.</span>
+<a id="__codelineno-0-2571" name="__codelineno-0-2571"></a>
+<a id="__codelineno-0-2572" name="__codelineno-0-2572"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2573" name="__codelineno-0-2573"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
+<a id="__codelineno-0-2574" name="__codelineno-0-2574"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2575" name="__codelineno-0-2575"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
+<a id="__codelineno-0-2576" name="__codelineno-0-2576"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
+<a id="__codelineno-0-2577" name="__codelineno-0-2577"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2578" name="__codelineno-0-2578"></a><span class="sd">        map rather than the artist (ST-20).</span>
+<a id="__codelineno-0-2579" name="__codelineno-0-2579"></a>
+<a id="__codelineno-0-2580" name="__codelineno-0-2580"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2581" name="__codelineno-0-2581"></a><span class="sd">        - Colour buffered point features by their ``fid`` column and count the drawn polygons:</span>
+<a id="__codelineno-0-2582" name="__codelineno-0-2582"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2583" name="__codelineno-0-2583"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2584" name="__codelineno-0-2584"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2585" name="__codelineno-0-2585"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-2586" name="__codelineno-0-2586"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Map</span>
+<a id="__codelineno-0-2587" name="__codelineno-0-2587"></a><span class="sd">            &gt;&gt;&gt; fc = FeatureCollection.read_file(&quot;tests/data/points.geojson&quot;)</span>
+<a id="__codelineno-0-2588" name="__codelineno-0-2588"></a><span class="sd">            &gt;&gt;&gt; fc[&quot;geometry&quot;] = fc.geometry.buffer(500.0)</span>
+<a id="__codelineno-0-2589" name="__codelineno-0-2589"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=fc.epsg)</span>
+<a id="__codelineno-0-2590" name="__codelineno-0-2590"></a><span class="sd">            &gt;&gt;&gt; _ = m.choropleth(fc, column=&quot;fid&quot;, name=&quot;zones&quot;)</span>
+<a id="__codelineno-0-2591" name="__codelineno-0-2591"></a><span class="sd">            &gt;&gt;&gt; len(m.artist(&quot;zones&quot;).get_paths()) &gt;= len(fc)</span>
+<a id="__codelineno-0-2592" name="__codelineno-0-2592"></a><span class="sd">            True</span>
+<a id="__codelineno-0-2593" name="__codelineno-0-2593"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-2594" name="__codelineno-0-2594"></a>
+<a id="__codelineno-0-2595" name="__codelineno-0-2595"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2596" name="__codelineno-0-2596"></a><span class="sd">        - Colour by an unordered attribute — one colour per distinct class, keyed by a swatch legend:</span>
+<a id="__codelineno-0-2597" name="__codelineno-0-2597"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2598" name="__codelineno-0-2598"></a><span class="sd">            &gt;&gt;&gt; fc[&quot;zone&quot;] = [&quot;urban&quot;, &quot;rural&quot;] * (len(fc) // 2) + [&quot;urban&quot;] * (len(fc) % 2)</span>
+<a id="__codelineno-0-2599" name="__codelineno-0-2599"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=fc.epsg)</span>
+<a id="__codelineno-0-2600" name="__codelineno-0-2600"></a><span class="sd">            &gt;&gt;&gt; _ = m.choropleth(fc, column=&quot;zone&quot;, scheme=&quot;categorical&quot;, name=&quot;zoning&quot;)</span>
+<a id="__codelineno-0-2601" name="__codelineno-0-2601"></a><span class="sd">            &gt;&gt;&gt; from matplotlib.colors import BoundaryNorm</span>
+<a id="__codelineno-0-2602" name="__codelineno-0-2602"></a><span class="sd">            &gt;&gt;&gt; norm = m.artist(&quot;zoning&quot;).norm</span>
+<a id="__codelineno-0-2603" name="__codelineno-0-2603"></a><span class="sd">            &gt;&gt;&gt; isinstance(norm, BoundaryNorm)  # discrete class codes, not a continuous scale</span>
+<a id="__codelineno-0-2604" name="__codelineno-0-2604"></a><span class="sd">            True</span>
+<a id="__codelineno-0-2605" name="__codelineno-0-2605"></a><span class="sd">            &gt;&gt;&gt; [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]</span>
+<a id="__codelineno-0-2606" name="__codelineno-0-2606"></a><span class="sd">            [&#39;rural&#39;, &#39;urban&#39;]</span>
+<a id="__codelineno-0-2607" name="__codelineno-0-2607"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-2608" name="__codelineno-0-2608"></a>
+<a id="__codelineno-0-2609" name="__codelineno-0-2609"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2610" name="__codelineno-0-2610"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2611" name="__codelineno-0-2611"></a>    <span class="k">if</span> <span class="n">cmap</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2612" name="__codelineno-0-2612"></a>        <span class="c1"># Straight back into the caller&#39;s keywords: this is where `cmap=` has always travelled, so</span>
+<a id="__codelineno-0-2613" name="__codelineno-0-2613"></a>        <span class="c1"># naming it in the signature documents the keyword without moving it.</span>
+<a id="__codelineno-0-2614" name="__codelineno-0-2614"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;cmap&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cmap</span>
+<a id="__codelineno-0-2615" name="__codelineno-0-2615"></a>    <span class="c1"># The channel is named `opacity` here and `alpha` where it reaches matplotlib, so it travels on</span>
+<a id="__codelineno-0-2616" name="__codelineno-0-2616"></a>    <span class="c1"># under the engine&#39;s own spelling — exactly where a caller&#39;s `alpha=` always went.</span>
+<a id="__codelineno-0-2617" name="__codelineno-0-2617"></a>    <span class="k">if</span> <span class="n">opacity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2618" name="__codelineno-0-2618"></a>        <span class="n">opts</span><span class="p">[</span><span class="s2">&quot;alpha&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">opacity</span>
+<a id="__codelineno-0-2619" name="__codelineno-0-2619"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
+<a id="__codelineno-0-2620" name="__codelineno-0-2620"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
+<a id="__codelineno-0-2621" name="__codelineno-0-2621"></a>            <span class="c1"># A column is required, so the polygons are always filled by a value: a choropleth.</span>
+<a id="__codelineno-0-2622" name="__codelineno-0-2622"></a>            <span class="n">_polygon_kind</span><span class="p">(</span><span class="n">column</span><span class="p">),</span>
+<a id="__codelineno-0-2623" name="__codelineno-0-2623"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
+<a id="__codelineno-0-2624" name="__codelineno-0-2624"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-2625" name="__codelineno-0-2625"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-2626" name="__codelineno-0-2626"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-2627" name="__codelineno-0-2627"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-2628" name="__codelineno-0-2628"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;choropleth&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-2629" name="__codelineno-0-2629"></a>                    <span class="s2">&quot;column&quot;</span><span class="p">:</span> <span class="n">column</span><span class="p">,</span>
+<a id="__codelineno-0-2630" name="__codelineno-0-2630"></a>                    <span class="s2">&quot;scheme&quot;</span><span class="p">:</span> <span class="n">scheme</span><span class="p">,</span>
+<a id="__codelineno-0-2631" name="__codelineno-0-2631"></a>                    <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
+<a id="__codelineno-0-2632" name="__codelineno-0-2632"></a>                <span class="p">}</span>
+<a id="__codelineno-0-2633" name="__codelineno-0-2633"></a>            <span class="p">),</span>
+<a id="__codelineno-0-2634" name="__codelineno-0-2634"></a>            <span class="c1"># The classification is folded into the glyph&#39;s keywords by the drawer, so what the figure</span>
+<a id="__codelineno-0-2635" name="__codelineno-0-2635"></a>            <span class="c1"># records is the call the caller made; their own engine keywords travel beside it.</span>
+<a id="__codelineno-0-2636" name="__codelineno-0-2636"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-2637" name="__codelineno-0-2637"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2638" name="__codelineno-0-2638"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2639" name="__codelineno-0-2639"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13141,10 +13141,7 @@ quadtree: points aggregated into adaptive square cells.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3104">3104</a></span>
-<span class="normal"><a href="#__codelineno-0-3105">3105</a></span>
-<span class="normal"><a href="#__codelineno-0-3106">3106</a></span>
-<span class="normal"><a href="#__codelineno-0-3107">3107</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3107">3107</a></span>
 <span class="normal"><a href="#__codelineno-0-3108">3108</a></span>
 <span class="normal"><a href="#__codelineno-0-3109">3109</a></span>
 <span class="normal"><a href="#__codelineno-0-3110">3110</a></span>
@@ -13323,189 +13320,192 @@ quadtree: points aggregated into adaptive square cells.</p>
 <span class="normal"><a href="#__codelineno-0-3283">3283</a></span>
 <span class="normal"><a href="#__codelineno-0-3284">3284</a></span>
 <span class="normal"><a href="#__codelineno-0-3285">3285</a></span>
-<span class="normal"><a href="#__codelineno-0-3286">3286</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3104" name="__codelineno-0-3104"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-3105" name="__codelineno-0-3105"></a><span class="k">def</span><span class="w"> </span><span class="nf">hexbin</span><span class="p">(</span>
-<a id="__codelineno-0-3106" name="__codelineno-0-3106"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-3107" name="__codelineno-0-3107"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-3108" name="__codelineno-0-3108"></a>    <span class="n">column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3109" name="__codelineno-0-3109"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-3110" name="__codelineno-0-3110"></a>    <span class="n">reduce</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">DEFAULT_HEXBIN_REDUCE</span><span class="p">,</span>
-<a id="__codelineno-0-3111" name="__codelineno-0-3111"></a>    <span class="n">gridsize</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
-<a id="__codelineno-0-3112" name="__codelineno-0-3112"></a>    <span class="n">min_count</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3113" name="__codelineno-0-3113"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3114" name="__codelineno-0-3114"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-3115" name="__codelineno-0-3115"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-3116" name="__codelineno-0-3116"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-3117" name="__codelineno-0-3117"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Aggregate points onto a hexagonal lattice and colour each cell (pyramids points → ``HexbinGlyph``).</span>
-<a id="__codelineno-0-3118" name="__codelineno-0-3118"></a>
-<a id="__codelineno-0-3119" name="__codelineno-0-3119"></a><span class="sd">    The discrete counterpart of :meth:`kde`: with no ``column`` each cell is coloured by how many points</span>
-<a id="__codelineno-0-3120" name="__codelineno-0-3120"></a><span class="sd">    fell in it, and with one by the ``reduce`` of their values — a number read straight off the colour</span>
-<a id="__codelineno-0-3121" name="__codelineno-0-3121"></a><span class="sd">    key, with none of the over-plotting a dense scatter has. The points are reprojected to the display</span>
-<a id="__codelineno-0-3122" name="__codelineno-0-3122"></a><span class="sd">    CRS first and the lattice is laid there, so the cells are regular on the map rather than equal-area</span>
-<a id="__codelineno-0-3123" name="__codelineno-0-3123"></a><span class="sd">    on the ground. The layer is a ``choropleth`` of the aggregate, as :meth:`quadtree`&#39;s is.</span>
-<a id="__codelineno-0-3124" name="__codelineno-0-3124"></a>
-<a id="__codelineno-0-3125" name="__codelineno-0-3125"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-3126" name="__codelineno-0-3126"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one</span>
-<a id="__codelineno-0-3127" name="__codelineno-0-3127"></a><span class="sd">            (reprojected to the display CRS). Only a path-backed layer can be written down.</span>
-<a id="__codelineno-0-3128" name="__codelineno-0-3128"></a><span class="sd">        column: Numeric column aggregated per cell, or ``None`` (default) to count the points.</span>
-<a id="__codelineno-0-3129" name="__codelineno-0-3129"></a><span class="sd">        reduce: How a cell&#39;s values aggregate: ``&quot;mean&quot;`` (default), ``&quot;sum&quot;``, ``&quot;min&quot;``, ``&quot;max&quot;``,</span>
-<a id="__codelineno-0-3130" name="__codelineno-0-3130"></a><span class="sd">            ``&quot;std&quot;``, ``&quot;count&quot;``, or a function of an array. A named reducer is written into the</span>
-<a id="__codelineno-0-3131" name="__codelineno-0-3131"></a><span class="sd">            figure; a function is held beside the layer, and a figure read back elsewhere falls back to</span>
-<a id="__codelineno-0-3132" name="__codelineno-0-3132"></a><span class="sd">            ``&quot;mean&quot;``. Ignored without a ``column``.</span>
-<a id="__codelineno-0-3133" name="__codelineno-0-3133"></a><span class="sd">        gridsize: Hexagons across the binned window — a whole number, or an ``(nx, ny)`` pair of</span>
-<a id="__codelineno-0-3134" name="__codelineno-0-3134"></a><span class="sd">            them. One cell across is the smallest lattice there is, so the counts must be positive.</span>
-<a id="__codelineno-0-3135" name="__codelineno-0-3135"></a><span class="sd">        min_count: Leave out cells with fewer points than this, as a whole number of points.</span>
-<a id="__codelineno-0-3136" name="__codelineno-0-3136"></a><span class="sd">            ``None`` (default) leaves out the empty cells of a count map — which cleopatra would</span>
-<a id="__codelineno-0-3137" name="__codelineno-0-3137"></a><span class="sd">            otherwise draw as zeros across the whole window — and is cleopatra&#39;s own default with a</span>
-<a id="__codelineno-0-3138" name="__codelineno-0-3138"></a><span class="sd">            ``column``.</span>
-<a id="__codelineno-0-3139" name="__codelineno-0-3139"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-3140" name="__codelineno-0-3140"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-3141" name="__codelineno-0-3141"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-3142" name="__codelineno-0-3142"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-3143" name="__codelineno-0-3143"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
-<a id="__codelineno-0-3144" name="__codelineno-0-3144"></a><span class="sd">        **opts: Further ``HexbinGlyph`` options and the shared styling (``cmap``, ``vmin``, ``vmax``,</span>
-<a id="__codelineno-0-3145" name="__codelineno-0-3145"></a><span class="sd">            ``scheme``, ``k``, ``color_scale``, ``edge_color``, ``line_width``, ``extent``, …).</span>
-<a id="__codelineno-0-3146" name="__codelineno-0-3146"></a>
-<a id="__codelineno-0-3147" name="__codelineno-0-3147"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-3148" name="__codelineno-0-3148"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-3149" name="__codelineno-0-3149"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
-<a id="__codelineno-0-3150" name="__codelineno-0-3150"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
-<a id="__codelineno-0-3151" name="__codelineno-0-3151"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-3152" name="__codelineno-0-3152"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
-<a id="__codelineno-0-3153" name="__codelineno-0-3153"></a><span class="sd">        map rather than the artist (ST-20).</span>
-<a id="__codelineno-0-3154" name="__codelineno-0-3154"></a>
-<a id="__codelineno-0-3155" name="__codelineno-0-3155"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-3156" name="__codelineno-0-3156"></a><span class="sd">        ValueError: if ``features`` is empty or holds non-point geometry; if ``gridsize`` is not a</span>
-<a id="__codelineno-0-3157" name="__codelineno-0-3157"></a><span class="sd">            positive whole number (or a pair of them), or ``min_count`` is not a non-negative whole</span>
-<a id="__codelineno-0-3158" name="__codelineno-0-3158"></a><span class="sd">            number — both are checked in the builder, since unchecked they reach matplotlib&#39;s</span>
-<a id="__codelineno-0-3159" name="__codelineno-0-3159"></a><span class="sd">            ``hexbin`` and come back as arithmetic naming neither the method nor the argument; or if</span>
-<a id="__codelineno-0-3160" name="__codelineno-0-3160"></a><span class="sd">            ``column`` names a column that does not hold numbers, which the reducer needs.</span>
-<a id="__codelineno-0-3161" name="__codelineno-0-3161"></a><span class="sd">        KeyError: if ``column`` names no feature attribute — the refusal names ``hexbin()``, the</span>
-<a id="__codelineno-0-3162" name="__codelineno-0-3162"></a><span class="sd">            keyword and the column, and lists the columns the features do have.</span>
-<a id="__codelineno-0-3163" name="__codelineno-0-3163"></a>
-<a id="__codelineno-0-3164" name="__codelineno-0-3164"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-3165" name="__codelineno-0-3165"></a><span class="sd">        - Count the points per cell; three coincident points are one cell holding 3:</span>
-<a id="__codelineno-0-3166" name="__codelineno-0-3166"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3167" name="__codelineno-0-3167"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3168" name="__codelineno-0-3168"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3169" name="__codelineno-0-3169"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3170" name="__codelineno-0-3170"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
-<a id="__codelineno-0-3171" name="__codelineno-0-3171"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3172" name="__codelineno-0-3172"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3173" name="__codelineno-0-3173"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3174" name="__codelineno-0-3174"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0, 6.0, 100.0]},</span>
-<a id="__codelineno-0-3175" name="__codelineno-0-3175"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],</span>
-<a id="__codelineno-0-3176" name="__codelineno-0-3176"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3177" name="__codelineno-0-3177"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3178" name="__codelineno-0-3178"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-3179" name="__codelineno-0-3179"></a><span class="sd">            &gt;&gt;&gt; _ = m.hexbin(wells, gridsize=4, name=&quot;counts&quot;)</span>
-<a id="__codelineno-0-3180" name="__codelineno-0-3180"></a><span class="sd">            &gt;&gt;&gt; sorted(m.artist(&quot;counts&quot;).get_array().tolist())</span>
-<a id="__codelineno-0-3181" name="__codelineno-0-3181"></a><span class="sd">            [1.0, 3.0]</span>
-<a id="__codelineno-0-3182" name="__codelineno-0-3182"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-3183" name="__codelineno-0-3183"></a>
-<a id="__codelineno-0-3184" name="__codelineno-0-3184"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3185" name="__codelineno-0-3185"></a><span class="sd">        - Aggregate a column instead; the origin cell is the mean of 2, 4 and 6:</span>
-<a id="__codelineno-0-3186" name="__codelineno-0-3186"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3187" name="__codelineno-0-3187"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3188" name="__codelineno-0-3188"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3189" name="__codelineno-0-3189"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3190" name="__codelineno-0-3190"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
-<a id="__codelineno-0-3191" name="__codelineno-0-3191"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3192" name="__codelineno-0-3192"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3193" name="__codelineno-0-3193"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3194" name="__codelineno-0-3194"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0, 6.0, 100.0]},</span>
-<a id="__codelineno-0-3195" name="__codelineno-0-3195"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],</span>
-<a id="__codelineno-0-3196" name="__codelineno-0-3196"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3197" name="__codelineno-0-3197"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3198" name="__codelineno-0-3198"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-3199" name="__codelineno-0-3199"></a><span class="sd">            &gt;&gt;&gt; _ = m.hexbin(wells, &quot;depth&quot;, reduce=&quot;mean&quot;, gridsize=4, name=&quot;depths&quot;)</span>
-<a id="__codelineno-0-3200" name="__codelineno-0-3200"></a><span class="sd">            &gt;&gt;&gt; sorted(m.artist(&quot;depths&quot;).get_array().tolist())</span>
-<a id="__codelineno-0-3201" name="__codelineno-0-3201"></a><span class="sd">            [4.0, 100.0]</span>
-<a id="__codelineno-0-3202" name="__codelineno-0-3202"></a><span class="sd">            &gt;&gt;&gt; m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props[&quot;via&quot;]</span>
-<a id="__codelineno-0-3203" name="__codelineno-0-3203"></a><span class="sd">            &#39;hexbin&#39;</span>
-<a id="__codelineno-0-3204" name="__codelineno-0-3204"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-3205" name="__codelineno-0-3205"></a>
-<a id="__codelineno-0-3206" name="__codelineno-0-3206"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3207" name="__codelineno-0-3207"></a><span class="sd">        - A lattice nothing could be binned onto is refused here, naming the argument, rather than</span>
-<a id="__codelineno-0-3208" name="__codelineno-0-3208"></a><span class="sd">          surfacing as matplotlib arithmetic several frames down:</span>
-<a id="__codelineno-0-3209" name="__codelineno-0-3209"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3210" name="__codelineno-0-3210"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3211" name="__codelineno-0-3211"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3212" name="__codelineno-0-3212"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3213" name="__codelineno-0-3213"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
-<a id="__codelineno-0-3214" name="__codelineno-0-3214"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3215" name="__codelineno-0-3215"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3216" name="__codelineno-0-3216"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3217" name="__codelineno-0-3217"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0]},</span>
-<a id="__codelineno-0-3218" name="__codelineno-0-3218"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(8, 8)],</span>
-<a id="__codelineno-0-3219" name="__codelineno-0-3219"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3220" name="__codelineno-0-3220"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3221" name="__codelineno-0-3221"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-3222" name="__codelineno-0-3222"></a><span class="sd">            &gt;&gt;&gt; for lattice in ({&quot;gridsize&quot;: 0}, {&quot;gridsize&quot;: 4, &quot;min_count&quot;: -1}):</span>
-<a id="__codelineno-0-3223" name="__codelineno-0-3223"></a><span class="sd">            ...     try:</span>
-<a id="__codelineno-0-3224" name="__codelineno-0-3224"></a><span class="sd">            ...         m.hexbin(wells, **lattice)</span>
-<a id="__codelineno-0-3225" name="__codelineno-0-3225"></a><span class="sd">            ...     except ValueError as error:</span>
-<a id="__codelineno-0-3226" name="__codelineno-0-3226"></a><span class="sd">            ...         print(error)</span>
-<a id="__codelineno-0-3227" name="__codelineno-0-3227"></a><span class="sd">            hexbin() needs gridsize= as a whole number &gt;= 1; got 0</span>
-<a id="__codelineno-0-3228" name="__codelineno-0-3228"></a><span class="sd">            hexbin() needs min_count= as a whole number &gt;= 0; got -1</span>
-<a id="__codelineno-0-3229" name="__codelineno-0-3229"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-3230" name="__codelineno-0-3230"></a>
-<a id="__codelineno-0-3231" name="__codelineno-0-3231"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3232" name="__codelineno-0-3232"></a><span class="sd">        - A ``column`` these features do not carry is named with the columns they do, and one that</span>
-<a id="__codelineno-0-3233" name="__codelineno-0-3233"></a><span class="sd">          holds text is refused for what the reducer cannot do with it:</span>
-<a id="__codelineno-0-3234" name="__codelineno-0-3234"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-3235" name="__codelineno-0-3235"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-3236" name="__codelineno-0-3236"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-3237" name="__codelineno-0-3237"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
-<a id="__codelineno-0-3238" name="__codelineno-0-3238"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
-<a id="__codelineno-0-3239" name="__codelineno-0-3239"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
-<a id="__codelineno-0-3240" name="__codelineno-0-3240"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
-<a id="__codelineno-0-3241" name="__codelineno-0-3241"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
-<a id="__codelineno-0-3242" name="__codelineno-0-3242"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0], &quot;site&quot;: [&quot;north&quot;, &quot;south&quot;]},</span>
-<a id="__codelineno-0-3243" name="__codelineno-0-3243"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(8, 8)],</span>
-<a id="__codelineno-0-3244" name="__codelineno-0-3244"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
-<a id="__codelineno-0-3245" name="__codelineno-0-3245"></a><span class="sd">            ... ))</span>
-<a id="__codelineno-0-3246" name="__codelineno-0-3246"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
-<a id="__codelineno-0-3247" name="__codelineno-0-3247"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-3248" name="__codelineno-0-3248"></a><span class="sd">            ...     m.hexbin(wells, &quot;dpeth&quot;, gridsize=4)</span>
-<a id="__codelineno-0-3249" name="__codelineno-0-3249"></a><span class="sd">            ... except KeyError as error:</span>
-<a id="__codelineno-0-3250" name="__codelineno-0-3250"></a><span class="sd">            ...     print(error.args[0])</span>
-<a id="__codelineno-0-3251" name="__codelineno-0-3251"></a><span class="sd">            hexbin(): column=&#39;dpeth&#39; is not a property of these features; available: [&#39;depth&#39;, &#39;site&#39;]</span>
-<a id="__codelineno-0-3252" name="__codelineno-0-3252"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-3253" name="__codelineno-0-3253"></a><span class="sd">            ...     m.hexbin(wells, &quot;site&quot;, gridsize=4)</span>
-<a id="__codelineno-0-3254" name="__codelineno-0-3254"></a><span class="sd">            ... except ValueError as error:</span>
-<a id="__codelineno-0-3255" name="__codelineno-0-3255"></a><span class="sd">            ...     print(error)</span>
-<a id="__codelineno-0-3256" name="__codelineno-0-3256"></a><span class="sd">            hexbin() needs column=&#39;site&#39; to name a column of numbers, and it holds str values that are not numbers</span>
-<a id="__codelineno-0-3257" name="__codelineno-0-3257"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
-<a id="__codelineno-0-3258" name="__codelineno-0-3258"></a>
-<a id="__codelineno-0-3259" name="__codelineno-0-3259"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-3260" name="__codelineno-0-3260"></a>
-<a id="__codelineno-0-3261" name="__codelineno-0-3261"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-3262" name="__codelineno-0-3262"></a><span class="sd">        kde: the smoothed density of the same points.</span>
-<a id="__codelineno-0-3263" name="__codelineno-0-3263"></a><span class="sd">        quadtree: points aggregated into adaptive square cells.</span>
-<a id="__codelineno-0-3264" name="__codelineno-0-3264"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-3265" name="__codelineno-0-3265"></a>    <span class="n">gridsize</span><span class="p">,</span> <span class="n">min_count</span> <span class="o">=</span> <span class="n">_hexbin_lattice</span><span class="p">(</span><span class="n">gridsize</span><span class="p">,</span> <span class="n">min_count</span><span class="p">)</span>
-<a id="__codelineno-0-3266" name="__codelineno-0-3266"></a>    <span class="n">held_reduce</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">reduce</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">reduce</span>
-<a id="__codelineno-0-3267" name="__codelineno-0-3267"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
-<a id="__codelineno-0-3268" name="__codelineno-0-3268"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
-<a id="__codelineno-0-3269" name="__codelineno-0-3269"></a>            <span class="s2">&quot;choropleth&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-3270" name="__codelineno-0-3270"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
-<a id="__codelineno-0-3271" name="__codelineno-0-3271"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-3272" name="__codelineno-0-3272"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-3273" name="__codelineno-0-3273"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-3274" name="__codelineno-0-3274"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-3275" name="__codelineno-0-3275"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;hexbin&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-3276" name="__codelineno-0-3276"></a>                    <span class="s2">&quot;column&quot;</span><span class="p">:</span> <span class="n">column</span><span class="p">,</span>
-<a id="__codelineno-0-3277" name="__codelineno-0-3277"></a>                    <span class="s2">&quot;reduce&quot;</span><span class="p">:</span> <span class="n">reduce</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">reduce</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-3278" name="__codelineno-0-3278"></a>                    <span class="s2">&quot;gridsize&quot;</span><span class="p">:</span> <span class="n">gridsize</span><span class="p">,</span>
-<a id="__codelineno-0-3279" name="__codelineno-0-3279"></a>                    <span class="s2">&quot;min_count&quot;</span><span class="p">:</span> <span class="n">min_count</span><span class="p">,</span>
-<a id="__codelineno-0-3280" name="__codelineno-0-3280"></a>                <span class="p">}</span>
-<a id="__codelineno-0-3281" name="__codelineno-0-3281"></a>            <span class="p">),</span>
-<a id="__codelineno-0-3282" name="__codelineno-0-3282"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-3283" name="__codelineno-0-3283"></a>            <span class="n">key</span><span class="o">=</span><span class="n">held_reduce</span><span class="p">,</span>
-<a id="__codelineno-0-3284" name="__codelineno-0-3284"></a>        <span class="p">)</span>
-<a id="__codelineno-0-3285" name="__codelineno-0-3285"></a>    <span class="p">)</span>
-<a id="__codelineno-0-3286" name="__codelineno-0-3286"></a>    <span class="k">return</span> <span class="bp">self</span>
+<span class="normal"><a href="#__codelineno-0-3286">3286</a></span>
+<span class="normal"><a href="#__codelineno-0-3287">3287</a></span>
+<span class="normal"><a href="#__codelineno-0-3288">3288</a></span>
+<span class="normal"><a href="#__codelineno-0-3289">3289</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-3107" name="__codelineno-0-3107"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-3108" name="__codelineno-0-3108"></a><span class="k">def</span><span class="w"> </span><span class="nf">hexbin</span><span class="p">(</span>
+<a id="__codelineno-0-3109" name="__codelineno-0-3109"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-3110" name="__codelineno-0-3110"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-3111" name="__codelineno-0-3111"></a>    <span class="n">column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3112" name="__codelineno-0-3112"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-3113" name="__codelineno-0-3113"></a>    <span class="n">reduce</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">DEFAULT_HEXBIN_REDUCE</span><span class="p">,</span>
+<a id="__codelineno-0-3114" name="__codelineno-0-3114"></a>    <span class="n">gridsize</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
+<a id="__codelineno-0-3115" name="__codelineno-0-3115"></a>    <span class="n">min_count</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3116" name="__codelineno-0-3116"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3117" name="__codelineno-0-3117"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-3118" name="__codelineno-0-3118"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-3119" name="__codelineno-0-3119"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-3120" name="__codelineno-0-3120"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Aggregate points onto a hexagonal lattice and colour each cell (pyramids points → ``HexbinGlyph``).</span>
+<a id="__codelineno-0-3121" name="__codelineno-0-3121"></a>
+<a id="__codelineno-0-3122" name="__codelineno-0-3122"></a><span class="sd">    The discrete counterpart of :meth:`kde`: with no ``column`` each cell is coloured by how many points</span>
+<a id="__codelineno-0-3123" name="__codelineno-0-3123"></a><span class="sd">    fell in it, and with one by the ``reduce`` of their values — a number read straight off the colour</span>
+<a id="__codelineno-0-3124" name="__codelineno-0-3124"></a><span class="sd">    key, with none of the over-plotting a dense scatter has. The points are reprojected to the display</span>
+<a id="__codelineno-0-3125" name="__codelineno-0-3125"></a><span class="sd">    CRS first and the lattice is laid there, so the cells are regular on the map rather than equal-area</span>
+<a id="__codelineno-0-3126" name="__codelineno-0-3126"></a><span class="sd">    on the ground. The layer is a ``choropleth`` of the aggregate, as :meth:`quadtree`&#39;s is.</span>
+<a id="__codelineno-0-3127" name="__codelineno-0-3127"></a>
+<a id="__codelineno-0-3128" name="__codelineno-0-3128"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-3129" name="__codelineno-0-3129"></a><span class="sd">        features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one</span>
+<a id="__codelineno-0-3130" name="__codelineno-0-3130"></a><span class="sd">            (reprojected to the display CRS). Only a path-backed layer can be written down.</span>
+<a id="__codelineno-0-3131" name="__codelineno-0-3131"></a><span class="sd">        column: Numeric column aggregated per cell, or ``None`` (default) to count the points.</span>
+<a id="__codelineno-0-3132" name="__codelineno-0-3132"></a><span class="sd">        reduce: How a cell&#39;s values aggregate: ``&quot;mean&quot;`` (default), ``&quot;sum&quot;``, ``&quot;min&quot;``, ``&quot;max&quot;``,</span>
+<a id="__codelineno-0-3133" name="__codelineno-0-3133"></a><span class="sd">            ``&quot;std&quot;``, ``&quot;count&quot;``, or a function of an array. A named reducer is written into the</span>
+<a id="__codelineno-0-3134" name="__codelineno-0-3134"></a><span class="sd">            figure; a function is held beside the layer, and a figure read back elsewhere falls back to</span>
+<a id="__codelineno-0-3135" name="__codelineno-0-3135"></a><span class="sd">            ``&quot;mean&quot;``. Ignored without a ``column``.</span>
+<a id="__codelineno-0-3136" name="__codelineno-0-3136"></a><span class="sd">        gridsize: Hexagons across the binned window — a whole number, or an ``(nx, ny)`` pair of</span>
+<a id="__codelineno-0-3137" name="__codelineno-0-3137"></a><span class="sd">            them. One cell across is the smallest lattice there is, so the counts must be positive.</span>
+<a id="__codelineno-0-3138" name="__codelineno-0-3138"></a><span class="sd">        min_count: Leave out cells with fewer points than this, as a whole number of points.</span>
+<a id="__codelineno-0-3139" name="__codelineno-0-3139"></a><span class="sd">            ``None`` (default) leaves out the empty cells of a count map — which cleopatra would</span>
+<a id="__codelineno-0-3140" name="__codelineno-0-3140"></a><span class="sd">            otherwise draw as zeros across the whole window — and is cleopatra&#39;s own default with a</span>
+<a id="__codelineno-0-3141" name="__codelineno-0-3141"></a><span class="sd">            ``column``.</span>
+<a id="__codelineno-0-3142" name="__codelineno-0-3142"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-3143" name="__codelineno-0-3143"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-3144" name="__codelineno-0-3144"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-3145" name="__codelineno-0-3145"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-3146" name="__codelineno-0-3146"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
+<a id="__codelineno-0-3147" name="__codelineno-0-3147"></a><span class="sd">        **opts: Further ``HexbinGlyph`` options and the shared styling (``cmap``, ``vmin``, ``vmax``,</span>
+<a id="__codelineno-0-3148" name="__codelineno-0-3148"></a><span class="sd">            ``scheme``, ``k``, ``color_scale``, ``edge_color``, ``line_width``, ``extent``, …).</span>
+<a id="__codelineno-0-3149" name="__codelineno-0-3149"></a>
+<a id="__codelineno-0-3150" name="__codelineno-0-3150"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-3151" name="__codelineno-0-3151"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
+<a id="__codelineno-0-3152" name="__codelineno-0-3152"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-3153" name="__codelineno-0-3153"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
+<a id="__codelineno-0-3154" name="__codelineno-0-3154"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
+<a id="__codelineno-0-3155" name="__codelineno-0-3155"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-3156" name="__codelineno-0-3156"></a><span class="sd">        map rather than the artist (ST-20).</span>
+<a id="__codelineno-0-3157" name="__codelineno-0-3157"></a>
+<a id="__codelineno-0-3158" name="__codelineno-0-3158"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-3159" name="__codelineno-0-3159"></a><span class="sd">        ValueError: if ``features`` is empty or holds non-point geometry; if ``gridsize`` is not a</span>
+<a id="__codelineno-0-3160" name="__codelineno-0-3160"></a><span class="sd">            positive whole number (or a pair of them), or ``min_count`` is not a non-negative whole</span>
+<a id="__codelineno-0-3161" name="__codelineno-0-3161"></a><span class="sd">            number — both are checked in the builder, since unchecked they reach matplotlib&#39;s</span>
+<a id="__codelineno-0-3162" name="__codelineno-0-3162"></a><span class="sd">            ``hexbin`` and come back as arithmetic naming neither the method nor the argument; or if</span>
+<a id="__codelineno-0-3163" name="__codelineno-0-3163"></a><span class="sd">            ``column`` names a column that does not hold numbers, which the reducer needs.</span>
+<a id="__codelineno-0-3164" name="__codelineno-0-3164"></a><span class="sd">        KeyError: if ``column`` names no feature attribute — the refusal names ``hexbin()``, the</span>
+<a id="__codelineno-0-3165" name="__codelineno-0-3165"></a><span class="sd">            keyword and the column, and lists the columns the features do have.</span>
+<a id="__codelineno-0-3166" name="__codelineno-0-3166"></a>
+<a id="__codelineno-0-3167" name="__codelineno-0-3167"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-3168" name="__codelineno-0-3168"></a><span class="sd">        - Count the points per cell; three coincident points are one cell holding 3:</span>
+<a id="__codelineno-0-3169" name="__codelineno-0-3169"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3170" name="__codelineno-0-3170"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3171" name="__codelineno-0-3171"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3172" name="__codelineno-0-3172"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3173" name="__codelineno-0-3173"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
+<a id="__codelineno-0-3174" name="__codelineno-0-3174"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3175" name="__codelineno-0-3175"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3176" name="__codelineno-0-3176"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3177" name="__codelineno-0-3177"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0, 6.0, 100.0]},</span>
+<a id="__codelineno-0-3178" name="__codelineno-0-3178"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],</span>
+<a id="__codelineno-0-3179" name="__codelineno-0-3179"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3180" name="__codelineno-0-3180"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3181" name="__codelineno-0-3181"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-3182" name="__codelineno-0-3182"></a><span class="sd">            &gt;&gt;&gt; _ = m.hexbin(wells, gridsize=4, name=&quot;counts&quot;)</span>
+<a id="__codelineno-0-3183" name="__codelineno-0-3183"></a><span class="sd">            &gt;&gt;&gt; sorted(m.artist(&quot;counts&quot;).get_array().tolist())</span>
+<a id="__codelineno-0-3184" name="__codelineno-0-3184"></a><span class="sd">            [1.0, 3.0]</span>
+<a id="__codelineno-0-3185" name="__codelineno-0-3185"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-3186" name="__codelineno-0-3186"></a>
+<a id="__codelineno-0-3187" name="__codelineno-0-3187"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3188" name="__codelineno-0-3188"></a><span class="sd">        - Aggregate a column instead; the origin cell is the mean of 2, 4 and 6:</span>
+<a id="__codelineno-0-3189" name="__codelineno-0-3189"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3190" name="__codelineno-0-3190"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3191" name="__codelineno-0-3191"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3192" name="__codelineno-0-3192"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3193" name="__codelineno-0-3193"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
+<a id="__codelineno-0-3194" name="__codelineno-0-3194"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3195" name="__codelineno-0-3195"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3196" name="__codelineno-0-3196"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3197" name="__codelineno-0-3197"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0, 6.0, 100.0]},</span>
+<a id="__codelineno-0-3198" name="__codelineno-0-3198"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(0, 0), Point(0, 0), Point(8, 8)],</span>
+<a id="__codelineno-0-3199" name="__codelineno-0-3199"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3200" name="__codelineno-0-3200"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3201" name="__codelineno-0-3201"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-3202" name="__codelineno-0-3202"></a><span class="sd">            &gt;&gt;&gt; _ = m.hexbin(wells, &quot;depth&quot;, reduce=&quot;mean&quot;, gridsize=4, name=&quot;depths&quot;)</span>
+<a id="__codelineno-0-3203" name="__codelineno-0-3203"></a><span class="sd">            &gt;&gt;&gt; sorted(m.artist(&quot;depths&quot;).get_array().tolist())</span>
+<a id="__codelineno-0-3204" name="__codelineno-0-3204"></a><span class="sd">            [4.0, 100.0]</span>
+<a id="__codelineno-0-3205" name="__codelineno-0-3205"></a><span class="sd">            &gt;&gt;&gt; m.figure_spec.layers.get(m.layer_ids[-1]).symbology.props[&quot;via&quot;]</span>
+<a id="__codelineno-0-3206" name="__codelineno-0-3206"></a><span class="sd">            &#39;hexbin&#39;</span>
+<a id="__codelineno-0-3207" name="__codelineno-0-3207"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-3208" name="__codelineno-0-3208"></a>
+<a id="__codelineno-0-3209" name="__codelineno-0-3209"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3210" name="__codelineno-0-3210"></a><span class="sd">        - A lattice nothing could be binned onto is refused here, naming the argument, rather than</span>
+<a id="__codelineno-0-3211" name="__codelineno-0-3211"></a><span class="sd">          surfacing as matplotlib arithmetic several frames down:</span>
+<a id="__codelineno-0-3212" name="__codelineno-0-3212"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3213" name="__codelineno-0-3213"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3214" name="__codelineno-0-3214"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3215" name="__codelineno-0-3215"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3216" name="__codelineno-0-3216"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
+<a id="__codelineno-0-3217" name="__codelineno-0-3217"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3218" name="__codelineno-0-3218"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3219" name="__codelineno-0-3219"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3220" name="__codelineno-0-3220"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0]},</span>
+<a id="__codelineno-0-3221" name="__codelineno-0-3221"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(8, 8)],</span>
+<a id="__codelineno-0-3222" name="__codelineno-0-3222"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3223" name="__codelineno-0-3223"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3224" name="__codelineno-0-3224"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-3225" name="__codelineno-0-3225"></a><span class="sd">            &gt;&gt;&gt; for lattice in ({&quot;gridsize&quot;: 0}, {&quot;gridsize&quot;: 4, &quot;min_count&quot;: -1}):</span>
+<a id="__codelineno-0-3226" name="__codelineno-0-3226"></a><span class="sd">            ...     try:</span>
+<a id="__codelineno-0-3227" name="__codelineno-0-3227"></a><span class="sd">            ...         m.hexbin(wells, **lattice)</span>
+<a id="__codelineno-0-3228" name="__codelineno-0-3228"></a><span class="sd">            ...     except ValueError as error:</span>
+<a id="__codelineno-0-3229" name="__codelineno-0-3229"></a><span class="sd">            ...         print(error)</span>
+<a id="__codelineno-0-3230" name="__codelineno-0-3230"></a><span class="sd">            hexbin() needs gridsize= as a whole number &gt;= 1; got 0</span>
+<a id="__codelineno-0-3231" name="__codelineno-0-3231"></a><span class="sd">            hexbin() needs min_count= as a whole number &gt;= 0; got -1</span>
+<a id="__codelineno-0-3232" name="__codelineno-0-3232"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-3233" name="__codelineno-0-3233"></a>
+<a id="__codelineno-0-3234" name="__codelineno-0-3234"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3235" name="__codelineno-0-3235"></a><span class="sd">        - A ``column`` these features do not carry is named with the columns they do, and one that</span>
+<a id="__codelineno-0-3236" name="__codelineno-0-3236"></a><span class="sd">          holds text is refused for what the reducer cannot do with it:</span>
+<a id="__codelineno-0-3237" name="__codelineno-0-3237"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-3238" name="__codelineno-0-3238"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-3239" name="__codelineno-0-3239"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-3240" name="__codelineno-0-3240"></a><span class="sd">            &gt;&gt;&gt; import geopandas as gpd</span>
+<a id="__codelineno-0-3241" name="__codelineno-0-3241"></a><span class="sd">            &gt;&gt;&gt; from shapely.geometry import Point</span>
+<a id="__codelineno-0-3242" name="__codelineno-0-3242"></a><span class="sd">            &gt;&gt;&gt; from pyramids.feature import FeatureCollection</span>
+<a id="__codelineno-0-3243" name="__codelineno-0-3243"></a><span class="sd">            &gt;&gt;&gt; from digitalearth import Map</span>
+<a id="__codelineno-0-3244" name="__codelineno-0-3244"></a><span class="sd">            &gt;&gt;&gt; wells = FeatureCollection(gpd.GeoDataFrame(</span>
+<a id="__codelineno-0-3245" name="__codelineno-0-3245"></a><span class="sd">            ...     {&quot;depth&quot;: [2.0, 4.0], &quot;site&quot;: [&quot;north&quot;, &quot;south&quot;]},</span>
+<a id="__codelineno-0-3246" name="__codelineno-0-3246"></a><span class="sd">            ...     geometry=[Point(0, 0), Point(8, 8)],</span>
+<a id="__codelineno-0-3247" name="__codelineno-0-3247"></a><span class="sd">            ...     crs=&quot;EPSG:4326&quot;,</span>
+<a id="__codelineno-0-3248" name="__codelineno-0-3248"></a><span class="sd">            ... ))</span>
+<a id="__codelineno-0-3249" name="__codelineno-0-3249"></a><span class="sd">            &gt;&gt;&gt; m = Map(crs=4326)</span>
+<a id="__codelineno-0-3250" name="__codelineno-0-3250"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-3251" name="__codelineno-0-3251"></a><span class="sd">            ...     m.hexbin(wells, &quot;dpeth&quot;, gridsize=4)</span>
+<a id="__codelineno-0-3252" name="__codelineno-0-3252"></a><span class="sd">            ... except KeyError as error:</span>
+<a id="__codelineno-0-3253" name="__codelineno-0-3253"></a><span class="sd">            ...     print(error.args[0])</span>
+<a id="__codelineno-0-3254" name="__codelineno-0-3254"></a><span class="sd">            hexbin(): column=&#39;dpeth&#39; is not a property of these features; available: [&#39;depth&#39;, &#39;site&#39;]</span>
+<a id="__codelineno-0-3255" name="__codelineno-0-3255"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-3256" name="__codelineno-0-3256"></a><span class="sd">            ...     m.hexbin(wells, &quot;site&quot;, gridsize=4)</span>
+<a id="__codelineno-0-3257" name="__codelineno-0-3257"></a><span class="sd">            ... except ValueError as error:</span>
+<a id="__codelineno-0-3258" name="__codelineno-0-3258"></a><span class="sd">            ...     print(error)</span>
+<a id="__codelineno-0-3259" name="__codelineno-0-3259"></a><span class="sd">            hexbin() needs column=&#39;site&#39; to name a column of numbers, and it holds str values that are not numbers</span>
+<a id="__codelineno-0-3260" name="__codelineno-0-3260"></a><span class="sd">            &gt;&gt;&gt; m.close()</span>
+<a id="__codelineno-0-3261" name="__codelineno-0-3261"></a>
+<a id="__codelineno-0-3262" name="__codelineno-0-3262"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-3263" name="__codelineno-0-3263"></a>
+<a id="__codelineno-0-3264" name="__codelineno-0-3264"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-3265" name="__codelineno-0-3265"></a><span class="sd">        kde: the smoothed density of the same points.</span>
+<a id="__codelineno-0-3266" name="__codelineno-0-3266"></a><span class="sd">        quadtree: points aggregated into adaptive square cells.</span>
+<a id="__codelineno-0-3267" name="__codelineno-0-3267"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-3268" name="__codelineno-0-3268"></a>    <span class="n">gridsize</span><span class="p">,</span> <span class="n">min_count</span> <span class="o">=</span> <span class="n">_hexbin_lattice</span><span class="p">(</span><span class="n">gridsize</span><span class="p">,</span> <span class="n">min_count</span><span class="p">)</span>
+<a id="__codelineno-0-3269" name="__codelineno-0-3269"></a>    <span class="n">held_reduce</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">reduce</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">reduce</span>
+<a id="__codelineno-0-3270" name="__codelineno-0-3270"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw</span><span class="p">(</span>
+<a id="__codelineno-0-3271" name="__codelineno-0-3271"></a>        <span class="n">LayerRecord</span><span class="p">(</span>
+<a id="__codelineno-0-3272" name="__codelineno-0-3272"></a>            <span class="s2">&quot;choropleth&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3273" name="__codelineno-0-3273"></a>            <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
+<a id="__codelineno-0-3274" name="__codelineno-0-3274"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-3275" name="__codelineno-0-3275"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-3276" name="__codelineno-0-3276"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-3277" name="__codelineno-0-3277"></a>                <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-3278" name="__codelineno-0-3278"></a>                    <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;hexbin&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3279" name="__codelineno-0-3279"></a>                    <span class="s2">&quot;column&quot;</span><span class="p">:</span> <span class="n">column</span><span class="p">,</span>
+<a id="__codelineno-0-3280" name="__codelineno-0-3280"></a>                    <span class="s2">&quot;reduce&quot;</span><span class="p">:</span> <span class="n">reduce</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">reduce</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-3281" name="__codelineno-0-3281"></a>                    <span class="s2">&quot;gridsize&quot;</span><span class="p">:</span> <span class="n">gridsize</span><span class="p">,</span>
+<a id="__codelineno-0-3282" name="__codelineno-0-3282"></a>                    <span class="s2">&quot;min_count&quot;</span><span class="p">:</span> <span class="n">min_count</span><span class="p">,</span>
+<a id="__codelineno-0-3283" name="__codelineno-0-3283"></a>                <span class="p">}</span>
+<a id="__codelineno-0-3284" name="__codelineno-0-3284"></a>            <span class="p">),</span>
+<a id="__codelineno-0-3285" name="__codelineno-0-3285"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-3286" name="__codelineno-0-3286"></a>            <span class="n">key</span><span class="o">=</span><span class="n">held_reduce</span><span class="p">,</span>
+<a id="__codelineno-0-3287" name="__codelineno-0-3287"></a>        <span class="p">)</span>
+<a id="__codelineno-0-3288" name="__codelineno-0-3288"></a>    <span class="p">)</span>
+<a id="__codelineno-0-3289" name="__codelineno-0-3289"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
