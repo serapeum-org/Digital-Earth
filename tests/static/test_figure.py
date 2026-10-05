@@ -1,12 +1,34 @@
 """Tests for digitalearth.static.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
 
 import inspect
+from typing import Literal, get_args, get_origin
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 from digitalearth.static import Map, facet, figure, grid, shared_colorbar
+
+#: The words ``plt.subplots`` reads for ``sharex``/``sharey``, as ``grid``'s docstring enumerates them.
+SHARING_WORDS = {"all", "row", "col", "none"}
+
+
+def _literal_words(annotation):
+    """Return every string a ``Literal`` inside ``annotation`` admits.
+
+    Args:
+        annotation: A parameter's annotation, read off the signature.
+
+    Returns:
+        The set of literal strings the annotation allows, empty for one that admits any string.
+    """
+    members = get_args(annotation) or (annotation,)
+    return {
+        word
+        for member in members
+        if get_origin(member) is Literal
+        for word in get_args(member)
+    }
 
 
 @pytest.fixture
@@ -460,4 +482,41 @@ class TestWhatFacetReadsTheSharedMappableThrough:
         drawn = maps[0].artist(maps[0].layer_ids[-1])
         assert drawn.colorbar.mappable is drawn, (
             f"the shared bar should be keyed to the first panel's artist; got {drawn.colorbar}"
+        )
+
+
+class TestHowTheSharingKeywordsAreTyped:
+    """``grid(sharex=, sharey=)`` carry their vocabulary in the signature (N3)."""
+
+    @pytest.mark.parametrize("keyword", ["sharex", "sharey"])
+    def test_the_annotation_enumerates_the_words(self, keyword):
+        """The annotation admits exactly the words the docstring lists.
+
+        Args:
+            keyword: The sharing keyword under test.
+
+        Test scenario:
+            Both were typed `Any` while the docstring enumerated matplotlib's own vocabulary, so a
+            misspelled word reached `plt.subplots` with mypy content — the checker had nothing to hold it
+            to and the reader had to read prose for a list the signature could carry.
+        """
+        annotation = inspect.signature(grid).parameters[keyword].annotation
+        assert _literal_words(annotation) == SHARING_WORDS, (
+            f"grid({keyword}=) should admit {sorted(SHARING_WORDS)}; got {annotation}"
+        )
+
+    @pytest.mark.parametrize("keyword", ["sharex", "sharey"])
+    def test_the_annotation_still_admits_the_booleans(self, keyword):
+        """`True` and `False` stay part of the vocabulary beside the words.
+
+        Args:
+            keyword: The sharing keyword under test.
+
+        Test scenario:
+            `False` is the default and `True` is the shorthand for `"all"`, so a `Literal` of the four
+            words alone would refuse the two spellings the default itself uses.
+        """
+        annotation = inspect.signature(grid).parameters[keyword].annotation
+        assert bool in get_args(annotation), (
+            f"grid({keyword}=) should admit bool; got {annotation}"
         )

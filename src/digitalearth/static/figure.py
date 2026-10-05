@@ -19,7 +19,7 @@ import os
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -65,8 +65,8 @@ def grid(
     crs: Any = 3857,
     globe: bool = False,
     figsize: Optional[Tuple[float, float]] = None,
-    sharex: Any = False,
-    sharey: Any = False,
+    sharex: Union[bool, Literal["all", "row", "col", "none"]] = False,
+    sharey: Union[bool, Literal["all", "row", "col", "none"]] = False,
     suptitle: Optional[str] = None,
     **kwargs,
 ) -> Tuple[Figure, List[Map]]:
@@ -96,7 +96,8 @@ def grid(
         globe: When True, every panel is a globe (``Map(globe=True)``).
         figsize: Figure size in inches; ``None`` uses the matplotlib default.
         sharex: How the panels share their x axis — ``False`` (default), ``True``/``"all"``, ``"row"``,
-            ``"col"`` or ``"none"``, exactly as ``plt.subplots`` reads them. Sharing links the *limits*:
+            ``"col"`` or ``"none"``, exactly as ``plt.subplots`` reads them, and exactly what the
+            signature's own ``Literal`` admits. Sharing links the *limits*:
             framing or autoscaling one panel of a group frames every panel in it, which is the point of
             asking for it, and means a grid whose panels show different regions should leave it off.
         sharey: The same for the y axis.
