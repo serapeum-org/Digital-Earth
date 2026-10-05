@@ -19,14 +19,52 @@ Each claim is read off the returned object's **identity and type** — ``Self`` 
 not the mixin that defines the method — and the layer a converted builder drew is reached through
 :meth:`~digitalearth.static.scene.Scene.artist`, which **raises** ``KeyError`` for a layer that drew
 nothing, so the replacement for "assert the return value" is not vacuous.
+
+That ``KeyError`` rules out a call that drew nothing; it does **not** rule out one that *computed* nothing,
+and the first version of this file asserted only ``artist("graticule-1") is not None`` while its docstring
+claimed the count (review R2-L9). This drawer's value is the list of projected polylines, so the grid that
+computed zero of them satisfied it. Proved by mutation, with ``projections.graticule`` patched to answer
+``[]`` and nothing else changed:
+
+```
+is not None                         -> True     # the old assertion, on a grid of no lines
+len(artist('graticule-1')) == 18    -> False    # 0 != 18
+on-axes collections / texts         -> 1 / 6    # which is why the second claim below survives it
+
+pytest tests/static/test_projection_chaining.py -k chained_graticule -p mutant_empty_grid
+  1 failed, 1 passed   # ..._computed_every_line_it_was_asked_for
+```
+
+So the count is asserted now, in both of the shapes the claim names: the polylines the drawer computed,
+and the artists the layer owns on the axes. Each half is proved by the mutant the other survives — with
+``_Graticule.labels`` patched to answer ``()`` instead, the lines are untouched and the second one is the
+one that goes red:
+
+```
+pytest tests/static/test_projection_chaining.py -k chained_graticule -p mutant_no_labels
+  1 failed, 1 passed   # ..._drew_those_lines_and_their_degrees
+```
 """
+
+from collections import Counter
 
 import pytest
 
 from digitalearth.static import Map
 
-#: A window, as ``(west, south, east, north)`` in EPSG:4326, the chained calls are measured against.
+#: A window, as ``(west, south, east, north)`` in EPSG:4326, the chained calls are measured against. Its
+#: edges sit 5 degrees clear of the next 30-degree line either way, so which lines fall inside it is not a
+#: question about float equality at the boundary.
 WINDOW = [-35.0, -5.0, 35.0, 65.0]
+
+#: How many polylines a 30-degree grid holds: the 13 meridians from -180 to 180, and the 5 parallels from
+#: -60 to 60 (the poles carry none). Built from the two ranges rather than read off a map, so an assertion
+#: against it is not the builder compared with itself.
+WORLD_LINES = len(range(-180, 181, 30)) + len(range(-60, 61, 30))
+
+#: The degrees :data:`WINDOW` holds at that spacing, meridians first — one ``Text`` each. Fewer than
+#: :data:`WORLD_LINES`, because the lines span the world and the labels are the view's.
+WINDOW_DEGREES = ("30°W", "0°", "30°E", "0°", "30°N", "60°N")
 
 
 @pytest.fixture
@@ -153,20 +191,45 @@ class TestTheWholeChainRuns:
             f"the last frame should stand; got {held}"
         )
 
-    def test_the_chained_graticule_is_still_on_the_axes(self, canvas):
-        """The layer the chained call drew is reached by id, not by the call's value.
+    def test_the_chained_graticule_computed_every_line_it_was_asked_for(self, canvas):
+        """The layer the chained call drew is reached by id, and counted rather than tested for ``None``.
 
         Args:
             canvas: A flat lon/lat map.
 
         Test scenario:
             ``Map.artist`` **raises** ``KeyError`` for a layer that drew nothing, so reading the grid
-            through it is the non-vacuous replacement for asserting on a return value that is now the
-            map. A flat map's graticule owns one ``LineCollection`` plus one ``Text`` per labelled line.
+            through it already rules out the call having drawn nothing at all. What ``is not None`` could
+            not rule out is a grid that *computed* nothing: this drawer's value is the list of projected
+            polylines, and ``[] is not None`` is True (review R2-L9). So the count is asserted.
+            :data:`WORLD_LINES` is built from the two ranges a 30-degree grid steps through rather than
+            read back off the map.
         """
         canvas.set_bounds(WINDOW).graticule(spacing=30.0)
-        assert canvas.artist("graticule-1") is not None, (
-            "the chained graticule should own an artist reachable by its id"
+        drawn = len(canvas.artist("graticule-1"))
+        assert drawn == WORLD_LINES, (
+            f"the chained graticule should have computed {WORLD_LINES} polylines; got {drawn}"
+        )
+
+    def test_the_chained_graticule_drew_those_lines_and_their_degrees(self, canvas):
+        """And the artists it owns are the shape the claim names: one collection, one ``Text`` per degree.
+
+        Args:
+            canvas: A flat lon/lat map.
+
+        Test scenario:
+            The other half of the same claim, counted on the axes: a flat map's graticule owns one
+            ``LineCollection`` for the whole grid plus one ``Text`` per **labelled line**, which is the
+            degrees :data:`WINDOW` holds — :data:`WINDOW_DEGREES`, not the 18 polylines.
+        """
+        canvas.set_bounds(WINDOW).graticule(spacing=30.0)
+        owned = Counter(
+            type(artist).__name__
+            for artist in canvas._renderer.drawn["graticule-1"].artists
+        )
+        assert owned == {"LineCollection": 1, "Text": len(WINDOW_DEGREES)}, (
+            f"the chained graticule should own one collection and {len(WINDOW_DEGREES)} degrees; "
+            f"got {dict(owned)}"
         )
 
     def test_a_domain_then_a_graticule_chains(self, canvas):
