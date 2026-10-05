@@ -22,6 +22,9 @@ exception so it reads as a decision rather than an oversight.
 import matplotlib
 import numpy as np
 import pytest
+from matplotlib.axes import Axes
+from matplotlib.collections import PolyCollection
+from matplotlib.text import Annotation, Text
 from pyramids.dataset import Dataset
 
 from digitalearth.static import Map
@@ -60,6 +63,45 @@ CHAINING_CALLS = {
     ),
     "nightshade": (lambda canvas: canvas.nightshade(EQUINOX_NOON, name="deco"), "deco"),
     "tissot": (lambda canvas: canvas.tissot(name="deco"), "deco"),
+}
+
+#: The six reference layers, which file the **axes** as their artist: cleopatra's ``add_features`` draws
+#: onto them and hands them back, so the method has no one artist of its own to name.
+NATURAL_EARTH = ("borders", "coastlines", "lakes", "land", "ocean", "rivers")
+
+#: The four overlays, which file the single artist they drew.
+OVERLAYS = ("annotate", "nightshade", "text", "tissot")
+
+#: What ``Map.artist`` hands back for each call, as ``name -> the class it is an instance of``. Measured on
+#: a flat lon/lat map; this is the table the Round-2 review (M6) asked for, because "is not the map" holds
+#: for ``None`` and for any unrelated object alike.
+FILED_ARTIST_TYPES = {
+    "coastlines": Axes,
+    "borders": Axes,
+    "land": Axes,
+    "ocean": Axes,
+    "lakes": Axes,
+    "rivers": Axes,
+    "text": Text,
+    "annotate": Annotation,
+    "nightshade": PolyCollection,
+    "tissot": PolyCollection,
+}
+
+#: Which of the axes' own artist lists each call draws into, as ``name -> attribute of the axes``. Measured
+#: on a fresh flat map: every list below starts empty and each call leaves exactly one artist in it, so the
+#: count is what a layer that registered and drew nothing fails.
+AXES_LIST = {
+    "coastlines": "collections",
+    "borders": "collections",
+    "land": "collections",
+    "ocean": "collections",
+    "lakes": "collections",
+    "rivers": "collections",
+    "text": "texts",
+    "annotate": "texts",
+    "nightshade": "collections",
+    "tissot": "collections",
 }
 
 #: The orthographic globe whose far side the skipped-label tests place a point on.
@@ -111,21 +153,92 @@ class TestEveryDecorationMethodHandsBackTheMap:
         )
 
     @pytest.mark.parametrize("method", sorted(CHAINING_CALLS))
-    def test_the_artist_is_still_reachable_by_the_layer_s_name(self, method, canvas):
-        """What the method drew is still reachable, through the public accessor rather than its return.
+    def test_the_filed_artist_is_the_kind_this_method_files(self, method, canvas):
+        """What the method filed is an instance of the class that method draws.
 
         Args:
             method: The entry in :data:`CHAINING_CALLS` under test.
             canvas: The flat map it draws on.
 
         Test scenario:
-            Chaining must not cost a caller the artist. ``Map.artist(layer_id)`` is where it moved, and
-            it must answer with something matplotlib drew — not ``None``, and not the map.
+            Chaining must not cost a caller the artist, and ``Map.artist(layer_id)`` is where it moved.
+            The kind is asserted per method, off :data:`FILED_ARTIST_TYPES`, because the predecessor of
+            this test asked only whether the value was *not the map* — which ``None`` satisfies, and so
+            does any unrelated object. Forcing every drawer to file ``artist=None`` left all ten of those
+            green; it fails all ten of these.
         """
         call, layer = CHAINING_CALLS[method]
         call(canvas)
         drawn = canvas.artist(layer)
-        assert drawn is not canvas, f"{method}() filed the map as its own artist"
+        expected = FILED_ARTIST_TYPES[method]
+        assert isinstance(drawn, expected), (
+            f"{method}() filed {type(drawn).__name__}, not a {expected.__name__}"
+        )
+
+    @pytest.mark.parametrize("method", sorted(CHAINING_CALLS))
+    def test_the_call_leaves_exactly_one_artist_on_the_axes(self, method, canvas):
+        """Each call puts one artist into the axes list it draws into.
+
+        Args:
+            method: The entry in :data:`CHAINING_CALLS` under test.
+            canvas: The flat map it draws on.
+
+        Test scenario:
+            The type check above reads the accessor; this reads matplotlib. A layer that registers and
+            then draws nothing — the off-limb regression round 1's H1 named — keeps a describable id and
+            a filed value while the axes stays empty, so the axes' own count is the half of the claim the
+            accessor cannot make.
+        """
+        call, _ = CHAINING_CALLS[method]
+        call(canvas)
+        drawn_on_axes = getattr(canvas.ax, AXES_LIST[method])
+        assert len(drawn_on_axes) == 1, (
+            f"{method}() should leave one artist in ax.{AXES_LIST[method]}, found {len(drawn_on_axes)}"
+        )
+
+    @pytest.mark.parametrize("method", OVERLAYS)
+    def test_an_overlay_files_the_very_artist_the_axes_holds(self, method, canvas):
+        """The artist an overlay files is the one matplotlib holds, not a second object like it.
+
+        Args:
+            method: One of :data:`OVERLAYS` — the four that draw an artist of their own.
+            canvas: The flat map it draws on.
+
+        Test scenario:
+            Identity against the axes' own list rather than a type check, so an accessor that rebuilt or
+            re-wrapped the artist would fail. This is the sharpest form available for the four; the six
+            reference layers cannot be held to it, because what they file is the axes (see the test
+            below).
+        """
+        call, layer = CHAINING_CALLS[method]
+        call(canvas)
+        drawn = canvas.artist(layer)
+        assert drawn in getattr(canvas.ax, AXES_LIST[method]), (
+            f"{method}() filed an artist the axes does not hold"
+        )
+
+    @pytest.mark.parametrize("method", NATURAL_EARTH)
+    def test_a_reference_layer_files_the_axes_cleopatra_handed_back(
+        self, method, canvas
+    ):
+        """A Natural-Earth layer files the axes itself, which is what its drawer answers with.
+
+        Args:
+            method: One of :data:`NATURAL_EARTH`.
+            canvas: The flat map it draws on.
+
+        Test scenario:
+            ``cleopatra.basemap.reference.add_features`` draws onto the axes and hands the axes back, so
+            on a flat map these six have no artist of their own to file. Pinning the identity states that
+            outright — the predecessor test's docstring claimed all ten answer with "something matplotlib
+            drew", which was never true of these six — and leaves the companion count test above as the
+            only thing that can say they drew.
+        """
+        call, layer = CHAINING_CALLS[method]
+        call(canvas)
+        assert canvas.artist(layer) is canvas.ax, (
+            f"{method}() should file the axes its drawer answered with"
+        )
 
     @pytest.mark.parametrize("method", sorted(CHAINING_CALLS))
     def test_the_layer_is_registered_under_the_name_it_was_given(self, method, canvas):
