@@ -2206,10 +2206,13 @@ class VectorMixin(_MixinBase):
         artist), so readers can scale the field. Only ``quiver`` arrows carry a key; ``barbs``/``streamplot``
         do not.
 
-        **Furniture, not a layer, and deliberately a carve-out from ST-20.** It is one of the two public
-        static methods annotated ``-> Any`` rather than ``-> Self`` — :meth:`field`'s Returns note is the
-        census of them, and
-        :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is the other. So, measured on
+        **Furniture, not a layer, and deliberately a carve-out from ST-20.** It is annotated ``-> Any``
+        rather than the ``-> Self`` the chaining contract makes the default for a builder it only looks like
+        — one of the two entries in :meth:`field`'s Returns census of those builder carve-outs, with
+        :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` the other. (Figure furniture
+        such as :meth:`~digitalearth.static.scene.Scene.stamp` and output calls such as ``save`` likewise
+        hand back their own object rather than the map, but are not builders and so are not in that census.)
+        So, measured on
         a map carrying one ``quiver`` layer: the call hands back matplotlib's ``QuiverKey`` and **not** the
         map, so it does not chain; it registers **no layer**, leaving ``layer_ids`` at
         ``['vectors-1']`` either side of it; the arrow is nonetheless on the shared axes

@@ -662,10 +662,13 @@ class InsetMixin(_MixinBase):
             :meth:`~digitalearth.static.scene.Scene.get_layer` and
             :meth:`~digitalearth.static.scene.Scene.remove_layer` reach it by the same id.
 
-            It returned the ``Polygon`` until round 2's L7, which made this the tier's **second**
-            artist-returning carve-out while the censuses — ``raster.py``'s canonical chaining note and
-            ``tests/static/test_decoration_chaining.py`` — both name
-            :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` as the one. The
+            It returned the ``Polygon`` until round 2's L7, which made this a **second** carve-out handing
+            back a *registered layer's* artist — the kind
+            :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is singled out as in
+            ``tests/static/test_decoration_chaining.py`` ("the one decoration method that keeps its artist
+            return"), and which ``raster.py``'s canonical chaining note names beside
+            :meth:`~digitalearth.static.maps.vector.VectorMixin.quiverkey` — the second entry in that
+            census, whose ``QuiverKey`` is furniture registering no layer rather than a layer's artist. The
             rationale it carried ("one patch a caller restyles afterwards") is the reasoning this package
             rejected for ``text``/``annotate``, and it bought nothing, since the patch was already
             registered and already reachable by id.
