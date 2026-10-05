@@ -7,7 +7,9 @@ optional extras.
 
 ``Scene`` is the base host: a single matplotlib ``fig``/``ax`` that several cleopatra glyphs render onto so
 layers stack (e.g. a filled field + line contours + points). ``Map`` (see :mod:`digitalearth.static.map`)
-adds geospatial behaviour (display CRS, reprojection, basemap/coastlines). ``TexturedGlobe`` (see
+adds geospatial behaviour (display CRS, reprojection, basemap/coastlines). ``Pick`` is the value a
+``Scene.on_pick`` callback is handed — exported because a caller annotating that callback needs the type,
+and the module path it lives in is the one this ``__init__`` exists to hide. ``TexturedGlobe`` (see
 :mod:`digitalearth.static.textured_globe`) is the 3-D outlier: a pyramids raster or tile basemap draped over
 cleopatra's textured sphere on a matplotlib ``Axes3D``.
 
@@ -33,7 +35,7 @@ from digitalearth.static.map import Map
 # advertised surface, and the guard on that list expects every name it carries to be a package-root
 # export too.
 from digitalearth.static.maps.base import OffLimbError  # noqa: F401
-from digitalearth.static.scene import Scene
+from digitalearth.static.scene import Pick, Scene
 from digitalearth.static.textured_globe import TexturedGlobe
 
-__all__ = ["Scene", "Map", "TexturedGlobe", "facet", "grid", "shared_colorbar"]
+__all__ = ["Scene", "Map", "Pick", "TexturedGlobe", "facet", "grid", "shared_colorbar"]

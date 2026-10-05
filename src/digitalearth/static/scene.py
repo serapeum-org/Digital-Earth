@@ -262,7 +262,7 @@ class Pick:
         - The value a callback is handed, built directly: the reported layer is the top of the stack and
           `hits` says what lies under it, so a callback can look past the layer it was given:
             ```python
-            >>> from digitalearth.static.scene import Pick
+            >>> from digitalearth.static import Pick
             >>> pick = Pick("depth", 4.9, 52.4, ("depth", "basemap-1"))
             >>> pick.layer_id, pick.hits[1:]
             ('depth', ('basemap-1',))
@@ -274,7 +274,7 @@ class Pick:
           default, which is what makes one cheap to build in a test:
             ```python
             >>> from dataclasses import FrozenInstanceError
-            >>> from digitalearth.static.scene import Pick
+            >>> from digitalearth.static import Pick
             >>> plain = Pick("depth", 0.0, 0.0)
             >>> plain.hits, plain.event
             ((), None)

@@ -15,6 +15,7 @@ import digitalearth
 
 #: ``digitalearth.static.__all__``, and the submodule each name is defined in.
 STATIC_EXPORTS = {
+    "Pick": "digitalearth.static.scene",
     "Scene": "digitalearth.static.scene",
     "Map": "digitalearth.static.map",
     "TexturedGlobe": "digitalearth.static.textured_globe",
@@ -49,7 +50,7 @@ class TestStaticPackageSurface:
         )
 
     def test_all_is_the_expected_surface(self):
-        """``__all__`` advertises exactly the five documented names.
+        """``__all__`` advertises exactly the documented names.
 
         Test scenario:
             The backend's public surface must not drift silently; additions and removals should be a

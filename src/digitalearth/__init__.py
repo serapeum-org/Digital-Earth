@@ -278,6 +278,7 @@ _LAZY_MODULES = {
     "digitalearth.ops.plugins": ("load_plugins",),
     "digitalearth.static": (
         "Map",
+        "Pick",
         "Scene",
         "TexturedGlobe",
         "facet",
@@ -331,6 +332,7 @@ if TYPE_CHECKING:
     from digitalearth.ops.plugins import load_plugins
     from digitalearth.static import (
         Map,
+        Pick,
         Scene,
         TexturedGlobe,
         facet,
@@ -363,6 +365,7 @@ __all__ = [
     "to_backend",
     "Map",
     "Scene",
+    "Pick",
     "TexturedGlobe",
     "facet",
     "grid",
