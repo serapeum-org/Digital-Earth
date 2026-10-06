@@ -669,7 +669,7 @@ class FieldColors:
             low, high = scale.as_limits()
             logger.warning(
                 "field(): the diverging ramp a centre of %s asks for is not drawn — the band runs %s to "
-                "%s, so one arm of the ramp would hold every value; the sequential colormap is kept. Only "
+                "%s, so one arm of the ramp would hold every value; the colormap is kept. Only "
                 "the ramp is declined: `center=` is cleopatra's keyword and still symmetrises the colour "
                 "limits on it, so an off-band centre widens the colour domain to reach the centre (a "
                 '`color_scale="midpoint"` scale leaves the limits alone). Centre it inside the data, or '

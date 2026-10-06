@@ -406,6 +406,24 @@ class TestANamedColormapWithAnOffBandCentreIsAnnounced:
             f"an off-band centre under a named cmap must be announced; got {caplog.text!r}"
         )
 
+    def test_the_message_does_not_call_the_kept_cmap_sequential(self, caplog):
+        """The kept colormap is the caller's named one, which may be diverging — so not "sequential".
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            `field(center=100, cmap="RdBu_r")` keeps `RdBu_r`, a diverging map. The word "sequential"
+            was accurate only in the no-cmap case where the tier resolved a sequential ramp itself; under
+            a named diverging cmap it contradicts what the caller passed.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+        assert "sequential" not in caplog.text, (
+            f"the kept colormap is the caller's (here diverging) one, not sequential; got {caplog.text!r}"
+        )
+
     def test_it_is_announced_exactly_once(self, caplog):
         """One call, one line — not one per internal draw pass.
 
