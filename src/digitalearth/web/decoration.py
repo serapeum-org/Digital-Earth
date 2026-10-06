@@ -1349,10 +1349,16 @@ class DecorationMixin(_MixinBase):
                 f"{available}"
             )
         # The declarative half (WB-8): dim, then reorder, through the map's own `replace_layer`/`move_layer`
-        # rather than a new mechanism, so the saved page draws what the layers now carry. Opacity before
-        # order because `replace_layer` keeps a layer's place — so the two do not fight — and both before
-        # the switcher is recorded, so a refusal leaves no half-built control behind.
-        applied_opacity = self._apply_layer_opacity(opacity)
+        # rather than a new mechanism, so the saved page draws what the layers now carry. The WHOLE request is
+        # validated before any layer is touched — mirroring `_bind_attribute`'s whole-list pre-check (M2):
+        # `_resolve_layer_opacity` rewrites every target's paint (raising on a bad value or a layer with no
+        # opacity to dim) and `_check_layer_order` proves the full order a legal in-band permutation on a trial
+        # tree, both without mutating. Only then are they applied — opacity before order because `replace_layer`
+        # keeps a layer's place, so the two do not fight — and both before the switcher is recorded. So a refusal
+        # leaves no half-built control behind: no opacity applied, no move done, no furniture recorded (M1).
+        resolved_opacity = self._resolve_layer_opacity(opacity)
+        self._check_layer_order(order)
+        applied_opacity = self._apply_layer_opacity(resolved_opacity)
         applied_order = self._apply_layer_order(order)
         # Held as a request, not appended as a layer: the live layers are resolved when the widget is
         # built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling
@@ -1373,22 +1379,23 @@ class DecorationMixin(_MixinBase):
         )
         return self
 
-    def _apply_layer_opacity(self, opacity: Optional[dict]) -> tuple:
-        """Dim each named layer to its asked opacity, by rewriting its paint through ``replace_layer``.
+    def _resolve_layer_opacity(self, opacity: Optional[dict]) -> tuple:
+        """Validate the whole opacity request and build each layer's rewritten spec, without mutating the map.
 
         The web tier builds no live opacity slider (py-maplibregl's switcher is visibility rows), so opacity
         is applied declaratively: the value is written into the layer's own recorded paint — a vector layer's
-        ``*-opacity`` paint key, or a raster's flat ``opacity`` prop — and
-        :meth:`~digitalearth.web.base.WebMapBase.replace_layer` rebuilds the MapLibre layer from it, so the
-        saved page draws the layer dimmed.
+        ``*-opacity`` paint key, or a raster's flat ``opacity`` prop. This resolves every target up front — so
+        a bad value or a layer with no opacity to change is refused before :meth:`_apply_layer_opacity` touches
+        a single layer, which is what keeps :meth:`layer_control` atomic (M1).
 
         Args:
             opacity: A mapping of layer id to opacity in ``[0, 1]``, or ``None`` to dim nothing. Every id has
                 already been checked to be on the map.
 
         Returns:
-            The applied pairs as a tuple of ``(layer_id, value)``, sorted by id, for the switcher furniture
-            to record what the control did. Empty when nothing was dimmed.
+            One ``(layer_id, value, spec)`` triple per target, in the order given — ``spec`` being the rewritten
+            :class:`~digitalearth.base.spec.LayerSpec` for :meth:`_apply_layer_opacity` to install. Empty when
+            nothing was asked to be dimmed.
 
         Raises:
             ValueError: when a value is not a finite fraction in ``[0, 1]``, or when a named layer records no
@@ -1396,7 +1403,7 @@ class DecorationMixin(_MixinBase):
         """
         if not opacity:
             return ()
-        applied = []
+        resolved = []
         for layer_id, value in opacity.items():
             opacity_value = as_finite(
                 value, f"opacity[{layer_id!r}]", "WebMap.layer_control()"
@@ -1406,9 +1413,27 @@ class DecorationMixin(_MixinBase):
                     f"WebMap.layer_control() opacity[{layer_id!r}]={opacity_value} must be a fraction "
                     "in [0, 1]"
                 )
-            self.replace_layer(self._layer_with_opacity(layer_id, opacity_value))
-            applied.append((layer_id, opacity_value))
-        return tuple(sorted(applied))
+            spec = self._layer_with_opacity(layer_id, opacity_value)
+            resolved.append((layer_id, opacity_value, spec))
+        return tuple(resolved)
+
+    def _apply_layer_opacity(self, resolved: tuple) -> tuple:
+        """Install the rewritten specs from :meth:`_resolve_layer_opacity` through ``replace_layer``.
+
+        The request was fully validated by :meth:`_resolve_layer_opacity`, so nothing here raises — each spec
+        is handed to :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rebuilds the MapLibre layer
+        from it so the saved page draws the layer dimmed.
+
+        Args:
+            resolved: The ``(layer_id, value, spec)`` triples :meth:`_resolve_layer_opacity` returned.
+
+        Returns:
+            The applied pairs as a tuple of ``(layer_id, value)``, sorted by id, for the switcher furniture
+            to record what the control did. Empty when nothing was dimmed.
+        """
+        for _, _, spec in resolved:
+            self.replace_layer(spec)
+        return tuple(sorted((layer_id, value) for layer_id, value, _ in resolved))
 
     def _layer_with_opacity(self, layer_id: str, value: float) -> LayerSpec:
         """Return a copy of a layer's description with its opacity set to ``value``.
@@ -1445,26 +1470,48 @@ class DecorationMixin(_MixinBase):
         symbology = Symbology(encodings=dict(layer.symbology.encodings), props=props)
         return _with_fields(layer, symbology=symbology)
 
+    def _check_layer_order(self, order: Optional[list]) -> None:
+        """Prove the full order is a legal in-band permutation, replaying the moves on a trial tree only.
+
+        :meth:`_apply_layer_order` moves each listed layer through the map's own ``move_layer``, and a move
+        that crosses a draw-order band raises an ``IndexError`` partway — leaving the stack half-reordered. So
+        the moves are first replayed against a throwaway copy of the layer tree, in the exact sequence (and
+        from the same anchor) :meth:`_apply_layer_order` uses, so a band-crossing order is refused before any
+        layer actually moves and :meth:`layer_control` stays atomic (M1).
+
+        Args:
+            order: The bottom-to-top order for the named layers, or ``None`` to leave the order untouched.
+                Every id has already been checked to be on the map.
+
+        Raises:
+            IndexError: when a move would take a layer out of its draw-order band, as
+                :class:`~digitalearth.base.spec.LayerTree` refuses it — the same error
+                :meth:`_apply_layer_order` would raise, surfaced before anything moves.
+        """
+        if not order:
+            return
+        tree = self._layer_tree
+        anchor = min(self.layer_ids.index(layer_id) for layer_id in order)
+        for offset, layer_id in enumerate(order):
+            tree = tree.move(layer_id, anchor + offset)
+
     def _apply_layer_order(self, order: Optional[list]) -> tuple:
         """Reorder the named layers bottom-to-top, through the map's own ``move_layer``.
 
         The web tier builds no drag-to-reorder control, so ordering is applied declaratively: each listed
         layer is moved to its place in draw order with
         :meth:`~digitalearth.web.base.WebMapBase.move_layer`. Anchored at the lowest position the listed
-        layers currently occupy and filled upward, so the listed set ends up contiguous in the given order;
-        a list that crosses a band surfaces the ``IndexError`` ``move_layer`` raises rather than swallowing it.
+        layers currently occupy and filled upward, so the listed set ends up contiguous in the given order.
+        The order was already proven a legal in-band permutation by :meth:`_check_layer_order`, so no move
+        here crosses a band — the atomicity pre-check is what makes that true.
 
         Args:
             order: The bottom-to-top order for the named layers, or ``None`` to leave the order untouched.
-                Every id has already been checked to be on the map.
+                Every id has already been checked to be on the map, and the permutation proven legal.
 
         Returns:
             The applied order as a tuple of ids, for the switcher furniture to record. Empty when the order
             was untouched.
-
-        Raises:
-            IndexError: when a move would take a layer out of its draw-order band, as ``move_layer`` refuses
-                it (a data layer cannot be dragged under the basemap).
         """
         if not order:
             return ()

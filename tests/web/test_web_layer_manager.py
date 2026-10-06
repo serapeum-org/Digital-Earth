@@ -226,6 +226,87 @@ class TestTheLiveControlStaysVisibilityOnly:
         )
 
 
+class TestARefusalLeavesTheMapUntouched:
+    """A bad opacity/order request raises with the map unchanged — the atomicity the method's comment claims."""
+
+    def test_a_bad_opacity_target_leaves_the_earlier_one_undimmed(self, points):
+        """A dimmable layer named before a non-dimmable one must not be dimmed when the call then refuses.
+
+        Args:
+            points: The point fixture.
+
+        Test scenario:
+            ``opacity`` is iterated in order, so a good id followed by a text layer (no opacity to dim) used to
+            dim the good one through ``replace_layer`` and only then raise — leaving the map half-transformed
+            with no switcher recorded. The whole request must be validated before any layer is touched.
+        """
+        mapped = (
+            WebMap().basemap().points(points).text(4.9, 52.4, "Amsterdam", name="ams")
+        )
+        good_id = mapped.layer_ids[1]
+        before = mapped.get_layer(good_id).symbology.props["paint"]["circle-opacity"]
+        with pytest.raises(ValueError, match="cannot dim layer 'ams'"):
+            mapped.layer_control(opacity={good_id: 0.3, "ams": 0.5})
+        assert (
+            mapped.get_layer(good_id).symbology.props["paint"]["circle-opacity"]
+            == before
+        )
+
+    def test_a_bad_opacity_target_records_no_switcher(self, points):
+        """The refused call must record no switcher furniture — no half-built control is left behind.
+
+        Args:
+            points: The point fixture.
+        """
+        mapped = (
+            WebMap().basemap().points(points).text(4.9, 52.4, "Amsterdam", name="ams")
+        )
+        good_id = mapped.layer_ids[1]
+        with pytest.raises(ValueError, match="cannot dim layer 'ams'"):
+            mapped.layer_control(opacity={good_id: 0.3, "ams": 0.5})
+        assert not [item for item in mapped._furniture if item.kind == "layer_switcher"]
+
+    def test_a_band_crossing_order_leaves_the_earlier_opacity_untouched(
+        self, two_layers
+    ):
+        """An ``order`` that crosses a band must not leave an ``opacity`` named in the same call applied.
+
+        Args:
+            two_layers: The map under test.
+
+        Test scenario:
+            ``opacity`` used to be applied before ``order`` was validated, so a band-crossing move raised with
+            the opacity already baked in. Both halves must be validated before either is applied.
+        """
+        basemap_id, fill_id, circle_id = two_layers.layer_ids
+        before = two_layers.get_layer(circle_id).symbology.props["paint"][
+            "circle-opacity"
+        ]
+        with pytest.raises(IndexError, match="data band"):
+            two_layers.layer_control(
+                opacity={circle_id: 0.2}, order=[fill_id, basemap_id]
+            )
+        assert (
+            two_layers.get_layer(circle_id).symbology.props["paint"]["circle-opacity"]
+            == before
+        )
+
+    def test_a_band_crossing_order_records_no_switcher(self, two_layers):
+        """The refused band-crossing call must record no switcher furniture.
+
+        Args:
+            two_layers: The map under test.
+        """
+        basemap_id, fill_id, circle_id = two_layers.layer_ids
+        with pytest.raises(IndexError, match="data band"):
+            two_layers.layer_control(
+                opacity={circle_id: 0.2}, order=[fill_id, basemap_id]
+            )
+        assert not [
+            item for item in two_layers._furniture if item.kind == "layer_switcher"
+        ]
+
+
 class TestWhatTheControlRecords:
     """The applied opacity and order are recorded on the switcher furniture, so the declaration reads true."""
 
