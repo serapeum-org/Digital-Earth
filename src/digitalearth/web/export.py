@@ -354,7 +354,12 @@ class ExportMixin(_MixinBase):
         frames = self._temporal_frames()
         with tempfile.TemporaryDirectory() as work:
             images = [
-                self._frame_png(pathlib.Path(work) / f"frame{index}.png", frame, title)
+                self._frame_png(
+                    pathlib.Path(work) / f"frame{index}.png",
+                    frame,
+                    title,
+                    kind=container.upper(),
+                )
                 for index, frame in enumerate(frames)
             ]
             if container == "mp4":
@@ -409,13 +414,17 @@ class ExportMixin(_MixinBase):
             )
         return [[layer_id] for layer_id in layer_ids]
 
-    def _frame_png(self, path: Any, visible: list, title: str) -> pathlib.Path:
+    def _frame_png(
+        self, path: Any, visible: list, title: str, *, kind: str = "GIF"
+    ) -> pathlib.Path:
         """Render one animation frame by showing only ``visible`` and screenshotting the page.
 
         Args:
             path: Where to write this frame.
             visible: The layer ids to show; every other step layer is hidden.
             title: HTML document title used while rendering.
+            kind: The export name quoted in the missing-browser error — ``"GIF"`` or ``"MP4"``, threaded from
+                the resolved container so an MP4 save does not report a GIF failure (N1).
 
         Returns:
             The frame's :class:`pathlib.Path`.
@@ -425,7 +434,7 @@ class ExportMixin(_MixinBase):
         widget = self._build_map_widget(with_controls=False)
         for layer_id in steps:
             widget.set_visibility(layer_id, layer_id in visible)
-        return self._render_png(str(path), title=title, widget=widget, kind="GIF")
+        return self._render_png(str(path), title=title, widget=widget, kind=kind)
 
     @staticmethod
     def _png_via_playwright(url: str, path: str) -> None:

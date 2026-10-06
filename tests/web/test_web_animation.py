@@ -562,6 +562,36 @@ class TestTheAnimationOrchestration:
             "nothing should be rendered before the format is validated"
         )
 
+    def test_an_mp4_no_browser_failure_names_mp4_not_gif(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """A missing-browser failure on an ``.mp4`` save must name MP4, not the hardcoded "GIF".
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+
+        Test scenario:
+            ``_render_png`` quotes the export ``kind`` in its missing-browser ``ImportError``. ``_frame_png``
+            used to hardcode ``kind="GIF"``, so an ``.mp4`` save on a browserless machine reported "GIF
+            export". The container must be threaded through so an MP4 save says MP4.
+        """
+        pytest.importorskip("imageio_ffmpeg")
+        from digitalearth.web import WebMap
+
+        def no_browser(self, path, *, title="", **kwargs):
+            """Reproduce ``_render_png``'s missing-browser error, quoting the kind it was handed."""
+            kind = kwargs.get("kind", "PNG")
+            raise ImportError(f"{kind} export needs a headless browser")
+
+        monkeypatch.setattr(WebMap, "_render_png", no_browser)
+        m = WebMap().basemap().timeslider(raster_stack)
+        destination = str(tmp_path / "series.mp4")
+        with pytest.raises(ImportError, match="MP4 export needs a headless browser"):
+            m.save_animation(destination)
+
     def test_a_missing_mp4_encoder_is_refused_before_any_frame_renders(
         self, raster_stack, tmp_path, monkeypatch, spy_widget
     ):
