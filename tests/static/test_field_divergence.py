@@ -562,3 +562,24 @@ class TestTheRampIsBuiltFromAColormapObjectToo:
         assert middle > max(bottom, top), (
             f"the centre ({middle}) should be lighter than both ends ({bottom}, {top})"
         )
+
+
+class TestCenteredLimitsWithoutACentre:
+    """`centered_limits` only widens when a centre is stated; with none it hands the limits straight back.
+
+    The animation path bakes the symmetric domain in once over the stack, so it asks `centered_limits` of
+    every field — including the ones the caller left centre-less. That branch has to return the band it was
+    given, or a frame with no `center=` would be widened to something the clip never measured.
+    """
+
+    def test_no_centre_returns_the_limits_unchanged(self):
+        """With `center=None` the band is handed back as it came in.
+
+        Test scenario:
+            The ``self.center is None`` arm of `centered_limits`: the symmetrising formula is cleopatra's and
+            is reached only through a stated centre, so a centre-less `FieldColors` must not move the limits.
+        """
+        held = FieldColors().centered_limits(-3.0, 8.0)
+        assert held == (-3.0, 8.0), (
+            f"a centre-less call must not widen the band; got {held}"
+        )

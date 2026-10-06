@@ -1123,6 +1123,11 @@ class TestTheInsetRaisesBlockCannotGoStale:
         pytest.param(
             {"extent": [0.0, 0.0, float("nan"), 1.0]}, "extent", id="extent-not-finite"
         ),
+        pytest.param(
+            {"extent": ["west", "south", "east", "north"]},
+            "extent",
+            id="extent-not-numbers",
+        ),
     ]
 
     @pytest.mark.parametrize("kwargs, keyword", REFUSALS)
