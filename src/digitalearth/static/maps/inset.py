@@ -21,7 +21,7 @@ import logging
 from dataclasses import dataclass
 from math import isfinite
 from numbers import Real
-from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple
 
 import numpy as np
 from matplotlib.patches import Polygon
@@ -829,6 +829,10 @@ class InsetMixin(_MixinBase):
                   meet the axes anywhere. A rectangle that merely *hangs over* an edge is a placement
                   and is drawn as asked for, reported at `WARNING` (round 2, L10).
                 * `reference` — a name that is not one of the Natural-Earth layers a locator can draw.
+                * `extent` — not four finite numbers; or a rectangle that frames no area, its east not
+                  east of its west or its north not north of its south. `set_bounds` honours such a flip as
+                  an inverted axis, but a locator's extent is the wider rectangle it shows, not an axis to
+                  invert, so it is refused here rather than forwarded.
                 * `globe=True` beside an `extent` — the globe frame sets the projection's own limits, so
                   the two cannot both be honoured.
 
@@ -947,6 +951,7 @@ class InsetMixin(_MixinBase):
                     f"layer; use any of {list(_REFERENCE_LAYERS)}"
                 )
         on_a_globe = self._locator_globe(globe, extent)
+        checked_extent = None if extent is None else self._checked_extent(extent)
         box = _ExtentBox.of(self, caller="inset")
         locator = type(self)(
             crs=self.crs if crs is None else crs,
@@ -962,10 +967,10 @@ class InsetMixin(_MixinBase):
         # view to itself, so framing afterwards is what makes the asked-for extent the one that stands.
         for layer in reference:
             getattr(locator, layer)()
-        if extent is None:
+        if checked_extent is None:
             locator.set_global()
         else:
-            locator.set_bounds(list(extent))
+            locator.set_bounds(checked_extent)
         locator._mark(box)
         # The frame goes on here rather than at render time: nothing else renders the locator, and the
         # geography and the box have to be on the axes before they can be clipped to the limb. `render`
@@ -973,6 +978,52 @@ class InsetMixin(_MixinBase):
         locator.render()
         self._locator = locator
         return self
+
+    def _checked_extent(self, extent: Sequence[float]) -> List[float]:
+        """Read a caller's locator extent into four display-CRS numbers, refusing the ones that frame nothing.
+
+        :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` honours a flipped pair as an
+        inverted axis — a deliberate 2-D-tier contract — but a locator's `extent` is the wider rectangle the
+        inset shows, not an axis to invert, so an inverted or zero-area one is a caller's mistake. It is read
+        here, in front of the method with the method's other refusals, so a bad extent leaves nothing
+        half-built (the same invariant every inset refusal keeps) and the message names `inset()` rather
+        than the `set_bounds` it used to forward to.
+
+        Args:
+            extent: The `(west, south, east, north)` the caller named, in the locator's CRS.
+
+        Returns:
+            The four numbers as a list, ready for `set_bounds`.
+
+        Raises:
+            ValueError: for an extent that is not four finite numbers, whose east is not east of its west,
+                or whose north is not north of its south — each naming `inset(extent=...)`.
+        """
+        try:
+            values = [float(value) for value in extent]
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"inset(extent={extent!r}) takes four numbers (west, south, east, north) in the "
+                "locator's CRS; that is not a sequence of numbers"
+            ) from error
+        if len(values) != 4:
+            raise ValueError(
+                f"inset(extent={values!r}) needs exactly 4 values as (west, south, east, north); got "
+                f"{len(values)}"
+            )
+        if not all(isfinite(value) for value in values):
+            raise ValueError(
+                f"inset(extent={values!r}) has a non-finite edge: every one of (west, south, east, "
+                "north) has to be a finite number in the locator's CRS"
+            )
+        west, south, east, north = values
+        if east <= west or north <= south:
+            raise ValueError(
+                f"inset(extent={values!r}) frames no area: west has to be below east and south below "
+                "north — the extent is the wider rectangle the locator shows, not an inverted axis. Give "
+                "the corners the right way round, or drop extent= to show the whole projection domain"
+            )
+        return values
 
     def _locator_globe(self, globe: Optional[bool], extent: Any) -> bool:
         """Settle whether the locator is drawn on a globe frame, refusing the pair that cannot be.

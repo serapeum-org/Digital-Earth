@@ -450,6 +450,12 @@ class FieldColors:
         over: Colour for a value above the upper limit, likewise.
         under: Colour for a value below the lower limit, likewise.
         center: The value a diverging scale is built around, or ``None`` when the call asked for none.
+        from_center: Whether that centre was stated as ``center=`` rather than through
+            ``color_scale="midpoint", midpoint=``. The two spellings differ in one consequence only:
+            ``center=`` widens the colour limits (cleopatra symmetrises on it), while a midpoint scale
+            keeps the data's own limits. So an off-band ``center=`` moves the limits whatever colormap the
+            caller named — which is why that case is announced regardless of the colormap, where a midpoint
+            one the caller styled themselves is left silent.
 
     Examples:
         - Read off a drawing-options dict, which is also how the keywords leave it:
@@ -484,6 +490,7 @@ class FieldColors:
     over: Optional[str] = None
     under: Optional[str] = None
     center: Optional[float] = None
+    from_center: bool = False
 
     @classmethod
     def stated_on(cls, opts: Dict[str, Any]) -> "FieldColors":
@@ -508,6 +515,10 @@ class FieldColors:
         """
         return cls(
             center=cls._center_on(opts),
+            # `center=` is this tier's own keyword and the one that widens the limits; the midpoint spelling
+            # does not. Recording which was used is what lets the off-band warning fire on a named colormap
+            # for `center=` alone (ST-3, issue #390).
+            from_center=opts.get(CENTER_KEY) is not None,
             **{key: opts.pop(key) for key in EXTREME_KEYS if key in opts},
         )
 
@@ -547,6 +558,38 @@ class FieldColors:
             return None
         return float(midpoint)
 
+    def centered_limits(self, vmin: float, vmax: float) -> Tuple[float, float]:
+        """Symmetrise ``(vmin, vmax)`` around the stated centre, reusing cleopatra's own rule.
+
+        Delegates to cleopatra's :meth:`ArrayGlyph._center_limits`, so the numbers match what the
+        ``center=`` keyword computes at draw time to the bit — the ``center ± max|limit − center|`` formula
+        is cleopatra's and is not restated here. The animation path bakes these in once over the stack so a
+        frame drawn with no ``center=`` keyword still spans the symmetric domain cleopatra would have widened
+        to (ST-3, issue #390).
+
+        Args:
+            vmin: Lower colour limit before symmetrisation.
+            vmax: Upper colour limit before symmetrisation.
+
+        Returns:
+            The symmetric ``(vmin, vmax)``, or the inputs unchanged when no centre is stated.
+
+        Examples:
+            - A band running ``-3`` to ``8`` centred on ``100`` widens to ``(-3, 203)``:
+                ```python
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> FieldColors(center=100.0).centered_limits(-3.0, 8.0)
+                (-3.0, 203.0)
+
+                ```
+        """
+        if self.center is None:
+            return float(vmin), float(vmax)
+        return cast(
+            Tuple[float, float],
+            ArrayGlyph._center_limits(float(vmin), float(vmax), self.center),
+        )
+
     def ramp_over(self, cmap: Any, values: Any, requested: Any) -> Any:
         """Return the colormap this field should draw with, diverging it when the data warrants that.
 
@@ -561,6 +604,14 @@ class FieldColors:
         keyword, not this decision — so the decline is of the *ramp* only, and the warning says that too: an
         off-band centre still widens the colour domain to reach the centre. Measured, a band running ``12``
         to ``88`` with ``center=0`` draws through ``(-88.0, 88.0)`` on the sequential ramp that was kept.
+
+        The warning is wider than the ramp swap: an off-band ``center=`` widens the limits *whatever*
+        colormap is drawn, so it is announced even when the caller named one (``from_center``) — the gap
+        issue #390 closed. A ``color_scale="midpoint"`` centre leaves the limits alone, so a caller who
+        styled one themselves is left silent. An animation drives its one per-clip warning through this
+        method too, from :meth:`AnimationMixin._freeze_animation_ramp`, which then bakes the symmetric limits
+        and drops the ``center=`` keyword so the per-frame draws reach this method with no centre and stay
+        quiet — the reason a frame is not a second announcement.
 
         Measuring the domain costs one pass over the band, which is why it is behind the centre check rather
         than done for every field.
@@ -599,15 +650,26 @@ class FieldColors:
                 'viridis'
 
                 ```
+            - An off-band ``center=`` keeps the named colormap and announces the widening (the warning goes
+              to the log, so only the kept colormap is shown here):
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> rainfall = np.array([12.0, 40.0, 88.0])
+                >>> FieldColors(center=100.0, from_center=True).ramp_over("RdBu_r", rainfall, "RdBu_r")
+                'RdBu_r'
+
+                ```
         """
-        if self.center is None or requested is not None:
+        if self.center is None:
             return cmap
         scale = Scale.from_values(values)
-        if not scale.straddles(self.center):
+        straddles = scale.straddles(self.center)
+        if not straddles and (requested is None or self.from_center):
             low, high = scale.as_limits()
             logger.warning(
                 "field(): the diverging ramp a centre of %s asks for is not drawn — the band runs %s to "
-                "%s, so one arm of the ramp would hold every value; the sequential colormap is kept. Only "
+                "%s, so one arm of the ramp would hold every value; the colormap is kept. Only "
                 "the ramp is declined: `center=` is cleopatra's keyword and still symmetrises the colour "
                 "limits on it, so an off-band centre widens the colour domain to reach the centre (a "
                 '`color_scale="midpoint"` scale leaves the limits alone). Centre it inside the data, or '
@@ -616,6 +678,7 @@ class FieldColors:
                 low,
                 high,
             )
+        if requested is not None or not straddles:
             return cmap
         # The two ends of the resolved ramp become the two arms, which keeps a variable's own auto-styled
         # colours meaningful instead of overriding them with one hard-coded pair. `make_diverging` builds the

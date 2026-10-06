@@ -121,21 +121,36 @@ class TestPanelSpec:
         with pytest.raises(ValueError, match="view must be a Viewport or a Camera"):
             PanelSpec("main", view=4326)
 
-    @pytest.mark.parametrize("title", [5, ""])
-    def test_a_title_that_is_not_a_non_empty_string_is_refused(self, title):
-        """A title is text, and an empty one is refused as `LayerSpec` refuses an empty label.
+    @pytest.mark.parametrize("title", [5, 1.5])
+    def test_a_title_that_is_not_a_string_is_refused(self, title):
+        """A title is text, so a non-string is refused by name.
 
         Args:
-            title: A non-string or an empty title.
+            title: A non-string title.
+        """
+        with pytest.raises(ValueError, match="title must be a string or None"):
+            PanelSpec("main", title=title)
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_a_blank_panel_title_is_kept_as_no_title(self, blank):
+        """A whitespace-only title is the same request as `None` and is kept as `None`.
+
+        Args:
+            blank: An empty or whitespace-only title.
 
         Test scenario:
-            `PanelSpec`/`FigureSpec` accepted ``title=""`` while `LayerSpec` refused ``label=""``: two optional
-            display strings, two rules, and two spellings — ``None`` and ``""`` — of "no title" that compare unequal.
+            The spec once accepted ``title="   "`` verbatim while no tier drew it, so a figure carried a title it
+            rendered as none. It is now normalised to `None`, the one spelling of "no title", matching what the
+            static tier's `set_title` already records.
         """
-        with pytest.raises(
-            ValueError, match="title must be a non-empty string or None"
-        ):
-            PanelSpec("main", title=title)
+        assert PanelSpec("main", title=blank).title is None
+
+    def test_a_blank_panel_title_round_trips_as_none(self):
+        """A blank title normalised to `None` survives `to_dict`/`from_dict` as `None`."""
+        rebuilt = PanelSpec.from_dict(
+            json.loads(json.dumps(PanelSpec("main", title="   ").to_dict()))
+        )
+        assert rebuilt.title is None
 
     def test_from_dict_needs_exactly_one_kind_of_view(self):
         """Both or neither of `viewport` and `camera` cannot say what the panel is."""
@@ -313,18 +328,33 @@ class TestFigureReferences:
         with pytest.raises(ValueError, match="size must be"):
             FigureSpec(panels=panels, size=size)
 
-    @pytest.mark.parametrize("title", [5, ""])
-    def test_a_figure_title_that_is_not_a_non_empty_string_is_refused(self, title):
-        """A figure's title follows the panel's rule, and the layer label's.
+    @pytest.mark.parametrize("title", [5, 1.5])
+    def test_a_figure_title_that_is_not_a_string_is_refused(self, title):
+        """A figure's title follows the panel's rule: a non-string is refused by name.
 
         Args:
-            title: A non-string or an empty title.
+            title: A non-string title.
         """
         panels = (PanelSpec("p"),)
         with pytest.raises(
-            ValueError, match="FigureSpec title must be a non-empty string or None"
+            ValueError, match="FigureSpec title must be a string or None"
         ):
             FigureSpec(panels=panels, title=title)
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_a_blank_figure_title_is_kept_as_no_title(self, blank):
+        """A whitespace-only figure title is the same request as `None` and is kept as `None`.
+
+        Args:
+            blank: An empty or whitespace-only title.
+        """
+        assert FigureSpec(panels=(PanelSpec("p"),), title=blank).title is None
+
+    def test_a_blank_figure_title_round_trips_as_none(self):
+        """A blank figure title normalised to `None` survives `to_dict`/`from_dict`."""
+        figure = FigureSpec(panels=(PanelSpec("p"),), title="\t")
+        rebuilt = FigureSpec.from_dict(json.loads(json.dumps(figure.to_dict())))
+        assert rebuilt.title is None
 
     def test_sources_cannot_be_changed_after_construction(self):
         """The sources mapping is read-only, so a figure cannot be re-pointed from outside."""

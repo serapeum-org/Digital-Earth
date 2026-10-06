@@ -47,6 +47,9 @@ ANOMALY = np.array([[-2.0, -1.0, 0.0], [1.0, 3.0, 6.0]])
 #: The same shape of field with no negative arm — the case a diverging ramp must decline.
 POSITIVE = np.array([[12.0, 40.0], [60.0, 88.0]])
 
+#: The band issue #390 measures: running -3..8, so a centre of 100 is off-band and a centre of 0 straddles.
+ANOMALY_WIDE = np.array([[-3.0, 0.0], [4.0, 8.0]])
+
 
 def _lightness(rgba):
     """Return the CIE L* of an RGBA colour, through cleopatra's own converter.
@@ -382,6 +385,108 @@ class TestACentreOutsideTheDataIsDeclined:
         )
 
 
+class TestANamedColormapWithAnOffBandCentreIsAnnounced:
+    """The gap #390 closes: an off-band ``center=`` under a named cmap widened the limits in silence."""
+
+    def test_an_off_band_centre_under_a_named_cmap_warns(self, caplog):
+        """`field(center=100, cmap='RdBu_r')` must say the diverging ramp was declined.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            On a named colormap the decline used to be skipped, so an unreachable centre widened the
+            colour limits with no signal. The warning now fires whichever colormap was named, because what
+            moved is the *limits*, not the ramp.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+        assert "is not drawn" in caplog.text, (
+            f"an off-band centre under a named cmap must be announced; got {caplog.text!r}"
+        )
+
+    def test_the_message_does_not_call_the_kept_cmap_sequential(self, caplog):
+        """The kept colormap is the caller's named one, which may be diverging — so not "sequential".
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            `field(center=100, cmap="RdBu_r")` keeps `RdBu_r`, a diverging map. The word "sequential"
+            was accurate only in the no-cmap case where the tier resolved a sequential ramp itself; under
+            a named diverging cmap it contradicts what the caller passed.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+        assert "sequential" not in caplog.text, (
+            f"the kept colormap is the caller's (here diverging) one, not sequential; got {caplog.text!r}"
+        )
+
+    def test_it_is_announced_exactly_once(self, caplog):
+        """One call, one line — not one per internal draw pass.
+
+        Args:
+            caplog: pytest's log capture.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+        assert caplog.text.count("is not drawn") == 1, (
+            f"the decline must be said once per call; got {caplog.text!r}"
+        )
+
+    def test_the_limits_are_unchanged_by_the_warning(self, caplog):
+        """The behaviour the warning describes is the one that already drew: the limits do not move.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            cleopatra symmetrises ``(-3, 8)`` on a centre of 100 to ``(-3, 203)``. The warning announces
+            that widening; it does not change it.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+                clim = canvas.artist().get_clim()
+        assert clim == (-3.0, 203.0), (
+            f"the limits must be symmetrised on the centre, unchanged; got {clim}"
+        )
+
+    def test_a_straddled_centre_under_a_named_cmap_stays_silent(self, caplog):
+        """A centre the data straddles is the ordinary case, and says nothing.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            The ramp is reachable, so there is nothing to announce. The limits symmetrise to ``(-8, 8)``,
+            which the sibling test pins; here the claim is only the silence.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=0.0, cmap="RdBu_r")
+        assert "is not drawn" not in caplog.text, (
+            f"a straddled centre under a named cmap must stay silent; got {caplog.text!r}"
+        )
+
+    def test_a_straddled_centre_under_a_named_cmap_still_symmetrises(self, caplog):
+        """And it still symmetrises the limits, cleopatra's keyword doing its own job.
+
+        Args:
+            caplog: pytest's log capture.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=0.0, cmap="RdBu_r")
+                clim = canvas.artist().get_clim()
+        assert clim == (-8.0, 8.0), (
+            f"a straddled centre must symmetrise to the furthest arm; got {clim}"
+        )
+
+
 class TestNothingShiftsWithoutACentre:
     """A field with no stated centre is drawn exactly as it was."""
 
@@ -474,4 +579,28 @@ class TestTheRampIsBuiltFromAColormapObjectToo:
         )
         assert middle > max(bottom, top), (
             f"the centre ({middle}) should be lighter than both ends ({bottom}, {top})"
+        )
+
+
+class TestCenteredLimitsWithoutACentre:
+    """`centered_limits` only widens when a centre is stated; with none it hands the limits straight back.
+
+    This exercises the `self.center is None` arm directly. Production never routes a centre-less field
+    through it: `_freeze_animation_ramp` calls `centered_limits` only under `if colors.from_center:`, and
+    `from_center` is `True` only when a centre was stated, so a centre-less `FieldColors` never reaches the
+    animation call. The arm is a defensive contract of `centered_limits` itself — safe to call
+    unconditionally, returning the band unchanged when no centre is stated — which this test pins by calling
+    it straight.
+    """
+
+    def test_no_centre_returns_the_limits_unchanged(self):
+        """With `center=None` the band is handed back as it came in.
+
+        Test scenario:
+            The ``self.center is None`` arm of `centered_limits`: the symmetrising formula is cleopatra's and
+            is reached only through a stated centre, so a centre-less `FieldColors` must not move the limits.
+        """
+        held = FieldColors().centered_limits(-3.0, 8.0)
+        assert held == (-3.0, 8.0), (
+            f"a centre-less call must not widen the band; got {held}"
         )

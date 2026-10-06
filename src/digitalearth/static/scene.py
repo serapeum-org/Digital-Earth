@@ -2821,6 +2821,18 @@ class Scene(WatermarkMixin):
         at. Because it is figure-level rather than axes-level it sits above every layer, and works on any
         scene — a :class:`~digitalearth.static.map.Map`, a chart, or a bare :class:`Scene`.
 
+        **Figure furniture, not a layer, and a deliberate ``-> Any`` carve-out.** Like
+        :meth:`~digitalearth.static.maps.vector.VectorMixin.quiverkey` and :meth:`save`, the return *is* the
+        point of the call — the inset ``Axes`` comes back so the mark can be repositioned or restyled — so it
+        is annotated ``-> Any`` rather than the ``-> Self`` the chaining contract makes the default for a
+        builder it only resembles. It registers **no layer**: it adds no entry to :attr:`layer_ids`, writes
+        nothing to the figure's description, and so is **not** reachable through :meth:`artist`
+        (``scene.artist("stamp")`` raises `KeyError`). It is figure furniture rather than a data builder,
+        which is why :meth:`quiverkey`'s furniture note names it — with :meth:`save` — as handing back its own
+        object yet sitting *beside* :meth:`~digitalearth.static.maps.raster.RasterMixin.field`'s Returns census
+        of the builder carve-outs (which enumerates ``quiverkey`` and ``stock_img``) rather than inside it.
+        ``tests/static/test_stamp_is_furniture.py`` pins both halves.
+
         Args:
             mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /
                 ``(H, W, 4)`` array, either ``uint8`` ``0-255`` or float ``0-1``.

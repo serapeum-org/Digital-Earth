@@ -57,6 +57,7 @@ from digitalearth.static.maps.raster import (
     FieldColors,
     _field_source,
 )
+from digitalearth.static.render_compat import CENTER_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -1378,9 +1379,8 @@ class AnimationMixin(_MixinBase):
         # from the frame being drawn, which is why it blocks the in-place path outright
         # (:attr:`FrameUpdate.PER_FRAME_OPTS`) — both paths then redraw and so already agree, and pinning a
         # ramp there would take the shared categorical palette away from a band of class codes.
-        center = (
-            None if opts.get("scheme") else FieldColors.stated_on(dict(opts)).center
-        )
+        colors = None if opts.get("scheme") else FieldColors.stated_on(dict(opts))
+        center = None if colors is None else colors.center
         # One read of the stack's variable serves both the ramp and the bar, and is paid for only when one
         # of them is asked for — resolving a style costs a frame read.
         style = (
@@ -1388,13 +1388,13 @@ class AnimationMixin(_MixinBase):
             if colorbar or center is not None
             else {}
         )
-        if center is not None:
-            self._freeze_animation_ramp(opts, center, style)
+        if colors is not None and center is not None:
+            self._freeze_animation_ramp(opts, colors, style)
         if colorbar:
             self._animation_colorbar(opts, cbar_label, style)
 
     def _freeze_animation_ramp(
-        self, opts: dict, center: float, style: Mapping[str, Any]
+        self, opts: dict, colors: FieldColors, style: Mapping[str, Any]
     ) -> None:
         """Resolve the diverging ramp a stated ``center=`` asks for **once over the stack**.
 
@@ -1405,13 +1405,20 @@ class AnimationMixin(_MixinBase):
         answer while a redrawn one re-decided it. Asking once, of the shared ``vmin``/``vmax``
         :meth:`_resolve_animation_clim` has just measured, is what makes the two paths one animation.
 
-        Written into ``opts["cmap"]``, so from each frame's point of view the colormap is the caller's and
-        ``ramp_over`` declines — the same no-op it gives any call that named its own ``cmap``.
+        The resolved colormap is written into ``opts["cmap"]``. For the ``center=`` spelling the symmetric
+        limits cleopatra would compute are then baked into ``opts["vmin"]``/``opts["vmax"]`` — reused from
+        cleopatra's own rule through :meth:`~digitalearth.static.maps.raster.FieldColors.centered_limits`,
+        not recomputed here — and the ``center=`` keyword is dropped, so each frame reaches ``ramp_over``
+        with no centre, draws the same widened domain, and adds no second warning: the one above is the
+        whole clip's (issue #390). cleopatra does not widen the limits for a ``color_scale="midpoint"``
+        scale, so there is nothing to bake there and the keyword stays; those frames decline through
+        cleopatra's own named-cmap no-op, the colormap already being the one resolved here.
 
         Args:
             opts: The render options every frame is drawn with. Read for ``cmap``, ``vmin`` and ``vmax``;
-                the resolved colormap is written back into it.
-            center: The centre the call stated, in either of its spellings.
+                the resolved colormap is written back, and for a ``center=`` call ``vmin``/``vmax`` are
+                rewritten to the symmetric limits and ``center`` is removed.
+            colors: The colour decisions the call stated, carrying the centre and which spelling named it.
             style: The animated variable's :func:`~digitalearth.base.autostyle.auto_style` dict, the source
                 of the colormap a call that named none resolves to.
 
@@ -1421,9 +1428,10 @@ class AnimationMixin(_MixinBase):
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.raster import FieldColors
                 >>> scene = Map(crs=4326)
                 >>> opts = {"vmin": -5.0, "vmax": 5.0}
-                >>> scene._freeze_animation_ramp(opts, 0.0, {"cmap": "viridis"})
+                >>> scene._freeze_animation_ramp(opts, FieldColors(center=0.0), {"cmap": "viridis"})
                 >>> opts["cmap"].name
                 'viridis-diverging'
                 >>> scene.close()
@@ -1434,22 +1442,44 @@ class AnimationMixin(_MixinBase):
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.raster import FieldColors
                 >>> scene = Map(crs=4326)
                 >>> opts = {"vmin": -5.0, "vmax": 5.0, "cmap": "RdBu_r"}
-                >>> scene._freeze_animation_ramp(opts, 0.0, {"cmap": "viridis"})
+                >>> scene._freeze_animation_ramp(opts, FieldColors(center=0.0), {"cmap": "viridis"})
                 >>> opts["cmap"]
                 'RdBu_r'
+                >>> scene.close()
+
+                ```
+            - An off-band ``center=`` bakes the widened limits in and drops the keyword, so the frames need
+              no centre to draw the same domain:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Map
+                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> scene = Map(crs=4326)
+                >>> opts = {"vmin": -3.0, "vmax": 8.0, "center": 100.0, "cmap": "RdBu_r"}
+                >>> colors = FieldColors(center=100.0, from_center=True)
+                >>> scene._freeze_animation_ramp(opts, colors, {})
+                >>> (opts["vmin"], opts["vmax"]), "center" in opts
+                ((-3.0, 203.0), False)
                 >>> scene.close()
 
                 ```
         """
         requested = opts.get("cmap")
         resolved = requested or style.get("cmap") or DEFAULT_FIELD_CMAP
-        opts["cmap"] = FieldColors(center=center).ramp_over(
+        opts["cmap"] = colors.ramp_over(
             resolved,
             np.asarray([opts["vmin"], opts["vmax"]], dtype="float64"),
             requested,
         )
+        if colors.from_center:
+            opts["vmin"], opts["vmax"] = colors.centered_limits(
+                opts["vmin"], opts["vmax"]
+            )
+            del opts[CENTER_KEY]
 
     def _draw_animation_frame(
         self,

@@ -79,22 +79,27 @@ def _identifier(owner: str, value: Any) -> None:
         )
 
 
-def _optional_title(owner: str, title: Any) -> None:
-    """Refuse a title that is neither ``None`` nor a non-empty string.
+def _optional_title(owner: str, title: Any) -> Optional[str]:
+    """Return a title normalised to ``None`` or a non-blank string.
 
     Args:
         owner: The type being built, for the message.
         title: The candidate title.
 
+    Returns:
+        ``None`` for ``None`` or a blank string, and the string unchanged otherwise. A blank title is the same
+        request as ``None`` — the one spelling of "no title" — so a ``"   "`` the spec once carried while no tier
+        drew it is now recorded as ``None``, matching what the static tier's `set_title` already does. The text is
+        kept as given rather than stripped, as a label is.
+
     Raises:
-        ValueError: for a non-string or an empty string. It is the rule `LayerSpec` applies to its label: ``None``
-            is the one spelling of "no title", so ``""`` is not a second one that compares unequal to it.
-            Whitespace is kept, as it is in a label.
+        ValueError: for a non-string that is not ``None``.
     """
-    if title is not None and (not isinstance(title, str) or not title):
-        raise ValueError(
-            f"{owner} title must be a non-empty string or None; got {title!r}"
-        )
+    if title is None:
+        return None
+    if not isinstance(title, str):
+        raise ValueError(f"{owner} title must be a string or None; got {title!r}")
+    return title if title.strip() else None
 
 
 @dataclass(frozen=True)
@@ -115,8 +120,9 @@ class PanelSpec:
     Raises:
         ValueError: for an id that is not a non-empty string, a view that is neither a
             `Viewport` nor a `Camera`, `layers` given as a bare string, a layer id that is not a non-empty string, a
-            layer listed twice, a title that is not a non-empty string, a furniture entry that is not a
-            :class:`~digitalearth.base.spec.furniture.Furniture`, or one furniture kind listed twice.
+            layer listed twice, a title that is not a string or ``None`` (a blank title is kept as ``None``), a
+            furniture entry that is not a :class:`~digitalearth.base.spec.furniture.Furniture`, or one furniture
+            kind listed twice.
 
     Examples:
         - Two panels over the same layer, in two projections:
@@ -191,7 +197,7 @@ class PanelSpec:
                 f"panel {self.id!r} lists layers {repeated} more than once"
             )
         object.__setattr__(self, "layers", layers)
-        _optional_title("PanelSpec", self.title)
+        object.__setattr__(self, "title", _optional_title("PanelSpec", self.title))
         furniture = tuple(self.furniture)
         for item in furniture:
             if not isinstance(item, Furniture):
@@ -511,7 +517,7 @@ class FigureSpec:
             not a `LayerTree`, a layer whose source or elevation source is not among the sources, a panel naming a
             layer that is not in the tree, a 3-D (`Camera`) panel showing a draped layer without the layer it
             drapes over, a size that is not two positive finite numbers (a boolean counts as
-            neither), or a title that is not a non-empty string.
+            neither), or a title that is not a string or ``None`` (a blank title is kept as ``None``).
 
     Examples:
         - One source, one layer, one panel:
@@ -576,7 +582,7 @@ class FigureSpec:
             self._check_sources(layer, self.sources)
         self._check_panel_layers()
         object.__setattr__(self, "size", self._checked_size(self.size))
-        _optional_title("FigureSpec", self.title)
+        object.__setattr__(self, "title", _optional_title("FigureSpec", self.title))
 
     def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
         """Pickle and copy by rebuilding through the constructor.
