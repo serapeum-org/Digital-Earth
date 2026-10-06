@@ -257,7 +257,7 @@ class TestC2FrameRateIsFps:
         monkeypatch.setattr(web_export, "_write_gif", fake_write)
         monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
         monkeypatch.setattr(
-            WebMap, "_frame_png", lambda self, path, visible, title: path
+            WebMap, "_frame_png", lambda self, path, visible, title, *, kind="GIF": path
         )
         WebMap().save_animation(str(tmp_path / "series.gif"))
         assert recorded["duration"] == pytest.approx(1.0 / DEFAULT_FPS), (
@@ -283,7 +283,7 @@ class TestC2FrameRateIsFps:
         monkeypatch.setattr(web_export, "_write_gif", fake_write)
         monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
         monkeypatch.setattr(
-            WebMap, "_frame_png", lambda self, path, visible, title: path
+            WebMap, "_frame_png", lambda self, path, visible, title, *, kind="GIF": path
         )
 
         WebMap().save_animation(str(tmp_path / "series.gif"), fps=4.0)
