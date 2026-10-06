@@ -120,7 +120,7 @@ class TestStylingByValue:
             points_gdf: The point fixture.
         """
         m = WebMap()
-        with pytest.raises(KeyError):
+        with pytest.raises(KeyError, match="column 'nope' not found"):
             m.cluster(points_gdf, color_by="nope")
 
 
