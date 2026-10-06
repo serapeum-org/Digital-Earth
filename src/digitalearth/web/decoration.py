@@ -357,6 +357,10 @@ def refresh_legend_panel(web_map: Any) -> None:
     )
 
 
+#: The Natural-Earth resolutions `cleopatra.basemap.reference` publishes, for `coastlines`/`borders` to refuse
+#: anything else by name rather than letting the read fail deeper down.
+_NATURAL_EARTH_RESOLUTIONS = frozenset({"110m", "50m", "10m"})
+
 #: Degrees between graticule lines when a caller names neither step — the interactive tier's own default, so
 #: one `graticule()` call draws the same grid on both (#263).
 _DEFAULT_GRID_STEP: float = 30.0
@@ -1570,6 +1574,186 @@ class DecorationMixin(_MixinBase):
         # Reference geography says nothing about where to look, so it does not frame the map. Its band —
         # over the basemap, under the data — comes from the kind's registration, not from here.
         return self
+
+    def coastlines(
+        self,
+        resolution: str = "110m",
+        *,
+        color: str = "#000000",
+        width: float = 0.8,
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Self:
+        """Overlay Natural-Earth coastlines as reference lines (WB-16).
+
+        Coastlines came only with whatever basemap style a caller picked; a map built from the caller's own
+        sources, or one with ``basemap(opacity=...)`` turned down, had none. This draws them as a line
+        overlay in the reference band — over the basemap, under the data — from the same
+        ``cleopatra.basemap.reference`` Natural-Earth coordinates the static tier reads, built here into
+        ordinary GeoJSON so the lines embed in a saved page and need no network. No GIS is reimplemented:
+        the coordinates are read from the shared source and packaged, nothing more.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``, matching
+                the static tier's spelling.
+            color: Line colour.
+            width: Line width in pixels.
+            opacity: Line opacity in ``[0, 1]``; reference geography sits visually under the data.
+            visible: Whether the overlay starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``, or when
+                ``width`` or ``opacity`` is not a finite number.
+
+        Examples:
+            - Coastlines over a basemap, under the data (needs the ``web`` extra, so the block is skipped
+              without it):
+                ```python
+                >>> from digitalearth.web import WebMap        # doctest: +SKIP
+                >>> WebMap().basemap().coastlines()            # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.borders: the same line path for country boundaries.
+            digitalearth.web.base.WebMapBase.add_reference: the band that keeps it under the data.
+        """
+        return self._reference_lines(
+            "coastline",
+            "coastlines",
+            resolution,
+            color=color,
+            width=width,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def borders(
+        self,
+        resolution: str = "110m",
+        *,
+        color: str = "#777777",
+        width: float = 0.6,
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Self:
+        """Overlay Natural-Earth country borders as reference lines (WB-16).
+
+        The same line path as :meth:`coastlines`, for country boundaries rather than the shoreline.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            color: Line colour.
+            width: Line width in pixels.
+            opacity: Line opacity in ``[0, 1]``.
+            visible: Whether the overlay starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``, or when
+                ``width`` or ``opacity`` is not a finite number.
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.coastlines: the shoreline counterpart.
+        """
+        return self._reference_lines(
+            "borders",
+            "borders",
+            resolution,
+            color=color,
+            width=width,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def _reference_lines(
+        self,
+        source_layer: str,
+        prefix: str,
+        resolution: str,
+        *,
+        color: str,
+        width: float,
+        opacity: float,
+        visible: bool,
+    ) -> Self:
+        """Add one Natural-Earth line layer — a coastline or a border — to the reference band.
+
+        :meth:`coastlines` and :meth:`borders` are one mechanism over two Natural-Earth datasets, so the
+        body lives here. The geometry is read from ``cleopatra.basemap.reference`` as lon/lat coordinate
+        arrays and packaged into GeoJSON; the MapLibre source and line layer are added through a queued
+        closure (the shape :meth:`~digitalearth.web.base.WebMapBase.add_reference` takes), so a figure
+        written down keeps the embedded lines even offline.
+
+        Args:
+            source_layer: The Natural-Earth dataset name cleopatra takes — ``"coastline"`` or ``"borders"``.
+            prefix: The id prefix the overlay is numbered under — ``"coastlines"`` or ``"borders"``.
+            resolution: One of ``"110m"``, ``"50m"`` or ``"10m"``.
+            color: Line colour.
+            width: Line width in pixels.
+            opacity: Line opacity in ``[0, 1]``.
+            visible: Whether the overlay starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: for an unknown resolution, or a non-finite width/opacity.
+        """
+        call = f"WebMap.{prefix}()"
+        if resolution not in _NATURAL_EARTH_RESOLUTIONS:
+            raise ValueError(
+                f"{call} resolution={resolution!r} must be one of "
+                f"{sorted(_NATURAL_EARTH_RESOLUTIONS)} — the resolutions Natural Earth publishes"
+            )
+        width = as_finite(width, "width", call)
+        opacity = as_finite(opacity, "opacity", call)
+        layer_cls, layer_types = _require_layer_api()
+        from cleopatra.basemap.reference import natural_earth
+
+        # Read the reference geometry as lon/lat arrays and package it as GeoJSON. Parts with fewer than two
+        # vertices cannot be a line, so they are dropped rather than drawn as a degenerate segment.
+        parts = natural_earth(source_layer, resolution)
+        features = [
+            {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[float(x), float(y)] for x, y in part],
+                },
+            }
+            for part in parts
+            if len(part) >= 2
+        ]
+        collection = {"type": "FeatureCollection", "features": features}
+        layer_id = self._layer_id(prefix, None)
+        source_id = f"{layer_id}-src"
+        layout = None if visible else {"visibility": "none"}
+
+        def apply(widget: Any) -> None:
+            widget.add_source(source_id, {"type": "geojson", "data": collection})
+            widget.add_layer(
+                layer_cls(
+                    id=layer_id,
+                    type=layer_types.LINE,
+                    source=source_id,
+                    paint={
+                        "line-color": color,
+                        "line-width": float(width),
+                        "line-opacity": float(opacity),
+                    },
+                    layout=layout,
+                )
+            )
+
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        return self.add_reference(apply)
 
     def navigation(
         self,
