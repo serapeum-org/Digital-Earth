@@ -13,7 +13,7 @@ import pytest
 from PIL import Image
 
 from digitalearth.web import WebMap
-from digitalearth.web.export import _write_gif
+from digitalearth.web.export import _write_gif, _write_mp4
 
 
 @pytest.fixture(autouse=True)
@@ -156,6 +156,59 @@ class TestTheGifEncoder:
         destination = str(tmp_path / "out.gif")
         with pytest.raises(ValueError, match="no frames"):
             _write_gif([], destination, duration=0.5, loop=0)
+
+
+class TestTheMp4Encoder:
+    """MP4 reuses the GIF's frame pipeline and swaps only the encoder (ffmpeg via imageio-ffmpeg)."""
+
+    @pytest.fixture(autouse=True)
+    def _need_encoder(self):
+        """Skip when the ffmpeg encoder is absent (present in the web env, not in the bare dev env)."""
+        pytest.importorskip("imageio_ffmpeg")
+
+    def test_frames_become_a_real_mp4(self, frames, tmp_path):
+        """The bytes have to be a real MP4 — an ``ftyp`` box — not a mislabelled GIF or empty file.
+
+        Args:
+            frames: The synthetic frame paths.
+            tmp_path: pytest's per-test directory.
+
+        Test scenario:
+            ISO base-media (MP4) files open with an ``ftyp`` box in their first atom; its presence is the
+            proof the encoder produced a genuine container rather than writing nothing or a wrong format.
+        """
+        out = tmp_path / "out.mp4"
+        _write_mp4(frames, str(out), fps=3.0)
+        data = out.read_bytes()
+        assert b"ftyp" in data[:32], data[:32]
+
+    def test_no_frames_is_refused(self, tmp_path):
+        """An empty video is not a thing; the caller needs to know nothing was rendered.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+        """
+        destination = str(tmp_path / "out.mp4")
+        with pytest.raises(ValueError, match="no frames"):
+            _write_mp4([], destination, fps=3.0)
+
+    def test_the_frames_are_closed(self, frames, tmp_path):
+        """A still-open frame keeps a Windows handle on the caller's temporary directory.
+
+        Args:
+            frames: The synthetic frame paths.
+            tmp_path: pytest's per-test directory.
+
+        Test scenario:
+            ``save_animation`` renders its frames into a ``TemporaryDirectory``; a leaked handle makes
+            that directory fail to delete with ``PermissionError`` on Windows.
+        """
+        out = tmp_path / "out.mp4"
+        _write_mp4(frames, str(out), fps=3.0)
+        for frame in frames:
+            pathlib.Path(
+                frame
+            ).unlink()  # raises PermissionError on Windows if still open
 
 
 class TestWhichStepsAreAnimated:
@@ -412,3 +465,80 @@ class TestTheAnimationOrchestration:
 
         with Image.open(out) as animation:
             assert animation.n_frames == 3, animation.n_frames
+
+    def test_an_mp4_suffix_encodes_a_real_mp4(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """``save_animation("x.mp4")`` runs the same frame pipeline and swaps to the MP4 encoder.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+
+        Test scenario:
+            The ``.mp4`` suffix must route past the GIF encoder to ffmpeg, so the file carries an MP4
+            ``ftyp`` box rather than a ``GIF89a`` header.
+        """
+        pytest.importorskip("imageio_ffmpeg")
+        from digitalearth.web import WebMap
+
+        seen = []
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
+        out = tmp_path / "series.mp4"
+        m = WebMap().basemap().timeslider(raster_stack)
+        assert m.save_animation(str(out)) == pathlib.Path(out)
+
+        assert len(seen) == 3, f"expected one frame per step, rendered {len(seen)}"
+        data = out.read_bytes()
+        assert b"ftyp" in data[:32], data[:32]
+
+    def test_format_mp4_overrides_a_gif_suffix(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """An explicit ``format="mp4"`` must win over the path's ``.gif`` suffix.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+
+        Test scenario:
+            A caller who names the format explicitly gets that encoder regardless of the filename, proving
+            the switch is the format argument and not merely the suffix.
+        """
+        pytest.importorskip("imageio_ffmpeg")
+        from digitalearth.web import WebMap
+
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer([]))
+        out = tmp_path / "despite-the-name.gif"
+        WebMap().basemap().timeslider(raster_stack).save_animation(
+            str(out), format="mp4"
+        )
+        data = out.read_bytes()
+        assert b"ftyp" in data[:32], data[:32]
+
+    def test_an_unknown_format_is_refused(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """A format that is neither GIF nor MP4 is a caller error, named before anything is rendered.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+        """
+        from digitalearth.web import WebMap
+
+        rendered = []
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(rendered))
+        m = WebMap().basemap().timeslider(raster_stack)
+        destination = str(tmp_path / "series.webm")
+        with pytest.raises(ValueError, match="gif.*mp4|mp4.*gif"):
+            m.save_animation(destination, format="webm")
+        assert rendered == [], (
+            "nothing should be rendered before the format is validated"
+        )

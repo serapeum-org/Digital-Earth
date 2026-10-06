@@ -8,9 +8,11 @@ The headline of the tier: turn any ``WebMap`` into a shareable artifact.
 * PNG snapshot — render the HTML in a headless browser and screenshot it. The browser is an **optional,
   gated** dependency (not in the ``[web]`` extra): ``save(*.png)`` raises an actionable ``ImportError`` when
   neither Playwright nor Selenium is installed, rather than failing obscurely.
-* ``save_animation`` — one screenshot per time step, encoded as a GIF at ``fps`` frames per second (the rate
-  every tier's animation entry point takes). ``animate``, ``to_gif`` and a seconds-per-frame ``duration=``
-  were its older spellings.
+* ``save_animation`` — one screenshot per time step, encoded at ``fps`` frames per second (the rate every
+  tier's animation entry point takes). The encoder is chosen from the output: a ``.gif`` is encoded by Pillow
+  (which arrives with matplotlib), a ``.mp4`` by ffmpeg via ``imageio-ffmpeg``; ``format=`` forces either one.
+  The frame pipeline — render one page per step, screenshot it — is identical for both. ``animate``,
+  ``to_gif`` and a seconds-per-frame ``duration=`` were its older spellings.
 
 ``WebMapBase.save`` dispatches HTML vs. PNG and the ``offline`` flag here (the base sits first in the MRO, so
 these are hooks it calls, not overrides). urllib / browser libs are imported lazily.
@@ -20,7 +22,7 @@ import math
 import pathlib
 import re
 import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.web.base import DEFAULT_TITLE
@@ -34,8 +36,8 @@ from digitalearth.web.base import DEFAULT_TITLE
 def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
     """Encode PNG frames into an animated GIF.
 
-    Pillow does the encoding — it arrives with matplotlib, so an animation needs no dependency the tier
-    does not already have. MP4 would need ffmpeg, which it does not.
+    Pillow does the encoding — it arrives with matplotlib, so a GIF needs no dependency the tier does not
+    already have. The MP4 counterpart (:func:`_write_mp4`) needs ffmpeg and is gated accordingly.
 
     Args:
         frames: Paths to the rendered PNG frames, in order.
@@ -65,6 +67,63 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
         duration=int(duration * 1000),
         loop=int(loop),
     )
+
+
+def _write_mp4(frames: list, path: str, *, fps: float) -> None:
+    """Encode PNG frames into an H.264 MP4 video.
+
+    The frame pipeline is the GIF encoder's — one rendered PNG per time step, in order — and only the
+    encoder differs: ``imageio-ffmpeg`` streams the frames through ffmpeg's libx264 rather than Pillow
+    writing a GIF. ffmpeg is an optional dependency ``digitalearth[web]`` does not pull (just as the headless
+    browser the frames themselves need is not), so a missing encoder raises an actionable ``ImportError``
+    rather than failing obscurely.
+
+    Args:
+        frames: Paths to the rendered PNG frames, in order.
+        path: Where to write the MP4.
+        fps: Frames per second of playback.
+
+    Raises:
+        ValueError: when there are no frames to write — the same guard the GIF encoder keeps, since this is
+            the encoder for any frame list.
+        ImportError: when ``imageio-ffmpeg`` (the bundled ffmpeg encoder) is not installed.
+    """
+    import numpy as np
+    from PIL import Image
+
+    if not frames:
+        raise ValueError("no frames to write")
+    try:
+        import imageio_ffmpeg
+    except ImportError as err:
+        raise ImportError(
+            "MP4 export needs imageio-ffmpeg (the bundled ffmpeg encoder), which is not part of "
+            "digitalearth[web]. Install it with `pip install imageio-ffmpeg`, or save a .gif instead."
+        ) from err
+
+    arrays = []
+    for frame in frames:
+        # Closed before encoding, for the same Windows file-handle reason the GIF encoder closes its frames.
+        with Image.open(frame) as handle:
+            arrays.append(np.asarray(handle.convert("RGB")))
+    height, width = arrays[0].shape[:2]
+    # macro_block_size=1 keeps each frame's own dimensions instead of silently padding them up to a multiple
+    # of 16, so the MP4 is the size the map drew — the fidelity the GIF path gets from Pillow for free.
+    # `-f mp4` forces the container: ffmpeg otherwise picks the muxer from the path suffix, so a `format="mp4"`
+    # written to a non-`.mp4` name would encode an empty file under the wrong muxer.
+    writer = imageio_ffmpeg.write_frames(
+        path,
+        size=(width, height),
+        fps=float(fps),
+        macro_block_size=1,
+        output_params=["-f", "mp4"],
+    )
+    writer.send(None)  # seed the generator-coroutine before the first frame
+    try:
+        for array in arrays:
+            writer.send(array.tobytes())
+    finally:
+        writer.close()
 
 
 #: CDN asset URLs (js/css) ``to_html`` references, matched for offline inlining.
@@ -210,44 +269,53 @@ class ExportMixin(_MixinBase):
         fps: float = DEFAULT_FPS,
         loop: int = 0,
         title: str = DEFAULT_TITLE,
+        format: Optional[str] = None,
     ) -> pathlib.Path:
-        """Write a temporal map's steps as an animated GIF (recipe W7).
+        """Write a temporal map's steps as an animated GIF or an MP4 video (recipe W7).
 
         A time series is the case where a moving image says most, and it is also the case a web page
         carries worst — a saved page shows a step picker, not an animation, and nothing could be pasted
         into a report. The other two tiers have had ``save_animation`` all along.
 
         One frame is rendered per time step, by making that step the only visible one and screenshotting
-        the page, so the frames are the same pixels the map draws.
+        the page, so the frames are the same pixels the map draws. That frame pipeline is shared by both
+        output kinds; only the encoder differs — a GIF is written by Pillow, an MP4 by ffmpeg (via
+        ``imageio-ffmpeg``).
 
         Args:
-            path: Where to write the GIF.
+            path: Where to write the animation. The suffix picks the encoder when ``format`` is not given:
+                ``.mp4`` encodes a video, anything else (``.gif`` by convention) a GIF.
             fps: Frames per second — the rate every tier's animation entry point takes, with the same
                 default (:data:`DEFAULT_FPS`, ``3.0``, declared once in
                 :mod:`digitalearth.base.animation`), so one number means one speed across the whole
                 package. This entry point used to be spelled ``duration=0.8`` (one frame held 0.8 s, i.e.
                 1.25 fps); a call that names no rate now renders faster, and ``fps=1.25`` restores the
                 previous speed.
-            loop: How many times to repeat; ``0`` loops forever.
+            loop: How many times to repeat; ``0`` loops forever. GIF only — an MP4 carries no loop field
+                (a player or the HTML ``<video loop>`` attribute decides), so it is ignored for ``.mp4``.
             title: HTML document title used while rendering.
+            format: Force the encoder — ``"gif"`` or ``"mp4"`` — regardless of the path suffix; ``None``
+                infers it from the suffix.
 
         Returns:
             The :class:`pathlib.Path` written.
 
         Raises:
-            ValueError: when the map has no time steps to animate, or fewer than two, or when ``fps`` is
-                not a finite positive number — a zero rate has no frame to hold, and a ``nan``/``inf`` one
-                is no rate at all.
-            ImportError: when no headless browser is installed — the same gated dependency the PNG
-                snapshot needs, and deliberately not part of ``digitalearth[web]``.
+            ValueError: when the map has no time steps to animate, or fewer than two; when ``fps`` is not a
+                finite positive number (a zero rate has no frame to hold, and a ``nan``/``inf`` one is no
+                rate at all); or when ``format`` is neither ``"gif"`` nor ``"mp4"``.
+            ImportError: when no headless browser is installed — the same gated dependency the PNG snapshot
+                needs, deliberately not part of ``digitalearth[web]`` — or, for an MP4, when
+                ``imageio-ffmpeg`` is absent.
 
         Examples:
-            - Animate a raster stack:
+            - Animate a raster stack to a GIF, or to an MP4 by changing the suffix:
                 ```python
                 >>> from digitalearth.web import WebMap                           # doctest: +SKIP
                 >>> from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP
                 >>> stack = DatasetCollection.from_files(["jan.tif", "feb.tif"])  # doctest: +SKIP
                 >>> WebMap().basemap().timeslider(stack).save_animation("out.gif")       # doctest: +SKIP
+                >>> WebMap().basemap().timeslider(stack).save_animation("out.mp4")       # doctest: +SKIP
 
                 ```
 
@@ -258,14 +326,45 @@ class ExportMixin(_MixinBase):
             raise ValueError(f"fps= must be a finite rate; got {fps!r}")
         if float(fps) <= 0:
             raise ValueError(f"fps= must be positive; got {fps!r}")
+        container = self._animation_format(path, format)
         frames = self._temporal_frames()
         with tempfile.TemporaryDirectory() as work:
             images = [
                 self._frame_png(pathlib.Path(work) / f"frame{index}.png", frame, title)
                 for index, frame in enumerate(frames)
             ]
-            _write_gif(images, path, duration=1.0 / float(fps), loop=loop)
+            if container == "mp4":
+                _write_mp4(images, path, fps=float(fps))
+            else:
+                _write_gif(images, path, duration=1.0 / float(fps), loop=loop)
         return pathlib.Path(path)
+
+    @staticmethod
+    def _animation_format(path: str, fmt: Optional[str]) -> str:
+        """Resolve which encoder :meth:`save_animation` should use: ``"gif"`` or ``"mp4"``.
+
+        ``fmt`` wins when given, so a caller can force the encoder regardless of the filename; otherwise the
+        path suffix decides, defaulting to GIF for any non-``.mp4`` name (the historical behaviour, where
+        ``save_animation`` always wrote a GIF).
+
+        Args:
+            path: The output path, whose suffix is consulted when ``fmt`` is ``None``.
+            fmt: An explicit ``"gif"``/``"mp4"`` override, or ``None`` to infer from ``path``.
+
+        Returns:
+            Either ``"gif"`` or ``"mp4"``.
+
+        Raises:
+            ValueError: when ``fmt`` names a format that is neither GIF nor MP4.
+        """
+        if fmt is not None:
+            chosen = str(fmt).lower().lstrip(".")
+        else:
+            suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
+            chosen = suffix if suffix == "mp4" else "gif"
+        if chosen not in {"gif", "mp4"}:
+            raise ValueError(f"animation format must be 'gif' or 'mp4'; got {fmt!r}")
+        return chosen
 
     def _temporal_frames(self) -> list:
         """Return the visible-layer set for each time step, oldest first.
