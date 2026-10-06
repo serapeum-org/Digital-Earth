@@ -151,6 +151,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "labels",
     "contours",
     "filled_contours",
+    "vector_tiles",
     "heatmap",
     "clusters",
     "extrusion",
@@ -659,6 +660,9 @@ def drawer_for(kind: str) -> Any:
         # the vector kinds above, so the same drawer rebuilds it.
         "contours": vector.draw_vector,
         "filled_contours": vector.draw_vector,
+        # An MVT tile set: a `vector` source and one typed style layer, built from its description like a
+        # basemap, since the source is the tile URL rather than a feature collection in the figure.
+        "vector_tiles": vector.draw_vector_tiles,
         "heatmap": bigdata.draw_heatmap,
         "clusters": bigdata.draw_clusters,
         "extrusion": threed.draw_extruded_polygons,

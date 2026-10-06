@@ -301,6 +301,55 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     )
 
 
+def draw_vector_tiles(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre vector source and the typed layer for an MVT tile layer (WB-6).
+
+    A vector-tile layer draws from no data in the figure: its source is the tile URL the caller passed, and
+    the one named layer to read out of the pyramid, its geometry's MapLibre type and the paint are all values
+    recorded on its symbology — which is why `_data` is unused. They are plain JSON, so a map whose layer is
+    a tile set describes itself in a figure that can be written down and read back, exactly as a raster
+    basemap does.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — a tile layer has no feature source in the figure to place.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the ``vector`` source and the circle / line
+        / fill layer reading one of its source-layers. It is an ordinary style layer, so it takes the
+        ordinary route.
+
+    Raises:
+        ValueError: when the description carries none of the MapLibre source, the source-layer, the layer
+            type or the paint the drawer reads — naming the layer, its kind and what is missing.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, _ = _require_layer_api()
+    props = required_props(layer, "source", "source_layer", "maplibre_type", "paint")
+    spec_layout = dict(props.get("layout") or {})
+    if not layer.visible:
+        spec_layout["visibility"] = "none"
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=dict(props["source"]),
+        layer=layer_cls(
+            id=layer.id,
+            type=props[
+                "maplibre_type"
+            ],  # MapLibre coerces the string back to its own enum
+            source=source_id,
+            # The vector source holds many named layers; this is the one to draw. MapLibre takes it under
+            # `source-layer`, which the `maplibre` Layer serialises `source_layer` to.
+            source_layer=props["source_layer"],
+            paint=dict(props["paint"]),
+            layout=spec_layout or None,
+        ),
+    )
+
+
 class VectorMixin(_MixinBase):
     """Point / line / polygon / choropleth builders for :class:`~digitalearth.web.map.WebMap`.
 
@@ -1615,3 +1664,199 @@ class VectorMixin(_MixinBase):
             asked=ask.named,
             color_encoding=color_encoding,
         )
+
+    def _vector_tile_source(
+        self,
+        tiles: Any,
+        url: Optional[str],
+        *,
+        min_zoom: Optional[int],
+        max_zoom: Optional[int],
+        attribution: str,
+    ) -> dict:
+        """Build the MapLibre ``vector`` source dict, naming the tile set exactly one way.
+
+        Args:
+            tiles: An MVT tile URL template carrying ``{z}/{x}/{y}``, or a sequence of them, or `None` when
+                the set is named by `url` instead.
+            url: A TileJSON URL the service publishes, or `None` when `tiles` names the set instead.
+            min_zoom: The shallowest zoom the service serves, or `None` to leave the source unbounded.
+            max_zoom: The deepest zoom the service serves — past it MapLibre over-zooms the last real tiles
+                rather than requesting levels that do not exist — or `None`.
+            attribution: Attribution text shown in the map's attribution control; empty adds none.
+
+        Returns:
+            The source dict :func:`draw_vector_tiles` builds the MapLibre source from — plain JSON, so it is
+            written straight into a saved figure.
+
+        Raises:
+            ValueError: when neither `tiles` nor `url` is given, or both are — a vector source is reached by
+                exactly one of them, and MapLibre reads a template and a TileJSON as the same thing said
+                twice.
+        """
+        if (tiles is None) == (url is None):
+            raise ValueError(
+                "vector_tiles() takes exactly one of tiles= (a {z}/{x}/{y} template) or url= (a TileJSON "
+                f"URL); got tiles={tiles!r} and url={url!r}"
+            )
+        source: dict = {"type": "vector"}
+        if url is not None:
+            source["url"] = url
+        else:
+            source["tiles"] = (
+                [tiles] if isinstance(tiles, str) else [str(t) for t in tiles]
+            )
+        if min_zoom is not None:
+            source["minzoom"] = int(min_zoom)
+        if max_zoom is not None:
+            source["maxzoom"] = int(max_zoom)
+        if attribution:
+            source["attribution"] = attribution
+        return source
+
+    def vector_tiles(
+        self,
+        tiles: Any = None,
+        *,
+        source_layer: str,
+        url: Optional[str] = None,
+        geometry: str = "line",
+        color: str = VECTOR_COLOR,
+        width: Maybe[float] = UNSET,
+        size: Maybe[float] = UNSET,
+        opacity: Maybe[float] = UNSET,
+        outline_color: str = "#ffffff",
+        min_zoom: Optional[int] = None,
+        max_zoom: Optional[int] = None,
+        attribution: str = "",
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Draw a Mapbox Vector Tile (MVT) set as a circle / line / fill layer (WB-6).
+
+        MapLibre serves a vector tile pyramid — an ``.mvt``/``.pbf`` tile set, or a TileJSON describing one —
+        as a ``vector`` source, and draws one of its named layers with an ordinary style layer. This is the
+        vector counterpart of :meth:`~digitalearth.web.decoration.DecorationMixin.tiles`, which drapes a
+        *raster* pyramid under the data: the features here are drawn **among** the data from the tile URL,
+        never read into memory, so a continent of roads costs the page a URL rather than a GeoJSON blob.
+
+        The source is the tile URL, not a :class:`~pyramids.feature.FeatureCollection`, so there is no
+        reprojection and no pyramids involvement — a vector tile set is already Web-Mercator tiles. Give the
+        set exactly one way: a ``{z}/{x}/{y}`` template as ``tiles``, or a TileJSON ``url``.
+
+        Args:
+            tiles: An MVT tile URL template containing ``{z}/{x}/{y}``, or a sequence of them. Give this or
+                ``url``, not both.
+            source_layer: The name of the layer to draw *inside* the tile set — a vector tile holds many
+                named layers (``roads``, ``buildings``, ``water``, …), and MapLibre draws one at a time.
+            url: A TileJSON URL the service publishes, naming the tile set and its coverage. Give this or
+                ``tiles``, not both.
+            geometry: How to draw the features — ``"line"`` (the default, for roads and boundaries),
+                ``"fill"`` (for buildings and land use) or ``"circle"`` (for points of interest). Each maps
+                to the MapLibre layer type of the same shape.
+            color: The colour the features are drawn in; the line colour, the fill colour or the circle
+                colour, by ``geometry``. Not passed leaves :data:`VECTOR_COLOR`.
+            width: Line width in pixels, used by ``geometry="line"``; not passed leaves :data:`LINE_WIDTH`.
+            size: Circle radius in pixels, used by ``geometry="circle"``; not passed leaves
+                :data:`POINT_SIZE`.
+            opacity: Layer opacity in ``[0, 1]``; not passed leaves the geometry's own default
+                (:data:`LINE_OPACITY`, :data:`FILL_OPACITY` or :data:`POINT_OPACITY`).
+            outline_color: Polygon outline colour, used by ``geometry="fill"``.
+            min_zoom: The shallowest zoom the service serves, passed to the source; ``None`` leaves it
+                unbounded.
+            max_zoom: The deepest zoom the service serves. Past it MapLibre over-zooms the last real tiles
+                instead of requesting levels that do not exist; ``None`` leaves the source unbounded.
+            attribution: Attribution text shown in the map's attribution control.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when neither ``tiles`` nor ``url`` is given, or both are; when ``geometry`` is not
+                ``"line"``, ``"fill"`` or ``"circle"``; or when ``width``, ``size`` or ``opacity`` is not a
+                finite number, refused at this call because a figure holding NaN or infinity could not be
+                written down.
+            ImportError: when the ``web`` extra is not installed, so there is no MapLibre layer API.
+
+        Examples:
+            - Draw a roads tile set as lines, addressable by the name it was given (needs the ``web``
+              extra, so the block is skipped without it):
+                ```python
+                >>> from digitalearth.web import WebMap                       # doctest: +SKIP
+                >>> m = WebMap().basemap().vector_tiles(                      # doctest: +SKIP
+                ...     "https://tiles.example.org/{z}/{x}/{y}.pbf",
+                ...     source_layer="roads", name="roads",
+                ... )
+                >>> m.layer_ids                                              # doctest: +SKIP
+                ['tiles-1', 'roads']
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.tiles: the raster-pyramid counterpart, drawn under
+                the data.
+            digitalearth.web.vector.VectorMixin.lines: the same line layer drawn from an in-memory
+                collection instead of a tile set.
+        """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.vector_tiles()"
+        _, layer_types = _require_layer_api()
+        source = self._vector_tile_source(
+            tiles, url, min_zoom=min_zoom, max_zoom=max_zoom, attribution=attribution
+        )
+        ask = Ask()
+        if geometry == "line":
+            width = as_finite(ask("line-width", width, LINE_WIDTH), "width", call)
+            opacity = as_finite(
+                ask("line-opacity", opacity, LINE_OPACITY), "opacity", call
+            )
+            prefix, layer_type = "line", layer_types.LINE
+            paint = self._line_paint(width, opacity, color)
+        elif geometry == "fill":
+            opacity = as_finite(
+                ask("fill-opacity", opacity, FILL_OPACITY), "opacity", call
+            )
+            prefix, layer_type = "fill", layer_types.FILL
+            paint = self._fill_paint(opacity, outline_color, color)
+        elif geometry == "circle":
+            size = as_finite(ask("circle-radius", size, POINT_SIZE), "size", call)
+            opacity = as_finite(
+                ask("circle-opacity", opacity, POINT_OPACITY), "opacity", call
+            )
+            prefix, layer_type = "circle", layer_types.CIRCLE
+            paint = {
+                "circle-radius": float(size),
+                "circle-opacity": float(opacity),
+                "circle-color": color,
+            }
+        else:
+            raise ValueError(
+                f"vector_tiles() takes geometry= as 'line', 'fill' or 'circle'; got {geometry!r}"
+            )
+        layer_id = self._layer_id(prefix, name)
+        # Recorded as values — the source dict, the source-layer, the MapLibre type and the paint — never a
+        # closure: :func:`draw_vector_tiles` rebuilds the layer from exactly this, and `source=None` keeps
+        # the figure from recording a feature source there is none of, so the layer draws from its
+        # description alone, as a raster basemap does.
+        self._index_layer(
+            layer_id,
+            name,
+            kind="vector_tiles",
+            visible=visible,
+            symbology=Symbology(
+                props={
+                    "source": source,
+                    "source_layer": str(source_layer),
+                    # The enum's value, not the member: a description holds plain values a saved figure can
+                    # carry, and the spec refuses the member.
+                    "maplibre_type": getattr(layer_type, "value", layer_type),
+                    "paint": dict(paint),
+                    "layout": {},
+                    **asked_record(ask.named),
+                }
+            ),
+        )
+        self._last_layer_id = layer_id
+        return self

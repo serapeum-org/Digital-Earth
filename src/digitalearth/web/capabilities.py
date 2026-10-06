@@ -38,6 +38,7 @@ CAPABILITIES = Capabilities(
             "polygons",
             "choropleth",
             "labels",
+            "vector_tiles",
             "heatmap",
             "clusters",
             "point_cloud",

@@ -1313,6 +1313,12 @@ _BUILT_IN_KINDS = (
         "data",
     ),
     (
+        "vector_tiles",
+        "none",
+        "features served as an MVT tile pyramid, drawn from a tile URL — web vector_tiles",
+        "data",
+    ),
+    (
         "nightshade",
         "none",
         "the night side of the day/night terminator at one instant — static nightshade",
