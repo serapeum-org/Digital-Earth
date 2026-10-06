@@ -40,6 +40,12 @@ HEATMAP_OPACITY = 0.8
 
 DECK_TYPE_KEY = "@@type"
 
+#: The cluster aggregates ``cluster(color_by=...)`` offers, mapped to the MapLibre ``clusterProperties``
+#: operator that accumulates them in the browser (``["+", map]`` sums, ``["max", map]`` takes the maximum).
+#: A name outside this table is refused rather than accepted and left building nothing — the inertness
+#: #242/#244 removed from the controls.
+CLUSTER_AGGREGATES = {"sum": "+", "max": "max"}
+
 
 def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre heatmap layer over a point collection.
@@ -110,13 +116,23 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     count_id, loose_id = derived_ids("clusters", layer.id)
     source_id = f"{layer.id}-src"
     color, text_color = props["color"], props["text_color"]
+    # The value-styling half (WB-22), both optional: `cluster_properties` is the browser accumulator the
+    # source needs, and `cluster_color` is the classified expression that reads its result. Absent — a plain
+    # cluster — the source clusters without aggregating and the bubbles keep the flat colour, exactly as before.
+    cluster_properties = layer.symbology.props.get("cluster_properties")
+    bubble_color = layer.symbology.props.get("cluster_color", color)
+    source_options: dict = {
+        "cluster": True,
+        "cluster_radius": int(props["radius"]),
+        "cluster_max_zoom": int(props["max_zoom"]),
+    }
+    if cluster_properties:
+        source_options["cluster_properties"] = dict(cluster_properties)
     return DrawnLayer(
         source_id=source_id,
         source_spec=GeoJSONSource(
             data=geopandas_to_geojson(placed_features(web_map, data, layer)),
-            cluster=True,
-            cluster_radius=int(props["radius"]),
-            cluster_max_zoom=int(props["max_zoom"]),
+            **source_options,
         ),
         layer=layer_cls(
             id=layer.id,
@@ -124,7 +140,7 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
             source=source_id,
             filter=["has", "point_count"],
             paint={
-                "circle-color": color,
+                "circle-color": bubble_color,
                 "circle-radius": ["step", ["get", "point_count"], 15, 50, 20, 200, 25],
             },
         ),
@@ -273,6 +289,11 @@ class BigDataMixin(_MixinBase):
         max_zoom: int = 14,
         color: str = "#51bbd6",
         text_color: str = "#ffffff",
+        color_by: Optional[str] = None,
+        aggregate: str = "sum",
+        scheme: Optional[Any] = None,
+        k: int = 5,
+        cmap: str = "viridis",
     ) -> Self:
         """Render a point ``FeatureCollection`` as MapLibre clustered circles + count labels (recipe W4).
 
@@ -281,6 +302,19 @@ class BigDataMixin(_MixinBase):
         — so a layer switcher lists them once and :meth:`~digitalearth.web.base.WebMapBase.remove_layer`
         takes all three off together. The count and the loose points are drawn beside it, under that id
         suffixed ``-count`` and ``-unclustered``.
+
+        **Styling by value and a key (WB-22).** With ``color_by=`` the bubbles are coloured by an aggregate
+        of a feature property rather than one flat colour: MapLibre ``clusterProperties`` accumulate the
+        property per cluster (``aggregate="sum"`` or ``"max"``) in the browser, and the bubble is painted by
+        that aggregate with the same classified ``step``/``interpolate`` expression ``choropleth`` builds —
+        reused through :meth:`~digitalearth.web.vector.VectorMixin._color_expr`, not re-implemented here. A
+        classified cluster is then **keyable** exactly as a choropleth is, so
+        :meth:`~digitalearth.web.decoration.DecorationMixin.legend` /
+        :meth:`~digitalearth.web.base.WebMapBase.colorbar` draw its key from the colours it rendered. The
+        aggregate is computed per cluster in the browser, so the class breaks are derived from the feature
+        column's own spread — exact for ``max``, a reasonable default for ``sum`` — and the key shows the
+        breaks the paint was compiled from. Without ``color_by`` the bubbles stay the flat ``color`` and the
+        cluster carries no key, which is an honest refusal rather than an empty box.
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
@@ -291,15 +325,30 @@ class BigDataMixin(_MixinBase):
                 the figure records.
             radius: Cluster radius in pixels (MapLibre ``clusterRadius``).
             max_zoom: Zoom at/after which points stop clustering (``clusterMaxZoom``).
-            color: Fill colour for cluster bubbles and unclustered points.
+            color: Fill colour for cluster bubbles and unclustered points. Still the loose points' colour
+                when ``color_by`` recolours the bubbles, since a single point carries its own value rather
+                than an aggregate.
             text_color: Colour of the cluster count label.
+            color_by: A feature attribute to colour the bubbles by, aggregated per cluster. ``None`` keeps
+                the flat ``color`` and files no key.
+            aggregate: How to accumulate ``color_by`` across a cluster — ``"sum"`` or ``"max"`` (the
+                :data:`CLUSTER_AGGREGATES` MapLibre has). Ignored without ``color_by``.
+            scheme: The classification of the aggregate's colours, as
+                :meth:`~digitalearth.web.vector.VectorMixin.choropleth` takes it — a cleopatra scheme or an
+                explicit edge sequence for a graduated ``step``, or ``None`` (the default) for a continuous
+                ramp. Ignored without ``color_by``.
+            k: Number of classes for a graduated ``scheme``. Ignored without ``color_by``.
+            cmap: matplotlib colormap sampled for the class / ramp colours. Ignored without ``color_by``.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
             TypeError: when ``features`` is not a point layer.
-            KeyError: when ``features`` is a URL with no resolver registered for its scheme.
+            KeyError: when ``color_by`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            ValueError: when ``aggregate`` is not one of :data:`CLUSTER_AGGREGATES`, or propagated from the
+                classifier (unknown scheme, constant column, …).
             FileNotFoundError: when ``features`` is a path that names nothing.
         """
 
@@ -307,6 +356,35 @@ class BigDataMixin(_MixinBase):
         gdf = self._display_gdf(features, method="cluster")
         self._require_points(gdf, "cluster")
         from digitalearth.web.renderer import derived_ids
+
+        props: dict = {
+            "color": color,
+            "text_color": text_color,
+            "radius": int(radius),
+            "max_zoom": int(max_zoom),
+        }
+        # The classification, when asked for, is built before the id is allocated, so a bad aggregate or an
+        # unknown column raises with nothing reserved. `_color_expr` records `last_legend`/`last_breaks`, which
+        # `_index_layer` then files under this layer — the same path a classified `choropleth` takes, so the
+        # cluster's key is drawn by exactly the machinery the choropleth's is (reuse, not a second copy).
+        encodings: dict = {}
+        if color_by is not None:
+            operator = CLUSTER_AGGREGATES.get(aggregate)
+            if operator is None:
+                raise ValueError(
+                    f"WebMap.cluster(aggregate={aggregate!r}) must be one of "
+                    f"{sorted(CLUSTER_AGGREGATES)}"
+                )
+            values = self._require_column(gdf, color_by)
+            aggregated = f"{color_by}_{aggregate}"
+            color_expr, color_encoding = self._color_expr(
+                values, aggregated, scheme, k, cmap
+            )
+            # The accumulator MapLibre runs per cluster, and the colour expression that reads its result:
+            # the drawer wires the first onto the source and paints the bubbles with the second.
+            props["cluster_properties"] = {aggregated: [operator, ["get", color_by]]}
+            props["cluster_color"] = color_expr
+            encodings = {"color": color_encoding}
 
         # The counts and the loose points are drawn under ids derived from this one, so the allocation
         # reserves those too — a caller's `name=` can no longer take one of them (review M5).
@@ -321,14 +399,7 @@ class BigDataMixin(_MixinBase):
             # frame already warped here (review H1).
             source=features,
             placed=gdf,
-            symbology=Symbology(
-                props={
-                    "color": color,
-                    "text_color": text_color,
-                    "radius": int(radius),
-                    "max_zoom": int(max_zoom),
-                }
-            ),
+            symbology=Symbology(encodings=encodings, props=props),
         )
         if registered:
             # The loose points, which are the layer carrying the caller's own columns: the bubbles are
