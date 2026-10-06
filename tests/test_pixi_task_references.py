@@ -39,7 +39,7 @@ INVOCATION = re.compile(
 )
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _pyproject() -> dict:
     """Return the parsed pyproject.toml (cached — every helper here reads from it)."""
     with (ROOT / "pyproject.toml").open("rb") as handle:

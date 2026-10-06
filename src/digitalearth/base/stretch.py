@@ -11,7 +11,7 @@ once over a whole animation stack and hand the same pair to every frame — whic
 time-lapse holds one stretch instead of pumping as each frame re-derives its own.
 """
 
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -26,7 +26,7 @@ _STRETCH_PERCENTILES = (2, 98)
 DEFAULT_COMPOSITE_BANDS = (1, 2, 3)
 
 #: One ``(lo, hi)`` stretch bound per composite channel, in channel order.
-ChannelLimits = Sequence[Tuple[float, float]]
+ChannelLimits = Sequence[tuple[float, float]]
 
 
 def require_three_bands(caller: str, bands: Sequence[int]) -> None:
@@ -80,7 +80,7 @@ def require_three_bands(caller: str, bands: Sequence[int]) -> None:
         )
 
 
-def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
+def channel_limits(stack: np.ndarray) -> list[tuple[float, float]]:
     """Return the per-channel 2-98 percentile ``(lo, hi)`` of an ``(rows, cols, n)`` stack.
 
     These are the bounds :func:`stretch_to_unit` derives on every call. Computing them **once** over a
@@ -138,7 +138,7 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
             f"channel_limits needs an (rows, cols, n) channel stack, got a {stack.ndim}-D array "
             f"with shape {stack.shape}"
         )
-    bounds: List[Tuple[float, float]] = []
+    bounds: list[tuple[float, float]] = []
     for index in range(stack.shape[2]):
         values = finite(
             stack[..., index]
@@ -154,7 +154,7 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
     return bounds
 
 
-def _check_limits(limits: Optional[ChannelLimits], channels: int) -> None:
+def _check_limits(limits: ChannelLimits | None, channels: int) -> None:
     """Reject a ``limits`` argument that is not one ``(lo, hi)`` pair per channel.
 
     Both composites take ``limits`` from the caller, so the shapes people actually get wrong are worth
@@ -192,7 +192,7 @@ def _check_limits(limits: Optional[ChannelLimits], channels: int) -> None:
 
 
 def stretch_to_unit(
-    stack: np.ndarray, limits: Optional[ChannelLimits] = None
+    stack: np.ndarray, limits: ChannelLimits | None = None
 ) -> np.ndarray:
     """Per-channel contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``.
 

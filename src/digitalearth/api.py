@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator, Mapping
-from typing import TYPE_CHECKING, Any, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -893,7 +893,7 @@ def quickmap(
 
 
 def to_backend(
-    figure: "FigureSpec", backend: str = "matplotlib", **scene_kwargs: Any
+    figure: FigureSpec, backend: str = "matplotlib", **scene_kwargs: Any
 ) -> Any:
     """Render an engine-neutral :class:`~digitalearth.base.spec.FigureSpec` on a chosen ``backend`` (U-6).
 
@@ -1571,7 +1571,7 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
     return scene
 
 
-def _method(name: str, kind: Optional[str] = None):
+def _method(name: str, kind: str | None = None):
     """Build a module-level function that quick-draws via the ``Map`` method ``name``.
 
     The wrapper *is* the ``kind``: it injects one on the caller's behalf. So when the chosen

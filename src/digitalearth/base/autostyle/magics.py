@@ -15,7 +15,7 @@ lives in cleopatra; the *domain knowledge* — "``msl`` is mean-sea-level pressu
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 
@@ -28,7 +28,7 @@ _MAGICS_LIBRARY = Path(__file__).parent / "library" / "magics.yml"
 _MATCH_KEYS = ("match", "standard_name", "match_units")
 
 
-def _as_list(value: Any) -> List[Any]:
+def _as_list(value: Any) -> list[Any]:
     """Coerce ``None`` / a scalar / a sequence into a list (so callers can iterate uniformly)."""
     if value is None:
         return []
@@ -37,7 +37,7 @@ def _as_list(value: Any) -> List[Any]:
     return list(value)
 
 
-def _style_of(params: Dict[str, Any]) -> Dict[str, Any]:
+def _style_of(params: dict[str, Any]) -> dict[str, Any]:
     """Return a field entry with the match-only keys removed — i.e. just the renderable style."""
     return {k: v for k, v in params.items() if k not in _MATCH_KEYS}
 
@@ -63,7 +63,7 @@ def _alias_in(alias: str, name: str) -> bool:
 
 
 @lru_cache(maxsize=1)
-def load_magics_library() -> Dict[str, dict]:
+def load_magics_library() -> dict[str, dict]:
     """Load the Magics operational style library from ``library/magics.yml`` (cached).
 
     Returns:
@@ -95,7 +95,7 @@ def load_magics_library() -> Dict[str, dict]:
     return yaml.safe_load(_MAGICS_LIBRARY.read_text(encoding="utf-8")) or {}
 
 
-def _matches_name(params: Dict[str, Any], needle: str) -> bool:
+def _matches_name(params: dict[str, Any], needle: str) -> bool:
     """Whether an entry's aliases match a field's name, anchored at a token start.
 
     Args:
@@ -111,7 +111,7 @@ def _matches_name(params: Dict[str, Any], needle: str) -> bool:
     )
 
 
-def _matches_standard_name(params: Dict[str, Any], needle: str) -> bool:
+def _matches_standard_name(params: dict[str, Any], needle: str) -> bool:
     """Whether an entry lists a field's CF ``standard_name``, case-insensitively.
 
     Args:
@@ -126,7 +126,7 @@ def _matches_standard_name(params: Dict[str, Any], needle: str) -> bool:
     ]
 
 
-def _matches_units(params: Dict[str, Any], needle: str) -> bool:
+def _matches_units(params: dict[str, Any], needle: str) -> bool:
     """Whether an entry lists a field's units, case-insensitively.
 
     Only distinctive units are listed in the library, so that a plain ``"m"`` does not collide with
@@ -145,12 +145,12 @@ def _matches_units(params: Dict[str, Any], needle: str) -> bool:
 
 
 def magics_style(
-    name: Optional[str] = None,
-    standard_name: Optional[str] = None,
-    units: Optional[str] = None,
+    name: str | None = None,
+    standard_name: str | None = None,
+    units: str | None = None,
     *,
-    library: Optional[Dict[str, dict]] = None,
-) -> Optional[Dict[str, Any]]:
+    library: dict[str, dict] | None = None,
+) -> dict[str, Any] | None:
     """Resolve a canonical Magics-style for a field, by identity matching.
 
     Matching is tried in the order Magics itself prefers — **name first**, then CF ``standard_name``, then

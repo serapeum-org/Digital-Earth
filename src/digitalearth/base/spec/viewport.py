@@ -14,9 +14,10 @@ one, which is what makes a rotation a sequence of views rather than a loop that 
 per scene, applied through the plotter's scale — rather than as something baked into mesh coordinates.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from math import atan2, cos, degrees, hypot, radians, sin, sqrt
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any
 
 from digitalearth.base.spec._serial import (
     as_list,
@@ -40,7 +41,7 @@ DEFAULT_VIEW_ANGLE = 30.0
 #: between the two unit vectors, so it is independent of the scene's scale.
 _PARALLEL_TOLERANCE = 1e-9
 
-Vector3 = Tuple[float, float, float]
+Vector3 = tuple[float, float, float]
 
 #: The owner named in `Camera.look_at`'s validation messages.
 _LOOK_AT = "Camera.look_at"
@@ -175,11 +176,11 @@ class Viewport:
     """
 
     crs: Any = 3857
-    bounds: Optional[Bounds] = None
-    domain: Optional[Union[str, Tuple[float, float, float, float]]] = None
+    bounds: Bounds | None = None
+    domain: str | tuple[float, float, float, float] | None = None
     globe: bool = False
-    center: Optional[Tuple[float, float]] = None
-    zoom: Optional[float] = None
+    center: tuple[float, float] | None = None
+    zoom: float | None = None
 
     def __post_init__(self) -> None:
         """Refuse a view nothing could be drawn in.
@@ -211,7 +212,7 @@ class Viewport:
             )
 
     @staticmethod
-    def _checked_center(center: Any) -> Optional[Tuple[float, float]]:
+    def _checked_center(center: Any) -> tuple[float, float] | None:
         """Return the centre as two floats, or `None`.
 
         Args:
@@ -266,7 +267,7 @@ class Viewport:
     @staticmethod
     def _checked_domain(
         domain: Any,
-    ) -> Optional[Union[str, Tuple[float, float, float, float]]]:
+    ) -> str | tuple[float, float, float, float] | None:
         """Return the domain as a name or a tuple of four floats, or ``None``.
 
         Args:
@@ -386,7 +387,7 @@ class Viewport:
 
         return needs_reproject(data, self.crs)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -411,7 +412,7 @@ class Viewport:
 
                 ```
         """
-        out: Dict[str, Any] = {"crs": crs_to_json(self.crs, "Viewport.crs")}
+        out: dict[str, Any] = {"crs": crs_to_json(self.crs, "Viewport.crs")}
         if self.bounds is not None:
             out["bounds"] = self.bounds.to_dict()
         if self.domain is not None:
@@ -551,8 +552,8 @@ class Camera:
     view_up: Vector3 = (0.0, 0.0, 1.0)
     view_angle: float = DEFAULT_VIEW_ANGLE
     parallel: bool = False
-    parallel_scale: Optional[float] = None
-    vertical_exaggeration: Optional[float] = None
+    parallel_scale: float | None = None
+    vertical_exaggeration: float | None = None
     crs: Any = None
 
     def __post_init__(self) -> None:
@@ -631,8 +632,8 @@ class Camera:
         view_up: Sequence[float] = (0.0, 0.0, 1.0),
         view_angle: float = DEFAULT_VIEW_ANGLE,
         parallel: bool = False,
-        parallel_scale: Optional[float] = None,
-        vertical_exaggeration: Optional[float] = None,
+        parallel_scale: float | None = None,
+        vertical_exaggeration: float | None = None,
     ) -> "Camera":
         """Place a camera by the direction it looks from, in the terms a map reader uses.
 
@@ -810,7 +811,7 @@ class Camera:
         dz = self.position[2] - self.focal_point[2]
         return degrees(atan2(dz, hypot(dx, dy)))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:

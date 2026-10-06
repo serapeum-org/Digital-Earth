@@ -15,7 +15,7 @@ stays in pyramids.
 
 import math
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -81,14 +81,14 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 def _classify_or_refuse(
-    colours: Optional[np.ndarray],
+    colours: np.ndarray | None,
     *,
-    scheme: Optional[str],
+    scheme: str | None,
     k: int,
     cmap: Any,
     pinned: dict[str, Any],
-    scale: Optional[Scale] = None,
-) -> tuple[dict[str, Any], Optional[np.ndarray]]:
+    scale: Scale | None = None,
+) -> tuple[dict[str, Any], np.ndarray | None]:
     """Cut `colours` into classes once, per feature, and refuse a colour keyword the scheme owns.
 
     Classifying before the prisms are built lets the per-cell array be filled straight from the result, so a
@@ -140,7 +140,7 @@ def _classify_or_refuse(
     return style, scalars
 
 
-def _finite_height(heights: Optional[np.ndarray], height: Any, index: int) -> float:
+def _finite_height(heights: np.ndarray | None, height: Any, index: int) -> float:
     """The extrusion height for one feature, refusing a non-finite one by name.
 
     Args:
@@ -352,8 +352,8 @@ class VectorMixin(_MixinBase):
 
 
 def _color_encoding(
-    gdf: Any, column: Optional[str], scheme: Any, k: int, cmap: Any
-) -> Optional[dict[str, Encoding]]:
+    gdf: Any, column: str | None, scheme: Any, k: int, cmap: Any
+) -> dict[str, Encoding] | None:
     """Return the colour encoding an extrusion publishes, or `None` for a flat-filled one.
 
     Args:
@@ -463,7 +463,7 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
         scale=None if encoding is None else encoding.scale,
     )
 
-    prisms: list["pv.PolyData"] = []
+    prisms: list[pv.PolyData] = []
     for i, geom in enumerate(geoms):
         h = _finite_height(heights, height, i)
         for ring in _exterior_rings(geom):

@@ -16,8 +16,9 @@ API.
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, List, Optional, Sequence
+from typing import Any
 
 import matplotlib
 
@@ -261,7 +262,7 @@ def _cmd_batch(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run the ``digitalearth`` CLI.
 
     Args:

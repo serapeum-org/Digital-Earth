@@ -19,7 +19,8 @@ embedding a DEM the way :mod:`digitalearth.web.raster` can embed a band. The til
 goes and the promise that the page decodes with the scheme it was written with.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.spec import Encoding, LayerSpec, Symbology
@@ -229,8 +230,8 @@ class ThreeDMixin(_MixinBase):
         features: Any,
         *,
         height: Any,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         color: Maybe[str] = UNSET,
@@ -284,7 +285,7 @@ class ThreeDMixin(_MixinBase):
             else as_finite(height, "height", "WebMap.extrusion()"),
         }
         gdf = self._display_gdf(features, method="extrusion")
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is not None:
             paint["fill-extrusion-color"], color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -322,7 +323,7 @@ class ThreeDMixin(_MixinBase):
         encoding: str = "terrarium",
         tiles_path: Any = None,
         zooms: Any = None,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> Self:
         """Drape the map over 3-D terrain, from a pyramids DEM or from tiles already served (recipe W5).
 
@@ -498,7 +499,7 @@ class ThreeDMixin(_MixinBase):
         return self._queue(apply)
 
     @staticmethod
-    def _point_cloud_data(points: Any, z_column: Optional[str]) -> list:
+    def _point_cloud_data(points: Any, z_column: str | None) -> list:
         """Build deck.gl ``PointCloudLayer`` rows (``[{"position": [x, y, z]}, …]``) from ``points``.
 
         Args:
@@ -539,10 +540,10 @@ class ThreeDMixin(_MixinBase):
         self,
         points: Any,
         *,
-        z_column: Optional[str] = None,
+        z_column: str | None = None,
         color: Sequence[int] = (255, 140, 0),
         size: float = 2.0,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> Self:
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
 
@@ -655,7 +656,7 @@ class ThreeDMixin(_MixinBase):
         lat: float,
         *,
         size: float = 1.0,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> Self:
         """Place a glTF/GLB 3-D model at ``(lng, lat)`` as a deck.gl ``ScenegraphLayer`` (recipe W5).
 

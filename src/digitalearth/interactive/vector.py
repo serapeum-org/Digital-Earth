@@ -16,7 +16,7 @@ producing an empty Bokeh layer.
 """
 
 import os
-from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.crs import reproject
@@ -109,7 +109,7 @@ POINT_SIZE = 6.0
 _POINTS_CALLER = "InteractiveMap.points()"
 
 
-def apply_opacity(opacity: Optional[float], opts: dict) -> None:
+def apply_opacity(opacity: float | None, opts: dict) -> None:
     """Write the Core ``opacity`` into ``opts`` under the spelling the engine reads.
 
     ``opacity`` is what :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract call it, and
@@ -183,10 +183,10 @@ def _vector_symbology(
     hv_type: str,
     vdims: Any,
     common: dict,
-    labels: Optional[dict] = None,
-    opts: Optional[dict] = None,
-    asked: Tuple[str, ...] = (),
-    color: Optional[Encoding] = None,
+    labels: dict | None = None,
+    opts: dict | None = None,
+    asked: tuple[str, ...] = (),
+    color: Encoding | None = None,
 ) -> Symbology:
     """Return the description a vector layer is drawn from.
 
@@ -591,7 +591,7 @@ class VectorMixin(_MixinBase):
             features = reproject(features, self.crs)
         return features
 
-    def _vector_element(self, kind: str, gdf: Any, vdims: Optional[list] = None) -> Any:
+    def _vector_element(self, kind: str, gdf: Any, vdims: list | None = None) -> Any:
         """Build a GeoViews element of ``kind`` from a display-CRS GeoDataFrame.
 
         The element declares its (already display) CRS via ``gv.util.process_crs`` — GeoViews builds
@@ -625,15 +625,15 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         size: Maybe[float] = UNSET,
         cmap: str = "viridis",
-        opacity: Optional[float] = None,
+        opacity: float | None = None,
         rasterize: Any = "auto",
-        big_data_threshold: Optional[int] = None,
-        name: Optional[str] = None,
+        big_data_threshold: int | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -741,12 +741,12 @@ class VectorMixin(_MixinBase):
                 features, aggregator=aggregator, column=column, cmap=cmap, **opts
             )
         styling: dict = {}
-        labels: Optional[dict] = None
+        labels: dict | None = None
         # What the layer's colour varies with, published beside the engine's own spelling of it so a colour
         # key can hang on the layer rather than on the tier's most recent classification (order 24). `None`
         # while no `column` was given: those points are one flat colour, and a key over them would label
         # nothing.
-        colour: Optional[Encoding] = None
+        colour: Encoding | None = None
         if column and isinstance(scheme, str) and scheme.lower() == "categorical":
             # Categorical colouring works off the string form of the value, so it has to relabel the frame
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
@@ -777,7 +777,7 @@ class VectorMixin(_MixinBase):
         # description and puts the rest in `held` (review M3). Either way the drawer merges them over
         # this, which keeps the precedence: an explicit style the caller wrote outranks the one
         # classification derived, so one scheme cannot mean two things (review M4).
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         # Resolved here rather than at the top of the method, so the aggregating route above — which forwards
         # `**opts` to `rasterize` and never draws a marker — is reached with the keyword untouched.
@@ -806,7 +806,7 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -837,7 +837,7 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -854,12 +854,12 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
+        column: str | None = None,
         cmap: str = "viridis",
-        opacity: Optional[float] = None,
+        opacity: float | None = None,
         rasterize: Any = "auto",
-        big_data_threshold: Optional[int] = None,
-        name: Optional[str] = None,
+        big_data_threshold: int | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -943,11 +943,11 @@ class VectorMixin(_MixinBase):
         features: Any,
         kind: str,
         *,
-        column: Optional[str],
+        column: str | None,
         cmap: str,
         rasterize: Any,
         threshold: int,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1019,7 +1019,7 @@ class VectorMixin(_MixinBase):
                 visible=visible,
                 **opts,
             )
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         common: dict = {}
         if column:
@@ -1063,7 +1063,7 @@ class VectorMixin(_MixinBase):
         column: str,
         *,
         cmap: str = "viridis",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1107,7 +1107,7 @@ class VectorMixin(_MixinBase):
             features, column, cmap=cmap
         )
         self.last_breaks = categories
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1252,7 +1252,7 @@ class VectorMixin(_MixinBase):
         scheme: Any,
         k: int,
         cmap: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1290,7 +1290,7 @@ class VectorMixin(_MixinBase):
             features, column, scheme=scheme, k=k, cmap=cmap
         )
         self.last_breaks = list(classified["color_levels"])
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1318,12 +1318,12 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        scheme: Optional[str] = None,
+        scheme: str | None = None,
         k: int = 5,
         cmap: str = "viridis",
-        opacity: Optional[float] = None,
-        clim: Optional[Tuple[float, float]] = None,
-        name: Optional[str] = None,
+        opacity: float | None = None,
+        clim: tuple[float, float] | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1471,9 +1471,9 @@ class VectorMixin(_MixinBase):
         *,
         band: int = DEFAULT_BAND,
         density: float = 1.0,
-        color_by: Optional[str] = "magnitude",
+        color_by: str | None = "magnitude",
         cmap: str = "viridis",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1501,7 +1501,7 @@ class VectorMixin(_MixinBase):
             ValueError: when ``density`` is not in ``(0, 1]``.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1531,7 +1531,7 @@ class VectorMixin(_MixinBase):
         *,
         band: int = DEFAULT_BAND,
         density: float = 1.0,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1568,7 +1568,7 @@ class VectorMixin(_MixinBase):
             "streamlines render through the matplotlib backend (Bokeh has no streamline glyph); "
             "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1594,7 +1594,7 @@ class VectorMixin(_MixinBase):
         *,
         band: int = DEFAULT_BAND,
         density: float = 1.0,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1637,7 +1637,7 @@ class VectorMixin(_MixinBase):
             "barbs render through the matplotlib backend only (Bokeh has no wind-barb glyph); "
             "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
         )
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1661,11 +1661,11 @@ class VectorMixin(_MixinBase):
         self,
         data: Any,
         *,
-        value_column: Optional[str] = None,
+        value_column: str | None = None,
         rasterize: Any = "auto",
-        big_data_threshold: Optional[int] = None,
+        big_data_threshold: int | None = None,
         cmap: str = "viridis",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1771,7 +1771,7 @@ class VectorMixin(_MixinBase):
             )
         self._built_mesh = (data, value_column, built)
         try:
-            held: Dict[str, Any] = {}
+            held: dict[str, Any] = {}
             described_opts = describe_opts(held, opts)
             return self.add_layer(
                 None,
@@ -1794,7 +1794,7 @@ class VectorMixin(_MixinBase):
             # map, and a later draw from the description must build its own.
             self._built_mesh = None
 
-    def _mesh_inputs(self, data: Any, value_column: Optional[str]) -> tuple:
+    def _mesh_inputs(self, data: Any, value_column: str | None) -> tuple:
         """Return ``(nodes_points, simplices, vdims)`` for :meth:`trimesh`.
 
         Args:
@@ -1843,9 +1843,9 @@ class VectorMixin(_MixinBase):
         *,
         gridsize: int = 30,
         aggregator: str = "mean",
-        column: Optional[str] = None,
+        column: str | None = None,
         cmap: str = "viridis",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1870,7 +1870,7 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1898,7 +1898,7 @@ class VectorMixin(_MixinBase):
         *,
         filled: bool = True,
         cmap: str = "viridis",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1920,7 +1920,7 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1945,11 +1945,11 @@ class VectorMixin(_MixinBase):
         nodes: Any,
         edges: Any,
         *,
-        weight: Optional[str] = None,
+        weight: str | None = None,
         bundle: bool = False,
         node_id: str = "id",
         cmap: str = "viridis",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1978,7 +1978,7 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -2006,8 +2006,8 @@ class VectorMixin(_MixinBase):
         nodes: Any,
         edges: Any,
         *,
-        weight: Optional[str] = None,
-        name: Optional[str] = None,
+        weight: str | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:

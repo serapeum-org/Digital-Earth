@@ -11,7 +11,8 @@ plain hover. Each method documents this rather than implying full interactivity 
 All CRS work (crop, the un-projection of drawn geometry) goes through pyramids.
 """
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Self
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.spec import DEFAULT_BAND
@@ -44,9 +45,9 @@ class InteractionMixin(_MixinBase):
     def hover(
         self,
         *,
-        tooltips: Optional[list] = None,
-        formatters: Optional[dict] = None,
-        layer: Optional[int] = None,
+        tooltips: list | None = None,
+        formatters: dict | None = None,
+        layer: int | None = None,
     ) -> Self:
         """Configure the Bokeh hover tooltips on a registered layer (DI.7).
 
@@ -167,8 +168,8 @@ class InteractionMixin(_MixinBase):
         self,
         kind: str = "box",
         *,
-        num_objects: Optional[int] = None,
-        name: Optional[str] = None,
+        num_objects: int | None = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Add a draw/edit tool so the user can sketch an area-of-interest (DI.8).

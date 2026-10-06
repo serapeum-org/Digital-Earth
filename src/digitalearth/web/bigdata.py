@@ -16,7 +16,8 @@ separate widget, and would re-declare it.
 Builders that colour by value reuse the base ``_color_expr`` helpers; numpy/maplibre are imported lazily.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger
 
@@ -206,7 +207,7 @@ class BigDataMixin(_MixinBase):
         self,
         features: Any,
         *,
-        weight: Optional[str] = None,
+        weight: str | None = None,
         radius: float = 30.0,
         intensity: float = 1.0,
         opacity: Maybe[float] = UNSET,
@@ -289,9 +290,9 @@ class BigDataMixin(_MixinBase):
         max_zoom: int = 14,
         color: str = "#51bbd6",
         text_color: str = "#ffffff",
-        color_by: Optional[str] = None,
+        color_by: str | None = None,
         aggregate: str = "sum",
-        scheme: Optional[Any] = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
     ) -> Self:
@@ -557,7 +558,7 @@ class BigDataMixin(_MixinBase):
         return self._add_deck_layer(layer)
 
     def _threshold(
-        self, big_data_threshold: Optional[int] = None, *, caller: str = "WebMap"
+        self, big_data_threshold: int | None = None, *, caller: str = "WebMap"
     ) -> int:
         """Resolve the feature count that routes a layer to the GPU: the call's, else the map's.
 
@@ -586,9 +587,7 @@ class BigDataMixin(_MixinBase):
             return int(self.big_data_threshold)
         return validate_big_data_threshold(big_data_threshold, caller=caller)
 
-    def _route_big(
-        self, gdf: Any, kind: str, *, threshold: Optional[int] = None
-    ) -> bool:
+    def _route_big(self, gdf: Any, kind: str, *, threshold: int | None = None) -> bool:
         """Whether ``gdf`` exceeds the big-data threshold — and log the routing decision when it does.
 
         Args:

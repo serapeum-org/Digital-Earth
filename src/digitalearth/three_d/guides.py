@@ -48,9 +48,10 @@ argument rather than reading `scene._figure`, which during `apply` is still the 
   built as one box from every layer that asks for one, in layer order, rather than letting the last caller win.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 
@@ -67,7 +68,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: :data:`~digitalearth.base.registry.FURNITURE_ANCHORS`. PyVista's `add_legend(loc=...)` spells the same four
 #: places its own way, so the shared anchor vocabulary is translated here rather than leaked into a caller's
 #: call — a figure written on another tier carries `anchor="bottom-right"` and has to mean the same thing.
-LEGEND_LOCATIONS: Dict[str, str] = {
+LEGEND_LOCATIONS: dict[str, str] = {
     "top-left": "upper left",
     "top-right": "upper right",
     "bottom-left": "lower left",
@@ -78,7 +79,7 @@ LEGEND_LOCATIONS: Dict[str, str] = {
 #: PyVista places its own bar along the bottom of the window and takes no anchor, so an anchor that arrived on
 #: a `Guide` would otherwise be recorded and silently dropped. The x offsets leave the default bar width room
 #: inside the frame.
-BAR_POSITIONS: Dict[str, Tuple[float, float]] = {
+BAR_POSITIONS: dict[str, tuple[float, float]] = {
     "top-left": (0.05, 0.90),
     "top-right": (0.55, 0.90),
     "bottom-left": (0.05, 0.05),
@@ -90,7 +91,7 @@ BAR_POSITIONS: Dict[str, Tuple[float, float]] = {
 DEFAULT_LEGEND_LOCATION: str = "upper right"
 
 
-def guide_field(layer: Any) -> Optional[str]:
+def guide_field(layer: Any) -> str | None:
     """Return the field a layer's colour is driven by, or `None` when nothing drives it.
 
     Args:
@@ -160,8 +161,8 @@ def guide_field(layer: Any) -> Optional[str]:
 
 
 def color_scale(
-    values: Any, *, scheme: Any, k: int, cmap: Any, missing: Optional[str] = None
-) -> Optional[Scale]:
+    values: Any, *, scheme: Any, k: int, cmap: Any, missing: str | None = None
+) -> Scale | None:
     """Return the :class:`~digitalearth.base.spec.scale.Scale` a colour column is drawn through.
 
     The builder's half of the classification the drawer performs. It is the **same** computation, not a second
@@ -248,7 +249,7 @@ def _native(value: Any) -> Any:
     return value.item() if isinstance(value, np.generic) else value
 
 
-def _keyed(scale: Optional[Scale]) -> bool:
+def _keyed(scale: Scale | None) -> bool:
     """Whether a scale cuts keys a list can name, rather than running a continuous ramp.
 
     Args:
@@ -307,7 +308,7 @@ def _colour_encoding(figure: FigureSpec, layer_id: str) -> Encoding:
     return encoding
 
 
-def _resolve_layer(figure: FigureSpec, layer_id: Optional[str], caller: str) -> str:
+def _resolve_layer(figure: FigureSpec, layer_id: str | None, caller: str) -> str:
     """Return the layer a key was asked for, defaulting to the most recent colour-driven one.
 
     Args:
@@ -400,7 +401,7 @@ def _engine_title(scene: Any, layer_id: str, field: str) -> str:
 
 def _sharing_bar(
     scene: Any, figure: FigureSpec, layer_id: str, title: str
-) -> List[str]:
+) -> list[str]:
     """Return the other layers whose own engine-drawn bar is the same one.
 
     Args:
@@ -467,7 +468,7 @@ def _release_bar(
         _remove_bar(plotter, title)
 
 
-def _bar_placement(anchor: Optional[str]) -> Dict[str, Any]:
+def _bar_placement(anchor: str | None) -> dict[str, Any]:
     """Return the `add_scalar_bar` keywords that put a bar where a guide asked for it.
 
     Args:
@@ -484,7 +485,7 @@ def _bar_placement(anchor: Optional[str]) -> Dict[str, Any]:
     return {"position_x": placed[0], "position_y": placed[1]}
 
 
-def _drawn_colors(actor: Any, scale: Scale) -> Optional[List[str]]:
+def _drawn_colors(actor: Any, scale: Scale) -> list[str] | None:
     """Return the colours a classified layer was actually drawn in, read off its lookup table.
 
     This is the reason a swatch cannot disagree with the picture. The colours are not recomputed from the
@@ -509,8 +510,8 @@ def _drawn_colors(actor: Any, scale: Scale) -> Optional[List[str]]:
 
 
 def _legend_rows(
-    spec: LegendSpec, labels: Optional[Sequence[str]], prefix: Optional[str]
-) -> List[Tuple[str, str]]:
+    spec: LegendSpec, labels: Sequence[str] | None, prefix: str | None
+) -> list[tuple[str, str]]:
     """Return one layer's contribution to the keyed list, as the `(text, colour)` pairs PyVista takes.
 
     Args:
@@ -556,7 +557,7 @@ class ColourGuide:
     field: str
     guide: Guide
     visible: bool
-    scale: Optional[Scale] = None
+    scale: Scale | None = None
 
     @property
     def keyed(self) -> bool:
@@ -587,7 +588,7 @@ class ColourGuide:
         return self.guide.title or self.field
 
     @property
-    def wanted_bar(self) -> Optional[str]:
+    def wanted_bar(self) -> str | None:
         """The title this layer's scalar bar should be on.
 
         Returns:
@@ -597,7 +598,7 @@ class ColourGuide:
         return self.title if self.shown and not self.keyed else None
 
 
-def _guide_plan(figure: FigureSpec) -> List[ColourGuide]:
+def _guide_plan(figure: FigureSpec) -> list[ColourGuide]:
     """Return what every layer carrying a colour guide asks for, in draw order.
 
     Args:
@@ -675,7 +676,7 @@ def redraw_guides(scene: Any, figure: FigureSpec) -> None:
 
 
 def _redraw_bars(
-    scene: Any, figure: FigureSpec, plotter: Any, held: Dict[str, Dict[str, Any]]
+    scene: Any, figure: FigureSpec, plotter: Any, held: dict[str, dict[str, Any]]
 ) -> None:
     """Reconcile the scalar bars the scene's continuous colour guides ask for.
 
@@ -713,7 +714,7 @@ def _redraw_bars(
     # and a layer that keeps its title is not reached by the release pass above, so it is exactly the case
     # the walk cannot see. A layer still never reads its own entry: `_add_bar` returns on
     # `current == wanted`, which is the condition the seed is built from, before it looks anything up.
-    taken: Dict[str, str] = {
+    taken: dict[str, str] = {
         plan.wanted_bar: plan.layer_id
         for plan in plans
         if plan.wanted_bar is not None and current[plan.layer_id] == plan.wanted_bar
@@ -730,9 +731,9 @@ def _current_bar(
     scene: Any,
     figure: FigureSpec,
     plotter: Any,
-    held: Dict[str, Dict[str, Any]],
+    held: dict[str, dict[str, Any]],
     plan: ColourGuide,
-) -> Optional[str]:
+) -> str | None:
     """Return the title of the bar one layer's key is on right now, or `None` when it has none.
 
     Args:
@@ -749,7 +750,7 @@ def _current_bar(
     record = held.setdefault(plan.layer_id, {})
     # Annotated rather than inferred: the record is a `Dict[str, Any]` bag of drawn state, so an unannotated
     # read of it is `Any` and this function would hand one back under a `str | None` signature.
-    current: Optional[str] = record.get("bar")
+    current: str | None = record.get("bar")
     if current is not None:
         return current
     # PyVista titles the bar it draws of its own accord after the scalars array, so that bar *is* this
@@ -771,10 +772,10 @@ def _current_bar(
 def _add_bar(
     scene: Any,
     plotter: Any,
-    record: Dict[str, Any],
+    record: dict[str, Any],
     plan: ColourGuide,
-    current: Optional[str],
-    taken: Dict[str, str],
+    current: str | None,
+    taken: dict[str, str],
 ) -> None:
     """Draw one layer's scalar bar, every changing layer having already given its old one up.
 
@@ -821,7 +822,7 @@ def _add_bar(
 
 
 def _drop_orphaned_bars(
-    scene: Any, figure: FigureSpec, plotter: Any, held: Dict[str, Dict[str, Any]]
+    scene: Any, figure: FigureSpec, plotter: Any, held: dict[str, dict[str, Any]]
 ) -> None:
     """Take off an engine-drawn bar that no layer keys off any more.
 
@@ -868,7 +869,7 @@ def _redraw_legend(
     scene: Any,
     figure: FigureSpec,
     plotter: Any,
-    held: Dict[str, Dict[str, Any]],
+    held: dict[str, dict[str, Any]],
     was_keyed: bool,
 ) -> None:
     """Rebuild the one keyed list from every layer that asks for one.
@@ -891,7 +892,7 @@ def _redraw_legend(
         for plan in _guide_plan(figure)
         if plan.keyed and plan.shown and plan.scale is not None
     ]
-    drawn: List[Tuple[str, str]] = []
+    drawn: list[tuple[str, str]] = []
     location = DEFAULT_LEGEND_LOCATION
     for position, plan in enumerate(keyed):
         actor = _drawn_actor(scene, plan.layer_id)
@@ -947,13 +948,13 @@ class GuideMixin(_MixinBase):
 
     def _record_guide(
         self,
-        layer_id: Optional[str],
+        layer_id: str | None,
         *,
-        title: Optional[str],
+        title: str | None,
         visible: bool,
         caller: str,
         keyed: bool,
-        labels: Optional[Sequence[str]] = None,
+        labels: Sequence[str] | None = None,
     ) -> str:
         """Put a guide on one layer's colour encoding, then draw from it.
 
@@ -1051,9 +1052,9 @@ class GuideMixin(_MixinBase):
 
     def colorbar(
         self,
-        layer_id: Optional[str] = None,
+        layer_id: str | None = None,
         *,
-        label: Optional[str] = None,
+        label: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Show the continuous colour key of a layer — PyVista's scalar bar, as a guide on its encoding.
@@ -1130,10 +1131,10 @@ class GuideMixin(_MixinBase):
 
     def legend(
         self,
-        layer_id: Optional[str] = None,
+        layer_id: str | None = None,
         *,
-        title: Optional[str] = None,
-        labels: Optional[Sequence[str]] = None,
+        title: str | None = None,
+        labels: Sequence[str] | None = None,
         visible: bool = True,
     ) -> Self:
         """Show the keyed colour list of a layer — PyVista's legend box, as a guide on its encoding.

@@ -8,7 +8,7 @@ over it, so neither ratchet repeats it.
 """
 
 import importlib
-from typing import Any, Dict
+from typing import Any
 
 #: Backend name → the module holding that tier's ``CAPABILITIES`` value. All four import engine-free.
 TIER_CAPABILITY_MODULES = {
@@ -19,7 +19,7 @@ TIER_CAPABILITY_MODULES = {
 }
 
 
-def tier_capabilities(backend: str) -> Dict[str, Any]:
+def tier_capabilities(backend: str) -> dict[str, Any]:
     """Return one tier's declared capabilities as a plain dict.
 
     Args:

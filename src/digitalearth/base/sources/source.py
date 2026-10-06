@@ -8,7 +8,7 @@ This module is a **leaf**: it imports nothing from :mod:`digitalearth.base.sourc
 ``extractors`` and the package ``__init__`` can both import ``Source`` without creating an import cycle.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from digitalearth.base.crs import authority_code
 from digitalearth.base.sources.dimension import DimensionInfo
@@ -65,18 +65,18 @@ class Source:
 
     def __init__(
         self,
-        z: Optional[DimensionInfo],
+        z: DimensionInfo | None,
         x: DimensionInfo,
         y: DimensionInfo,
         crs: Any = None,
-        metadata: Optional[dict] = None,
-        units: Optional[str] = None,
+        metadata: dict | None = None,
+        units: str | None = None,
     ):
         self._z, self._x, self._y = z, x, y
         self._crs, self._meta, self._units = crs, metadata or {}, units
 
     @property
-    def z(self) -> Optional[DimensionInfo]:
+    def z(self) -> DimensionInfo | None:
         """The data dimension (2-D grid for rasters, 1-D values for points), or ``None``."""
         return self._z
 
@@ -228,7 +228,7 @@ class Source:
         return self._crs
 
     @property
-    def epsg(self) -> Optional[int]:
+    def epsg(self) -> int | None:
         """The EPSG code of :attr:`crs`, or ``None`` when it has none.
 
         The narrower of the two CRS questions: :attr:`crs` always says where the coordinates are, while this
@@ -293,7 +293,7 @@ class Source:
         return authority_code(crs)
 
     @property
-    def units(self) -> Optional[str]:
+    def units(self) -> str | None:
         """Unit string for the data values, or ``None``."""
         return self._units
 

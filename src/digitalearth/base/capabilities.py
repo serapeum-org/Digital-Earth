@@ -17,9 +17,10 @@ so a dispatcher can read every tier's answer before deciding which one to build 
 chosen backend cannot honour, by name, before anything is drawn.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Dict, FrozenSet, Mapping, Optional
+from typing import Any
 
 from digitalearth.base.registry import KIND_PATTERN, furniture_kinds, kinds
 from digitalearth.base.spec.encoding import CHANNELS
@@ -90,7 +91,7 @@ def is_feature(name: Any) -> bool:
     return isinstance(name, str) and (name in FEATURES or name in furniture_kinds())
 
 
-def _named_set(owner: str, name: str, values: Any) -> FrozenSet[str]:
+def _named_set(owner: str, name: str, values: Any) -> frozenset[str]:
     """Return a set of names, refusing a bare string and anything that is not a name.
 
     Args:
@@ -179,11 +180,11 @@ class Capabilities:
     """
 
     backend: str
-    kinds: FrozenSet[str] = frozenset()
-    channels: FrozenSet[str] = frozenset()
-    data_driven: FrozenSet[str] = frozenset()
-    schemes: FrozenSet[str] = frozenset()
-    features: FrozenSet[str] = frozenset()
+    kinds: frozenset[str] = frozenset()
+    channels: frozenset[str] = frozenset()
+    data_driven: frozenset[str] = frozenset()
+    schemes: frozenset[str] = frozenset()
+    features: frozenset[str] = frozenset()
     absent: Mapping[str, str] = field(default_factory=dict)
 
     def __hash__(self) -> int:
@@ -283,7 +284,7 @@ class Capabilities:
             raise ValueError(
                 f"{owner} absent must be a mapping of name to reason; got {type(self.absent).__name__}"
             )
-        entries: Dict[str, str] = {}
+        entries: dict[str, str] = {}
         for name, reason in dict(self.absent).items():
             if not isinstance(name, str) or not name:
                 raise ValueError(f"{owner} absent must be keyed by name; got {name!r}")
@@ -326,7 +327,7 @@ class Capabilities:
             or name in self.features
         )
 
-    def reason(self, name: str) -> Optional[str]:
+    def reason(self, name: str) -> str | None:
         """Return why the backend does not have a capability, when it said.
 
         Args:
@@ -395,7 +396,7 @@ class Capabilities:
             + (f"; {reason}" if reason else "")
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form, for the support matrix the docs build.
 
         Returns:

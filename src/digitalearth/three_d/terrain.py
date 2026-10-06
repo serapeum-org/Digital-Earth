@@ -14,7 +14,7 @@ non-uniform spacing. The one subtlety VTK imposes: scalars/elevation attach in *
 (``ravel(order="F")``) to line up with the structured point ordering — C-order silently mirrors the terrain.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -88,9 +88,7 @@ def _terrain_mesh(
     return grid
 
 
-def _color_encoding(
-    scalars: Any, kwargs: Dict[str, Any]
-) -> Optional[Dict[str, Encoding]]:
+def _color_encoding(scalars: Any, kwargs: dict[str, Any]) -> dict[str, Encoding] | None:
     """Return the colour encoding a terrain publishes, or `None` for a genuinely flat surface.
 
     Args:

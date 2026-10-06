@@ -25,10 +25,11 @@ Nothing here knows a renderer. Folding a `Symbology` into the flat form a partic
 backend's job, and in the static tier there is exactly one place it happens.
 """
 
+from collections.abc import Container, Mapping
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
 from difflib import get_close_matches
-from typing import Any, Container, Dict, Mapping, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -88,7 +89,7 @@ class StyleKey:
 
     name: str
     doc: str
-    channel: Optional[str] = None
+    channel: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse a key pointing at a channel that does not exist.
@@ -177,7 +178,7 @@ class Symbology:
             ),
         )
 
-    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+    def __reduce__(self) -> tuple[Any, tuple[Any, ...]]:
         """Pickle and copy by rebuilding through the constructor.
 
         Returns:
@@ -260,7 +261,7 @@ class Symbology:
 
     # ------------------------------------------------------------------ readers
 
-    def encoding(self, channel: str) -> Optional[Encoding]:
+    def encoding(self, channel: str) -> Encoding | None:
         """Return what drives one channel.
 
         Args:
@@ -288,7 +289,7 @@ class Symbology:
         """
         return self.encodings.get(channel)
 
-    def guide(self, channel: str = "color") -> Optional[Guide]:
+    def guide(self, channel: str = "color") -> Guide | None:
         """Return what explains one channel to the reader — the legend or colorbar asked for on it.
 
         The read side of :meth:`with_guide`, and the reason a guide lives on the encoding rather than beside
@@ -384,9 +385,7 @@ class Symbology:
         merged.update(props)
         return Symbology(encodings=dict(self.encodings), props=merged)
 
-    def with_guide(
-        self, guide: Optional[Guide], *, channel: str = "color"
-    ) -> "Symbology":
+    def with_guide(self, guide: Guide | None, *, channel: str = "color") -> "Symbology":
         """Return a copy whose `channel` encoding carries `guide`.
 
         **A guide explains an encoding**, so it is attached to one rather than held beside it. That is the
@@ -465,7 +464,7 @@ class Symbology:
 
     # ------------------------------------------------------------------ serialisation
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -492,7 +491,7 @@ class Symbology:
 
                 ```
         """
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         if self.encodings:
             out["encodings"] = {
                 plain_text(channel): encoding.to_dict()
@@ -579,12 +578,12 @@ class Symbology:
 #: number or flag published no channel at all and its layer crossed unstyled. Membership is not the whole
 #: gate — :func:`~digitalearth.base.spec._serial.travels_in_a_figure` is, and it is what still refuses
 #: ``datetime64``, a non-finite number and anything else no figure can be written with.
-PORTABLE_VALUES: Tuple[type, ...] = (bool, int, float, str, np.generic)
+PORTABLE_VALUES: tuple[type, ...] = (bool, int, float, str, np.generic)
 
 
 def portable_constants(
     flat: Mapping[str, Any], channels: Mapping[str, str]
-) -> Dict[str, Encoding]:
+) -> dict[str, Encoding]:
     """Lift a tier's own flat style values onto the declared channels they drive.
 
     The half of :meth:`StyleSchema.route` a backend needs when it has *already* resolved a caller's keywords
@@ -621,7 +620,7 @@ def portable_constants(
 
             ```
     """
-    lifted: Dict[str, Encoding] = {}
+    lifted: dict[str, Encoding] = {}
     for keyword, value in flat.items():
         channel = channels.get(keyword)
         if channel is None or value is None:
@@ -644,7 +643,7 @@ def asked_constants(
     flat: Mapping[str, Any],
     channels: Mapping[str, str],
     asked: Container[str],
-) -> Dict[str, Encoding]:
+) -> dict[str, Encoding]:
     """Lift onto their channels only the style keys a caller actually named.
 
     :func:`portable_constants` with the one filter both 2-D tiers need. A builder resolves its defaults before
@@ -730,7 +729,7 @@ class StyleSchema:
         """Freeze the table, so a schema handed around cannot be extended behind a caller's back."""
         object.__setattr__(self, "keys", FrozenDict(dict(self.keys)))
 
-    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+    def __reduce__(self) -> tuple[Any, tuple[Any, ...]]:
         """Pickle and copy by rebuilding through the constructor.
 
         Returns:
@@ -789,8 +788,8 @@ class StyleSchema:
 
                 ```
         """
-        table: Dict[str, StyleKey] = {}
-        driving: Dict[str, str] = {}
+        table: dict[str, StyleKey] = {}
+        driving: dict[str, str] = {}
         for key in keys:
             if key.name in table:
                 raise ValueError(f"style key {key.name!r} is declared twice")
@@ -806,7 +805,7 @@ class StyleSchema:
             table[key.name] = key
         return cls(keys=table)
 
-    def names(self) -> Tuple[str, ...]:
+    def names(self) -> tuple[str, ...]:
         """Return every declared keyword, sorted.
 
         Returns:
@@ -833,7 +832,7 @@ class StyleSchema:
         """
         return tuple(sorted(self.keys))
 
-    def channels(self) -> Tuple[str, ...]:
+    def channels(self) -> tuple[str, ...]:
         """Return the channels this surface can drive, sorted.
 
         Returns:
@@ -862,7 +861,7 @@ class StyleSchema:
         """
         return tuple(sorted({key.channel for key in self.keys.values() if key.channel}))
 
-    def route(self, flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]]:
+    def route(self, flat: Mapping[str, Any]) -> tuple[Symbology, dict[str, Any]]:
         """Split flat keyword arguments into a declared symbology and whatever is left over.
 
         Args:
@@ -889,9 +888,9 @@ class StyleSchema:
 
                 ```
         """
-        encodings: Dict[str, Encoding] = {}
-        props: Dict[str, Any] = {}
-        leftover: Dict[str, Any] = {}
+        encodings: dict[str, Encoding] = {}
+        props: dict[str, Any] = {}
+        leftover: dict[str, Any] = {}
         for name, value in flat.items():
             key = self.keys.get(name)
             if key is None:
@@ -905,7 +904,7 @@ class StyleSchema:
                 encodings[key.channel] = Encoding.constant(key.channel, value)
         return Symbology(encodings=encodings, props=props), leftover
 
-    def suggest(self, name: str) -> Optional[str]:
+    def suggest(self, name: str) -> str | None:
         """Return the declared keyword `name` was most likely meant to be.
 
         Args:

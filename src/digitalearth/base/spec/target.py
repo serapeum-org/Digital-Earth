@@ -11,10 +11,11 @@ window a reader pans around.
 the budget from the target.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from numbers import Integral
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import Any
 
 from digitalearth.base.domains import resolve_domain
 from digitalearth.base.spec._serial import (
@@ -40,7 +41,7 @@ DEFAULT_BUDGETS: Mapping[str, int] = MappingProxyType(
 )
 
 
-def _positive_whole(name: str, value: Any) -> Optional[int]:
+def _positive_whole(name: str, value: Any) -> int | None:
     """Return `value` as a positive int, or ``None`` when unset.
 
     Args:
@@ -104,10 +105,10 @@ class RenderTarget:
     """
 
     kind: str = "window"
-    width: Optional[int] = None
-    height: Optional[int] = None
+    width: int | None = None
+    height: int | None = None
     pixel_ratio: float = 1.0
-    budget: Optional[int] = None
+    budget: int | None = None
 
     def __post_init__(self) -> None:
         """Refuse a target nothing could be rendered to.
@@ -155,9 +156,9 @@ class RenderTarget:
 
     def view_request(
         self,
-        view: Optional[Union[Viewport, Camera]] = None,
+        view: Viewport | Camera | None = None,
         *,
-        bounds: Optional[Bounds] = None,
+        bounds: Bounds | None = None,
     ) -> ViewRequest:
         """Return the request a reader answers for this view on this target.
 
@@ -227,7 +228,7 @@ class RenderTarget:
             raise ValueError(
                 f"RenderTarget.view_request needs bounds as a Bounds; got {type(bounds).__name__}"
             )
-        region: Optional[Bounds] = None
+        region: Bounds | None = None
         if isinstance(view, Viewport) and bounds is not None:
             region = view.framed(bounds).bounds
         elif isinstance(view, Viewport):
@@ -265,7 +266,7 @@ class RenderTarget:
         region = resolve_domain(view.domain)
         return Bounds.from_bbox(list(region), crs=4326).to_crs(view.crs)  # type: ignore[arg-type]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -288,7 +289,7 @@ class RenderTarget:
 
                 ```
         """
-        out: Dict[str, Any] = {"kind": plain_text(self.kind)}
+        out: dict[str, Any] = {"kind": plain_text(self.kind)}
         for name in ("width", "height"):
             value = getattr(self, name)
             if value is not None:

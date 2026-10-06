@@ -14,8 +14,9 @@ This is one of the four homes a decoration can have; the other three are a layer
 map coordinates), a guide on an `Encoding` (anything that explains a channel) and the panel's own `title`.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional
+from typing import Any
 
 from digitalearth.base.registry import (
     FURNITURE_ANCHORS,
@@ -90,7 +91,7 @@ class Furniture:
     """
 
     kind: str
-    anchor: Optional[str] = None
+    anchor: str | None = None
     options: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -145,7 +146,7 @@ class Furniture:
             ),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -172,7 +173,7 @@ class Furniture:
 
                 ```
         """
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "kind": plain_text(self.kind),
             "anchor": plain_text(self.anchor),
         }

@@ -1,7 +1,6 @@
 """DimensionInfo — a labelled coordinate/value axis used by :class:`~digitalearth.base.sources.source.Source`."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -46,4 +45,4 @@ class DimensionInfo:
 
     values: np.ndarray
     name: str = ""
-    units: Optional[str] = None
+    units: str | None = None

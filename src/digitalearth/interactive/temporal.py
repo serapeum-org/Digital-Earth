@@ -10,7 +10,8 @@ colormap and colorbar do not jump as the slider moves.
 materialise a frame (``dmap[0]``) to assert on it.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.clim import sample_evenly, stack_scale
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Symbology
@@ -26,7 +27,7 @@ from digitalearth.interactive.base import (
 from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 
 
-def _iso_labels(labels: Optional[Sequence]) -> Optional[list]:
+def _iso_labels(labels: Sequence | None) -> list | None:
     """Return slider labels in a spelling a figure can be written with.
 
     A time slider is normally labelled with timestamps, and JSON has no spelling for one — the writer says
@@ -138,7 +139,7 @@ class TemporalMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
-    def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
+    def _global_clim(self, collection: Any, band: int) -> tuple[float, float]:
         """Compute one ``(vmin, vmax)`` for the whole series so the colour range never jumps between frames.
 
         Note: this pass is **eager** — it reprojects and extracts the sampled members once at ``timecube``
@@ -172,12 +173,12 @@ class TemporalMixin(_MixinBase):
         collection: Any,
         *,
         kdim: str = "time",
-        labels: Optional[Sequence] = None,
+        labels: Sequence | None = None,
         band: int = DEFAULT_BAND,
-        cmap: Optional[str] = None,
-        clim: Optional[Tuple[float, float]] = None,
+        cmap: str | None = None,
+        clim: tuple[float, float] | None = None,
         colorbar: bool = True,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:

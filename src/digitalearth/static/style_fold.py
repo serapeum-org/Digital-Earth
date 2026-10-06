@@ -23,7 +23,8 @@ So the colour group is built by the builder, with three rules that are this tier
   what the caller already did. The two spellings style the same thing, so the fold names both and stops.
 """
 
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from cleopatra.styling.scaling import ColorScale, ColorScaling
 
@@ -139,7 +140,7 @@ def _written_colour_keys(kwargs: Mapping[str, Any]) -> list:
     return [key for key in COLOR_GROUP_MEMBERS if key in kwargs]
 
 
-def fold_color_scaling(out: Dict[str, Any]) -> None:
+def fold_color_scaling(out: dict[str, Any]) -> None:
     """Fold the flat colour keywords in ``out`` into a ``ColorScaling`` under ``color=`` (in place).
 
     Args:

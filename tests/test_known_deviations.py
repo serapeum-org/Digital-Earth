@@ -17,7 +17,6 @@ it on purpose:** change the table, run ``python -m tests.test_known_deviations``
 
 import textwrap
 from pathlib import Path
-from typing import Dict, List
 
 from tests.base.test_map_conformance import (
     CANNOT_HIDE_AT_BUILD,
@@ -66,14 +65,14 @@ _CATEGORIES = (
 )
 
 
-def collect_known_deviations() -> List[Dict[str, str]]:
+def collect_known_deviations() -> list[dict[str, str]]:
     """Read the four drift tables into one normalised, sorted list of accepted deviations.
 
     Returns:
         One entry per accepted deviation — ``{category, backend, subject, reason}`` — sorted by category,
         backend then subject, so the rendered page is stable across runs and operating systems.
     """
-    entries: List[Dict[str, str]] = []
+    entries: list[dict[str, str]] = []
     for category, table in _FLAT_TABLES:
         entries.extend(
             {"category": category, "backend": backend, "subject": "", "reason": reason}
@@ -95,7 +94,7 @@ def collect_known_deviations() -> List[Dict[str, str]]:
     )
 
 
-def _bullet(entry: Dict[str, str]) -> str:
+def _bullet(entry: dict[str, str]) -> str:
     """Render one deviation as a wrapped markdown bullet (≤ 120 columns)."""
     label = (
         f"{entry['backend']} · `{entry['subject']}`"
@@ -118,7 +117,7 @@ def render_allowlist() -> str:
         The markdown page. A category with no live deviation is skipped, so the page lists exactly what is
         accepted now; a new entry adds a bullet (or a section), a fixed one removes it — each a reviewable diff.
     """
-    grouped: Dict[str, List[Dict[str, str]]] = {}
+    grouped: dict[str, list[dict[str, str]]] = {}
     for entry in collect_known_deviations():
         grouped.setdefault(entry["category"], []).append(entry)
     blocks = [

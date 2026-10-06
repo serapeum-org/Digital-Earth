@@ -5,7 +5,8 @@ multi-box plots, and warming stripes. The rendering primitives live in cleopatra
 numpy ensembles/series into the arrays those glyphs expect and draws them onto a (optionally shared) axes.
 """
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
@@ -20,7 +21,7 @@ def envelope(
     low: Sequence[float],
     high: Sequence[float],
     *,
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     color: Any = None,
     alpha: float = 0.3,
 ) -> Any:
@@ -43,11 +44,11 @@ def envelope(
 
 def quantile_band(
     ensemble: np.ndarray,
-    x: Optional[Sequence[float]] = None,
+    x: Sequence[float] | None = None,
     lower: float = 0.1,
     upper: float = 0.9,
     *,
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     **kwargs,
 ) -> Any:
     """Shade the inter-quantile band of an ensemble across members.
@@ -71,19 +72,19 @@ def quantile_band(
     return envelope(x, lo, hi, ax=ax, **kwargs)
 
 
-def boxplot(values: Any, *, ax: Optional[Axes] = None, **kwargs) -> Any:
+def boxplot(values: Any, *, ax: Axes | None = None, **kwargs) -> Any:
     """Draw a box-and-whisker plot of ``values`` (``HistogramGlyph.boxplot``)."""
     return HistogramGlyph(values, ax=ax, fig=_fig_of(ax)).boxplot(ax=ax, **kwargs)
 
 
 def multiboxplot(
-    groups: Sequence[Sequence[float]], *, ax: Optional[Axes] = None, **kwargs
+    groups: Sequence[Sequence[float]], *, ax: Axes | None = None, **kwargs
 ) -> Any:
     """Draw grouped box plots, one box per group (``HistogramGlyph.multiboxplot``)."""
     return HistogramGlyph(groups, ax=ax, fig=_fig_of(ax)).multiboxplot(ax=ax, **kwargs)
 
 
-def stripes(values: Sequence[float], *, ax: Optional[Axes] = None, **kwargs) -> Any:
+def stripes(values: Sequence[float], *, ax: Axes | None = None, **kwargs) -> Any:
     """Draw a warming-stripes bar strip of a 1-D series (``HistogramGlyph.stripes``)."""
     return HistogramGlyph(np.asarray(values), ax=ax, fig=_fig_of(ax)).stripes(
         ax=ax, **kwargs

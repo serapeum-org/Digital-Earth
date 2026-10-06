@@ -13,11 +13,12 @@ WASM/Pyodide export is **out** for a pyramids-backed app: GDAL/pyramids cannot r
 live app must be *served*, not converted. ``save_app`` is the offline path (pre-rendered states only).
 """
 
+from collections.abc import Sequence
 from functools import reduce
 from importlib.util import find_spec
 from operator import mul as _mul
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.controls import (
     LAYER_CONTROLS,
@@ -38,10 +39,10 @@ _BASEMAP_CHOICES = list(
 
 
 def _controls_named(
-    controls: Optional[Sequence[str]],
+    controls: Sequence[str] | None,
     *,
     caller: str,
-) -> Tuple[Tuple[str, ...], bool]:
+) -> tuple[tuple[str, ...], bool]:
     """Settle which controls a layer manager exposes, and whether the caller asked for them outright.
 
     One list says it on both tiers (#264): this tier once spelled the same request as one boolean per
@@ -267,7 +268,7 @@ class DashboardMixin(_MixinBase):
         return controls, bindings
 
     def _restyled_layers(
-        self, overrides: dict, layers: Optional[Sequence[Any]] = None
+        self, overrides: dict, layers: Sequence[Any] | None = None
     ) -> list:
         """Return each layer restyled with **its own** recorded style, the widget's values over the top.
 
@@ -478,9 +479,7 @@ class DashboardMixin(_MixinBase):
         """
         return self._layer_control_panel
 
-    def _control_layer_indices(
-        self, layers: Optional[Sequence[str]]
-    ) -> Tuple[int, ...]:
+    def _control_layer_indices(self, layers: Sequence[str] | None) -> tuple[int, ...]:
         """Return the positions of the layers a control offers, in draw order.
 
         Positions rather than ids, because the toggle labels are indexed (``"0: Image"``) and
@@ -540,9 +539,9 @@ class DashboardMixin(_MixinBase):
     def layer_control(
         self,
         *,
-        layers: Optional[Sequence[str]] = None,
+        layers: Sequence[str] | None = None,
         position: str = "top-right",
-        controls: Optional[Sequence[str]] = None,
+        controls: Sequence[str] | None = None,
         reorder: bool = False,
     ) -> Self:
         """Build a layer manager — per-layer visibility, an opacity slider, a basemap switch (DI.13).

@@ -20,7 +20,7 @@ Until then this is the reference and the registry, with no tier obliged to use i
 
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from digitalearth.base.registry import OBJECT_SCHEME, register_object, resolve_uri
 from digitalearth.base.spec._serial import plain_text, refuse_unknown, require
@@ -68,8 +68,8 @@ class DataRef:
     """
 
     uri: str
-    driver: Optional[str] = None
-    version: Optional[str] = None
+    driver: str | None = None
+    version: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse a reference that names nothing, or holds a hint a figure could not store.
@@ -210,7 +210,7 @@ class DataRef:
         """
         return resolve_uri(self.uri)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -237,7 +237,7 @@ class DataRef:
 
                 ```
         """
-        out: Dict[str, Any] = {"uri": plain_text(self.uri)}
+        out: dict[str, Any] = {"uri": plain_text(self.uri)}
         if self.driver is not None:
             out["driver"] = plain_text(self.driver)
         if self.version is not None:
@@ -245,7 +245,7 @@ class DataRef:
         return out
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DataRef":
+    def from_dict(cls, data: dict[str, Any]) -> "DataRef":
         """Rebuild a reference from its dict form.
 
         Args:

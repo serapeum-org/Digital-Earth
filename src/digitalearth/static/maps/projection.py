@@ -7,6 +7,7 @@ apply the frame before output.
 
 import os
 import warnings
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
 from math import isfinite
@@ -14,14 +15,9 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
-    List,
-    Mapping,
     NamedTuple,
     Optional,
     Self,
-    Sequence,
-    Tuple,
     Union,
 )
 
@@ -60,19 +56,19 @@ MAX_GRATICULE_LINES: int = 2000
 #: How a flat map's grid looks when the caller asks for nothing else, in the **plural** keys a
 #: ``LineCollection`` takes. Deliberately quiet: a graticule is a reference the reader consults, not a layer
 #: they look at, and cleopatra's ``apply_projection_frame`` draws the globe's own grid in the same register.
-_GRATICULE_STYLE: Dict[str, Any] = {
+_GRATICULE_STYLE: dict[str, Any] = {
     "colors": "gray",
     "linewidths": 0.5,
     "linestyles": ":",
 }
 
 #: How a degree label looks. Small and grey for the same reason the lines are.
-_GRATICULE_LABEL_STYLE: Dict[str, Any] = {"fontsize": 8, "color": "gray"}
+_GRATICULE_LABEL_STYLE: dict[str, Any] = {"fontsize": 8, "color": "gray"}
 
 #: The lon/lat window degree labels are placed in when nothing has framed the axes — the span the lines
 #: themselves cover (:func:`digitalearth.static.projections.graticule` runs its meridians from -89.5 to
 #: 89.5), so a label sits at the end of its own line rather than past it.
-_LABEL_WORLD_WINDOW: Tuple[float, float, float, float] = (-180.0, -89.5, 180.0, 89.5)
+_LABEL_WORLD_WINDOW: tuple[float, float, float, float] = (-180.0, -89.5, 180.0, 89.5)
 
 #: How far into the window a label sits, as a fraction of the window's own span, measured from the lower
 #: edge for a meridian and the left edge for a parallel. Non-zero so the text is inside the axes rather
@@ -109,7 +105,7 @@ def _padded(box: Bounds, fraction: float) -> Bounds:
     return box if not fraction else box.padded(fraction)
 
 
-def _from_image(artist: Any, _axes: Any) -> Tuple[float, float, float, float]:
+def _from_image(artist: Any, _axes: Any) -> tuple[float, float, float, float]:
     """Return an image artist's extent, as ``(xmin, ymin, xmax, ymax)``.
 
     Args:
@@ -124,7 +120,7 @@ def _from_image(artist: Any, _axes: Any) -> Tuple[float, float, float, float]:
     return min(left, right), min(bottom, top), max(left, right), max(bottom, top)
 
 
-def _from_collection(artist: Any, axes: Any) -> Tuple[float, float, float, float]:
+def _from_collection(artist: Any, axes: Any) -> tuple[float, float, float, float]:
     """Return a collection's data limits, as ``(xmin, ymin, xmax, ymax)``.
 
     Args:
@@ -139,7 +135,7 @@ def _from_collection(artist: Any, axes: Any) -> Tuple[float, float, float, float
     return float(xmin), float(ymin), float(xmax), float(ymax)
 
 
-def _from_line(artist: Any, _axes: Any) -> Optional[Tuple[float, float, float, float]]:
+def _from_line(artist: Any, _axes: Any) -> tuple[float, float, float, float] | None:
     """Return a line artist's vertex extent, as ``(xmin, ymin, xmax, ymax)``.
 
     Args:
@@ -156,7 +152,7 @@ def _from_line(artist: Any, _axes: Any) -> Optional[Tuple[float, float, float, f
     return float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())
 
 
-def _from_point(artist: Any, _axes: Any) -> Tuple[float, float, float, float]:
+def _from_point(artist: Any, _axes: Any) -> tuple[float, float, float, float]:
     """Return a positioned artist's location as a zero-size rectangle.
 
     Args:
@@ -175,7 +171,7 @@ def _from_point(artist: Any, _axes: Any) -> Tuple[float, float, float, float]:
 #: artist answers to wins. Written as a table rather than as a chain of ``isinstance`` checks because what
 #: matters is the *question the artist answers*, not which matplotlib class it is — a third-party artist a
 #: ``custom:matplotlib`` layer holds answers the same questions without inheriting from any of them.
-_EXTENT_READERS: Tuple[Tuple[str, Any], ...] = (
+_EXTENT_READERS: tuple[tuple[str, Any], ...] = (
     ("get_extent", _from_image),
     ("get_datalim", _from_collection),
     ("get_xydata", _from_line),
@@ -183,9 +179,7 @@ _EXTENT_READERS: Tuple[Tuple[str, Any], ...] = (
 )
 
 
-def _artist_extent(
-    artist: Any, axes: Any
-) -> Optional[Tuple[float, float, float, float]]:
+def _artist_extent(artist: Any, axes: Any) -> tuple[float, float, float, float] | None:
     """Return the region one artist covers, as ``(xmin, ymin, xmax, ymax)`` in data coordinates.
 
     Args:
@@ -208,7 +202,7 @@ def _artist_extent(
 
 def _drawn_extent(
     artists: Sequence[Any], axes: Any
-) -> Optional[Tuple[float, float, float, float]]:
+) -> tuple[float, float, float, float] | None:
     """Return the region one layer's artists cover together.
 
     Args:
@@ -254,7 +248,7 @@ class _Frame(NamedTuple):
     flip_x: bool = False
     flip_y: bool = False
 
-    def limits(self) -> Tuple[float, float, float, float]:
+    def limits(self) -> tuple[float, float, float, float]:
         """Return the axes limits this frame sets, in matplotlib's own order.
 
         Returns:
@@ -272,7 +266,7 @@ class _Frame(NamedTuple):
 #: :data:`digitalearth.static.maps.decoration._UNFRAMED_LIMITS` is the same pair for the same reason — a
 #: replayed basemap meets the same unframed axes — and the two are spelled where they are read because
 #: neither mixin imports the other.
-_UNFRAMED_LIMITS: Tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
+_UNFRAMED_LIMITS: tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
 
 
 @dataclass(frozen=True)
@@ -324,7 +318,7 @@ class _DegreeAxis:
     va: str
     along_longitude: bool
 
-    def lines_within(self, step: float, low: float, high: float) -> List["_GridLine"]:
+    def lines_within(self, step: float, low: float, high: float) -> list["_GridLine"]:
         """Return this axis's lines inside ``[low, high]``, in ascending order.
 
         Anchored on zero rather than on ``low``, so the equator and the prime meridian are always among
@@ -361,7 +355,7 @@ class _DegreeAxis:
             if low <= index * step <= high
         ]
 
-    def anchor(self, value: float, across: float) -> Tuple[float, float]:
+    def anchor(self, value: float, across: float) -> tuple[float, float]:
         """Return the ``(lon, lat)`` a label sits at, from the line's degree and the across-line one.
 
         Args:
@@ -578,7 +572,7 @@ class _Graticule:
         self._lat_step = props["lat_step"]
         self._labelled = bool(props.get("labels", True))
         #: The projected polylines, meridians then parallels, split at the projection limb.
-        self.lines: List[Any] = projections.graticule(
+        self.lines: list[Any] = projections.graticule(
             scene.crs, lon_step=self._lon_step, lat_step=self._lat_step
         )
 
@@ -607,7 +601,7 @@ class _Graticule:
         self._scene._graticule_lines = self.lines
         return self._on_flat_axes(layer, style, labels)
 
-    def labels(self) -> Tuple[_DegreeLabel, ...]:
+    def labels(self) -> tuple[_DegreeLabel, ...]:
         """Place a degree label on every line the view holds.
 
         **Where they go, and why there.** Each label sits on its own line, just inside the lower edge of
@@ -655,7 +649,7 @@ class _Graticule:
         )
         return self._placed(asked, np.asarray(x, float), np.asarray(y, float))
 
-    def window(self) -> Optional[Tuple[float, float, float, float]]:
+    def window(self) -> tuple[float, float, float, float] | None:
         """Return the lon/lat window the view covers, as ``(lon_min, lat_min, lon_max, lat_max)``.
 
         What the labels are placed in: the lines span the world whatever the map is looking at, so the
@@ -696,8 +690,8 @@ class _Graticule:
         )
 
     def _placed(
-        self, asked: List[_GridLine], x: np.ndarray, y: np.ndarray
-    ) -> Tuple[_DegreeLabel, ...]:
+        self, asked: list[_GridLine], x: np.ndarray, y: np.ndarray
+    ) -> tuple[_DegreeLabel, ...]:
         """Keep the labels whose projected anchor the view can show, and name the ones it cannot.
 
         Split from :meth:`labels` because the two answer different questions: that one is *which degrees,
@@ -720,8 +714,8 @@ class _Graticule:
         # An unframed axes is about to be autoscaled to the grid itself, so its limits say nothing about
         # what will be visible and a label is not dropped for falling outside the unit square.
         framed = (xmin, xmax, ymin, ymax) != _UNFRAMED_LIMITS
-        placed: List[_DegreeLabel] = []
-        dropped: List[str] = []
+        placed: list[_DegreeLabel] = []
+        dropped: list[str] = []
         for line, px, py in zip(asked, x, y):
             outside = framed and not (xmin <= px <= xmax and ymin <= py <= ymax)
             if not (isfinite(px) and isfinite(py)) or outside:
@@ -740,8 +734,8 @@ class _Graticule:
     def _on_flat_axes(
         self,
         layer: LayerSpec,
-        style: Dict[str, Any],
-        labels: Tuple[_DegreeLabel, ...],
+        style: dict[str, Any],
+        labels: tuple[_DegreeLabel, ...],
     ) -> DrawnLayer:
         """Put the grid on a flat axes, replacing whatever this layer drew before.
 
@@ -784,7 +778,7 @@ class _Graticule:
             drawn = tuple(label.draw(self._scene.ax) for label in labels)
         return DrawnLayer(artist=self.lines, artists=(collection, *drawn))
 
-    def _previous_artists(self, layer: LayerSpec) -> Tuple[Any, ...]:
+    def _previous_artists(self, layer: LayerSpec) -> tuple[Any, ...]:
         """Return the artists this layer's previous drawing still has on *this* axes.
 
         Args:
@@ -803,7 +797,7 @@ class _Graticule:
         )
 
 
-def _checked_step(keyword: str, value: Optional[float]) -> Optional[float]:
+def _checked_step(keyword: str, value: float | None) -> float | None:
     """Return a spacing a grid can be cut at, or refuse it by name.
 
     Args:
@@ -909,7 +903,7 @@ class _GraticuleSteps(NamedTuple):
     labels: bool = True
 
     @classmethod
-    def held_by(cls, layer: Optional[LayerSpec]) -> Optional["_GraticuleSteps"]:
+    def held_by(cls, layer: LayerSpec | None) -> Optional["_GraticuleSteps"]:
         """Read back what a graticule layer the map already describes is drawn at.
 
         The other half of :meth:`symbology`, and the reason a *replacing*
@@ -927,7 +921,7 @@ class _GraticuleSteps(NamedTuple):
         if layer is None:
             return None
         symbology = getattr(layer, "symbology", None)
-        props: Dict[str, Any] = {} if symbology is None else dict(symbology.props)
+        props: dict[str, Any] = {} if symbology is None else dict(symbology.props)
         return cls(
             float(props.get("lon_step", DEFAULT_GRATICULE_STEP)),
             float(props.get("lat_step", DEFAULT_GRATICULE_STEP)),
@@ -937,9 +931,9 @@ class _GraticuleSteps(NamedTuple):
     @classmethod
     def asked(
         cls,
-        lon_step: Optional[float],
-        lat_step: Optional[float],
-        spacing: Optional[float],
+        lon_step: float | None,
+        lat_step: float | None,
+        spacing: float | None,
         labels: bool = True,
         carried: Optional["_GraticuleSteps"] = None,
     ) -> "_GraticuleSteps":
@@ -1029,8 +1023,8 @@ class _GraticuleEdit(NamedTuple):
     """
 
     held: str
-    was: Optional[LayerSpec]
-    pointer: Optional[str]
+    was: LayerSpec | None
+    pointer: str | None
 
     def undo(self, scene: Any) -> None:
         """Put the description back as this call found it.
@@ -1100,7 +1094,7 @@ class ProjectionMixin(_MixinBase):
     #: (review R2-M10). It is *not* the axes limits read on demand: those are whatever the last autoscale left
     #: behind, which on an unframed figure is matplotlib's unit square, and ``None`` there is the honest
     #: answer rather than that square.
-    _frame_bounds: Optional[Bounds] = None
+    _frame_bounds: Bounds | None = None
 
     @property
     def viewport(self) -> Viewport:
@@ -1134,7 +1128,7 @@ class ProjectionMixin(_MixinBase):
 
     def set_bounds(
         self,
-        bounds: Optional[Union[Bounds, Sequence[float]]] = None,
+        bounds: Bounds | Sequence[float] | None = None,
         *,
         padding: float = 0.0,
     ) -> Self:
@@ -1319,7 +1313,7 @@ class ProjectionMixin(_MixinBase):
 
     def _frame_asked(
         self,
-        bounds: Optional[Union[Bounds, Sequence[float]]],
+        bounds: Bounds | Sequence[float] | None,
         padding: float,
     ) -> "_Frame":
         """Resolve what a caller asked for into one rectangle in the display CRS, padded.
@@ -1432,7 +1426,7 @@ class ProjectionMixin(_MixinBase):
                 measured[layer.id] = Bounds(*covered, self.crs)
         return measured
 
-    def set_domain(self, domain: Optional[DomainLike] = None) -> Self:
+    def set_domain(self, domain: DomainLike | None = None) -> Self:
         """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.
 
         Args:
@@ -1486,13 +1480,13 @@ class ProjectionMixin(_MixinBase):
 
     def graticule(
         self,
-        lon_step: Optional[float] = None,
-        lat_step: Optional[float] = None,
+        lon_step: float | None = None,
+        lat_step: float | None = None,
         *,
-        spacing: Optional[float] = None,
-        labels: Optional[bool] = None,
-        name: Optional[str] = None,
-        visible: Optional[bool] = None,
+        spacing: float | None = None,
+        labels: bool | None = None,
+        name: str | None = None,
+        visible: bool | None = None,
     ) -> Self:
         """Add a lon/lat graticule to the map, with its degrees labelled.
 
@@ -1717,7 +1711,7 @@ class ProjectionMixin(_MixinBase):
         return self
 
     def _labels_asked(
-        self, labels: Optional[bool], carried: Optional["_GraticuleSteps"] = None
+        self, labels: bool | None, carried: Optional["_GraticuleSteps"] = None
     ) -> bool:
         """Settle whether this graticule is labelled, refusing the frame that cannot carry labels.
 
@@ -1763,7 +1757,7 @@ class ProjectionMixin(_MixinBase):
             )
         return False
 
-    def _graticule_held(self) -> Optional[LayerSpec]:
+    def _graticule_held(self) -> LayerSpec | None:
         """Return the graticule layer a next call would replace, or ``None`` for a creating call.
 
         Read by :meth:`graticule` for the options a replacing call inherits and by
@@ -1785,8 +1779,8 @@ class ProjectionMixin(_MixinBase):
         self,
         symbology: Symbology,
         *,
-        name: Optional[str],
-        visible: Optional[bool],
+        name: str | None,
+        visible: bool | None,
     ) -> _GraticuleEdit:
         """Describe the one graticule layer, replacing the map's own rather than adding a second.
 
@@ -1915,7 +1909,7 @@ class ProjectionMixin(_MixinBase):
         )
         return patch
 
-    def _own_the_graticule(self, artists: Tuple[Any, ...]) -> None:
+    def _own_the_graticule(self, artists: tuple[Any, ...]) -> None:
         """Give the described graticule layer the artists the projection frame drew for it, and its flag.
 
         Args:

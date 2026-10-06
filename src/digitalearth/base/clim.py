@@ -57,7 +57,8 @@ See Also:
     digitalearth.base.spec.scale.Scale: owns what a pair of limits means as a colour domain.
 """
 
-from typing import Any, Iterable, List, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -82,8 +83,8 @@ DEFAULT_CLIM_SCAN_CAP: int = 24
 
 
 def sample_evenly(
-    items: Sequence[Any], cap: Optional[int] = DEFAULT_CLIM_SCAN_CAP
-) -> List[Any]:
+    items: Sequence[Any], cap: int | None = DEFAULT_CLIM_SCAN_CAP
+) -> list[Any]:
     """Return at most ``cap`` items, spread evenly across the whole of ``items``.
 
     Sampling happens *before* the frames are read, which is the point: the cap is there to bound how many
@@ -176,7 +177,7 @@ def sample_evenly(
     return [seq[round(i * step)] for i in range(cap)]
 
 
-def measure_clim(arrays: Iterable[Any]) -> Optional[Tuple[float, float]]:
+def measure_clim(arrays: Iterable[Any]) -> tuple[float, float] | None:
     """Return the ``(min, max)`` across ``arrays``, ignoring nodata and non-finite values.
 
     Args:
@@ -216,8 +217,8 @@ def measure_clim(arrays: Iterable[Any]) -> Optional[Tuple[float, float]]:
 
             ```
     """
-    lows: List[float] = []
-    highs: List[float] = []
+    lows: list[float] = []
+    highs: list[float] = []
     for arr in arrays:
         values = arr
         if np.ma.isMaskedArray(values):
@@ -233,7 +234,7 @@ def measure_clim(arrays: Iterable[Any]) -> Optional[Tuple[float, float]]:
     return (min(lows), max(highs)) if lows else None
 
 
-def frozen_scale(measured: Optional[Tuple[float, float]]) -> Scale:
+def frozen_scale(measured: tuple[float, float] | None) -> Scale:
     """Turn a stack's measured range — or nothing measurable — into the domain every frame shares.
 
     The seam between this module and :class:`~digitalearth.base.spec.scale.Scale`: the measurement is this

@@ -10,7 +10,8 @@ module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competit
 all CRS work upstream.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -210,7 +211,7 @@ def _color_encoding(
     scheme: Any,
     k: int,
     cmap: Any,
-) -> Optional[Dict[str, Encoding]]:
+) -> dict[str, Encoding] | None:
     """Return the colour encoding a coloured cloud publishes, or `None` for an uncoloured one.
 
     The cloud's colour comes from a value per point, so a key over it explains that column — which is what
@@ -256,7 +257,7 @@ def _color_encoding(
     }
 
 
-def _refuse_folded_marker_size(props: Dict[str, Any]) -> None:
+def _refuse_folded_marker_size(props: dict[str, Any]) -> None:
     """Refuse ``point_size=``, the deleted spelling this drawer folds ``size=`` onto.
 
     ``point_size`` is a real :meth:`pyvista.Plotter.add_points` keyword, so PyVista's own unknown-keyword

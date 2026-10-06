@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 
 import pytest
 
@@ -44,7 +44,7 @@ MANIFEST = Path(__file__).resolve().parents[2] / "pyproject.toml"
 #: package left by a half-removed install, or a stub some other test put in `sys.modules`. Naming a symbol
 #: the tier really uses does tell them apart, and it is also the thing that breaks when an engine moves its
 #: API — which, in the one environment that pins three engines together, is what a version bump looks like.
-ENGINE_ENTRY_POINTS: Tuple[Tuple[str, str], ...] = (
+ENGINE_ENTRY_POINTS: tuple[tuple[str, str], ...] = (
     ("pyvista", "Plotter"),
     ("holoviews", "Store"),
     ("maplibre", "Layer"),
@@ -59,7 +59,7 @@ ENGINE_ENTRY_POINTS: Tuple[Tuple[str, str], ...] = (
 #: :func:`tests.base.test_map_conformance._described` already refuses to make, and for the reason it gives:
 #: "the band is the layer's own override where it set one and its kind's band otherwise … comparing the raw
 #: field would say they agree while saying nothing" (review R-L1).
-EXPECTED_DESCRIPTION: Tuple[Tuple[str, Any, bool], ...] = (
+EXPECTED_DESCRIPTION: tuple[tuple[str, Any, bool], ...] = (
     ("graticule", "reference", True),
     ("points", "data", True),
 )
@@ -91,7 +91,7 @@ def _seed_points():
     )
 
 
-def _described(tier) -> Tuple[Tuple[str, Any, bool], ...]:
+def _described(tier) -> tuple[tuple[str, Any, bool], ...]:
     """Draw the seed figure on one tier and reduce it to what every tier should agree on.
 
     Args:

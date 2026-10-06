@@ -1,6 +1,7 @@
 """TimeSeries — reduce a DatasetCollection to a per-time-step series and plot it as a line."""
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
@@ -77,7 +78,7 @@ class TimeSeries:
         return np.asarray(out)
 
     def plot(
-        self, times: Optional[Sequence] = None, ax: Optional[Axes] = None, **kwargs
+        self, times: Sequence | None = None, ax: Axes | None = None, **kwargs
     ) -> Any:
         """Plot the series as a line.
 

@@ -14,8 +14,9 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 """
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger
 
@@ -229,7 +230,7 @@ def _even_levels(source: Any, count: int) -> list:
 
 def _as_interval(
     interval: float | ContourInterval | None,
-) -> Optional[ContourInterval]:
+) -> ContourInterval | None:
     """Read the `interval=` argument in either spelling, so a plain number keeps meaning "every N".
 
     Args:
@@ -272,8 +273,8 @@ class _ContourLevels:
             `interval=100` as it was written, not as the :class:`ContourInterval` it normalises to.
     """
 
-    spacing: Optional[ContourInterval]
-    fixed: Optional[Any]
+    spacing: ContourInterval | None
+    fixed: Any | None
     asked: float | ContourInterval | None = None
 
     @property
@@ -465,10 +466,10 @@ class VectorMixin(_MixinBase):
         self,
         values: Any,
         column: str,
-        scheme: Optional[Any],
+        scheme: Any | None,
         k: int,
         cmap: str,
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre data-driven colour expression for ``column`` and record the breaks.
 
         Args:
@@ -511,7 +512,7 @@ class VectorMixin(_MixinBase):
 
     def _categorical_color_expr(
         self, values: Any, column: str, cmap: str
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre ``match`` expression over the column's distinct values (DC.8).
 
         Args:
@@ -577,7 +578,7 @@ class VectorMixin(_MixinBase):
 
     def _graduated_color_expr(
         self, values: Any, column: str, scheme: Any, k: int, cmap: str
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre ``step`` expression over class edges.
 
         Args:
@@ -641,7 +642,7 @@ class VectorMixin(_MixinBase):
 
     def _ramp_color_expr(
         self, values: Any, column: str, cmap: str
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre ``interpolate`` expression over a continuous ramp.
 
         Args:
@@ -702,9 +703,9 @@ class VectorMixin(_MixinBase):
         color: Maybe[str] = UNSET,
         halo_color: str = DEFAULT_LABEL_HALO_COLOR,
         halo_width: float = DEFAULT_LABEL_HALO_WIDTH,
-        offset: Optional[Any] = None,
+        offset: Any | None = None,
         allow_overlap: bool = False,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Label features with the text in ``column`` (recipe W2).
@@ -796,8 +797,8 @@ class VectorMixin(_MixinBase):
         )
 
     def _contour_levels(
-        self, source: Any, *, interval: Optional[ContourInterval], levels: Optional[Any]
-    ) -> Optional[Any]:
+        self, source: Any, *, interval: ContourInterval | None, levels: Any | None
+    ) -> Any | None:
         """Settle which iso-values `contours` traces, refusing the two ways of asking that cannot combine.
 
         Args:
@@ -833,12 +834,12 @@ class VectorMixin(_MixinBase):
         features: Any,
         *,
         filled: bool,
-        column: Optional[str],
+        column: str | None,
         cmap: str,
-        color: Optional[str],
+        color: str | None,
         width: float,
         opacity: float,
-        name: Optional[str],
+        name: str | None,
         visible: bool,
         asked: Sequence[str] = (),
     ) -> None:
@@ -878,7 +879,7 @@ class VectorMixin(_MixinBase):
         # a caller's `color=` pins every contour to one colour instead — and a flat colour drives nothing, so
         # there is no field-driven encoding to publish and no colour key to be asked for on it.
         colour: Any = color or VECTOR_COLOR
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is not None:
             colour, color_encoding = self._ramp_color_expr(
                 self._require_column(gdf, column), column, cmap
@@ -942,16 +943,16 @@ class VectorMixin(_MixinBase):
         dataset: Any,
         *,
         interval: float | ContourInterval | None = None,
-        levels: Optional[Any] = None,
+        levels: Any | None = None,
         band: int = DEFAULT_BAND,
         filled: bool = False,
-        cmap: Optional[str] = None,
-        units: Optional[str] = None,
-        color: Optional[str] = None,
+        cmap: str | None = None,
+        units: str | None = None,
+        color: str | None = None,
         width: Maybe[float] = UNSET,
         opacity: Maybe[float] = UNSET,
         labels: bool = False,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Trace iso-value contours from a raster band and draw them as vectors.
@@ -1104,12 +1105,12 @@ class VectorMixin(_MixinBase):
         paint: dict,
         *,
         kind: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
-        layout: Optional[dict] = None,
+        layout: dict | None = None,
         source: Any = None,
         asked: Sequence[str] = (),
-        color_encoding: Optional[Encoding] = None,
+        color_encoding: Encoding | None = None,
     ) -> Self:
         """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
 
@@ -1208,16 +1209,16 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         size: Maybe[float] = UNSET,
         color: Maybe[str] = UNSET,
         opacity: Maybe[float] = UNSET,
-        big: Optional[bool] = None,
-        big_data_threshold: Optional[int] = None,
-        name: Optional[str] = None,
+        big: bool | None = None,
+        big_data_threshold: int | None = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
@@ -1342,7 +1343,7 @@ class VectorMixin(_MixinBase):
                 )
             return self.deck_scatter(gdf, size=size)
         paint: dict = {"circle-radius": float(size), "circle-opacity": float(opacity)}
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is not None:
             paint["circle-color"], color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -1366,14 +1367,14 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         width: Maybe[float] = UNSET,
         color: Maybe[str] = UNSET,
         opacity: Maybe[float] = UNSET,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a line ``FeatureCollection`` as a MapLibre line layer (recipe W2).
@@ -1453,7 +1454,7 @@ class VectorMixin(_MixinBase):
         )
         gdf = self._display_gdf(features, method="lines")
         colour: Any
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is None:
             # Only on this arm, as before: `ask` *records* the key as named, so reaching it on the
             # classified arm too would add `line-color` to what the caller is said to have asked for.
@@ -1479,16 +1480,16 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         color: Maybe[str] = UNSET,
         opacity: Maybe[float] = UNSET,
         outline_color: str = "#ffffff",
-        big: Optional[bool] = None,
-        big_data_threshold: Optional[int] = None,
-        name: Optional[str] = None,
+        big: bool | None = None,
+        big_data_threshold: int | None = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a polygon ``FeatureCollection`` as a MapLibre fill layer (recipe W2).
@@ -1607,7 +1608,7 @@ class VectorMixin(_MixinBase):
                 )
             return self.deck_polygons(gdf)
         colour: Any
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is None:
             # Only on this arm, as before: `ask` *records* the key as named, so reaching it on the
             # classified arm too would add `fill-color` to what the caller is said to have asked for.
@@ -1634,12 +1635,12 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        scheme: Optional[Any] = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         opacity: Maybe[float] = UNSET,
         outline_color: str = "#ffffff",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).

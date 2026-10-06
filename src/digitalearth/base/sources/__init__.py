@@ -12,7 +12,7 @@ own leaf module (:mod:`digitalearth.base.sources.source`) so importing it here a
 not create a cycle.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -41,10 +41,10 @@ def get_source(
     data: PlottableData,
     *,
     band: int = DEFAULT_BAND,
-    variable: Optional[str] = None,
-    x: Optional[np.ndarray] = None,
-    y: Optional[np.ndarray] = None,
-    metadata: Optional[dict] = None,
+    variable: str | None = None,
+    x: np.ndarray | None = None,
+    y: np.ndarray | None = None,
+    metadata: dict | None = None,
     crs: Any = None,
 ) -> Source:
     """Build a :class:`Source` from any supported input (dispatch entry point).

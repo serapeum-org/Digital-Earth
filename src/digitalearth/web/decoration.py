@@ -18,7 +18,7 @@ for pyramids to compute geodesic distance/area (the GIS part).
 import html
 import re
 from dataclasses import replace as _with_fields
-from typing import TYPE_CHECKING, Any, List, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.basemaps import (
@@ -159,7 +159,7 @@ def _format_number(value: Any) -> str:
     return f"{value:.3f}".rstrip("0").rstrip(".")
 
 
-def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) -> str:
+def _legend_rows(kind: str, values: list, colors: list, labels: list | None) -> str:
     """Build the body of a legend for one classification.
 
     Args:
@@ -217,7 +217,7 @@ DEFAULT_KEY_ANCHOR = "bottom-right"
 LEGEND_LABELS = "legend_labels"
 
 
-def keyable_layer_ids(web_map: Any) -> List[str]:
+def keyable_layer_ids(web_map: Any) -> list[str]:
     """Return the live layers a colour key could describe, bottom-first.
 
     A layer qualifies when two things hold: its ``color`` channel is driven by a **field** rather than by a
@@ -231,7 +231,7 @@ def keyable_layer_ids(web_map: Any) -> List[str]:
     Returns:
         The qualifying ids in draw order, bottom first, so the caller reads the topmost off the end.
     """
-    keyed: List[str] = []
+    keyed: list[str] = []
     for layer_id in web_map.layer_ids:
         encoding = web_map._layer_tree.get(layer_id).symbology.encoding("color")
         if encoding is None or encoding.is_constant:
@@ -241,7 +241,7 @@ def keyable_layer_ids(web_map: Any) -> List[str]:
     return keyed
 
 
-def guided_layer_ids(web_map: Any) -> List[str]:
+def guided_layer_ids(web_map: Any) -> list[str]:
     """Return the live layers asking to have their colour explained, bottom-first.
 
     The keyable layers (:func:`keyable_layer_ids`) narrowed to those carrying a
@@ -256,7 +256,7 @@ def guided_layer_ids(web_map: Any) -> List[str]:
     Returns:
         The ids in draw order, bottom first, so the caller reads the topmost off the end.
     """
-    asked: List[str] = []
+    asked: list[str] = []
     for layer_id in keyable_layer_ids(web_map):
         guide = web_map._layer_tree.get(layer_id).symbology.guide()
         if guide is not None and guide.show:
@@ -264,7 +264,7 @@ def guided_layer_ids(web_map: Any) -> List[str]:
     return asked
 
 
-def drawn_guide_layer(web_map: Any) -> Optional[str]:
+def drawn_guide_layer(web_map: Any) -> str | None:
     """Return the layer whose colour key is on screen, or `None` when none is.
 
     **This tier draws one key**, and this is the one function that decides whose — the topmost *visible*
@@ -287,7 +287,7 @@ def drawn_guide_layer(web_map: Any) -> Optional[str]:
     return None
 
 
-def _legend_panel(spec: dict, guide: Guide, labels: Optional[Any]) -> tuple:
+def _legend_panel(spec: dict, guide: Guide, labels: Any | None) -> tuple:
     """Build one colour key as a floating panel.
 
     Args:
@@ -678,9 +678,9 @@ class DecorationMixin(_MixinBase):
         attribution: str = "",
         tile_size: int = 256,
         opacity: Maybe[float] = UNSET,
-        max_zoom: Optional[int] = None,
-        bounds: Optional[Any] = None,
-        name: Optional[str] = None,
+        max_zoom: int | None = None,
+        bounds: Any | None = None,
+        name: str | None = None,
     ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
@@ -797,9 +797,9 @@ class DecorationMixin(_MixinBase):
         provider: str = DEFAULT_BASEMAP_PROVIDER,
         *,
         opacity: Maybe[float] = UNSET,
-        api_key: Optional[str] = None,
-        preset: Optional[dict] = None,
-        name: Optional[str] = None,
+        api_key: str | None = None,
+        preset: dict | None = None,
+        name: str | None = None,
     ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
@@ -881,10 +881,10 @@ class DecorationMixin(_MixinBase):
     def legend(
         self,
         *,
-        layer_id: Optional[str] = None,
-        title: Optional[str] = None,
+        layer_id: str | None = None,
+        title: str | None = None,
         position: str = DEFAULT_KEY_ANCHOR,
-        labels: Optional[list] = None,
+        labels: list | None = None,
         visible: bool = True,
     ) -> Self:
         """Add a key for a classified layer (recipe W2).
@@ -982,11 +982,11 @@ class DecorationMixin(_MixinBase):
 
     def _record_key(
         self,
-        layer_id: Optional[str],
+        layer_id: str | None,
         *,
-        title: Optional[str],
+        title: str | None,
         position: str = DEFAULT_KEY_ANCHOR,
-        labels: Optional[list],
+        labels: list | None,
         visible: bool,
         caller: str,
     ) -> Self:
@@ -1050,11 +1050,11 @@ class DecorationMixin(_MixinBase):
 
     def _check_key_arguments(
         self,
-        layer_id: Optional[str],
+        layer_id: str | None,
         *,
-        title: Optional[str],
+        title: str | None,
         position: str,
-        labels: Optional[list],
+        labels: list | None,
     ) -> None:
         """Refuse a malformed key description, before the `visible` flag has been read at all.
 
@@ -1094,7 +1094,7 @@ class DecorationMixin(_MixinBase):
             # KeyError by name, then ValueError for no classification — the same two refusals
             # `_guide_target` gives a named layer, reached here so neither waits on the flag.
             self._legend_of(layer_id)
-            described: Optional[str] = layer_id
+            described: str | None = layer_id
         else:
             keyable = keyable_layer_ids(self)
             described = keyable[-1] if keyable else None
@@ -1104,8 +1104,8 @@ class DecorationMixin(_MixinBase):
             _legend_panel(self._legend_of(described), guide, rows)
 
     def _guide_target(
-        self, layer_id: Optional[str], *, visible: bool, caller: str = "legend()"
-    ) -> Optional[str]:
+        self, layer_id: str | None, *, visible: bool, caller: str = "legend()"
+    ) -> str | None:
         """Return the layer a colour key should describe.
 
         Args:
@@ -1179,9 +1179,7 @@ class DecorationMixin(_MixinBase):
             "choropleth (or any builder given column=...) first."
         )
 
-    def _attach_guide(
-        self, layer_id: str, guide: Guide, labels: Optional[list]
-    ) -> None:
+    def _attach_guide(self, layer_id: str, guide: Guide, labels: list | None) -> None:
         """Record on one layer that its colour is explained, and how.
 
         Args:
@@ -1216,12 +1214,12 @@ class DecorationMixin(_MixinBase):
     def layer_control(
         self,
         *,
-        layers: Optional[list] = None,
+        layers: list | None = None,
         position: str = "top-right",
-        controls: Optional[list] = None,
+        controls: list | None = None,
         theme: str = "default",
-        opacity: Optional[dict] = None,
-        order: Optional[list] = None,
+        opacity: dict | None = None,
+        order: list | None = None,
     ) -> Self:
         """Add a switcher so a viewer can turn the data layers on and off, dim them, and reorder them.
 
@@ -1379,7 +1377,7 @@ class DecorationMixin(_MixinBase):
         )
         return self
 
-    def _resolve_layer_opacity(self, opacity: Optional[dict]) -> tuple:
+    def _resolve_layer_opacity(self, opacity: dict | None) -> tuple:
         """Validate the whole opacity request and build each layer's rewritten spec, without mutating the map.
 
         The web tier builds no live opacity slider (py-maplibregl's switcher is visibility rows), so opacity
@@ -1470,7 +1468,7 @@ class DecorationMixin(_MixinBase):
         symbology = Symbology(encodings=dict(layer.symbology.encodings), props=props)
         return _with_fields(layer, symbology=symbology)
 
-    def _check_layer_order(self, order: Optional[list]) -> None:
+    def _check_layer_order(self, order: list | None) -> None:
         """Prove the full order is a legal in-band permutation, replaying the moves on a trial tree only.
 
         :meth:`_apply_layer_order` moves each listed layer through the map's own ``move_layer``, and a move
@@ -1495,7 +1493,7 @@ class DecorationMixin(_MixinBase):
         for offset, layer_id in enumerate(order):
             tree = tree.move(layer_id, anchor + offset)
 
-    def _apply_layer_order(self, order: Optional[list]) -> tuple:
+    def _apply_layer_order(self, order: list | None) -> tuple:
         """Reorder the named layers bottom-to-top, through the map's own ``move_layer``.
 
         The web tier builds no drag-to-reorder control, so ordering is applied declaratively: each listed
@@ -1524,14 +1522,14 @@ class DecorationMixin(_MixinBase):
         self,
         lon: float,
         lat: float,
-        s: Optional[str] = None,
+        s: str | None = None,
         *,
         crs: Any = 4326,
         text_size: float = 14.0,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> Self:
         """Place a single line of text at a coordinate.
 
@@ -1612,7 +1610,7 @@ class DecorationMixin(_MixinBase):
         heading: str,
         *,
         position: str = "top-left",
-        subtitle: Optional[str] = None,
+        subtitle: str | None = None,
     ) -> Self:
         """Put a title on the map itself, so a saved page carries its own heading.
 
@@ -1650,14 +1648,14 @@ class DecorationMixin(_MixinBase):
     def graticule(
         self,
         *,
-        lon_step: Optional[float] = None,
-        lat_step: Optional[float] = None,
-        spacing: Optional[float] = None,
+        lon_step: float | None = None,
+        lat_step: float | None = None,
+        spacing: float | None = None,
         color: str = "#888888",
         width: float = 0.5,
         opacity: Maybe[float] = UNSET,
         labels: bool = True,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a lat/lon grid over the map.
@@ -2045,7 +2043,7 @@ class DecorationMixin(_MixinBase):
         *,
         position: str = "bottom-right",
         compact: bool = False,
-        custom: Optional[str] = None,
+        custom: str | None = None,
     ) -> Self:
         """Add a MapLibre attribution control — the data and tile credits (WB-14).
 
@@ -2280,10 +2278,10 @@ class DecorationMixin(_MixinBase):
         api_key: str,
         *,
         position: str = "top-left",
-        placeholder: Optional[str] = None,
-        language: Optional[str] = None,
-        country: Optional[str] = None,
-        limit: Optional[int] = None,
+        placeholder: str | None = None,
+        language: str | None = None,
+        country: str | None = None,
+        limit: int | None = None,
         fly_to: bool = True,
     ) -> Self:
         """Add a place-search box backed by MapTiler's geocoding service (WB-15).
@@ -2543,7 +2541,7 @@ class DecorationMixin(_MixinBase):
         return properties
 
     @staticmethod
-    def _attribute_template(fields: Optional[List[str]]) -> dict:
+    def _attribute_template(fields: list[str] | None) -> dict:
         """Build the ``add_popup``/``add_tooltip`` kwargs for ``fields``.
 
         Args:
@@ -2562,9 +2560,9 @@ class DecorationMixin(_MixinBase):
 
     def popup(
         self,
-        fields: Optional[List[str]] = None,
+        fields: list[str] | None = None,
         *,
-        layer: Optional[Union[str, List[str]]] = None,
+        layer: str | list[str] | None = None,
     ) -> Self:
         """Show an attribute popup on **click** for one or several layers' features (recipe W2, WB-11).
 
@@ -2587,9 +2585,9 @@ class DecorationMixin(_MixinBase):
 
     def tooltip(
         self,
-        fields: Optional[List[str]] = None,
+        fields: list[str] | None = None,
         *,
-        layer: Optional[Union[str, List[str]]] = None,
+        layer: str | list[str] | None = None,
     ) -> Self:
         """Show an attribute tooltip on **hover** for one or several layers' features (recipe W2, WB-11).
 
@@ -2612,8 +2610,8 @@ class DecorationMixin(_MixinBase):
 
     def _bind_attribute(
         self,
-        fields: Optional[List[str]],
-        layer: Optional[Union[str, List[str]]],
+        fields: list[str] | None,
+        layer: str | list[str] | None,
         *,
         trigger: str,
         add: str,
@@ -2663,7 +2661,7 @@ class DecorationMixin(_MixinBase):
             self._queue(self._attribute_closure(layer_id, add, kwargs))
         return self
 
-    def _inspector_targets(self, layer: Optional[Union[str, List[str]]]) -> List[str]:
+    def _inspector_targets(self, layer: str | list[str] | None) -> list[str]:
         """Resolve a ``popup``/``tooltip`` ``layer=`` into the list of layer ids to bind.
 
         Args:

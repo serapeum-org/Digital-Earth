@@ -12,8 +12,9 @@ file by name rather than a broken tile.
 import html
 import logging
 from base64 import b64encode
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Sequence
+from typing import Any
 
 __all__ = ["gallery"]
 
@@ -232,7 +233,7 @@ def gallery(
     *,
     title: str = "digitalearth gallery",
     columns: int = 3,
-    captions: Optional[Sequence[str]] = None,
+    captions: Sequence[str] | None = None,
     sandbox: str = _IFRAME_SANDBOX,
 ) -> Path:
     """Build a standalone HTML gallery embedding ``images`` and write it to ``path``.

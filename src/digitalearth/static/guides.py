@@ -32,7 +32,7 @@ by maintenance (#185).
 import logging
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend, hatch_legend
 from matplotlib.colors import to_hex, to_rgba
@@ -72,7 +72,7 @@ __all__ = [
 GUIDE_KIND_KEY: str = "guide_kind"
 
 #: The two kinds of colour key this tier draws: a colorbar strip, or a list of labelled swatches.
-GUIDE_KINDS: Tuple[str, ...] = ("colorbar", "legend")
+GUIDE_KINDS: tuple[str, ...] = ("colorbar", "legend")
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ def _colours_by_value(artist: Any) -> bool:
     return callable(read) and read() is not None
 
 
-def _swatches(legend: Any) -> Tuple[List[Any], List[str]]:
+def _swatches(legend: Any) -> tuple[list[Any], list[str]]:
     """Return the categories and colours a glyph's own swatch legend was drawn with.
 
     Read off the drawn legend rather than re-derived from the values: cleopatra assigns a categorical fill's
@@ -194,7 +194,7 @@ def _swatches(legend: Any) -> Tuple[List[Any], List[str]]:
         categorical fill's swatch list and must not be published as one.
     """
     labels = [text.get_text() for text in legend.get_texts()]
-    colors: List[str] = []
+    colors: list[str] = []
     for handle in legend.legend_handles:
         face = getattr(handle, "get_facecolor", None)
         if face is None:
@@ -205,7 +205,7 @@ def _swatches(legend: Any) -> Tuple[List[Any], List[str]]:
     return list(labels), colors
 
 
-def drawn_scale(artist: Any) -> Optional[Scale]:
+def drawn_scale(artist: Any) -> Scale | None:
     """Return the scale a drawn artist colours through, read off its own norm.
 
     Shared rather than private because a drawer needs the same answer: `FieldColors.applied_to` in the
@@ -261,7 +261,7 @@ def drawn_scale(artist: Any) -> Optional[Scale]:
     return Scale.from_limits(low, high)
 
 
-def color_encoding(field: Optional[str], drawn: Any) -> Optional[Encoding]:
+def color_encoding(field: str | None, drawn: Any) -> Encoding | None:
     """Return what drives a drawn layer's colour, or ``None`` when nothing does.
 
     Args:
@@ -327,7 +327,7 @@ def color_encoding(field: Optional[str], drawn: Any) -> Optional[Encoding]:
     return Encoding.by_field("color", field, scale=drawn_scale(drawn.artist))
 
 
-def bar_refusal(layer: LayerSpec) -> Optional[str]:
+def bar_refusal(layer: LayerSpec) -> str | None:
     """Return why a colorbar cannot describe one layer's colour, or ``None`` when it can.
 
     Asked twice, in one spelling: :meth:`~digitalearth.static.scene.Scene.colorbar` asks it **before** it
@@ -399,7 +399,7 @@ def guide_kind(layer: LayerSpec) -> str:
     return "legend" if scale is not None and scale.is_categorical else "colorbar"
 
 
-def _legend_spec(scale: Scale, artist: Any, title: Optional[str]) -> LegendSpec:
+def _legend_spec(scale: Scale, artist: Any, title: str | None) -> LegendSpec:
     """Return the rows a swatch key is drawn from, derived from the scale the layer was drawn through.
 
     Args:
@@ -430,7 +430,7 @@ def _legend_spec(scale: Scale, artist: Any, title: Optional[str]) -> LegendSpec:
     )
 
 
-def _rows(layer: LayerSpec, spec: LegendSpec) -> List[str]:
+def _rows(layer: LayerSpec, spec: LegendSpec) -> list[str]:
     """Return the row labels a swatch key is drawn with: the caller's own, or the derived ones.
 
     Args:
@@ -464,7 +464,7 @@ def _rows(layer: LayerSpec, spec: LegendSpec) -> List[str]:
     return rows
 
 
-def _hatches_of(artist: Any) -> Optional[Tuple[str, ...]]:
+def _hatches_of(artist: Any) -> tuple[str, ...] | None:
     """Return the hatch pattern of each band a filled contour set draws, or ``None`` when it hatches none.
 
     Args:
@@ -484,7 +484,7 @@ def _hatches_of(artist: Any) -> Optional[Tuple[str, ...]]:
     return tuple(patterns[index % len(patterns)] or "" for index in range(bands))
 
 
-def _marked_bands(artist: Any, bands: int) -> List[bool]:
+def _marked_bands(artist: Any, bands: int) -> list[bool]:
     """Say, band by band, whether a filled contour set put any geometry on the axes for it.
 
     Levels may run past the data — ``levels=[0, 0.05, 1, 5, 10]`` over a p-value field that stops at 0.95
@@ -571,13 +571,13 @@ class GuidePlan:
     """
 
     kind: str
-    title: Optional[str] = None
-    anchor: Optional[str] = None
+    title: str | None = None
+    anchor: str | None = None
     mappable: Any = None
-    colors: Tuple[Optional[str], ...] = ()
-    rows: Tuple[str, ...] = ()
-    hatches: Tuple[str, ...] = ()
-    hatch_color: Optional[str] = None
+    colors: tuple[str | None, ...] = ()
+    rows: tuple[str, ...] = ()
+    hatches: tuple[str, ...] = ()
+    hatch_color: str | None = None
 
 
 @dataclass(frozen=True, eq=False)
@@ -674,13 +674,13 @@ class _HatchedKey:
     layer_id: str
     artist: Any
     spec: LegendSpec
-    kept: Tuple[int, ...]
-    rows: Tuple[str, ...]
-    hatches: Tuple[str, ...]
+    kept: tuple[int, ...]
+    rows: tuple[str, ...]
+    hatches: tuple[str, ...]
 
     @classmethod
     def of(
-        cls, layer: LayerSpec, artist: Any, title: Optional[str]
+        cls, layer: LayerSpec, artist: Any, title: str | None
     ) -> Optional["_HatchedKey"]:
         """Read a drawn layer's hatched bands, or answer ``None`` when it has none.
 
@@ -741,7 +741,7 @@ class _HatchedKey:
             hatches=hatches,
         )
 
-    def plan(self, guide: Any) -> Optional[GuidePlan]:
+    def plan(self, guide: Any) -> GuidePlan | None:
         """Build the swatch key these rows describe, or answer ``None`` when there are no rows.
 
         Args:
@@ -779,8 +779,8 @@ class _HatchedKey:
 
 
 def _legend_plan(
-    layer: LayerSpec, artist: Any, scale: Optional[Scale], guide: Any
-) -> Optional[GuidePlan]:
+    layer: LayerSpec, artist: Any, scale: Scale | None, guide: Any
+) -> GuidePlan | None:
     """Derive the swatch key a layer's recorded legend asks for.
 
     The two ways a swatch key's rows are derived, in the order they are tried: off the drawn artist for a
@@ -826,7 +826,7 @@ def _legend_plan(
     )
 
 
-def plan_guide(layer: LayerSpec, drawn: Any) -> Optional[GuidePlan]:
+def plan_guide(layer: LayerSpec, drawn: Any) -> GuidePlan | None:
     """Derive the key one layer's recorded guide asks for, refusing one this tier cannot draw.
 
     The orchestrator of the two kinds this tier draws: a swatch key is :func:`_legend_plan`'s, read either
@@ -1035,9 +1035,7 @@ def _paint_hatch_legend(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
     return legend
 
 
-def draw_guide(
-    scene: Any, layer: LayerSpec, drawn: Any, **kwargs: Any
-) -> Optional[Any]:
+def draw_guide(scene: Any, layer: LayerSpec, drawn: Any, **kwargs: Any) -> Any | None:
     """Draw the colour key one layer's recorded guide asks for, and return what was drawn.
 
     The two halves in one call, for a caller with nothing to do between them.

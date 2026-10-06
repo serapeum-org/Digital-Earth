@@ -13,9 +13,10 @@ the full read stands, so nothing already drawn moves.
 """
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -115,7 +116,7 @@ _DECIMATE_ABOVE = 2.0
 _FALLBACK_CANVAS = (640, 480)
 
 
-def _canvas_pixels(scene: Any) -> Tuple[int, int]:
+def _canvas_pixels(scene: Any) -> tuple[int, int]:
     """Return the device pixels a scene's figure will be drawn at.
 
     Device pixels, not inches: a figure saved at 200 dpi draws four times the pixels of the same figure at
@@ -233,7 +234,7 @@ def _windowed_field(scene: Any, data: Any, band: int, target: RenderTarget) -> A
         return None
 
 
-def _band_identity(data: Any, band: int) -> Tuple[str, Optional[str]]:
+def _band_identity(data: Any, band: int) -> tuple[str, str | None]:
     """Return a band's name and units, read from the raster's metadata rather than from its values.
 
     A windowed read answers with a bare array, which carries neither — pyramids' own docstring says *"pixel
@@ -259,7 +260,7 @@ def _band_identity(data: Any, band: int) -> Tuple[str, Optional[str]]:
 
 def _field_source(
     scene: Any, data: Any, band: int, *, exact: bool = False
-) -> Tuple[Any, Any]:
+) -> tuple[Any, Any]:
     """Read one band for a field render, at the resolution the figure will draw it (ST-5).
 
     Args:
@@ -305,7 +306,7 @@ def _field_source(
     return view, identity
 
 
-def _described_cmap(cmap: Any) -> Tuple[Any, Any]:
+def _described_cmap(cmap: Any) -> tuple[Any, Any]:
     """Split a colormap argument into the name a description records and the object held beside the layer.
 
     Args:
@@ -328,7 +329,7 @@ def _described_cmap(cmap: Any) -> Tuple[Any, Any]:
     return None, cmap
 
 
-def _described_limits(limits: Optional[ChannelLimits]) -> Any:
+def _described_limits(limits: ChannelLimits | None) -> Any:
     """Return stretch limits in the spelling a description carries: an unmeasurable bound as ``None``.
 
     :func:`~digitalearth.base.stretch.channel_limits` documents ``(nan, nan)`` for a channel it could not
@@ -370,9 +371,7 @@ def _drawing_limits(limits: Any) -> Any:
     ]
 
 
-def _class_plan(
-    layer: LayerSpec, kind: str, scheme: Any
-) -> Tuple[Optional[Scale], bool]:
+def _class_plan(layer: LayerSpec, kind: str, scheme: Any) -> tuple[Scale | None, bool]:
     """Decide, before the band is read, how a field layer is classified.
 
     Args:
@@ -486,14 +485,14 @@ class FieldColors:
             ```
     """
 
-    missing: Optional[str] = None
-    over: Optional[str] = None
-    under: Optional[str] = None
-    center: Optional[float] = None
+    missing: str | None = None
+    over: str | None = None
+    under: str | None = None
+    center: float | None = None
     from_center: bool = False
 
     @classmethod
-    def stated_on(cls, opts: Dict[str, Any]) -> "FieldColors":
+    def stated_on(cls, opts: dict[str, Any]) -> "FieldColors":
         """Read this tier's own colour decisions off a drawing-options dict.
 
         The :data:`~digitalearth.static.render_compat.EXTREME_KEYS` never reach a cleopatra glyph: a glyph
@@ -523,7 +522,7 @@ class FieldColors:
         )
 
     @staticmethod
-    def _center_on(opts: Dict[str, Any]) -> Optional[float]:
+    def _center_on(opts: dict[str, Any]) -> float | None:
         """Return the value a diverging scale was asked to be built around, or ``None``.
 
         Two keywords state one thing, and both are cleopatra's rather than this tier's:
@@ -558,7 +557,7 @@ class FieldColors:
             return None
         return float(midpoint)
 
-    def centered_limits(self, vmin: float, vmax: float) -> Tuple[float, float]:
+    def centered_limits(self, vmin: float, vmax: float) -> tuple[float, float]:
         """Symmetrise ``(vmin, vmax)`` around the stated centre, reusing cleopatra's own rule.
 
         Delegates to cleopatra's :meth:`ArrayGlyph._center_limits`, so the numbers match what the
@@ -586,7 +585,7 @@ class FieldColors:
         if self.center is None:
             return float(vmin), float(vmax)
         return cast(
-            Tuple[float, float],
+            tuple[float, float],
             ArrayGlyph._center_limits(float(vmin), float(vmax), self.center),
         )
 
@@ -903,11 +902,11 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
 
 def _classified(
-    opts: Dict[str, Any],
+    opts: dict[str, Any],
     values: Any,
     requested: Any,
-    described: Optional[Scale] = None,
-) -> Optional[BandClasses]:
+    described: Scale | None = None,
+) -> BandClasses | None:
     """Turn a classified raster into what cleopatra draws, and return its classes.
 
     The classes come from :mod:`digitalearth.base.raster_classes`, the one classifier the three 2-D tiers
@@ -976,7 +975,7 @@ def _classified(
             ```
     """
     scheme = opts.get("scheme")
-    classes: Optional[BandClasses]
+    classes: BandClasses | None
     if scheme is None:
         classes = classes_of(described, opts.get("cmap"))
     elif asks_categorical(scheme):
@@ -1047,7 +1046,7 @@ def _class_lookup(
     return ListedColormap(lookup)
 
 
-def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:
+def _composite_bands(scene: Any, data: Any, props: dict[str, Any]) -> tuple:
     """Return the reprojected dataset and its three stretched channels, band-last.
 
     The half ``rgb_composite`` and ``hsv_composite`` share: reproject once, read the three bands the
@@ -1071,7 +1070,7 @@ def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:
     return ds, stretch_to_unit(stack, _drawing_limits(props["limits"]))
 
 
-def _composite_glyph(scene: Any, ds: Any, band_first: Any, opts: Dict[str, Any]) -> Any:
+def _composite_glyph(scene: Any, ds: Any, band_first: Any, opts: dict[str, Any]) -> Any:
     """Build the ``ArrayGlyph`` that draws a three-channel composite as one image.
 
     Args:
@@ -1170,14 +1169,14 @@ class RasterMixin(_MixinBase):
         *,
         kind: str,
         band: int = DEFAULT_BAND,
-        cmap: Optional[str] = None,
+        cmap: str | None = None,
         levels: Any = None,
-        interval: Optional[float] = None,
+        interval: float | None = None,
         add_colorbar: bool = False,
         default_cmap: str = DEFAULT_FIELD_CMAP,
-        draw_band: Optional[str] = None,
-        zorder: Optional[float] = None,
-        name: Optional[str] = None,
+        draw_band: str | None = None,
+        zorder: float | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Any:
@@ -1289,7 +1288,7 @@ class RasterMixin(_MixinBase):
         self,
         dataset: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -1529,11 +1528,11 @@ class RasterMixin(_MixinBase):
         dataset: Any,
         *,
         levels: Any = None,
-        interval: Optional[float] = None,
+        interval: float | None = None,
         filled: bool = False,
-        hatches: Optional[Sequence[Optional[str]]] = None,
-        hatch_color: Optional[str] = None,
-        name: Optional[str] = None,
+        hatches: Sequence[str | None] | None = None,
+        hatch_color: str | None = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -1692,7 +1691,7 @@ class RasterMixin(_MixinBase):
         self,
         dataset: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -1727,7 +1726,7 @@ class RasterMixin(_MixinBase):
         self,
         dataset: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -1765,7 +1764,7 @@ class RasterMixin(_MixinBase):
         return self
 
     @staticmethod
-    def _extent_of(x: Any, y: Any) -> List[float]:
+    def _extent_of(x: Any, y: Any) -> list[float]:
         """Return the bbox-order extent of the cells 1-D x/y centres describe, as cleopatra takes it.
 
         The coordinates name the middle of each cell, and the extent is the rectangle those cells *cover* —
@@ -1787,7 +1786,7 @@ class RasterMixin(_MixinBase):
         """
         return Bounds.cell_edges(x, y, crs=None).as_bbox()
 
-    def _extent(self, ds: Any) -> List[float]:
+    def _extent(self, ds: Any) -> list[float]:
         """Return the bbox-order extent of the cells a dataset's coordinates describe, as cleopatra takes it.
 
         Args:
@@ -1804,8 +1803,8 @@ class RasterMixin(_MixinBase):
         bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
         *,
         mask_nodata: bool = True,
-        limits: Optional[ChannelLimits] = None,
-        name: Optional[str] = None,
+        limits: ChannelLimits | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1896,9 +1895,9 @@ class RasterMixin(_MixinBase):
         dataset: Any,
         bands: Sequence[int],
         mask_nodata: bool,
-        limits: Optional[ChannelLimits],
+        limits: ChannelLimits | None,
         opts: dict,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Any:
         """Record a three-band composite and draw it, answering an off-limb warp with a skipped layer.
@@ -1957,8 +1956,8 @@ class RasterMixin(_MixinBase):
         bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
         *,
         mask_nodata: bool = True,
-        limits: Optional[ChannelLimits] = None,
-        name: Optional[str] = None,
+        limits: ChannelLimits | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Self:
@@ -2045,7 +2044,7 @@ class RasterMixin(_MixinBase):
         collection: Any,
         band: int = DEFAULT_BAND,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Self:

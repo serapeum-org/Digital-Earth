@@ -118,9 +118,10 @@ import importlib.util
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import pytest
 
@@ -790,7 +791,7 @@ def _task_collects_the_module(command: str, manifest: dict) -> bool:
     return any(MODULE_PATH.startswith(f"{root.rstrip('/')}/") for root in covered)
 
 
-def _classification_excuse(backend: str) -> Optional[str]:
+def _classification_excuse(backend: str) -> str | None:
     """Return why a tier's figure carries no class edges, or `None` when it must carry them.
 
     **This once resolved two tables, and no longer can, because order 24 separated what they measure.**

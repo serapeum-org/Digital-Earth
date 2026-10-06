@@ -22,7 +22,7 @@ import math
 import pathlib
 import re
 import tempfile
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.web.base import DEFAULT_TITLE
@@ -288,7 +288,7 @@ class ExportMixin(_MixinBase):
         fps: float = DEFAULT_FPS,
         loop: int = 0,
         title: str = DEFAULT_TITLE,
-        format: Optional[str] = None,
+        format: str | None = None,
     ) -> pathlib.Path:
         """Write a temporal map's steps as an animated GIF or an MP4 video (recipe W7).
 
@@ -369,7 +369,7 @@ class ExportMixin(_MixinBase):
         return pathlib.Path(path)
 
     @staticmethod
-    def _animation_format(path: str, fmt: Optional[str]) -> str:
+    def _animation_format(path: str, fmt: str | None) -> str:
         """Resolve which encoder :meth:`save_animation` should use: ``"gif"`` or ``"mp4"``.
 
         ``fmt`` wins when given, so a caller can force the encoder regardless of the filename; otherwise the

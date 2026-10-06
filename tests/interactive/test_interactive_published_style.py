@@ -13,8 +13,9 @@ indistinguishable from `points(features)` and published no size at all; the tabl
 record the ask, and what used to be this module's documented loss is now one of its checks.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Mapping, Tuple
+from typing import Any
 
 import pytest
 
@@ -155,7 +156,7 @@ def _collection(members: int = 3):
 #: All twenty-three data builders plus the four decorations, because "which builders derive a channel" is
 #: exactly the question the table answers and a probe that draws a subset can only ever confirm the subset.
 #: `grep -rn UNASKED tests/` returned nothing before this (review R2-M5).
-UNSTYLED: Dict[str, Callable[[Any], Any]] = {
+UNSTYLED: dict[str, Callable[[Any], Any]] = {
     "points": lambda m: m.points(_points()),
     "lines": lambda m: m.lines(_lines()),
     "polygons": lambda m: m.polygons(_polygons()),
@@ -208,7 +209,7 @@ class Borrowed:
 #: 1.0 is `image`'s own `alpha` default on this tier, and 5.0 and 0.9 are the web tier's marker size and
 #: circle opacity — the very pair the module docstring of the conformance suite quotes. None of them is
 #: `points`' default, so every one of them is the caller's.
-BORROWED: Dict[str, Borrowed] = {
+BORROWED: dict[str, Borrowed] = {
     "size-is-another-builders-alpha": Borrowed(
         lambda m: m.points(_points(), size=1.0), "size", 1.0, "image's alpha"
     ),
@@ -224,7 +225,7 @@ BORROWED: Dict[str, Borrowed] = {
 }
 
 
-def _symbologies(figure) -> Tuple[Symbology, ...]:
+def _symbologies(figure) -> tuple[Symbology, ...]:
     """Return every layer's recorded symbology, in draw order.
 
     Args:
@@ -367,7 +368,7 @@ class TestAnUnstyledLayerPublishesNothing:
 #: `'Band_1'` is what `examples/data/acc4000.tif` calls its only band — measured, and the same name the drawn
 #: `hv.Image`'s value dimension carries, which is the agreement
 #: :func:`~digitalearth.interactive.raster.coloured_by` exists to keep.
-BOUND_FIELDS: Dict[str, Dict[str, str]] = {
+BOUND_FIELDS: dict[str, dict[str, str]] = {
     "points": {},
     "lines": {},
     "polygons": {},

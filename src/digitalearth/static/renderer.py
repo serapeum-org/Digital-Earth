@@ -65,10 +65,11 @@ share a word only in `Map.animate`'s own `kind=` vocabulary, which is a list of 
 """
 
 import logging
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, cast
+from typing import Any, Optional, cast
 
 from matplotlib.artist import Artist
 
@@ -90,7 +91,7 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-def drawing_opts(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
+def drawing_opts(scene: Any, layer: LayerSpec) -> dict[str, Any]:
     """Return the engine keywords a layer's caller passed, exactly as they passed them.
 
     This is the *held* half of the pair: every keyword the scene was given, as the very object it was given
@@ -210,12 +211,12 @@ class DrawnLayer:
 
     artist: Any = None
     glyph: Any = None
-    artists: Tuple[Any, ...] = field(default=())
-    color_field: Optional[str] = None
-    guides: Tuple[Any, ...] = field(default=())
-    scale: Optional[Scale] = None
+    artists: tuple[Any, ...] = field(default=())
+    color_field: str | None = None
+    guides: tuple[Any, ...] = field(default=())
+    scale: Scale | None = None
 
-    def colored_by(self, color_field: Optional[str]) -> "DrawnLayer":
+    def colored_by(self, color_field: str | None) -> "DrawnLayer":
         """Return this drawing again, carrying the data field its colour varies with.
 
         The one thing a drawer knows that its builder does not, and therefore the one field every drawer
@@ -260,7 +261,7 @@ class DrawnLayer:
 #:
 #: It is the whole of :data:`~digitalearth.static.capabilities.CAPABILITIES`'s ``kinds``: every builder this
 #: tier has draws from its description, so there is no half-converted set to keep track of.
-DRAWN_KINDS: Tuple[str, ...] = (
+DRAWN_KINDS: tuple[str, ...] = (
     "raster",
     "mesh",
     "contours",
@@ -293,7 +294,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
 )
 
 
-def _recipes() -> Dict[str, Dict[str, Any]]:
+def _recipes() -> dict[str, dict[str, Any]]:
     """Return the drawers of this tier, by kind and then by the recipe each layer was built with.
 
     A kind is drawn more than one way here — a ``choropleth`` is a feature collection, a Voronoi
@@ -426,7 +427,7 @@ def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional["DrawnLaye
     )
 
 
-def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
+def _dispatch(kind: str, recipes: dict[str, Any]) -> Any:
     """Return the drawer for one kind, which picks between the recipes that kind is drawn by.
 
     Args:
@@ -438,7 +439,7 @@ def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
         for it.
     """
 
-    def draw(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    def draw(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer | None:
         """Draw the layer with the drawer its recipe names.
 
         Args:
@@ -459,7 +460,7 @@ def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
                 f"a {kind!r} layer records {via!r} as how it was drawn; this tier draws one of "
                 f"{sorted(recipes)}"
             )
-        drawn: Optional[DrawnLayer] = recipes[via](scene, data, layer)
+        drawn: DrawnLayer | None = recipes[via](scene, data, layer)
         return drawn
 
     return draw
@@ -528,7 +529,7 @@ def drawer_for(kind: str) -> Any:
 #: a figure another tier described is drawn here (:func:`retarget_via`): a kind drawn one way needs no entry
 #: (its sole recipe is unambiguous), and a kind whose plain recipe is a genuine judgement (none here) is left
 #: out so its foreign ``via`` is refused rather than guessed. Held against :func:`_recipes` by a test.
-_CANONICAL_VIA: Dict[str, str] = {
+_CANONICAL_VIA: dict[str, str] = {
     "rgb": "rgb_composite",
     "points": "scatter",
     "choropleth": "choropleth",
@@ -705,7 +706,7 @@ def _forget_render_artist(axes: Any, artist: Any) -> None:
     axes._cleo_render_artists = pruned or None
 
 
-def _painted(axes: Any) -> Optional[List[Any]]:
+def _painted(axes: Any) -> list[Any] | None:
     """Return the axes' own list of the artists added to it, in the order they were added.
 
     matplotlib draws artists sorted by z-order, and artists of one z-order in the order they were added —
@@ -768,7 +769,7 @@ def _band_of_layer(layers: Any, layer_id: str) -> str:
     return layer.band or band_of(layer.kind)
 
 
-def _rank_zorders(bands: List[List[List[Any]]]) -> None:
+def _rank_zorders(bands: list[list[list[Any]]]) -> None:
     """Give each layer the z-order its place in its **own band** earns, within that band's own span.
 
     matplotlib draws an axes' artists ``sorted(children, key=attrgetter("zorder"))`` — a **stable** sort, so
@@ -827,7 +828,7 @@ def _rank_zorders(bands: List[List[List[Any]]]) -> None:
 
 
 @contextmanager
-def artists_added(axes: Any) -> Iterator[List[Any]]:
+def artists_added(axes: Any) -> Iterator[list[Any]]:
     """Collect the artists a block puts on the axes, for a drawer that cannot name them itself.
 
     ``cleopatra.basemap.tiles.add_tiles`` and ``cleopatra.basemap.reference.add_features`` both draw onto
@@ -848,7 +849,7 @@ def artists_added(axes: Any) -> Iterator[List[Any]]:
     """
     painted = _painted(axes)
     existing = {id(artist) for artist in painted or ()}
-    added: List[Any] = []
+    added: list[Any] = []
     try:
         yield added
     finally:
@@ -858,7 +859,7 @@ def artists_added(axes: Any) -> Iterator[List[Any]]:
 
 
 def _reinsert(
-    painted: List[Any], block: List[Any], was: Tuple[Any, ...], order: Tuple[Any, ...]
+    painted: list[Any], block: list[Any], was: tuple[Any, ...], order: tuple[Any, ...]
 ) -> None:
     """Move the artists a restored layer added back to where that layer's old artists stood, in place.
 
@@ -952,9 +953,9 @@ class _Held:
         painted: The axes' artists in the order they were added (see :func:`_painted`).
     """
 
-    drawn: Dict[str, DrawnLayer]
-    registered: Tuple[Tuple[Tuple[Any, Any], Optional[str]], ...]
-    painted: Tuple[Any, ...]
+    drawn: dict[str, DrawnLayer]
+    registered: tuple[tuple[tuple[Any, Any], str | None], ...]
+    painted: tuple[Any, ...]
 
 
 class Renderer:
@@ -991,11 +992,11 @@ class Renderer:
                 CRS, the reprojection, the off-limb policy, the artist registry a colorbar is keyed to.
         """
         self._scene = scene
-        self._drawn: Dict[str, DrawnLayer] = {}
+        self._drawn: dict[str, DrawnLayer] = {}
         #: The visibility asked of a layer that owns **no** artist to carry it, by layer id. A graticule is
         #: the one that gets there (see :meth:`is_visible`); every other layer's flag lives on its artists,
         #: where matplotlib reads it, and is not duplicated here.
-        self._asked: Dict[str, bool] = {}
+        self._asked: dict[str, bool] = {}
 
     @property
     def drawn(self) -> Mapping[str, DrawnLayer]:
@@ -1008,7 +1009,7 @@ class Renderer:
         """
         return dict(self._drawn)
 
-    def draw_layer(self, figure: FigureSpec, layer_id: str) -> Optional[DrawnLayer]:
+    def draw_layer(self, figure: FigureSpec, layer_id: str) -> DrawnLayer | None:
         """Draw one of a figure's layers and record what it produced.
 
         Args:
@@ -1041,7 +1042,7 @@ class Renderer:
         draw = drawer_for(layer.kind)
         partial = _PartialDraw(self._scene)
         try:
-            drawn: Optional[DrawnLayer] = draw(self._scene, data, layer)
+            drawn: DrawnLayer | None = draw(self._scene, data, layer)
         except BaseException:
             partial.undo()
             raise
@@ -1088,7 +1089,7 @@ class Renderer:
             self.set_visible(layer_id, False)
         return drawn
 
-    def draw_guide(self, layer: LayerSpec, **kwargs: Any) -> Optional[Any]:
+    def draw_guide(self, layer: LayerSpec, **kwargs: Any) -> Any | None:
         """Draw the colour key one layer's guide asks for, replacing whatever it already had.
 
         The one call that puts a key on the figure, whoever asked: :meth:`draw_layer` for a layer whose
@@ -1147,7 +1148,7 @@ class Renderer:
             _set_visible(_guide_artist(made), False)
         return made
 
-    def _displaced(self, legend: Any, keeper: Optional[str] = None) -> None:
+    def _displaced(self, legend: Any, keeper: str | None = None) -> None:
         """Forget every swatch legend but the one the axes now holds, wherever it was recorded.
 
         An axes holds **one** legend, so drawing a second layer's swatches takes the first layer's off — and
@@ -1320,7 +1321,7 @@ class Renderer:
             self._repaint(change.order, after.layers, before.layers.ids)
 
     def _repaint(
-        self, order: Tuple[str, ...], layers: Any = None, previous: Tuple[str, ...] = ()
+        self, order: tuple[str, ...], layers: Any = None, previous: tuple[str, ...] = ()
     ) -> None:
         """Paint the layers this renderer holds in `order`, leaving every other artist where it is.
 
@@ -1356,7 +1357,7 @@ class Renderer:
             for artist in drawn.artists
         }
         slots = [index for index, artist in enumerate(painted) if id(artist) in owner]
-        blocks: Dict[str, List[Any]] = {}
+        blocks: dict[str, list[Any]] = {}
         for index in slots:
             blocks.setdefault(owner[id(painted[index])], []).append(painted[index])
         for artists in blocks.values():
@@ -1366,14 +1367,14 @@ class Renderer:
             artists.sort(key=_zorder_of)
         ordered = [list(blocks.get(layer_id, ())) for layer_id in order]
         arranged = [artist for block in ordered for artist in block]
-        bands: Dict[str, List[List[Any]]] = {}
+        bands: dict[str, list[list[Any]]] = {}
         for layer_id, block in zip(order, ordered):
             bands.setdefault(_band_of_layer(layers, layer_id), []).append(block)
         if previous:
-            was: Dict[str, List[str]] = {}
+            was: dict[str, list[str]] = {}
             for layer_id in previous:
                 was.setdefault(_band_of_layer(layers, layer_id), []).append(layer_id)
-            now: Dict[str, List[str]] = {}
+            now: dict[str, list[str]] = {}
             for layer_id in order:
                 now.setdefault(_band_of_layer(layers, layer_id), []).append(layer_id)
             bands = {
@@ -1476,7 +1477,7 @@ class Renderer:
         Args:
             held: What the scene had registered before the refused change.
         """
-        swapped: Dict[Tuple[int, int], Optional[Tuple[Any, Any]]] = {}
+        swapped: dict[tuple[int, int], tuple[Any, Any] | None] = {}
         for layer_id, was in held.drawn.items():
             now = self._drawn.get(layer_id)
             if now is was or was.artist is None:
@@ -1484,8 +1485,8 @@ class Renderer:
             swapped[(id(was.glyph), id(was.artist))] = (
                 None if now is None else (now.glyph, now.artist)
             )
-        pairs: List[Tuple[Any, Any]] = []
-        labels: List[Optional[str]] = []
+        pairs: list[tuple[Any, Any]] = []
+        labels: list[str | None] = []
         for (glyph, mappable), label in held.registered:
             key = (id(glyph), id(mappable))
             pair = swapped[key] if key in swapped else (glyph, mappable)
@@ -1647,7 +1648,7 @@ class Renderer:
             return self._asked.get(layer_id, True)
         return all(_is_visible(artist) for artist in drawn.artists)
 
-    def layer_of(self, artist: Any) -> Optional[str]:
+    def layer_of(self, artist: Any) -> str | None:
         """Return the id of the layer that owns one matplotlib artist.
 
         The lookup a pick needs (ST-25). matplotlib hands a canvas event an *artist*, and a caller asked
@@ -1710,7 +1711,7 @@ class Renderer:
                 return layer_id
         return None
 
-    def hits(self, event: Any) -> Tuple[str, ...]:
+    def hits(self, event: Any) -> tuple[str, ...]:
         """Return the ids of the drawn layers under one mouse event, topmost first.
 
         The other half of what a pick needs, and the half that has to agree with what the reader sees:
@@ -1806,7 +1807,7 @@ class Renderer:
 
                 ```
         """
-        ranked: List[Tuple[float, int, str]] = []
+        ranked: list[tuple[float, int, str]] = []
         for index, (layer_id, drawn) in enumerate(self._drawn.items()):
             if not drawn.artists or not self.is_visible(layer_id):
                 continue

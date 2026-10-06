@@ -10,8 +10,9 @@ The trade is deliberate and documented: the matplotlib path is **static** (no li
 basemaps auto-disable under a non-Mercator projection (a tile call raises via the Web-Mercator guard).
 """
 
+from collections.abc import Sequence
 from math import isfinite
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.spec import Bounds, LayerSpec, Symbology, Viewport
 from digitalearth.interactive.base import (
@@ -48,7 +49,7 @@ def _padded(box: Bounds, fraction: float) -> Bounds:
     return box if not fraction else box.padded(fraction)
 
 
-def _element_extent(element: Any) -> Optional[Tuple[float, float, float, float]]:
+def _element_extent(element: Any) -> tuple[float, float, float, float] | None:
     """Return the region one HoloViews element covers, as ``(xmin, ymin, xmax, ymax)``.
 
     Asked of the element rather than of the data behind it: ``range`` is HoloViews' own answer for every
@@ -131,7 +132,7 @@ class ProjectionMixin(_MixinBase):
     #: has framed the map. Declared on the class rather than set in a constructor, because this mixin is
     #: composed into :class:`~digitalearth.interactive.map.InteractiveMap` and owns no ``__init__`` — the
     #: class attribute is the default every instance reads until :meth:`set_bounds` writes one of its own.
-    _frame_bounds: Optional[Bounds] = None
+    _frame_bounds: Bounds | None = None
 
     @property
     def viewport(self) -> Viewport:
@@ -148,7 +149,7 @@ class ProjectionMixin(_MixinBase):
 
     def set_bounds(
         self,
-        bounds: Optional[Union[Bounds, Sequence[float]]] = None,
+        bounds: Bounds | Sequence[float] | None = None,
         *,
         padding: float = 0.0,
     ) -> Self:
@@ -202,7 +203,7 @@ class ProjectionMixin(_MixinBase):
 
     def _frame_asked(
         self,
-        bounds: Optional[Union[Bounds, Sequence[float]]],
+        bounds: Bounds | Sequence[float] | None,
         padding: float,
     ) -> Bounds:
         """Resolve what a caller asked for into one rectangle in the display CRS, padded.
@@ -380,8 +381,8 @@ class ProjectionMixin(_MixinBase):
         lon_step: float = 30.0,
         lat_step: float = 30.0,
         *,
-        spacing: Optional[float] = None,
-        name: Optional[str] = None,
+        spacing: float | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:

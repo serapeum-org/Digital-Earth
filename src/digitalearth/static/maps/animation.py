@@ -14,17 +14,12 @@ the log line and the fallback all share.
 """
 
 import logging
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from math import isfinite
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Iterator,
-    List,
-    Mapping,
     Optional,
-    Sequence,
-    Tuple,
 )
 
 import numpy as np
@@ -83,7 +78,7 @@ UNREADABLE_FRAME = (OSError, RuntimeError, TypeError, ValueError)
 # `digitalearth.static.animation.FALLBACK_SAVE_FPS`, the rate the *encoder* assumes for a clip of unknown rate.
 
 
-def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
+def _scan_subset(datasets: Sequence[Any]) -> list[Any]:
     """Return at most :data:`_CLIM_SCAN_CAP` evenly-spaced frames of ``datasets``.
 
     Both stack scans — the scalar clim and the composite stretch — sample rather than read every frame, and
@@ -100,7 +95,7 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
     return sample_evenly(datasets, cap=_CLIM_SCAN_CAP)
 
 
-def _as_frames(stack: Any) -> List[Any]:
+def _as_frames(stack: Any) -> list[Any]:
     """Return an animation stack as a list of pyramids ``Dataset`` frames.
 
     A ``DatasetCollection`` is documented as an accepted stack, but iterating one yields the members'
@@ -121,8 +116,8 @@ def _as_frames(stack: Any) -> List[Any]:
 
 
 def _union_channel_limits(
-    scanned: Sequence[Sequence[Tuple[float, float]]],
-) -> List[Tuple[float, float]]:
+    scanned: Sequence[Sequence[tuple[float, float]]],
+) -> list[tuple[float, float]]:
     """Combine per-scan channel bounds into the widest ``(lo, hi)`` each channel takes.
 
     Non-finite bounds are dropped rather than folded in: ``min``/``max`` against ``nan`` returns whichever
@@ -136,7 +131,7 @@ def _union_channel_limits(
     Returns:
         One ``(lo, hi)`` tuple per channel, in channel order.
     """
-    limits: List[Tuple[float, float]] = []
+    limits: list[tuple[float, float]] = []
     for index in range(len(scanned[0])):
         lows = [bounds[index][0] for bounds in scanned if isfinite(bounds[index][0])]
         highs = [bounds[index][1] for bounds in scanned if isfinite(bounds[index][1])]
@@ -362,7 +357,7 @@ class FrameUpdate:
         *,
         kind: str,
         mode: str = "auto",
-        titles: Optional[Sequence[str]] = None,
+        titles: Sequence[str] | None = None,
     ):
         """Resolve the strategy from what the call asks for and what the renderer can do.
 
@@ -406,14 +401,14 @@ class FrameUpdate:
         blocker = self._blocked_by(kind, opts)
         if blocker is None and mode == "redraw":
             blocker = "update='redraw' asks for the axes to be cleared and every layer rebuilt"
-        self.blocker: Optional[str] = blocker
+        self.blocker: str | None = blocker
         # Read only on the in-place path, so a blocked strategy leaves it at the default rather than
         # validating a band no frame of it will use: a composite names `bands`, not `band`, and a redrawn
         # frame has its band checked where every still checks it (`_prime_animation`).
         self.band: int = DEFAULT_BAND if blocker else _animated_band(dict(opts))
 
     @classmethod
-    def _blocked_by(cls, kind: str, opts: Mapping[str, Any]) -> Optional[str]:
+    def _blocked_by(cls, kind: str, opts: Mapping[str, Any]) -> str | None:
         """Return why ``kind`` drawn with ``opts`` cannot update one artist, or ``None`` when it can.
 
         Args:
@@ -590,7 +585,7 @@ class FrameUpdate:
             "to redraw the frames instead"
         )
 
-    def _display_grid(self, index: int) -> Optional[Tuple[int, ...]]:
+    def _display_grid(self, index: int) -> tuple[int, ...] | None:
         """Return the grid frame ``index`` is **drawn** on, or ``None`` when it draws nothing.
 
         Read through :func:`~digitalearth.static.maps.raster._field_source`, the same reader
@@ -612,7 +607,7 @@ class FrameUpdate:
             return None
         return tuple(np.shape(src.z.values))
 
-    def _stack_blocker(self) -> Optional[str]:
+    def _stack_blocker(self) -> str | None:
         """Return why this stack cannot be held in place all the way through, or ``None`` when it can.
 
         :meth:`settle` refuses ``blit=True`` and ``update="in_place"`` for what the *kind and the options*
@@ -769,7 +764,7 @@ class AnimationMixin(_MixinBase):
         fps: float,
         *,
         blit: bool = False,
-        updates: Optional[FrameUpdate] = None,
+        updates: FrameUpdate | None = None,
     ) -> FuncAnimation:
         """Drive ``n_frames`` of ``draw_one(i)`` on this Map's axes as a :class:`FuncAnimation`.
 
@@ -799,10 +794,10 @@ class AnimationMixin(_MixinBase):
         Returns:
             The :class:`FuncAnimation`, also held on ``self._animation``.
         """
-        kept: List[Any] = []
+        kept: list[Any] = []
         strategy = {"updates": updates}
 
-        def _redraw(i: int) -> List[Any]:
+        def _redraw(i: int) -> list[Any]:
             self.ax.clear()
             self._reset_layers()
             self._framed = False
@@ -812,7 +807,7 @@ class AnimationMixin(_MixinBase):
                 self._apply_frame()
             return [] if drawn is None else [drawn]
 
-        def _f(i: int) -> List[Any]:
+        def _f(i: int) -> list[Any]:
             # `kept` empty means the first frame drew no data artist at all — an off-limb frame on a globe —
             # so there is nothing to update and each frame draws itself.
             running = strategy["updates"]
@@ -836,8 +831,8 @@ class AnimationMixin(_MixinBase):
         self,
         path: str,
         *,
-        fps: Optional[float] = None,
-        gif: Optional[str] = None,
+        fps: float | None = None,
+        gif: str | None = None,
         **kwargs: Any,
     ) -> Any:
         """Save the animation built by :meth:`animate` / :meth:`rotate`, optionally also deriving a GIF.
@@ -910,7 +905,7 @@ class AnimationMixin(_MixinBase):
 
     def _stack_clim(
         self, datasets: Sequence[Any], band: int = DEFAULT_BAND
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Return the ``(min, max)`` of ``band`` across ``datasets``, ignoring nodata/non-finite.
 
         Each frame is reprojected to the display CRS before it is measured, for the same reason the
@@ -934,7 +929,7 @@ class AnimationMixin(_MixinBase):
 
     def _measured_clim(
         self, datasets: Sequence[Any], band: int = DEFAULT_BAND
-    ) -> Optional[Tuple[float, float]]:
+    ) -> tuple[float, float] | None:
         """Return the ``(min, max)`` actually measured across ``datasets``, or ``None`` if nothing was.
 
         The difference from :meth:`_stack_clim` matters to :meth:`_clim_across_views`, which unions one
@@ -984,7 +979,7 @@ class AnimationMixin(_MixinBase):
 
     def _clim_across_views(
         self, dataset: Any, views: Sequence[Any], band: int = DEFAULT_BAND
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Return the ``(min, max)`` of one dataset measured under each sampled display CRS.
 
         The scalar counterpart of :meth:`_scan_across_views`: :meth:`rotate` redraws one dataset under a
@@ -1025,7 +1020,7 @@ class AnimationMixin(_MixinBase):
         datasets: Sequence[Any],
         opts: dict,
         *,
-        views: Optional[Sequence[Any]] = None,
+        views: Sequence[Any] | None = None,
     ) -> None:
         """Ensure ``opts`` carries a shared ``vmin``/``vmax`` so every animation frame uses one colour scale.
 
@@ -1121,7 +1116,7 @@ class AnimationMixin(_MixinBase):
         bands: Sequence[int],
         *,
         mask_nodata: bool = True,
-        views: Optional[Sequence[Any]] = None,
+        views: Sequence[Any] | None = None,
     ) -> ChannelLimits:
         """Return one ``(lo, hi)`` stretch bound per composite channel, spanning the whole stack.
 
@@ -1197,7 +1192,7 @@ class AnimationMixin(_MixinBase):
         views: Sequence[Any],
         *,
         mask_nodata: bool = True,
-    ) -> List[List[Tuple[float, float]]]:
+    ) -> list[list[tuple[float, float]]]:
         """Measure ``dataset`` once under each sampled display CRS in ``views``.
 
         The rotation counterpart of the per-frame scan: :meth:`rotate` redraws one dataset under a sweep of
@@ -1270,7 +1265,7 @@ class AnimationMixin(_MixinBase):
         return {}
 
     def _animation_colorbar(
-        self, opts: dict, label: Optional[str], style: Optional[dict] = None
+        self, opts: dict, label: str | None, style: dict | None = None
     ) -> Any:
         """Add one static colorbar for an animation from the already-resolved ``cmap``/``vmin``/``vmax``.
 
@@ -1309,8 +1304,8 @@ class AnimationMixin(_MixinBase):
         *,
         kind: str,
         colorbar: bool,
-        cbar_label: Optional[str],
-        views: Optional[Sequence[Any]] = None,
+        cbar_label: str | None,
+        views: Sequence[Any] | None = None,
     ) -> None:
         """Resolve the one shared colour treatment into `opts`, and if asked add the static colorbar.
 
@@ -1489,7 +1484,7 @@ class AnimationMixin(_MixinBase):
         *,
         ocean: bool,
         coastlines: bool,
-        title: Optional[str] = None,
+        title: str | None = None,
     ) -> Any:
         """Draw one animation frame: optional ocean disc, the field, optional coastlines, optional title.
 
@@ -1533,11 +1528,11 @@ class AnimationMixin(_MixinBase):
         *,
         kind: str = "imshow",
         fps: float = DEFAULT_FPS,
-        titles: Optional[Sequence[str]] = None,
+        titles: Sequence[str] | None = None,
         ocean: bool = False,
         coastlines: bool = False,
         colorbar: bool = False,
-        cbar_label: Optional[str] = None,
+        cbar_label: str | None = None,
         update: str = "auto",
         blit: bool = False,
         **kwargs: Any,
@@ -1784,7 +1779,7 @@ class AnimationMixin(_MixinBase):
         ocean: bool = False,
         coastlines: bool = False,
         colorbar: bool = False,
-        cbar_label: Optional[str] = None,
+        cbar_label: str | None = None,
         blit: bool = False,
         **kwargs,
     ) -> FuncAnimation:

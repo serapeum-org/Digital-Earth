@@ -6,7 +6,7 @@ Source-extraction helpers the plotting mixins consume via ``self``.
 """
 
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from matplotlib.animation import FuncAnimation
@@ -126,7 +126,7 @@ class GeoLayerBase(Scene):
         domain: Any = None,
         ax: Any = None,
         fig: Any = None,
-        figsize: Tuple[float, float] = (8, 8),
+        figsize: tuple[float, float] = (8, 8),
         globe: bool = False,
         strict: bool = False,
     ):
@@ -148,19 +148,19 @@ class GeoLayerBase(Scene):
         self.crs = crs
         self.domain = domain
         self.globe = globe
-        self._graticule_lines: Optional[List[np.ndarray]] = None  # set by graticule()
-        self._last_vector: Optional[tuple] = (
+        self._graticule_lines: list[np.ndarray] | None = None  # set by graticule()
+        self._last_vector: tuple | None = (
             None  # (glyph, artist, kind) of the most recent vector layer
         )
-        self._animation: Optional[FuncAnimation] = (
+        self._animation: FuncAnimation | None = (
             None  # last animate()/rotate() result (kept alive, L3)
         )
-        self._animation_fps: Optional[float] = (
+        self._animation_fps: float | None = (
             None  # rate the last animate()/rotate() was built at; save_animation's default
         )
         self._framed = False
-        self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
-        self._graticule_id: Optional[str] = (
+        self._frame_cache: tuple | None = None  # (crs, (boundary, xlim, ylim)) memo
+        self._graticule_id: str | None = (
             None  # the described graticule, so a redraw replaces it
         )
 

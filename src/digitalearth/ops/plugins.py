@@ -13,8 +13,9 @@ At runtime :func:`load_plugins` discovers and loads those entry points. This is 
 """
 
 import logging
+from collections.abc import Iterator, Sequence
 from importlib.metadata import EntryPoint, entry_points
-from typing import Any, Dict, Iterator, Optional, Sequence
+from typing import Any
 
 __all__ = ["GROUPS", "iter_plugins", "load_plugins"]
 
@@ -31,7 +32,7 @@ GROUPS = ("digitalearth.styles", "digitalearth.sources")
 
 
 def iter_plugins(
-    group: str, *, eps: Optional[Sequence[EntryPoint]] = None
+    group: str, *, eps: Sequence[EntryPoint] | None = None
 ) -> Iterator[EntryPoint]:
     """Yield the entry points registered under ``group`` (without loading them).
 
@@ -70,13 +71,12 @@ def iter_plugins(
             ```
     """
     selected = entry_points(group=group) if eps is None else eps
-    for ep in selected:
-        yield ep
+    yield from selected
 
 
 def load_plugins(
-    group: str, *, eps: Optional[Sequence[EntryPoint]] = None
-) -> Dict[str, Any]:
+    group: str, *, eps: Sequence[EntryPoint] | None = None
+) -> dict[str, Any]:
     """Discover and **load** every plugin registered under ``group``.
 
     Each entry point is imported via ``EntryPoint.load()`` and collected by its name. Loading is what
@@ -135,7 +135,7 @@ def load_plugins(
     See Also:
         iter_plugins: Yields the same entry points without importing their targets.
     """
-    loaded: Dict[str, Any] = {}
+    loaded: dict[str, Any] = {}
     for ep in iter_plugins(group, eps=eps):
         try:
             loaded[ep.name] = ep.load()

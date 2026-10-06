@@ -13,19 +13,13 @@ than being re-spelled — slightly differently — on each type. Three rules:
   included. `Bounds` and `Viewport` hold a CRS object in that spelling from the moment they are built.
 """
 
+from collections.abc import Callable, Iterable, Mapping
 from math import isfinite
 from numbers import Real
 from typing import (
     Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
     NamedTuple,
     NoReturn,
-    Optional,
-    Tuple,
     TypeVar,
 )
 
@@ -53,7 +47,7 @@ __all__ = [
 ]
 
 
-class FrozenDict(Dict[str, Any]):
+class FrozenDict(dict[str, Any]):
     """A `dict` that refuses every change after it is built — how the spec types hold a mapping.
 
     A read-only `mappingproxy` view froze the mapping too, but it cannot be copied: `pickle`, `copy.deepcopy` and
@@ -114,7 +108,7 @@ class FrozenDict(Dict[str, Any]):
     popitem = _refuse  # type: ignore[assignment]
     clear = _refuse  # type: ignore[assignment]
 
-    def __reduce__(self) -> Tuple[Any, Tuple[Dict[str, Any]]]:
+    def __reduce__(self) -> tuple[Any, tuple[dict[str, Any]]]:
         """Pickle and copy by rebuilding from a plain dict.
 
         Returns:
@@ -264,7 +258,7 @@ def finite_number(owner: str, name: str, value: Any) -> float:
     return number
 
 
-def true_or_false(value: Any) -> Optional[bool]:
+def true_or_false(value: Any) -> bool | None:
     """Return `value` as a Python bool when it is a boolean, numpy's `bool_` included, and ``None`` otherwise.
 
     Args:
@@ -291,7 +285,7 @@ def true_or_false(value: Any) -> Optional[bool]:
     return None
 
 
-def plain_text(value: Optional[str]) -> Optional[str]:
+def plain_text(value: str | None) -> str | None:
     """Return a string field as a Python `str`, or ``None`` unchanged.
 
     Args:
@@ -314,7 +308,7 @@ def plain_text(value: Optional[str]) -> Optional[str]:
     return None if value is None else str(value)
 
 
-def positive_number(value: Any) -> Optional[float]:
+def positive_number(value: Any) -> float | None:
     """Return `value` as a float when it is a positive finite real number, numpy's included, and ``None`` otherwise.
 
     Args:
@@ -455,7 +449,7 @@ def to_json_value(value: Any, where: str) -> Any:
             to_json_value(item, f"{where}[{index}]") for index, item in enumerate(value)
         ]
     if isinstance(value, Mapping):
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for key, item in value.items():
             if not isinstance(key, str):
                 raise TypeError(
@@ -587,7 +581,7 @@ class _Carried(NamedTuple):
     """
 
     travels: bool
-    holds: Tuple[Any, ...] = ()
+    holds: tuple[Any, ...] = ()
     nests: bool = False
 
     @classmethod
@@ -683,7 +677,7 @@ def _travelling_budget(value: Any, budget: int) -> int:
         with a non-string key, a live object, or a container that exhausts either bound, whether by holding
         too many values, by nesting too deep, or by holding itself.
     """
-    pending: List[Tuple[Any, int]] = [(value, 0)]
+    pending: list[tuple[Any, int]] = [(value, 0)]
     while pending:
         if budget <= 0:
             return -1
@@ -993,7 +987,7 @@ def thawed_value(value: Any) -> Any:
     return value
 
 
-def as_list(owner: str, key: str, value: Any) -> Tuple[Any, ...]:
+def as_list(owner: str, key: str, value: Any) -> tuple[Any, ...]:
     """Return a stored list as a tuple, refusing a value of another shape by the key it was stored under.
 
     Args:
@@ -1067,7 +1061,7 @@ def read_entry(owner: str, key: str, read: Callable[[Any], T], value: Any) -> T:
         raise type(error)(f"{owner}.from_dict {key}: {error}") from error
 
 
-def as_mapping(owner: str, key: str, value: Any) -> Dict[str, Any]:
+def as_mapping(owner: str, key: str, value: Any) -> dict[str, Any]:
     """Return a stored mapping as a dict, refusing a value of another shape by the key it was stored under.
 
     Args:

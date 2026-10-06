@@ -42,7 +42,7 @@ its reason (a scene can be looked at from any direction, so there is no fixed no
 
 import math
 from dataclasses import replace as with_fields
-from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Tuple
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 
@@ -76,32 +76,32 @@ SUBTITLE_ACTOR: str = "digitalearth-subtitle"
 #: What the axes are called when the scene's display CRS says nothing useful: the plain survey words, which are
 #: what #203 asked for in place of PyVista's `X`/`Y`/`Z`. A bare array has no CRS to read, and `X`/`Y`/`Z`
 #: labels a figure with the letters of its own array indices.
-FALLBACK_AXIS_TITLES: Tuple[str, str, str] = ("Easting", "Northing", "Elevation")
+FALLBACK_AXIS_TITLES: tuple[str, str, str] = ("Easting", "Northing", "Elevation")
 
 #: The axis titles of a geographic display CRS, used when the CRS resolves but names no axes of its own.
-GEOGRAPHIC_AXIS_TITLES: Tuple[str, str, str] = ("Longitude", "Latitude", "Elevation")
+GEOGRAPHIC_AXIS_TITLES: tuple[str, str, str] = ("Longitude", "Latitude", "Elevation")
 
 #: The short labels a corner triad is drawn with when the scene is projected. The triad is a widget a couple of
 #: centimetres across, so it takes abbreviations rather than the box's full titles — but never `X`/`Y`/`Z`.
 #: **Not** the CRS's own `abbrev` fields: measured, EPSG:3857 abbreviates its axes `X` and `Y`, which is exactly
 #: the labelling #203 asked to be rid of, so the short forms are chosen from geographic-or-projected instead.
-FALLBACK_AXIS_LABELS: Tuple[str, str, str] = ("E", "N", "Up")
+FALLBACK_AXIS_LABELS: tuple[str, str, str] = ("E", "N", "Up")
 
 #: The short labels a geographic scene's triad is drawn with.
-GEOGRAPHIC_AXIS_LABELS: Tuple[str, str, str] = ("Lon", "Lat", "Up")
+GEOGRAPHIC_AXIS_LABELS: tuple[str, str, str] = ("Lon", "Lat", "Up")
 
 #: Which of a CRS's axes is the scene's x, y and z, by the direction the axis points. A CRS declares its axes
 #: in its own order — EPSG:4326 is (latitude, longitude) — while a scene always draws x east and y north, so
 #: the axes are matched by direction rather than by position. Taking them in CRS order labelled a lon/lat scene
 #: back to front.
-_AXIS_DIRECTIONS: Tuple[Tuple[str, ...], ...] = (
+_AXIS_DIRECTIONS: tuple[tuple[str, ...], ...] = (
     ("east", "west"),
     ("north", "south"),
     ("up", "down"),
 )
 
 
-def axis_titles(crs: Any) -> Tuple[str, str, str]:
+def axis_titles(crs: Any) -> tuple[str, str, str]:
     """Return what to call a scene's three axes, read off its display CRS.
 
     A 3-D figure labelled `X`/`Y`/`Z` says nothing about what is being looked at, which is what PyVista's own
@@ -151,7 +151,7 @@ def axis_titles(crs: Any) -> Tuple[str, str, str]:
     )
 
 
-def axis_labels(crs: Any) -> Tuple[str, str, str]:
+def axis_labels(crs: Any) -> tuple[str, str, str]:
     """Return the short axis labels a corner triad is drawn with, for a scene's display CRS.
 
     :func:`axis_titles`' companion for the widget that has no room for a title. The two are chosen the same
@@ -177,7 +177,7 @@ def axis_labels(crs: Any) -> Tuple[str, str, str]:
     return GEOGRAPHIC_AXIS_LABELS if is_geographic(crs) else FALLBACK_AXIS_LABELS
 
 
-def _named_axis(crs: Any, directions: Tuple[str, ...]) -> Optional[str]:
+def _named_axis(crs: Any, directions: tuple[str, ...]) -> str | None:
     """Return the name of the CRS axis pointing one way, or `None` when it declares none.
 
     Args:
@@ -239,7 +239,7 @@ def _finite(value: Any, name: str, caller: str) -> float:
 
 def _display_point(
     scene: Any, x: float, y: float, crs: Any
-) -> Optional[Tuple[float, float]]:
+) -> tuple[float, float] | None:
     """Return `(x, y)` where the scene draws it, reprojected from `crs` through pyramids.
 
     Args:
@@ -263,7 +263,7 @@ def _display_point(
     return float(placed_x[0]), float(placed_y[0])
 
 
-def _draw_title(plotter: Any, heading: str, style: Dict[str, Any]) -> None:
+def _draw_title(plotter: Any, heading: str, style: dict[str, Any]) -> None:
     """Put a heading, and an optional second line, onto a plotter.
 
     Args:
@@ -290,7 +290,7 @@ def _draw_title(plotter: Any, heading: str, style: Dict[str, Any]) -> None:
         )
 
 
-def _draw_axes_box(plotter: Any, crs: Any, style: Dict[str, Any]) -> None:
+def _draw_axes_box(plotter: Any, crs: Any, style: dict[str, Any]) -> None:
     """Put a labelled bounds box onto a plotter, titled for the CRS the scene draws in.
 
     Args:
@@ -309,7 +309,7 @@ def _draw_axes_box(plotter: Any, crs: Any, style: Dict[str, Any]) -> None:
     plotter.show_bounds(**options)
 
 
-def _draw_orientation_axes(plotter: Any, crs: Any, style: Dict[str, Any]) -> None:
+def _draw_orientation_axes(plotter: Any, crs: Any, style: dict[str, Any]) -> None:
     """Put the corner orientation triad onto a plotter, labelled for the CRS the scene draws in.
 
     Args:
@@ -358,7 +358,7 @@ def redraw_decoration(scene: Any) -> None:
         _draw_orientation_axes(plotter, scene.display_crs, held["orientation_axes"])
 
 
-def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[Tuple[Any, Any]]:
+def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
     """Draw the label a `text` layer describes, anchored in the scene's coordinates.
 
     Args:
@@ -425,7 +425,7 @@ class DecorationMixin(_MixinBase):
         self,
         heading: str,
         *,
-        subtitle: Optional[str] = None,
+        subtitle: str | None = None,
         font_size: int = 18,
         color: Any = None,
     ) -> Self:
@@ -503,9 +503,9 @@ class DecorationMixin(_MixinBase):
         self,
         show: bool = True,
         *,
-        xtitle: Optional[str] = None,
-        ytitle: Optional[str] = None,
-        ztitle: Optional[str] = None,
+        xtitle: str | None = None,
+        ytitle: str | None = None,
+        ztitle: str | None = None,
         **kwargs: Any,
     ) -> Self:
         """Draw a labelled box round the data, so the scene says what its coordinates are.
@@ -576,9 +576,9 @@ class DecorationMixin(_MixinBase):
         self,
         show: bool = True,
         *,
-        xlabel: Optional[str] = None,
-        ylabel: Optional[str] = None,
-        zlabel: Optional[str] = None,
+        xlabel: str | None = None,
+        ylabel: str | None = None,
+        zlabel: str | None = None,
         **kwargs: Any,
     ) -> Self:
         """Show the corner triad, so a reader can tell which way the scene is being looked at from.
@@ -636,7 +636,7 @@ class DecorationMixin(_MixinBase):
         self,
         lon: Any,
         lat: Any,
-        s: Optional[str] = None,
+        s: str | None = None,
         *,
         z: Any = 0.0,
         crs: Any = 4326,

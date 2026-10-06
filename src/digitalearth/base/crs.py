@@ -12,7 +12,7 @@ same thing whichever kind of layer a backend was drawing.
 """
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 from pyramids.base.crs import crs_from_user_input
@@ -27,7 +27,7 @@ __all__ = [
 ]
 
 
-def source_epsg(features: Any, default: Optional[int] = None) -> Optional[int]:
+def source_epsg(features: Any, default: int | None = None) -> int | None:
     """Best-effort EPSG code of a ``FeatureCollection`` / ``GeoDataFrame``.
 
     Prefers the pyramids ``.epsg`` attribute, falls back to deriving a code from ``.crs`` (``crs.to_epsg()``),
@@ -91,7 +91,7 @@ def declared_crs(data: Any) -> Any:
     return getattr(data, "crs", None) or None
 
 
-def is_geographic(crs: Any) -> Optional[bool]:
+def is_geographic(crs: Any) -> bool | None:
     """Whether ``crs`` is a geographic (lon/lat) CRS — in **every** spelling the ``Source`` contract allows.
 
     The CRS is interpreted by pyramids (``crs_from_user_input``), the GIS engine, so each of the forms
@@ -149,7 +149,7 @@ def is_geographic(crs: Any) -> Optional[bool]:
         return None
 
 
-def authority_code(crs: Any) -> Optional[int]:
+def authority_code(crs: Any) -> int | None:
     """The EPSG code pyramids reads out of ``crs``, or ``None`` when the definition carries none.
 
     The companion of :func:`is_geographic` — the same "let pyramids interpret it" rule, asked of the

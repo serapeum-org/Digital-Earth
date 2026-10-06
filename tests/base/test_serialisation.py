@@ -1626,7 +1626,7 @@ _SCALAR_SUBCLASSES = [
 ]
 
 
-class _Linestyle(str, enum.Enum):
+class _Linestyle(str, enum.Enum):  # noqa: UP042 - fixture deliberately tests (str, Enum) __str__, not StrEnum
     """A caller's `str`-valued enumeration of a style keyword's allowed values.
 
     The one scalar whose flattening changes the **value** rather than only the type: `str` on a mixin

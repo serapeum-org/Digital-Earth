@@ -14,10 +14,11 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 import logging
 import os
 import sys
+from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import replace as with_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Self, Sequence, Union
+from typing import TYPE_CHECKING, Any, Self, Union
 
 import numpy as np
 
@@ -78,7 +79,7 @@ SCENE_EXPORTERS: dict[str, str] = {
 }
 
 
-def _reused_categories(scale: Optional[Scale]) -> Optional[list[Any]]:
+def _reused_categories(scale: Scale | None) -> list[Any] | None:
     """Return a categorical scale's categories — the pass over the column — or ``None``.
 
     Args:
@@ -102,9 +103,7 @@ def _reused_categories(scale: Optional[Scale]) -> Optional[list[Any]]:
     return list(scale.categories)
 
 
-def _reused_edges(
-    scale: Optional[Scale], scheme: Any, k: int
-) -> Optional[tuple[float, ...]]:
+def _reused_edges(scale: Scale | None, scheme: Any, k: int) -> tuple[float, ...] | None:
     """Return the class edges a graduated request may draw from the description, or ``None``.
 
     Args:
@@ -162,7 +161,7 @@ def _category_codes(values: Any, categories: Sequence[Any]) -> tuple[np.ndarray,
 
 
 def classified_scalars(
-    values: Any, *, scheme: Any | None, k: int, cmap: Any, scale: Optional[Scale] = None
+    values: Any, *, scheme: Any | None, k: int, cmap: Any, scale: Scale | None = None
 ) -> dict[str, Any]:
     """Turn a value column into the ``scalars``/``cmap`` keywords that colour a PyVista layer.
 
@@ -634,7 +633,7 @@ class Scene3DBase:
             "theme": theme,
             **plotter_kwargs,
         }
-        self._plotter: Optional["pv.Plotter"] = None
+        self._plotter: pv.Plotter | None = None
         #: What the scene draws, as data. Every builder adds a layer to it; `figure_spec` hands it out with the
         #: live camera on its panel.
         self._figure: FigureSpec = FigureSpec(
@@ -1618,7 +1617,7 @@ class Scene3DBase:
         self._figure = candidate
 
     def _resolve_big_data_threshold(
-        self, big_data_threshold: Optional[int] = None, *, caller: str
+        self, big_data_threshold: int | None = None, *, caller: str
     ) -> int:
         """Resolve a builder's cell budget: the per-call value, else the scene's attribute (#207, C8).
 
@@ -1656,7 +1655,7 @@ class Scene3DBase:
         band: Any = None,
         selection: Any = None,
         label: Any = None,
-        encodings: Optional[Mapping[str, Encoding]] = None,
+        encodings: Mapping[str, Encoding] | None = None,
         **props: Any,
     ) -> Any:
         """Describe a layer, add it to the scene's figure, and draw it.

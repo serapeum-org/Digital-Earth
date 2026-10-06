@@ -11,8 +11,6 @@ cross-tier half — that the web and interactive tiers answer identically — is
 `tests/base/test_map_conformance.py`; the rule itself is in `tests/base/test_layer.py`.
 """
 
-from typing import Tuple
-
 import matplotlib
 import pytest
 
@@ -64,7 +62,7 @@ PATTERN_ONLY = f"{FONT}-2"
 PATTERN_LIST = f"{FONT}, {ASKED}"
 
 
-def _family_spellings() -> Tuple[str, ...]:
+def _family_spellings() -> tuple[str, ...]:
     """Return every keyword matplotlib accepts for a text artist's font family, without `name`.
 
     Asked of matplotlib rather than typed out here: a list typed out is what the package itself had, and it

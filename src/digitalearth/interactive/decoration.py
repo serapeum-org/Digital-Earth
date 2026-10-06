@@ -20,8 +20,9 @@ elements touches no network; tiles/coastline geometry is fetched by the renderer
 """
 
 import warnings
+from collections.abc import Callable, Sequence
 from dataclasses import replace as with_fields
-from typing import TYPE_CHECKING, Any, Callable, Optional, Self, Sequence
+from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger
 
@@ -143,7 +144,7 @@ def _upper_placeholders(url: str) -> str:
     return url
 
 
-def _provider_description(provider: Any) -> Optional[str]:
+def _provider_description(provider: Any) -> str | None:
     """Return a tile provider in a spelling a figure can be written with, carrying no credential.
 
     A provider name is already one. An `xyzservices.TileProvider` is a `dict` whose fields include the
@@ -428,8 +429,8 @@ class DecorationMixin(_MixinBase):
         *,
         level: str = "underlay",
         api_key: Any = None,
-        preset: Optional[dict] = None,
-        name: Optional[str] = None,
+        preset: dict | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -611,7 +612,7 @@ class DecorationMixin(_MixinBase):
             provider
         )  # an xyzservices.TileProvider (or any gv.WMTS-accepted object)
 
-    def _display_bounds(self, bounds: Optional[tuple]) -> Optional[tuple]:
+    def _display_bounds(self, bounds: tuple | None) -> tuple | None:
         """Reproject a keyed provider's lon/lat coverage into the display CRS (#233).
 
         Args:
@@ -644,7 +645,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -705,7 +706,7 @@ class DecorationMixin(_MixinBase):
         rivers: bool = False,
         lakes: bool = False,
         resolution: str = "110m",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -788,7 +789,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -826,7 +827,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -883,7 +884,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -940,7 +941,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -998,7 +999,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1083,7 +1084,7 @@ class DecorationMixin(_MixinBase):
         s: str,
         *,
         crs: Any = 4326,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1136,7 +1137,7 @@ class DecorationMixin(_MixinBase):
         column: str,
         *,
         crs: Any = 4326,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1182,7 +1183,7 @@ class DecorationMixin(_MixinBase):
             ),
         )
 
-    def _colour_binding(self, layer_id: str) -> Optional[Encoding]:
+    def _colour_binding(self, layer_id: str) -> Encoding | None:
         """Return what drives one layer's colour, when something varies it.
 
         Args:
@@ -1200,7 +1201,7 @@ class DecorationMixin(_MixinBase):
         encoding = self._layer_tree.get(layer_id).symbology.encoding("color")
         return None if encoding is None or encoding.is_constant else encoding
 
-    def _guided_layer(self, method: str, layer_id: Optional[str]) -> str:
+    def _guided_layer(self, method: str, layer_id: str | None) -> str:
         """Resolve which layer a colour key belongs to, and refuse a layer that can carry none.
 
         Args:
@@ -1278,7 +1279,7 @@ class DecorationMixin(_MixinBase):
         guide: Guide,
         *,
         kind: str,
-        labels: Optional[Sequence[str]] = None,
+        labels: Sequence[str] | None = None,
     ) -> LayerSpec:
         """Attach `guide` to one layer's colour encoding, and hand back the layer as it now reads.
 
@@ -1362,9 +1363,9 @@ class DecorationMixin(_MixinBase):
 
     def colorbar(
         self,
-        layer_id: Optional[str] = None,
+        layer_id: str | None = None,
         *,
-        label: Optional[str] = None,
+        label: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Show the continuous colour key of a layer (the Core name, #261, order 24).
@@ -1440,10 +1441,10 @@ class DecorationMixin(_MixinBase):
 
     def legend(
         self,
-        layer_id: Optional[str] = None,
+        layer_id: str | None = None,
         *,
-        title: Optional[str] = None,
-        labels: Optional[Sequence[str]] = None,
+        title: str | None = None,
+        labels: Sequence[str] | None = None,
         visible: bool = True,
     ) -> Self:
         """Show the keyed colour list of a layer (the Core name, #261, order 24).

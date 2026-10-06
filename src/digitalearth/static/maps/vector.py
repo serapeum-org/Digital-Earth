@@ -6,10 +6,11 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 """
 
 import os
+from collections.abc import Callable, Sequence
 from functools import wraps
 from math import isfinite
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
@@ -102,7 +103,7 @@ _LABEL_REFUSED_OPTS = {
 }
 
 
-def _label_offset(offset: Any) -> Optional[List[float]]:
+def _label_offset(offset: Any) -> list[float] | None:
     """Return a label offset in the spelling a description carries, refusing one it could not.
 
     Args:
@@ -211,7 +212,7 @@ def _as_count(value: Any, argument: str, caller: str, *, minimum: int = 1) -> in
     return int(value)
 
 
-def _hexbin_lattice(gridsize: Any, min_count: Any) -> Tuple[Any, Optional[int]]:
+def _hexbin_lattice(gridsize: Any, min_count: Any) -> tuple[Any, int | None]:
     """Refuse a lattice ``HexbinGlyph`` could not bin onto, before the figure is touched.
 
     Args:
@@ -592,7 +593,7 @@ def _label_style(scene: Any, layer: LayerSpec, props: dict) -> dict:
     return style
 
 
-def _label_offset_points(props: dict) -> Tuple[float, float]:
+def _label_offset_points(props: dict) -> tuple[float, float]:
     """Return the recorded offset as the ``(dx, dy)`` in **points** matplotlib places text by.
 
     MapLibre's ``text-offset`` is in **ems** — multiples of the text size — and its y axis points *down* the
@@ -613,7 +614,7 @@ def _label_offset_points(props: dict) -> Tuple[float, float]:
     return float(offset[0]) * size, -float(offset[1]) * size
 
 
-def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Draw one text label per feature, from the column a described layer names.
 
     The third member of this tier's text family: :func:`~digitalearth.static.maps.decoration.draw_text` places
@@ -1126,7 +1127,7 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     return drawn.colored_by(DENSITY_FIELD)
 
 
-def _line_parts(gdf: Any) -> Tuple[List[np.ndarray], np.ndarray]:
+def _line_parts(gdf: Any) -> tuple[list[np.ndarray], np.ndarray]:
     """Split a line GeoDataFrame into one vertex array per drawn path.
 
     Args:
@@ -1136,8 +1137,8 @@ def _line_parts(gdf: Any) -> Tuple[List[np.ndarray], np.ndarray]:
         ``(paths, repeats)``: one ``(n, 2)`` array per ``LineString`` part, and how many parts each feature
         contributed — so a per-feature column is repeated onto its parts with ``numpy.repeat``.
     """
-    paths: List[np.ndarray] = []
-    repeats: List[int] = []
+    paths: list[np.ndarray] = []
+    repeats: list[int] = []
     for geometry in gdf.geometry:
         parts = (
             list(geometry.geoms)
@@ -1149,7 +1150,7 @@ def _line_parts(gdf: Any) -> Tuple[List[np.ndarray], np.ndarray]:
     return paths, np.asarray(repeats)
 
 
-def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Draw the line features a described ``lines`` layer asks for (``cleopatra.FlowGlyph``).
 
     The same glyph ``sankey`` draws with, held to line defaults: one width for every path unless a column
@@ -1197,9 +1198,7 @@ def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     glyph = FlowGlyph(
         paths, values=values, widths=widths, ax=scene.ax, fig=scene.fig, **opts
     )
-    drawn: Optional[DrawnLayer] = scene._render_glyph(
-        glyph, artist="plot", **plot_style
-    )
+    drawn: DrawnLayer | None = scene._render_glyph(glyph, artist="plot", **plot_style)
     opacity = props.get("opacity")
     if drawn is not None and opacity is not None:
         # FlowGlyph takes no opacity of its own; the collection it drew does.
@@ -1280,7 +1279,7 @@ def _opened_component(component: Any) -> Any:
     return component
 
 
-def _described_agg(agg: Any) -> Tuple[Any, Any]:
+def _described_agg(agg: Any) -> tuple[Any, Any]:
     """Split a quadtree reducer into the name a description records and the callable held beside the layer.
 
     The sibling of :func:`~digitalearth.static.maps.raster._described_cmap`, and it exists for the same
@@ -1299,7 +1298,7 @@ def _described_agg(agg: Any) -> Tuple[Any, Any]:
     return (agg, None) if isinstance(agg, str) else (None, agg)
 
 
-def _quadtree_reducer(agg: Any, column: Optional[str], col_vals: Any) -> Any:
+def _quadtree_reducer(agg: Any, column: str | None, col_vals: Any) -> Any:
     """Return the function that gives one quadtree cell its value.
 
     Args:
@@ -1340,8 +1339,8 @@ def _clipped_cell_boxes(cells: Any, boundary: Any) -> tuple:
     Returns:
         `(rings, values)`, positionally aligned.
     """
-    rings: List[np.ndarray] = []
-    values: List[float] = []
+    rings: list[np.ndarray] = []
+    values: list[float] = []
     for xmin, ymin, xmax, ymax, value in cells:
         if boundary is None:
             rings.append(
@@ -1424,7 +1423,7 @@ def _polygon_rings(geometry: Any) -> list:
 
 
 def _clipped_cell_rings(
-    cells: Any, boundary: Any, col_vals: Any, column: Optional[str]
+    cells: Any, boundary: Any, col_vals: Any, column: str | None
 ) -> tuple:
     """Return each Voronoi cell's exterior ring, clipped to `boundary`, with the value it carries.
 
@@ -1442,8 +1441,8 @@ def _clipped_cell_rings(
     Returns:
         `(rings, values)` — the exterior coordinate arrays, and the values beside them or `None`.
     """
-    rings: List[np.ndarray] = []
-    values: Optional[list] = [] if column is not None else None
+    rings: list[np.ndarray] = []
+    values: list | None = [] if column is not None else None
     for index, cell in enumerate(cells.geoms):
         clipped = cell if boundary is None else cell.intersection(boundary)
         for ring in _polygon_rings(clipped):
@@ -1484,9 +1483,9 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        geom_types: Optional[Sequence[str]] = None,
+        geom_types: Sequence[str] | None = None,
         name: str = "layer",
-        geom_label: Optional[str] = None,
+        geom_label: str | None = None,
     ) -> Any:
         """Reproject a ``FeatureCollection`` to the display CRS, reject empty, and validate its geometry type.
 
@@ -1537,8 +1536,8 @@ class VectorMixin(_MixinBase):
 
     def _polygon_layer(
         self,
-        polygons: List[np.ndarray],
-        values: Optional[np.ndarray] = None,
+        polygons: list[np.ndarray],
+        values: np.ndarray | None = None,
         **opts,
     ) -> DrawnLayer:
         """Draw polygons as a value-filled (``values`` given) or outline-only ``PolygonGlyph`` layer.
@@ -1609,8 +1608,8 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        size_column: Optional[str] = None,
-        name: Optional[str] = None,
+        size_column: str | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1670,9 +1669,9 @@ class VectorMixin(_MixinBase):
         color: str = DEFAULT_LABEL_COLOR,
         halo_color: str = DEFAULT_LABEL_HALO_COLOR,
         halo_width: float = DEFAULT_LABEL_HALO_WIDTH,
-        offset: Optional[Any] = None,
+        offset: Any | None = None,
         crs: Any = None,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1823,7 +1822,7 @@ class VectorMixin(_MixinBase):
         self,
         dataset: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1886,7 +1885,7 @@ class VectorMixin(_MixinBase):
         return self
 
     def point_cloud(
-        self, dataset: Any, *, name: Optional[str] = None, visible: bool = True, **opts
+        self, dataset: Any, *, name: str | None = None, visible: bool = True, **opts
     ) -> Self:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
 
@@ -1916,7 +1915,7 @@ class VectorMixin(_MixinBase):
         dataset: Any,
         band: int = DEFAULT_BAND,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1995,7 +1994,7 @@ class VectorMixin(_MixinBase):
         *,
         kind: str,
         band: int = DEFAULT_BAND,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Any:
@@ -2058,7 +2057,7 @@ class VectorMixin(_MixinBase):
         u_dataset: Any,
         v_dataset: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -2102,7 +2101,7 @@ class VectorMixin(_MixinBase):
         u_dataset: Any,
         v_dataset: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Self:
@@ -2146,7 +2145,7 @@ class VectorMixin(_MixinBase):
         u_dataset: Any,
         v_dataset: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -2285,7 +2284,7 @@ class VectorMixin(_MixinBase):
         data: Any,
         *,
         kind: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Any:
@@ -2336,7 +2335,7 @@ class VectorMixin(_MixinBase):
             return None
 
     def tricontourf(
-        self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
+        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
     ) -> Self:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
@@ -2368,7 +2367,7 @@ class VectorMixin(_MixinBase):
         return self
 
     def tricontour(
-        self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
+        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
     ) -> Self:
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
@@ -2400,7 +2399,7 @@ class VectorMixin(_MixinBase):
         return self
 
     def tripcolor(
-        self, data: Any, *, name: Optional[str] = None, visible: bool = True, **kwargs
+        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
     ) -> Self:
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
 
@@ -2448,8 +2447,8 @@ class VectorMixin(_MixinBase):
             and one count per input feature saying how many of those polygons it contributed — ``1`` for a
             ``Polygon``, the number of parts for a ``MultiPolygon``.
         """
-        polygons: List[np.ndarray] = []
-        repeats: List[int] = []
+        polygons: list[np.ndarray] = []
+        repeats: list[int] = []
         for geom in geometry:
             parts = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
             polygons.extend(np.asarray(p.exterior.coords) for p in parts)
@@ -2458,7 +2457,7 @@ class VectorMixin(_MixinBase):
 
     @staticmethod
     def _finite_polygons(
-        polygons: List[np.ndarray], values: Optional[np.ndarray] = None
+        polygons: list[np.ndarray], values: np.ndarray | None = None
     ) -> tuple:
         """Drop polygons with any non-finite vertex (and the matching values).
 
@@ -2514,11 +2513,11 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        scheme: Optional[Any] = None,
+        scheme: Any | None = None,
         k: int = 5,
-        cmap: Optional[Any] = None,
-        opacity: Optional[float] = None,
-        name: Optional[str] = None,
+        cmap: Any | None = None,
+        opacity: float | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -2643,7 +2642,7 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -2701,7 +2700,7 @@ class VectorMixin(_MixinBase):
         return clip  # shapely geometry, assumed already in the display CRS
 
     @staticmethod
-    def _finite_point_xy(geom: Any, values: Optional[np.ndarray] = None):
+    def _finite_point_xy(geom: Any, values: np.ndarray | None = None):
         """Return ``(xs, ys, values)`` for points with finite coordinates.
 
         Points that reproject to non-finite coordinates (the far side of a clipped/globe display CRS) are
@@ -2726,10 +2725,10 @@ class VectorMixin(_MixinBase):
     def voronoi(
         self,
         features: Any,
-        column: Optional[str] = None,
+        column: str | None = None,
         *,
         clip: Any = None,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Self:
@@ -2804,7 +2803,7 @@ class VectorMixin(_MixinBase):
         return self
 
     @staticmethod
-    def _scale_factors(values: np.ndarray, limits: Tuple[float, float]) -> np.ndarray:
+    def _scale_factors(values: np.ndarray, limits: tuple[float, float]) -> np.ndarray:
         """Linearly map ``values`` onto ``limits`` (a constant input maps to the midpoint factor).
 
         Args:
@@ -2825,10 +2824,10 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         scale: str,
-        column: Optional[str] = None,
+        column: str | None = None,
         *,
-        limits: Tuple[float, float] = (0.2, 1.0),
-        name: Optional[str] = None,
+        limits: tuple[float, float] = (0.2, 1.0),
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Self:
@@ -2911,7 +2910,7 @@ class VectorMixin(_MixinBase):
         nmax: int,
         nmin: int,
         max_depth: int = 20,
-    ) -> List[Tuple[float, float, float, float, float]]:
+    ) -> list[tuple[float, float, float, float, float]]:
         """Recursively split the points' bbox into quadrants until each cell holds ``<= nmax`` points.
 
         Returns ``(xmin, ymin, xmax, ymax, value)`` per kept cell, where ``value = agg_fn(point_indices)``.
@@ -2935,7 +2934,7 @@ class VectorMixin(_MixinBase):
             x1 = x0 + 1.0
         if y1 <= y0:
             y1 = y0 + 1.0
-        out: List[Tuple[float, float, float, float, float]] = []
+        out: list[tuple[float, float, float, float, float]] = []
         stack = [(x0, y0, x1, y1, np.arange(len(xs)), 0)]
         while stack:
             xmin, ymin, xmax, ymax, idx, depth = stack.pop()
@@ -2961,13 +2960,13 @@ class VectorMixin(_MixinBase):
     def quadtree(
         self,
         features: Any,
-        column: Optional[str] = None,
+        column: str | None = None,
         *,
         agg: Any = DEFAULT_QUADTREE_AGG,
         nmax: int = 100,
         nmin: int = 0,
         clip: Any = None,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Self:
@@ -3074,7 +3073,7 @@ class VectorMixin(_MixinBase):
             return [g for g in geom.geoms if g.geom_type == "Polygon"]
         return []
 
-    def _clip_path(self, clip: Any) -> Optional[MplPath]:
+    def _clip_path(self, clip: Any) -> MplPath | None:
         """Resolve a clip boundary to a matplotlib ``Path`` (data coords) for contour clipping, or ``None``.
 
         Reuses :meth:`_clip_geometry` to reproject/union the boundary, then turns each polygon exterior ring
@@ -3088,8 +3087,8 @@ class VectorMixin(_MixinBase):
             when there is no usable boundary.
         """
         polys = self._polygons_of(self._clip_geometry(clip))
-        verts: List[list] = []
-        codes: List[int] = []
+        verts: list[list] = []
+        codes: list[int] = []
         for poly in polys:
             ring = np.asarray(poly.exterior.coords)
             if len(ring) < 3:
@@ -3108,12 +3107,12 @@ class VectorMixin(_MixinBase):
     def hexbin(
         self,
         features: Any,
-        column: Optional[str] = None,
+        column: str | None = None,
         *,
         reduce: Any = DEFAULT_HEXBIN_REDUCE,
         gridsize: Any = 50,
-        min_count: Optional[int] = None,
-        name: Optional[str] = None,
+        min_count: int | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -3294,7 +3293,7 @@ class VectorMixin(_MixinBase):
         features: Any,
         *,
         clip: Any = None,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Self:
@@ -3361,14 +3360,14 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
-        cmap: Optional[Any] = None,
+        cmap: Any | None = None,
         width: float | str | None = None,
-        color: Optional[Any] = None,
-        opacity: Optional[float] = None,
-        name: Optional[str] = None,
+        color: Any | None = None,
+        opacity: float | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -3534,7 +3533,7 @@ class VectorMixin(_MixinBase):
             # `color=` is a plausible slip — and `to_hex` answered it with matplotlib's "Invalid RGBA
             # argument", which names neither this method nor either keyword (review L4).
             try:
-                line_color: Optional[Any] = to_hex(color, keep_alpha=True)
+                line_color: Any | None = to_hex(color, keep_alpha=True)
             except (ValueError, TypeError):
                 raise ValueError(
                     f"{_LINES_CALLER} needs color= as one matplotlib colour for every line, and "
@@ -3574,10 +3573,10 @@ class VectorMixin(_MixinBase):
     def sankey(
         self,
         features: Any,
-        column: Optional[str] = None,
-        scale: Optional[str] = None,
+        column: str | None = None,
+        scale: str | None = None,
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Self:

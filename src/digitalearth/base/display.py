@@ -25,7 +25,8 @@ These are free functions taking the display CRS as an argument rather than readi
 that is not a scene class can use them too, and so they can be tested without one.
 """
 
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources import Source, get_source
@@ -132,10 +133,10 @@ def to_display_source(data: Any, crs: Any, *, band: int = DEFAULT_BAND) -> Sourc
 
 def auto_cmap(
     source: Any,
-    cmap: Optional[str],
+    cmap: str | None,
     fallback: str = DEFAULT_CMAP,
     *,
-    lookup: Optional[Callable[[Any], Dict[str, Any]]] = None,
+    lookup: Callable[[Any], dict[str, Any]] | None = None,
 ) -> str:
     """Return the colormap to draw `source` with, resolving from its variable when the caller named none.
 
@@ -200,5 +201,5 @@ def auto_cmap(
         from digitalearth.base.autostyle import auto_style
 
         lookup = auto_style
-    style: Dict[str, Any] = lookup(source)
+    style: dict[str, Any] = lookup(source)
     return style.get("cmap") or fallback

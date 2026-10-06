@@ -15,9 +15,10 @@ does with the record is asked separately.
 """
 
 import json
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Callable, Dict, Mapping, Tuple
+from typing import Any
 
 import pytest
 
@@ -129,9 +130,9 @@ class Probe:
 
     draw: Callable[[Any, dict], Any]
     own_default: Mapping[str, Any]
-    records: Tuple[str, ...]
+    records: tuple[str, ...]
     writes: str = "paint"
-    bare: Tuple[str, ...] = field(default=())
+    bare: tuple[str, ...] = field(default=())
 
 
 #: Every builder on this tier that records a style, and the ask each one is put to.
@@ -140,7 +141,7 @@ class Probe:
 #: that draws some of them can only ever confirm the ones it draws. The three at the end record style that
 #: drives no channel and are here to pin that, so a later builder cannot quietly start publishing a second
 #: colour as the layer's own.
-PROBES: Dict[str, Probe] = {
+PROBES: dict[str, Probe] = {
     "points": Probe(
         lambda m, style: m.points(_points(), **style),
         MappingProxyType({"size": 5.0}),
@@ -254,7 +255,7 @@ PROBES: Dict[str, Probe] = {
 }
 
 
-def _props(probe: Probe, style: Mapping[str, Any]) -> Dict[str, Any]:
+def _props(probe: Probe, style: Mapping[str, Any]) -> dict[str, Any]:
     """Draw one probe and return its last layer's recorded props.
 
     Args:

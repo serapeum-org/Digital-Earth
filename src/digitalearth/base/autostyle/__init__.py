@@ -14,7 +14,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -36,11 +36,11 @@ _LIBRARY_DIR = Path(__file__).parent / "library"
 #: after the bundled YAML so a plugin can add a group or override one. Populated by
 #: :func:`register_style_library`, which the package's plugin wiring
 #: (:func:`digitalearth.load_installed_plugins`) calls for each loaded ``styles`` plugin; empty until then.
-_PLUGIN_LIBRARY: Dict[str, dict] = {}
+_PLUGIN_LIBRARY: dict[str, dict] = {}
 
 
 @lru_cache(maxsize=1)
-def _bundled_library() -> Dict[str, dict]:
+def _bundled_library() -> dict[str, dict]:
     """Load and merge every bundled ``*.yml`` file in the style library (cached).
 
     The bundled files never change during a run, so this is cached; the plugin-contributed groups are merged
@@ -49,7 +49,7 @@ def _bundled_library() -> Dict[str, dict]:
     Returns:
         Mapping of style-group name (e.g. ``"temperature"``, ``"default"``) to its parameter dict.
     """
-    library: Dict[str, dict] = {}
+    library: dict[str, dict] = {}
     for path in sorted(_LIBRARY_DIR.glob("*.yml")):
         if path.name == "magics.yml":
             continue  # the Magics operational library is loaded separately via load_magics_library()
@@ -58,7 +58,7 @@ def _bundled_library() -> Dict[str, dict]:
     return library
 
 
-def load_library() -> Dict[str, dict]:
+def load_library() -> dict[str, dict]:
     """Return the bundled style groups merged with any ``digitalearth.styles`` plugin has contributed.
 
     The bundled ``*.yml`` groups are cached; the plugin-contributed groups (:data:`_PLUGIN_LIBRARY`, filled by
@@ -171,7 +171,7 @@ def temporary_style_library(library: Mapping[str, dict]) -> Iterator[None]:
         _PLUGIN_LIBRARY.update(previous)
 
 
-def auto_style(source: Source) -> Dict[str, Any]:
+def auto_style(source: Source) -> dict[str, Any]:
     """Resolve cleopatra style parameters for a :class:`~digitalearth.base.sources.source.Source`.
 
     The richer ECMWF Magics identity matching (:func:`~digitalearth.base.autostyle.magics.magics_style`) is tried
@@ -259,7 +259,7 @@ def auto_style(source: Source) -> Dict[str, Any]:
     """
     library = load_library()
     variable_raw = str(source.metadata("variable") or "")
-    style: Dict[str, Any] = dict(library.get("default", {}))
+    style: dict[str, Any] = dict(library.get("default", {}))
 
     # First, the richer ECMWF Magics identity matching (name -> standard_name -> units): when it recognises
     # the field, it supplies a canonical colormap *and* contour levels and we are done.
@@ -282,7 +282,7 @@ def auto_style(source: Source) -> Dict[str, Any]:
     return _with_source_units(style, source)
 
 
-def _with_source_units(style: Dict[str, Any], source: Source) -> Dict[str, Any]:
+def _with_source_units(style: dict[str, Any], source: Source) -> dict[str, Any]:
     """Fill a resolved style's ``units`` from the source itself when the library named none (ST-18).
 
     The library's answer is **canonical** and wins where it has one: a field matched as mean sea-level

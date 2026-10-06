@@ -39,10 +39,11 @@ element, because `.opts()` writes into HoloViews' global `Store` against the obj
 """
 
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
+from typing import Any, cast
 
 from digitalearth.base.capabilities import CapabilityError
 from digitalearth.base.custom import custom_kind
@@ -130,7 +131,7 @@ class DrawnLayer:
 #: a kind is built by its drawer and never by its builder. The one kind outside it is `custom:holoviews` —
 #: an element a caller built and handed to `add_layer`, which has no description to rebuild it from and
 #: so is drawn by being kept.
-DRAWN_KINDS: Tuple[str, ...] = (
+DRAWN_KINDS: tuple[str, ...] = (
     "graticule",
     "text",
     "coastlines",
@@ -179,10 +180,10 @@ KEPT_KINDS: Mapping[str, str] = MappingProxyType(
 #: `visible` at all. Which of these an element actually takes is read from the engine's own option table
 #: rather than listed per element here, the way :mod:`digitalearth.interactive.style_fold` reads everything
 #: else it folds — so this cannot drift from what HoloViews accepts.
-_VISIBILITY_KEYWORDS: Tuple[str, ...] = ("visible", "edge_visible", "node_visible")
+_VISIBILITY_KEYWORDS: tuple[str, ...] = ("visible", "edge_visible", "node_visible")
 
 
-def _visibility_keywords(element: Any) -> Tuple[str, ...]:
+def _visibility_keywords(element: Any) -> tuple[str, ...]:
     """Return the keywords this element spells "do not draw me" with, as its backend takes them.
 
     Args:
@@ -310,7 +311,7 @@ def _is_shown(element: Any) -> bool:
     return all(bool(applied.get(keyword, True)) for keyword in keywords)
 
 
-def _recipes() -> Dict[str, Dict[str, Any]]:
+def _recipes() -> dict[str, dict[str, Any]]:
     """Return the drawers of this tier, by kind and then by the recipe each was built with.
 
     A kind is drawn more than one way here — `points` is a frame of geometry or a datashaded aggregate,
@@ -374,7 +375,7 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
     }
 
 
-def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
+def _dispatch(kind: str, recipes: dict[str, Any]) -> Any:
     """Return the drawer for one kind, which picks between the recipes that kind is drawn by.
 
     Args:
@@ -386,7 +387,7 @@ def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
         the drawer for it.
     """
 
-    def draw(interactive_map: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+    def draw(interactive_map: Any, data: Any, layer: LayerSpec) -> DrawnLayer | None:
         """Draw the layer with the drawer its recipe names.
 
         Args:
@@ -407,7 +408,7 @@ def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
                 f"a {kind!r} layer records {via!r} as how it was drawn; this tier draws one of "
                 f"{sorted(recipes)}"
             )
-        drawn: Optional[DrawnLayer] = recipes[via](interactive_map, data, layer)
+        drawn: DrawnLayer | None = recipes[via](interactive_map, data, layer)
         return drawn
 
     return draw
@@ -475,7 +476,7 @@ def drawer_for(kind: str) -> Any:
 #: a figure another tier described is drawn here (:func:`retarget_via`): a kind drawn one way needs no entry,
 #: and a kind whose plain recipe is a genuine judgement — ``heatmap`` (hexbin vs kde) — is left out, so its
 #: foreign ``via`` is refused rather than guessed wrong. Held against :func:`_recipes` by a test.
-_CANONICAL_VIA: Dict[str, str] = {
+_CANONICAL_VIA: dict[str, str] = {
     "points": "geometry",
     "lines": "geometry",
     "raster": "image",
@@ -551,7 +552,7 @@ class Renderer:
         """
         return dict(self._drawn)
 
-    def draw_layer(self, figure: FigureSpec, layer_id: str) -> Optional[DrawnLayer]:
+    def draw_layer(self, figure: FigureSpec, layer_id: str) -> DrawnLayer | None:
         """Draw one of a figure's layers and record what it produced.
 
         Args:
@@ -588,7 +589,7 @@ class Renderer:
         """
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer)
-        drawn: Optional[DrawnLayer] = drawer_for(layer.kind)(self._map, data, layer)
+        drawn: DrawnLayer | None = drawer_for(layer.kind)(self._map, data, layer)
         if drawn is not None:
             drawn = _draw_recorded_guide(layer, drawn)
             self._drawn[layer_id] = drawn
@@ -684,7 +685,7 @@ class Renderer:
         before: FigureSpec,
         after: FigureSpec,
         held: Mapping[str, DrawnLayer],
-        overlay: List[Any],
+        overlay: list[Any],
     ) -> None:
         """Re-arrange what the map overlays so it is `after`'s layers, in `after`'s draw order.
 
@@ -723,7 +724,7 @@ class Renderer:
 
     def _would_draw(
         self, before: FigureSpec, after: FigureSpec, change: FigureDiff
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         """Return the layers a reconcile of this difference asks a drawer for, in the order it asks.
 
         Read once and handed to both :meth:`_refuse_what_it_cannot_rebuild` and :meth:`_reconcile`, so the
@@ -751,7 +752,7 @@ class Renderer:
         )
 
     def _refuse_what_it_cannot_rebuild(
-        self, after: FigureSpec, asked: Tuple[str, ...]
+        self, after: FigureSpec, asked: tuple[str, ...]
     ) -> None:
         """Refuse a change that would have to build a layer of a kind this tier only keeps.
 
@@ -777,7 +778,7 @@ class Renderer:
             )
 
     def _reconcile(
-        self, after: FigureSpec, change: FigureDiff, asked: Tuple[str, ...]
+        self, after: FigureSpec, change: FigureDiff, asked: tuple[str, ...]
     ) -> None:
         """Draw the difference between two figures, layer by layer.
 

@@ -5,7 +5,7 @@ written, at what frame rate, and — the substantive decision — that the inter
 chroma when a GIF is going to be derived from it, since a subsampled source permanently caps the GIF's colour.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pytest
@@ -17,9 +17,9 @@ from digitalearth.static.animation import FULL_CHROMA_PIX_FMT, save_animation
 
 
 @pytest.fixture
-def calls(monkeypatch) -> Dict[str, List[Any]]:
+def calls(monkeypatch) -> dict[str, list[Any]]:
     """Record the cleopatra calls instead of invoking ffmpeg."""
-    recorded: Dict[str, List[Any]] = {"save": [], "gif": []}
+    recorded: dict[str, list[Any]] = {"save": [], "gif": []}
     monkeypatch.setattr(
         de_animation,
         "_cleopatra_save_animation",

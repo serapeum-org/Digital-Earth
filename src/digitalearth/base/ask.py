@@ -28,16 +28,11 @@ Nothing here knows a renderer, and nothing here is a style vocabulary — the ch
 tier's own mapping, and the vocabulary is :mod:`digitalearth.base.spec.style`.
 """
 
+from collections.abc import Iterable, Mapping
 from typing import (
     Any,
-    Dict,
-    FrozenSet,
-    Iterable,
-    List,
-    Mapping,
     TypeAlias,
     TypeVar,
-    Union,
 )
 
 __all__ = [
@@ -93,7 +88,7 @@ UNSET: Unset = Unset()
 #: same thing the same way, and so the sentinel can never be *absent* from an annotation whose default is
 #: `UNSET` without a checker noticing. Resolving through :class:`Ask` narrows it back to `T`, which is what
 #: keeps the body of a builder typed exactly as it was.
-Maybe: TypeAlias = Union[T, Unset]
+Maybe: TypeAlias = T | Unset
 
 #: The `Symbology.props` key a layer's record of the caller's asks lives under.
 #:
@@ -143,7 +138,7 @@ class Ask:
 
     def __init__(self) -> None:
         """Start with nothing asked for."""
-        self._named: List[str] = []
+        self._named: list[str] = []
 
     def __call__(self, key: str, value: Maybe[T], default: T) -> T:
         """Resolve one style keyword, recording it when the caller passed it.
@@ -189,7 +184,7 @@ class Ask:
         self._named.append(key)
 
     @property
-    def named(self) -> List[str]:
+    def named(self) -> list[str]:
         """The keys the caller asked for, sorted and deduplicated.
 
         Returns:
@@ -211,7 +206,7 @@ class Ask:
         return sorted(set(self._named))
 
     @property
-    def record(self) -> Dict[str, List[str]]:
+    def record(self) -> dict[str, list[str]]:
         """The `Symbology.props` entry this call contributes.
 
         Returns:
@@ -238,7 +233,7 @@ class Ask:
         return asked_record(self._named)
 
 
-def asked_record(asked: Iterable[str]) -> Dict[str, List[str]]:
+def asked_record(asked: Iterable[str]) -> dict[str, list[str]]:
     """Return the `Symbology.props` entry that records these asks, or nothing when there are none.
 
     The write side of :data:`ASKED_PROP`, so a builder that resolves its style somewhere other than where it
@@ -269,7 +264,7 @@ def asked_record(asked: Iterable[str]) -> Dict[str, List[str]]:
     return {ASKED_PROP: named} if named else {}
 
 
-def asked_style(props: Mapping[str, Any]) -> FrozenSet[str]:
+def asked_style(props: Mapping[str, Any]) -> frozenset[str]:
     """Return the style keys a layer's description says the caller named.
 
     The read side of :data:`ASKED_PROP`, shared so the two tiers cannot disagree about how the record is

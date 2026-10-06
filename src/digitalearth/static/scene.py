@@ -28,22 +28,14 @@ of a globe) is dropped from the description again, so a figure never names somet
 
 import os
 import warnings
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import replace as with_fields
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
     Self,
-    Sequence,
-    Set,
-    Tuple,
 )
 
 import matplotlib.pyplot as plt
@@ -117,7 +109,7 @@ AT_INDICES: str = "at array indices"
 IN_DISPLAY_CRS: str = "in the display CRS"
 
 
-def placement_of(record: "LayerRecord") -> Optional[str]:
+def placement_of(record: "LayerRecord") -> str | None:
     """Return where the layer a record describes is placed, or ``None`` when it is not this figure's business.
 
     Args:
@@ -156,7 +148,7 @@ def placement_of(record: "LayerRecord") -> Optional[str]:
     return AT_INDICES if isinstance(record.source, np.ndarray) else IN_DISPLAY_CRS
 
 
-def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+def described_opts(opts: Mapping[str, Any] | None) -> dict[str, Any]:
     """Return the half of a caller's engine keywords that a figure carries.
 
     Args:
@@ -173,7 +165,7 @@ def described_opts(opts: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 
 
 def _with_described_opts(
-    symbology: Optional[Symbology], opts: Optional[Mapping[str, Any]]
+    symbology: Symbology | None, opts: Mapping[str, Any] | None
 ) -> Symbology:
     """Return a layer's symbology with the plain half of the caller's engine keywords written into it.
 
@@ -193,7 +185,7 @@ def _with_described_opts(
     return with_fields(recorded, props={**recorded.props, DRAWING_OPTS_KEY: described})
 
 
-def drawing_style(scene: Any, layer: LayerSpec) -> Dict[str, Any]:
+def drawing_style(scene: Any, layer: LayerSpec) -> dict[str, Any]:
     """Return every engine keyword a layer is drawn with: the described half under the held half.
 
     The pair :func:`~digitalearth.static.renderer.drawing_opts` alone used to be. A description carries the
@@ -293,7 +285,7 @@ class Pick:
     layer_id: str
     x: float
     y: float
-    hits: Tuple[str, ...] = ()
+    hits: tuple[str, ...] = ()
     event: Any = None
 
 
@@ -367,12 +359,12 @@ class LayerRecord:
 
     kind: str
     source: Any = None
-    name: Optional[str] = None
-    band: Optional[str] = None
+    name: str | None = None
+    band: str | None = None
     visible: bool = True
-    symbology: Optional[Symbology] = None
+    symbology: Symbology | None = None
     key: Any = None
-    opts: Optional[Mapping[str, Any]] = None
+    opts: Mapping[str, Any] | None = None
     held: Any = None
 
 
@@ -459,9 +451,9 @@ class Scene(WatermarkMixin):
 
     def __init__(
         self,
-        ax: Optional[Axes] = None,
-        fig: Optional[Figure] = None,
-        figsize: Tuple[float, float] = (8, 8),
+        ax: Axes | None = None,
+        fig: Figure | None = None,
+        figsize: tuple[float, float] = (8, 8),
         strict: bool = False,
     ):
         """Build the shared figure/axes host that layers render onto.
@@ -537,39 +529,39 @@ class Scene(WatermarkMixin):
         # panel is given `ax=`, so it never owns its figure, while `Map(crs=...)` always does.
         self._owns_fig: bool = made_figure
         self.strict: bool = bool(strict)
-        self.layers: List[Tuple[Any, Any]] = []
+        self.layers: list[tuple[Any, Any]] = []
         #: One entry per registered layer (same order as :attr:`layers`): the label :meth:`colorbar` falls
         #: back to when the caller passes none — the layer's resolved ``units``, or ``None``.
-        self._layer_labels: List[Optional[str]] = []
+        self._layer_labels: list[str | None] = []
         # What the scene draws, as data. `self.layers` holds the matplotlib artists — the drawing — and this
         # holds the description each was built from, which is what a figure can be written to and read back
         # from (#303). They are not the same list: a basemap, a graticule or a Natural-Earth overlay draws
         # straight onto the axes with no mappable to register, and is described all the same.
         self._layer_tree: LayerTree = LayerTree()
-        self._sources: Dict[str, DataRef] = {}
+        self._sources: dict[str, DataRef] = {}
         # Namespaced per scene: every figure restarts its layer numbering, so two maps in one session both
         # mint `raster-1`, and one process-global object table would have the second silently re-point the
         # first figure's captured source at its own data.
         self._objects_ns: str = object_namespace()
         #: The highest number issued for each generated-id prefix, so an unnamed layer is numbered
         #: within its kind rather than within the figure (review R2-M10).
-        self._id_counters: Dict[str, int] = {}
-        self._issued_ids: Set[str] = set()
+        self._id_counters: dict[str, int] = {}
+        self._issued_ids: set[str] = set()
         # What a drawer needs that the figure cannot carry — a clip boundary, a basemap credential — keyed
         # by layer id. Deliberately not part of `symbology`: a figure is written to JSON and read back, and
         # neither a shapely geometry nor an API key belongs in one (see `LayerRecord.key`).
-        self._layer_keys: Dict[str, Any] = {}
+        self._layer_keys: dict[str, Any] = {}
         # The caller's engine keywords, exactly as passed, keyed by layer id (see `LayerRecord.opts`). The
         # plain ones are described as well; these are the objects themselves, and for a dash tuple, a
         # `Normalize` or a colormap object this is the only place they live — a description is plain values,
         # and none of those is one.
-        self._layer_opts: Dict[str, Dict[str, Any]] = {}
+        self._layer_opts: dict[str, dict[str, Any]] = {}
         # The caller's own objects, for the custom layers they handed in (see `LayerRecord.held`).
-        self._held_objects: Dict[str, Any] = {}
+        self._held_objects: dict[str, Any] = {}
         # Where each layer's coordinates are placed — `IN_DISPLAY_CRS` or `AT_INDICES` — keyed by layer id,
         # so `_require_one_placement` can refuse the figure that would hold both. A `custom:matplotlib`
         # layer has no entry: the caller's own artist is in the caller's own coordinates.
-        self._layer_placements: Dict[str, str] = {}
+        self._layer_placements: dict[str, str] = {}
         # Whether this scene has already drawn a glyph onto `ax` (#313). A cleopatra glyph clears every
         # glyph's artists off its axes unless it is told to compose, so from the *second* layer onwards a
         # render has to compose or it takes the layer below it off again. Only from the second: the first
@@ -586,17 +578,17 @@ class Scene(WatermarkMixin):
         #: assigned (measured: ``[-0.5, 0.5, 1.5]`` for two categories) rather than the caller's own values,
         #: so reporting them as class edges would be reporting a wrong answer. A categorical key is the
         #: swatch legend the glyph draws on this tier.
-        self.last_breaks: Optional[List[float]] = None
+        self.last_breaks: list[float] | None = None
         # The callbacks a click on this figure is delivered to, and the canvas connection that feeds them
         # (see `on_pick`). The connection is made on the first registration rather than in the constructor,
         # so a scene nobody picks on puts no handler on the canvas at all.
-        self._pick_handlers: List[Callable[[Pick], Any]] = []
-        self._pick_cid: Optional[int] = None
+        self._pick_handlers: list[Callable[[Pick], Any]] = []
+        self._pick_cid: int | None = None
         # The panel's title, as the description carries it (see `set_title`); the figure's own heading is
         # its `suptitle`, read off the figure by `figure_spec`. Held on the scene rather than read back off
         # `ax.title`, because matplotlib keeps three titles on an axes — centre, left and right — and a
         # panel has one title whichever of them it was drawn at.
-        self._title: Optional[str] = None
+        self._title: str | None = None
         #: The renderer that turns this scene's description into artists on :attr:`ax`.
         self._renderer: Renderer = Renderer(self)
 
@@ -653,11 +645,11 @@ class Scene(WatermarkMixin):
     def _index_layer(
         self,
         layer_id: str,
-        label: Optional[str],
+        label: str | None,
         *,
         kind: str,
         visible: bool = True,
-        band: Optional[str] = None,
+        band: str | None = None,
         source: Any = None,
         symbology: Any = None,
     ) -> None:
@@ -957,7 +949,7 @@ class Scene(WatermarkMixin):
         self._layer_placements.pop(layer_id, None)
 
     @property
-    def layer_ids(self) -> List[str]:
+    def layer_ids(self) -> list[str]:
         """The ids of the layers this scene draws, in draw order, bottom first.
 
         Returns:
@@ -1100,7 +1092,7 @@ class Scene(WatermarkMixin):
         self._require_layer(layer_id)
         return self._layer_tree.get(layer_id)
 
-    def artist(self, layer_id: Optional[str] = None) -> Any:
+    def artist(self, layer_id: str | None = None) -> Any:
         """Return what one layer's drawer handed back — for most kinds, the matplotlib artist it drew.
 
         The companion to the builders returning `Self` (ST-20): they hand back the map so a figure reads
@@ -1253,7 +1245,7 @@ class Scene(WatermarkMixin):
         return self._renderer.drawn[layer_id].artist
 
     def add_layer(
-        self, artist: Any, *, name: Optional[str] = None, band: Optional[str] = None
+        self, artist: Any, *, name: str | None = None, band: str | None = None
     ) -> Self:
         """Register an artist **you built yourself** as a layer, and return this scene (chainable).
 
@@ -1537,7 +1529,7 @@ class Scene(WatermarkMixin):
         return Viewport()
 
     def _register_artist(
-        self, glyph: Any, mappable: Any, label: Optional[str] = None
+        self, glyph: Any, mappable: Any, label: str | None = None
     ) -> Any:
         """Register a rendered glyph and its mappable so a colorbar or legend can be keyed to it.
 
@@ -1576,7 +1568,7 @@ class Scene(WatermarkMixin):
             del self.layers[index]
             del self._layer_labels[index]
 
-    def _registered_index(self, drawn: Optional[DrawnLayer]) -> Optional[int]:
+    def _registered_index(self, drawn: DrawnLayer | None) -> int | None:
         """Return where one drawn layer's ``(glyph, mappable)`` pair sits in :attr:`layers`.
 
         Matched by identity rather than by position: :attr:`layers` holds only the layers that registered a
@@ -1603,10 +1595,10 @@ class Scene(WatermarkMixin):
         self,
         glyph: Any,
         mappable: Any,
-        label: Optional[str] = None,
+        label: str | None = None,
         *,
-        name: Optional[str] = None,
-        band: Optional[str] = None,
+        name: str | None = None,
+        band: str | None = None,
         visible: bool = True,
     ) -> Any:
         """Register an artist the caller built themselves, and describe it as a custom layer.
@@ -1686,7 +1678,7 @@ class Scene(WatermarkMixin):
         # rather than composes — which is what keeps a frame from composing over the frame before it.
         self._drew_on_axes = False
 
-    def _default_label(self, layer_id: str) -> Optional[str]:
+    def _default_label(self, layer_id: str) -> str | None:
         """Return the default colour-key title recorded for one layer, or ``None`` when there is none.
 
         Args:
@@ -1707,7 +1699,7 @@ class Scene(WatermarkMixin):
         glyph: Any,
         *plot_args: Any,
         artist: str = "im",
-        label: Optional[str] = None,
+        label: str | None = None,
         **plot_kwargs: Any,
     ) -> DrawnLayer:
         """Plot ``glyph`` on the shared axes, register the produced mappable, and report what it drew.
@@ -1794,7 +1786,7 @@ class Scene(WatermarkMixin):
                 self.ax.set_xlim(xlim)
                 self.ax.set_ylim(ylim)
 
-    def _color_keyed(self) -> List[str]:
+    def _color_keyed(self) -> list[str]:
         """Return the ids of the layers that publish a colour a key could explain, bottom first.
 
         Returns:
@@ -1809,7 +1801,7 @@ class Scene(WatermarkMixin):
             if self._layer_tree.get(layer_id).symbology.encoding("color") is not None
         ]
 
-    def _keyed_layer(self, layer_id: Optional[str], caller: str) -> LayerSpec:
+    def _keyed_layer(self, layer_id: str | None, caller: str) -> LayerSpec:
         """Return the layer a key was asked for, resolving ``None`` and refusing one with no colour to key.
 
         ``None`` resolves to the **topmost coloured layer in draw order** — `_color_keyed()[-1]`, since that
@@ -1858,7 +1850,7 @@ class Scene(WatermarkMixin):
             )
         return self._layer_tree.get(keyed[-1])
 
-    def _title_for(self, layer_id: str, asked: Optional[str]) -> Optional[str]:
+    def _title_for(self, layer_id: str, asked: str | None) -> str | None:
         """Return the title a key is recorded with: the caller's, or the layer's own units.
 
         Resolved at the **record** rather than at the draw, so the title travels with the figure instead of
@@ -1902,9 +1894,9 @@ class Scene(WatermarkMixin):
         layer: LayerSpec,
         kind: str,
         *,
-        title: Optional[str],
+        title: str | None,
         visible: bool,
-        labels: Optional[Sequence[str]],
+        labels: Sequence[str] | None,
         **kwargs: Any,
     ) -> None:
         """Record the guide on the layer's colour encoding, then draw the key from what was recorded.
@@ -1958,7 +1950,7 @@ class Scene(WatermarkMixin):
             self._displace_other_legends(layer.id)
 
     @staticmethod
-    def _shown_swatch_guide(layer: LayerSpec) -> Optional[Guide]:
+    def _shown_swatch_guide(layer: LayerSpec) -> Guide | None:
         """Return the guide by which a layer claims a drawn swatch legend, or ``None``.
 
         Args:
@@ -2070,9 +2062,9 @@ class Scene(WatermarkMixin):
 
     def colorbar(
         self,
-        layer_id: Optional[str] = None,
+        layer_id: str | None = None,
         *,
-        label: Optional[str] = None,
+        label: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -2252,10 +2244,10 @@ class Scene(WatermarkMixin):
 
     def legend(
         self,
-        layer_id: Optional[str] = None,
+        layer_id: str | None = None,
         *,
-        title: Optional[str] = None,
-        labels: Optional[Sequence[str]] = None,
+        title: str | None = None,
+        labels: Sequence[str] | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -2372,7 +2364,7 @@ class Scene(WatermarkMixin):
         return self
 
     @staticmethod
-    def _recorded_title(title: Any) -> Optional[str]:
+    def _recorded_title(title: Any) -> str | None:
         """Return the heading a figure records for what was handed to ``Axes.set_title``.
 
         The record has to agree with the drawing, and the two vocabularies are not the same:
@@ -2418,7 +2410,7 @@ class Scene(WatermarkMixin):
         return text if text.strip() else None
 
     @property
-    def title(self) -> Optional[str]:
+    def title(self) -> str | None:
         """The panel's title, as the figure's description carries it.
 
         Returns:
@@ -2661,7 +2653,7 @@ class Scene(WatermarkMixin):
             )
         return self
 
-    def off_pick(self, callback: Optional[Callable[[Pick], Any]] = None) -> Self:
+    def off_pick(self, callback: Callable[[Pick], Any] | None = None) -> Self:
         """Stop delivering picks to one callback, or to all of them.
 
         Args:
