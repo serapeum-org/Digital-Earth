@@ -18,7 +18,7 @@ from digitalearth.web import WebMap  # noqa: E402
 CONTROLS = {
     "attribution": lambda m: m.attribution(),
     "geolocate": lambda m: m.geolocate(),
-    "globe": lambda m: m.globe(),
+    "globe_control": lambda m: m.globe_control(),
     "terrain_control": lambda m: m.terrain_control("dem"),
 }
 
@@ -26,7 +26,7 @@ CONTROLS = {
 BAD_POSITION = {
     "attribution": lambda m: m.attribution(position="middle"),
     "geolocate": lambda m: m.geolocate(position="middle"),
-    "globe": lambda m: m.globe(position="middle"),
+    "globe_control": lambda m: m.globe_control(position="middle"),
     "terrain_control": lambda m: m.terrain_control("dem", position="middle"),
 }
 

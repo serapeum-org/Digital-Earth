@@ -2081,7 +2081,7 @@ class DecorationMixin(_MixinBase):
         )
         return self._queue(apply)
 
-    def globe(self, *, position: str = "top-right") -> Self:
+    def globe_control(self, *, position: str = "top-right") -> Self:
         """Add a MapLibre globe control — a toggle between the flat map and a 3-D globe (WB-14).
 
         Args:
@@ -2102,7 +2102,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
-        self._record_furniture("globe", anchor=position)
+        self._record_furniture("globe_control", anchor=position)
         return self._queue(apply)
 
     def terrain_control(

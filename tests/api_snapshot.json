@@ -233,11 +233,15 @@
         "export_html",
         "export_image",
         "fullscreen",
+        "geocoder",
+        "geolocate",
+        "globe_control",
         "layer_switcher",
         "legend",
         "measure",
         "navigation",
         "scale_bar",
+        "terrain_control",
         "time_slider"
       ],
       "kinds": [
@@ -259,7 +263,8 @@
         "raster",
         "rgb",
         "terrain",
-        "text"
+        "text",
+        "vector_tiles"
       ],
       "schemes": [
         "categorical",

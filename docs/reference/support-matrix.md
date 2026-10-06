@@ -46,6 +46,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `text` | ✓ | ✓ | ✓ | ✓ |
 | `tissot` | ✓ | — | — | — |
 | `unstructured` | ✓ | — | ✓ | — |
+| `vector_tiles` | — | ✓ | — | — |
 | `vectors` | ✓ | — | ✓ | ✓ |
 | `volume` | — | — | — | ✓ |
 
@@ -96,12 +97,16 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `export_image` | ✓ | ✓ | ✓ | ✓ |
 | `export_vector` | ✓ | — | — | — |
 | `fullscreen` | — | ✓ | — | — |
+| `geocoder` | — | ✓ | — | — |
+| `geolocate` | — | ✓ | — | — |
+| `globe_control` | — | ✓ | — | — |
 | `layer_switcher` | — | ✓ | ✓ | — |
 | `legend` | ✓ | ✓ | ✓ | ✓ |
 | `measure` | — | ✓ | — | — |
 | `navigation` | — | ✓ | — | — |
 | `raster_renderer` | ✓ | — | ✓ | — |
 | `scale_bar` | — | ✓ | — | — |
+| `terrain_control` | — | ✓ | — | — |
 | `time_slider` | — | ✓ | ✓ | — |
 
 ## What a backend omits, and why

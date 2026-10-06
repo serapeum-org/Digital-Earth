@@ -1112,7 +1112,7 @@ _BUILT_IN_FURNITURE = (
     ("measure", "top-left", "a tool that measures distances — web measure"),
     ("geocoder", "top-left", "a place-search box — web geocoder (MapTiler)"),
     ("geolocate", "top-right", "a button that centres on the viewer — web geolocate"),
-    ("globe", "top-right", "a toggle between a flat map and a globe — web globe"),
+    ("globe_control", "top-right", "a toggle between a flat map and a globe — web globe_control"),
     (
         "terrain_control",
         "top-right",

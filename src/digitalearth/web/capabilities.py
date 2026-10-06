@@ -86,7 +86,7 @@ CAPABILITIES = Capabilities(
             # WB-14: the remaining py-maplibregl controls the tier never exposed — the viewer-locate button,
             # the flat/globe toggle, and the 3-D-terrain toggle over a DEM source.
             "geolocate",
-            "globe",
+            "globe_control",
             "terrain_control",
             # The tier's colour key: `colorbar()` selects a layer's classification and `legend()` draws it.
             # It was listed as absent, on the grounds that the key is a builder rather than a toggle — but
