@@ -1115,6 +1115,14 @@ class TestTheInsetRaisesBlockCannotGoStale:
             "globe",
             id="globe-beside-an-extent",
         ),
+        pytest.param(
+            {"extent": [60.0, 40.0, -20.0, -40.0]}, "extent", id="extent-inverted"
+        ),
+        pytest.param({"extent": [0.0, 0.0, 0.0, 0.0]}, "extent", id="extent-zero-area"),
+        pytest.param({"extent": [1.0, 2.0, 3.0]}, "extent", id="extent-too-short"),
+        pytest.param(
+            {"extent": [0.0, 0.0, float("nan"), 1.0]}, "extent", id="extent-not-finite"
+        ),
     ]
 
     @pytest.mark.parametrize("kwargs, keyword", REFUSALS)
@@ -1414,3 +1422,96 @@ class TestAnExtentPROJCannotTransformMarksNothing:
         assert locator.layer_ids == [], (
             f"a skipped box should register no layer; got {locator.layer_ids}"
         )
+
+
+class TestTheLocatorExtentIsARectangle:
+    """``inset(extent=...)`` frames the locator, so an extent that frames no area is refused by name (#391).
+
+    ``set_bounds`` honours a flipped pair as an inverted axis — a deliberate 2-D-tier contract — but the
+    locator's ``extent`` is the wider rectangle the inset shows, not an axis to invert. An inverted or
+    zero-area extent used to be forwarded straight to ``set_bounds``, so the refusal (or, for the zero-area
+    one, matplotlib's "transformation singular" warning) read ``set_bounds`` rather than ``inset()``, and
+    the zero-area one was not refused at all. It is now read in ``inset()`` before the inset axes is built.
+    """
+
+    def test_an_inverted_extent_is_refused(self, framed):
+        """West east of east, or south north of north, frames no rectangle.
+
+        Args:
+            framed: Factory for the framed main map.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(extent="):
+            main.inset(extent=[60.0, 40.0, -20.0, -40.0])
+
+    def test_an_inverted_extent_leaves_no_axes_behind(self, framed):
+        """The refusal lands with the others, before ``ax.inset_axes`` is called.
+
+        Args:
+            framed: Factory for the framed main map.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(extent="):
+            main.inset(extent=[60.0, 40.0, -20.0, -40.0])
+        assert main.ax.child_axes == [], (
+            f"a refused extent should leave no inset axes; got {main.ax.child_axes}"
+        )
+
+    def test_a_zero_area_extent_is_refused(self, framed):
+        """``[0, 0, 0, 0]`` is a point, not a region, so it draws no locator.
+
+        Args:
+            framed: Factory for the framed main map.
+
+        Test scenario:
+            It used to be accepted and reach matplotlib as a singular limit, which expanded it and warned
+            twice about a "transformation singular" — a wrong picture rather than a refusal.
+        """
+        main = framed(4326)
+        with pytest.raises(ValueError, match=r"inset\(extent="):
+            main.inset(extent=[0.0, 0.0, 0.0, 0.0])
+
+    def test_a_valid_extent_still_frames_the_locator(self, framed):
+        """A rectangle the right way round is honoured, as the lon/lat example documents.
+
+        Args:
+            framed: Factory for the framed main map.
+        """
+        locator = (
+            framed(3857).inset(crs=4326, extent=[-20.0, -40.0, 60.0, 40.0]).locator
+        )
+        held = [float(value) for value in locator.ax.get_ylim()]
+        assert held == [-40.0, 40.0], f"the extent should frame the locator; got {held}"
+
+
+class TestSetBoundsNamesItsCaller:
+    """``set_bounds(caller=)`` lets a method that frames through it put its own name on the refusal (#391).
+
+    ``inset(extent=...)`` frames the locator through ``set_bounds``, so a ``set_bounds`` refusal reaching a
+    caller who never typed ``set_bounds`` is the round-1 L2 defect ``_ExtentBox.of(caller=)`` already
+    answers for the not-framed case. The keyword defaults to ``set_bounds``, preserving the wording every
+    direct caller gets.
+    """
+
+    def test_the_default_caller_is_named_set_bounds(self):
+        """A direct call keeps the wording it always had.
+
+        Test scenario:
+            The default must not change the message a direct ``set_bounds`` caller reads.
+        """
+        main = Map(crs=4326)
+        with pytest.raises(ValueError, match=r"^set_bounds needs exactly 4 values"):
+            main.set_bounds([1.0, 2.0, 3.0])
+        main.close()
+
+    def test_a_given_caller_is_named_instead(self):
+        """And a framing method passes its own name through.
+
+        Test scenario:
+            The name a caller threads is the one the refusal quotes, so a method framing through
+            ``set_bounds`` is not reported as ``set_bounds``.
+        """
+        main = Map(crs=4326)
+        with pytest.raises(ValueError, match=r"^locator_probe needs exactly 4 values"):
+            main.set_bounds([1.0, 2.0, 3.0], caller="locator_probe")
+        main.close()

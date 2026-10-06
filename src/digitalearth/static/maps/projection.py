@@ -1137,6 +1137,7 @@ class ProjectionMixin(_MixinBase):
         bounds: Optional[Union[Bounds, Sequence[float]]] = None,
         *,
         padding: float = 0.0,
+        caller: str = "set_bounds",
     ) -> Self:
         """Frame the figure on a region, or on everything it draws — the Core contract's framing method.
 
@@ -1160,6 +1161,11 @@ class ProjectionMixin(_MixinBase):
                 one. Note the **units are this tier's**: a figure is framed in data coordinates here, so a
                 proportion of the span is the only padding that means anything, where the web tier's
                 ``padding`` is a number of screen pixels.
+            caller: The name a sequence-length refusal quotes, so a method that frames **through** this one
+                is not reported as ``set_bounds`` to a caller who never typed it — the rule
+                :meth:`~digitalearth.static.maps.inset._ExtentBox.of` already follows for the not-framed
+                refusal. The default is this method's own name, preserving the wording a direct caller gets;
+                :meth:`~digitalearth.static.maps.inset.InsetMixin.inset` passes ``"inset"``.
 
         Returns:
             This map, so the call chains (``Map(crs=3857).set_bounds(bounds).coastlines()``). The Core
@@ -1256,7 +1262,7 @@ class ProjectionMixin(_MixinBase):
 
                 ```
         """
-        frame = self._frame_asked(bounds, padding)
+        frame = self._frame_asked(bounds, padding, caller)
         xmin, xmax, ymin, ymax = frame.limits()
         self.ax.set_xlim(xmin, xmax)
         self.ax.set_ylim(ymin, ymax)
@@ -1321,6 +1327,7 @@ class ProjectionMixin(_MixinBase):
         self,
         bounds: Optional[Union[Bounds, Sequence[float]]],
         padding: float,
+        caller: str = "set_bounds",
     ) -> "_Frame":
         """Resolve what a caller asked for into one rectangle in the display CRS, padded.
 
@@ -1333,6 +1340,8 @@ class ProjectionMixin(_MixinBase):
             bounds: What the caller passed — a `Bounds`, a ``(west, south, east, north)`` sequence, or
                 ``None`` to fit the data.
             padding: The fraction to grow the rectangle by.
+            caller: The name the sequence-length refusal quotes; defaults to ``set_bounds``, the public
+                method this one answers.
 
         Returns:
             The frame, carrying the rectangle and which way each axis runs.
@@ -1369,7 +1378,7 @@ class ProjectionMixin(_MixinBase):
         values = [float(value) for value in bounds]
         if len(values) != 4:
             raise ValueError(
-                f"set_bounds needs exactly 4 values as (west, south, east, north); got {len(values)}"
+                f"{caller} needs exactly 4 values as (west, south, east, north); got {len(values)}"
             )
         west, south, east, north = values
         # Normalised into a Bounds so the padding and the recorded region are the same arithmetic every
