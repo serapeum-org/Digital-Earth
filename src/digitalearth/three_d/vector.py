@@ -463,6 +463,8 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
         scale=None if encoding is None else encoding.scale,
     )
 
+    import pyvista as pv
+
     prisms: list[pv.PolyData] = []
     for i, geom in enumerate(geoms):
         h = _finite_height(heights, height, i)
@@ -475,7 +477,6 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
     if not prisms:
         scene._skip_empty("extruded_polygons", "no polygon geometries to extrude")
         return None
-    import pyvista as pv
 
     merged = pv.MultiBlock(prisms).combine()
     if colours is None:
