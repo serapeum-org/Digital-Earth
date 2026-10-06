@@ -311,10 +311,14 @@ class BigDataMixin(_MixinBase):
         classified cluster is then **keyable** exactly as a choropleth is, so
         :meth:`~digitalearth.web.decoration.DecorationMixin.legend` /
         :meth:`~digitalearth.web.base.WebMapBase.colorbar` draw its key from the colours it rendered. The
-        aggregate is computed per cluster in the browser, so the class breaks are derived from the feature
-        column's own spread — exact for ``max``, a reasonable default for ``sum`` — and the key shows the
-        breaks the paint was compiled from. Without ``color_by`` the bubbles stay the flat ``color`` and the
-        cluster carries no key, which is an honest refusal rather than an empty box.
+        aggregate is computed per cluster in the browser, while the class breaks are derived from the
+        **single-feature** column's own spread, so the key shows the breaks the paint was compiled from. That
+        is **exact only for** ``aggregate="max"`` — a cluster's max lies within the feature range, so a
+        bubble's colour and its legend label agree. For ``aggregate="sum"`` the legend breaks describe
+        **single-feature values, not cluster sums**: a cluster's sum can run past the top break, so a dense
+        cluster clamps to the top colour while its legend label reads lower than the quantity the colour
+        encodes. Without ``color_by`` the bubbles stay the flat ``color`` and the cluster carries no key,
+        which is an honest refusal rather than an empty box.
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.

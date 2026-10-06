@@ -11,9 +11,10 @@ closes both:
   draw its key from the colours it actually rendered. A plain cluster carries no classification and so has no
   key, which stays an honest refusal.
 
-The aggregate is computed in the browser per cluster, so the class breaks are derived from the feature
-column's own spread (exact for ``max``, a reasonable default for ``sum``); the legend shows the breaks the
-paint was compiled from.
+The aggregate is computed in the browser per cluster, while the class breaks are derived from the
+single-feature column's own spread, so the legend shows the breaks the paint was compiled from. That is exact
+only for ``max``: for ``aggregate="sum"`` the legend breaks describe single-feature values, not cluster sums,
+so a dense cluster clamps to the top colour while its legend label reads lower than the quantity it encodes.
 """
 
 import pytest
