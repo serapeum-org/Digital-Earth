@@ -47,6 +47,9 @@ ANOMALY = np.array([[-2.0, -1.0, 0.0], [1.0, 3.0, 6.0]])
 #: The same shape of field with no negative arm — the case a diverging ramp must decline.
 POSITIVE = np.array([[12.0, 40.0], [60.0, 88.0]])
 
+#: The band issue #390 measures: running -3..8, so a centre of 100 is off-band and a centre of 0 straddles.
+ANOMALY_WIDE = np.array([[-3.0, 0.0], [4.0, 8.0]])
+
 
 def _lightness(rgba):
     """Return the CIE L* of an RGBA colour, through cleopatra's own converter.
@@ -379,6 +382,90 @@ class TestACentreOutsideTheDataIsDeclined:
                 canvas.field(ANOMALY, center=0.0)
         assert "diverging" not in caplog.text, (
             f"a straddled centre must log nothing; got {caplog.text!r}"
+        )
+
+
+class TestANamedColormapWithAnOffBandCentreIsAnnounced:
+    """The gap #390 closes: an off-band ``center=`` under a named cmap widened the limits in silence."""
+
+    def test_an_off_band_centre_under_a_named_cmap_warns(self, caplog):
+        """`field(center=100, cmap='RdBu_r')` must say the diverging ramp was declined.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            On a named colormap the decline used to be skipped, so an unreachable centre widened the
+            colour limits with no signal. The warning now fires whichever colormap was named, because what
+            moved is the *limits*, not the ramp.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+        assert "is not drawn" in caplog.text, (
+            f"an off-band centre under a named cmap must be announced; got {caplog.text!r}"
+        )
+
+    def test_it_is_announced_exactly_once(self, caplog):
+        """One call, one line — not one per internal draw pass.
+
+        Args:
+            caplog: pytest's log capture.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+        assert caplog.text.count("is not drawn") == 1, (
+            f"the decline must be said once per call; got {caplog.text!r}"
+        )
+
+    def test_the_limits_are_unchanged_by_the_warning(self, caplog):
+        """The behaviour the warning describes is the one that already drew: the limits do not move.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            cleopatra symmetrises ``(-3, 8)`` on a centre of 100 to ``(-3, 203)``. The warning announces
+            that widening; it does not change it.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=100.0, cmap="RdBu_r")
+                clim = canvas.artist().get_clim()
+        assert clim == (-3.0, 203.0), (
+            f"the limits must be symmetrised on the centre, unchanged; got {clim}"
+        )
+
+    def test_a_straddled_centre_under_a_named_cmap_stays_silent(self, caplog):
+        """A centre the data straddles is the ordinary case, and says nothing.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            The ramp is reachable, so there is nothing to announce. The limits symmetrise to ``(-8, 8)``,
+            which the sibling test pins; here the claim is only the silence.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=0.0, cmap="RdBu_r")
+        assert "is not drawn" not in caplog.text, (
+            f"a straddled centre under a named cmap must stay silent; got {caplog.text!r}"
+        )
+
+    def test_a_straddled_centre_under_a_named_cmap_still_symmetrises(self, caplog):
+        """And it still symmetrises the limits, cleopatra's keyword doing its own job.
+
+        Args:
+            caplog: pytest's log capture.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(globe=False) as canvas:
+                canvas.field(ANOMALY_WIDE, center=0.0, cmap="RdBu_r")
+                clim = canvas.artist().get_clim()
+        assert clim == (-8.0, 8.0), (
+            f"a straddled centre must symmetrise to the furthest arm; got {clim}"
         )
 
 
