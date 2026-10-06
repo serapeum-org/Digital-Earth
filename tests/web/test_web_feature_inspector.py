@@ -134,3 +134,20 @@ class TestMalformedBindingsAreRefused:
         mapped = _two_layer_map()
         with pytest.raises(ValueError, match="names no layer"):
             mapped.popup(["v"], layer=[])
+
+    def test_a_bad_id_after_a_good_one_leaves_the_map_untouched(self):
+        """M2: a typo after a valid id must not bind the valid id or queue its closure.
+
+        Test scenario:
+            ``popup(["v"], layer=["a", "typo"])`` resolves and validates the whole id list before it
+            records or queues anything, so the raise over ``"typo"`` leaves ``"a"`` unbound and the
+            closure queue as it was — not ``"a"`` recorded with its closure queued behind the refusal,
+            which a catch-and-retry would then double-bind.
+        """
+        mapped = _two_layer_map()
+        queued_before = len(mapped._queued)
+        with pytest.raises(KeyError, match="no layer 'typo'"):
+            mapped.popup(["v"], layer=["a", "typo"])
+        assert _interactions(mapped, "a") == {}, _interactions(mapped, "a")
+        assert "a" not in _closure_ids(mapped)
+        assert len(mapped._queued) == queued_before

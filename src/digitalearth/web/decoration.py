@@ -2586,13 +2586,24 @@ class DecorationMixin(_MixinBase):
         """
         _require_layer_api()
         targets = self._inspector_targets(layer)
-        kwargs = self._attribute_template(fields)
         explicit = layer is not None
+        if explicit:
+            # Validate the whole caller-named list up front — mirror `layer_control`'s `named`/`unknown`
+            # pre-check (see `layer_control`) — so a bad id in the list leaves the map untouched rather than
+            # binding and queuing every valid id before it, which a catch-and-retry would then double-bind
+            # (M2). An id the tier chose — a cluster's loose points — is not caller-named, so it is not
+            # pre-checked here; it falls through to `_record_tooltip`, which records it undescribed.
+            unknown = [
+                layer_id for layer_id in targets if layer_id not in self._layer_tree.ids
+            ]
+            if unknown:
+                raise KeyError(
+                    f"no layer {unknown[0]!r} on this map; its layers are {self.layer_ids}"
+                )
+        kwargs = self._attribute_template(fields)
         for layer_id in targets:
-            # An id a caller wrote is checked by `_record_tooltip` (explicit) and raises KeyError by name;
-            # an id the tier chose — a cluster's loose points — is not in the tree and is recorded as the
-            # undescribed layer it is. Recorded before the closure is queued so a bad id in the list leaves
-            # no half-bound closure behind it.
+            # Nothing below refuses an id now: a caller-named list was validated above, and a tier-chosen id
+            # is recorded as the undescribed layer it is. The record then the queue stay paired per layer.
             self._record_tooltip(layer_id, fields, trigger=trigger, explicit=explicit)
             self._queue(self._attribute_closure(layer_id, add, kwargs))
         return self
