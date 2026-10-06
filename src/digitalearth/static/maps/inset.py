@@ -970,7 +970,7 @@ class InsetMixin(_MixinBase):
         if checked_extent is None:
             locator.set_global()
         else:
-            locator.set_bounds(checked_extent, caller="inset")
+            locator.set_bounds(checked_extent)
         locator._mark(box)
         # The frame goes on here rather than at render time: nothing else renders the locator, and the
         # geography and the box have to be on the axes before they can be clipped to the limb. `render`

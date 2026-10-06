@@ -1489,34 +1489,22 @@ class TestTheLocatorExtentIsARectangle:
         assert held == [-40.0, 40.0], f"the extent should frame the locator; got {held}"
 
 
-class TestSetBoundsNamesItsCaller:
-    """``set_bounds(caller=)`` lets a method that frames through it put its own name on the refusal (#391).
+class TestSetBoundsRefusesAShortSequence:
+    """A direct ``set_bounds`` short-sequence refusal names ``set_bounds``.
 
-    ``inset(extent=...)`` frames the locator through ``set_bounds``, so a ``set_bounds`` refusal reaching a
-    caller who never typed ``set_bounds`` is the round-1 L2 defect ``_ExtentBox.of(caller=)`` already
-    answers for the not-framed case. The keyword defaults to ``set_bounds``, preserving the wording every
-    direct caller gets.
+    ``inset(extent=...)`` does not frame the locator through ``set_bounds``'s own refusal — `_checked_extent`
+    validates the extent first and names ``inset(extent=...)`` itself (see `TestTheInsetRaisesBlockCannotGoStale`),
+    so ``set_bounds`` keeps a single, signature-stable message rather than a threaded caller name (the two
+    tiers' ``set_bounds`` must share one signature — `tests/interactive/test_interactive_projection.py`).
     """
 
-    def test_the_default_caller_is_named_set_bounds(self):
+    def test_a_short_sequence_is_named_set_bounds(self):
         """A direct call keeps the wording it always had.
 
         Test scenario:
-            The default must not change the message a direct ``set_bounds`` caller reads.
+            A sequence of the wrong length is refused by ``set_bounds`` naming itself.
         """
         main = Map(crs=4326)
         with pytest.raises(ValueError, match=r"^set_bounds needs exactly 4 values"):
             main.set_bounds([1.0, 2.0, 3.0])
-        main.close()
-
-    def test_a_given_caller_is_named_instead(self):
-        """And a framing method passes its own name through.
-
-        Test scenario:
-            The name a caller threads is the one the refusal quotes, so a method framing through
-            ``set_bounds`` is not reported as ``set_bounds``.
-        """
-        main = Map(crs=4326)
-        with pytest.raises(ValueError, match=r"^locator_probe needs exactly 4 values"):
-            main.set_bounds([1.0, 2.0, 3.0], caller="locator_probe")
         main.close()
