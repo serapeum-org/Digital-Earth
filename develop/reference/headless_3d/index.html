@@ -3924,7 +3924,7 @@ deliberately does not terminate a running one (dropping the last reference to a 
                 <code>window_size</code>
             </td>
             <td>
-                  <code><span title="typing.Sequence">Sequence</span>[<span title="int">int</span>]</code>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="int">int</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3971,7 +3971,7 @@ the same way by comparing false against every bound, and <code>inf</code> turns 
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="subprocess.Popen">Popen</span>]</code>
+                  <code><span title="subprocess.Popen">Popen</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3981,7 +3981,7 @@ the same way by comparing false against every bound, and <code>inf</code> turns 
           </tr>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="subprocess.Popen">Popen</span>]</code>
+                  <code><span title="subprocess.Popen">Popen</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4208,7 +4208,7 @@ or <code>wait</code> is not a positive finite number of seconds.</p>
 <a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="o">*</span><span class="p">,</span>
 <a id="__codelineno-0-49" name="__codelineno-0-49"></a>    <span class="n">window_size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">768</span><span class="p">),</span>
 <a id="__codelineno-0-50" name="__codelineno-0-50"></a>    <span class="n">wait</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">]:</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Start a virtual X server and point ``DISPLAY`` at it, so the 3-D tier can render with no screen.</span>
 <a id="__codelineno-0-53" name="__codelineno-0-53"></a>
 <a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">    Call it once, before the first scene is drawn. It does nothing — and returns ``None`` — when there is</span>

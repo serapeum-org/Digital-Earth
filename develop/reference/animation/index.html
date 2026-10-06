@@ -3796,7 +3796,7 @@ detail can survive the GIF palette.</p>
                 <code>fps</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="float">float</span>]</code>
+                  <code><span title="float">float</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3814,7 +3814,7 @@ rate
                 <code>gif</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="os.PathLike">PathLike</span>[<span title="str">str</span>]]]</code>
+                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="os.PathLike">PathLike</span>[<span title="str">str</span>]] | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3833,7 +3833,7 @@ containers. GIF and WebP are excluded because cleopatra writes them with Pillow,
                 <code>gif_options</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="dict">dict</span>]</code>
+                  <code><span title="dict">dict</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3877,7 +3877,7 @@ containers. GIF and WebP are excluded because cleopatra writes them with Pillow,
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="str">str</span>, <span title="str">str</span>]]</code>
+                  <code><span title="str">str</span> | <span title="tuple">tuple</span>[<span title="str">str</span>, <span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4042,11 +4042,11 @@ derived GIF, so the two files play at the same speed unless <code>gif_options</c
 <a id="__codelineno-0-88" name="__codelineno-0-88"></a>    <span class="n">anim</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;os.PathLike[str]&quot;</span><span class="p">],</span>
 <a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-91" name="__codelineno-0-91"></a>    <span class="n">fps</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-92" name="__codelineno-0-92"></a>    <span class="n">gif</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;os.PathLike[str]&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="n">gif_options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a>    <span class="n">fps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a>    <span class="n">gif</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;os.PathLike[str]&quot;</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="n">gif_options</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-94" name="__codelineno-0-94"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save ``anim`` to ``path``, optionally deriving a GIF from the written file without re-rendering.</span>
 <a id="__codelineno-0-97" name="__codelineno-0-97"></a>
 <a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">    Args:</span>
