@@ -82,6 +82,11 @@ CAPABILITIES = Capabilities(
             # py-maplibregl 0.3.6 but was never exposed; it is keyed, and the caller supplies the key.
             "geocoder",
             "attribution",
+            # WB-14: the remaining py-maplibregl controls the tier never exposed — the viewer-locate button,
+            # the flat/globe toggle, and the 3-D-terrain toggle over a DEM source.
+            "geolocate",
+            "globe",
+            "terrain_control",
             # The tier's colour key: `colorbar()` selects a layer's classification and `legend()` draws it.
             # It was listed as absent, on the grounds that the key is a builder rather than a toggle — but
             # the method exists and `quickmap(colorbar=...)` reaches it, so "not here" was untrue (M19).

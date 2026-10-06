@@ -1673,6 +1673,166 @@ class DecorationMixin(_MixinBase):
         self._record_furniture("fullscreen", anchor=position)
         return self._queue(apply)
 
+    def attribution(
+        self,
+        *,
+        position: str = "bottom-right",
+        compact: bool = False,
+        custom: Optional[str] = None,
+    ) -> Self:
+        """Add a MapLibre attribution control — the data and tile credits (WB-14).
+
+        A basemap carries its own attribution, but a map built from the caller's own sources has none until
+        one is added. This is the control that shows it, and it sits bottom-right as every MapLibre map's
+        does.
+
+        Args:
+            position: One of the four MapLibre corners.
+            compact: Collapse the credits behind an ``ⓘ`` button rather than showing them inline, for a
+                small map where the full line would crowd the frame.
+            custom: Extra attribution text to show beside whatever the sources declare; ``None`` shows only
+                the sources' own.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import AttributionControl
+
+        settings: dict = {"compact": bool(compact)}
+        if custom is not None:
+            settings["custom_attribution"] = custom
+        control = AttributionControl(**settings)
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        recorded: dict = {"compact": bool(compact)}
+        if custom is not None:
+            recorded["custom"] = custom
+        self._record_furniture("attribution", anchor=position, **recorded)
+        return self._queue(apply)
+
+    def geolocate(
+        self,
+        *,
+        position: str = "top-right",
+        track: bool = False,
+        show_accuracy_circle: bool = True,
+        show_heading: bool = False,
+    ) -> Self:
+        """Add a MapLibre geolocate control — a button that centres the map on the viewer (WB-14).
+
+        Args:
+            position: One of the four MapLibre corners.
+            track: Keep re-centring on the viewer as they move, rather than locating them once.
+            show_accuracy_circle: Draw the circle of positional uncertainty around the located point.
+            show_heading: Show which way the viewer's device is facing.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import GeolocateControl
+
+        control = GeolocateControl(
+            track_user_location=bool(track),
+            show_accuracy_circle=bool(show_accuracy_circle),
+            show_user_heading=bool(show_heading),
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture(
+            "geolocate",
+            anchor=position,
+            track=bool(track),
+            show_accuracy_circle=bool(show_accuracy_circle),
+            show_heading=bool(show_heading),
+        )
+        return self._queue(apply)
+
+    def globe(self, *, position: str = "top-right") -> Self:
+        """Add a MapLibre globe control — a toggle between the flat map and a 3-D globe (WB-14).
+
+        Args:
+            position: One of the four MapLibre corners.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import GlobeControl
+
+        control = GlobeControl()
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture("globe", anchor=position)
+        return self._queue(apply)
+
+    def terrain_control(
+        self,
+        source: str,
+        *,
+        exaggeration: float = 1.0,
+        position: str = "top-right",
+    ) -> Self:
+        """Add a MapLibre terrain control — a toggle for 3-D terrain from a DEM source (WB-14).
+
+        The control drives a raster-DEM source that is already on the map (for example the one
+        :meth:`~digitalearth.web.threed.ThreeDMixin.terrain_tiles` adds); it is named here by its MapLibre
+        source id, the way the control itself references it, so whether the source exists is the caller's
+        own responsibility — exactly as it is in MapLibre.
+
+        Args:
+            source: The MapLibre id of the raster-DEM source the terrain is built from.
+            exaggeration: The vertical exaggeration applied when terrain is switched on.
+            position: One of the four MapLibre corners.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``source`` is not a non-empty string — the control would drive nothing — or
+                when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        if not isinstance(source, str) or not source:
+            raise ValueError(
+                "terrain_control() needs source= as the MapLibre id of a raster-DEM source to drive; the "
+                "control toggles that source's terrain and has nothing to toggle without one"
+            )
+        from maplibre.controls import TerrainControl
+
+        control = TerrainControl(source=source, exaggeration=float(exaggeration))
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture(
+            "terrain_control",
+            anchor=position,
+            source=source,
+            exaggeration=float(exaggeration),
+        )
+        return self._queue(apply)
+
     def controls(
         self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
     ) -> Self:
