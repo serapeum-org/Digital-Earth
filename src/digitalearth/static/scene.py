@@ -2828,9 +2828,10 @@ class Scene(WatermarkMixin):
         builder it only resembles. It registers **no layer**: it adds no entry to :attr:`layer_ids`, writes
         nothing to the figure's description, and so is **not** reachable through :meth:`artist`
         (``scene.artist("stamp")`` raises `KeyError`). It is figure furniture rather than a data builder,
-        which is why :meth:`quiverkey`'s Returns census of the builder carve-outs names it as sitting *beside*
-        that list with :meth:`save` rather than inside it. ``tests/static/test_stamp_is_furniture.py`` pins
-        both halves.
+        which is why :meth:`quiverkey`'s furniture note names it — with :meth:`save` — as handing back its own
+        object yet sitting *beside* :meth:`~digitalearth.static.maps.raster.RasterMixin.field`'s Returns census
+        of the builder carve-outs (which enumerates ``quiverkey`` and ``stock_img``) rather than inside it.
+        ``tests/static/test_stamp_is_furniture.py`` pins both halves.
 
         Args:
             mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /
