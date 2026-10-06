@@ -22380,8 +22380,7 @@ object table and the pick handler are released on <strong>every</strong> close r
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2946">2946</a></span>
-<span class="normal"><a href="#__codelineno-0-2947">2947</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2947">2947</a></span>
 <span class="normal"><a href="#__codelineno-0-2948">2948</a></span>
 <span class="normal"><a href="#__codelineno-0-2949">2949</a></span>
 <span class="normal"><a href="#__codelineno-0-2950">2950</a></span>
@@ -22440,67 +22439,68 @@ object table and the pick handler are released on <strong>every</strong> close r
 <span class="normal"><a href="#__codelineno-0-3003">3003</a></span>
 <span class="normal"><a href="#__codelineno-0-3004">3004</a></span>
 <span class="normal"><a href="#__codelineno-0-3005">3005</a></span>
-<span class="normal"><a href="#__codelineno-0-3006">3006</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2946" name="__codelineno-0-2946"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2947" name="__codelineno-0-2947"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
-<a id="__codelineno-0-2948" name="__codelineno-0-2948"></a>
-<a id="__codelineno-0-2949" name="__codelineno-0-2949"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
-<a id="__codelineno-0-2950" name="__codelineno-0-2950"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
-<a id="__codelineno-0-2951" name="__codelineno-0-2951"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
-<a id="__codelineno-0-2952" name="__codelineno-0-2952"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
-<a id="__codelineno-0-2953" name="__codelineno-0-2953"></a><span class="sd">    ``with`` calls on the way out.</span>
-<a id="__codelineno-0-2954" name="__codelineno-0-2954"></a>
-<a id="__codelineno-0-2955" name="__codelineno-0-2955"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
-<a id="__codelineno-0-2956" name="__codelineno-0-2956"></a>
-<a id="__codelineno-0-2957" name="__codelineno-0-2957"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
-<a id="__codelineno-0-2958" name="__codelineno-0-2958"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
-<a id="__codelineno-0-2959" name="__codelineno-0-2959"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
-<a id="__codelineno-0-2960" name="__codelineno-0-2960"></a>
-<a id="__codelineno-0-2961" name="__codelineno-0-2961"></a><span class="sd">    **The figure is closed only when this scene created it.** A figure the scene **made** itself (a</span>
-<a id="__codelineno-0-2962" name="__codelineno-0-2962"></a><span class="sd">    bare ``Map()``/``Scene()``, and so every :meth:`from_figure` round trip) is closed here; a figure</span>
-<a id="__codelineno-0-2963" name="__codelineno-0-2963"></a><span class="sd">    handed in through ``ax=``/``fig=`` is **spared**, because it belongs to whoever laid it out. This is</span>
-<a id="__codelineno-0-2964" name="__codelineno-0-2964"></a><span class="sd">    #371, resolved: a borrowed figure is spared (R2-L12), which brings this into line with</span>
-<a id="__codelineno-0-2965" name="__codelineno-0-2965"></a><span class="sd">    :meth:`~digitalearth.static.textured_globe.TexturedGlobe.close`, always gated the same way. The</span>
-<a id="__codelineno-0-2966" name="__codelineno-0-2966"></a><span class="sd">    object table and the pick handler are released on **every** close regardless — see below.</span>
-<a id="__codelineno-0-2967" name="__codelineno-0-2967"></a>
-<a id="__codelineno-0-2968" name="__codelineno-0-2968"></a><span class="sd">    .. warning::</span>
-<a id="__codelineno-0-2969" name="__codelineno-0-2969"></a><span class="sd">        When the scene owns the figure, this closes the **entire** ``self.fig``. The panels returned by</span>
-<a id="__codelineno-0-2970" name="__codelineno-0-2970"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure none of them owns (each is built</span>
-<a id="__codelineno-0-2971" name="__codelineno-0-2971"></a><span class="sd">        with ``ax=``/``fig=``), so closing a single panel no longer closes its siblings — and an</span>
-<a id="__codelineno-0-2972" name="__codelineno-0-2972"></a><span class="sd">        :meth:`~digitalearth.static.maps.inset.InsetMixin.inset` locator, drawn on the host&#39;s own</span>
-<a id="__codelineno-0-2973" name="__codelineno-0-2973"></a><span class="sd">        figure, likewise spares the host when closed. Close the scene that **made** the figure (or call</span>
-<a id="__codelineno-0-2974" name="__codelineno-0-2974"></a><span class="sd">        :meth:`save` and close it yourself) to take the whole figure down. The pick handler this scene</span>
-<a id="__codelineno-0-2975" name="__codelineno-0-2975"></a><span class="sd">        connected comes off on close whether the figure is owned or borrowed, so a closed borrowed-axes</span>
-<a id="__codelineno-0-2976" name="__codelineno-0-2976"></a><span class="sd">        scene stops answering clicks even though its figure lives on.</span>
-<a id="__codelineno-0-2977" name="__codelineno-0-2977"></a>
-<a id="__codelineno-0-2978" name="__codelineno-0-2978"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2979" name="__codelineno-0-2979"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
-<a id="__codelineno-0-2980" name="__codelineno-0-2980"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2981" name="__codelineno-0-2981"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
-<a id="__codelineno-0-2982" name="__codelineno-0-2982"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
-<a id="__codelineno-0-2983" name="__codelineno-0-2983"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
-<a id="__codelineno-0-2984" name="__codelineno-0-2984"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
-<a id="__codelineno-0-2985" name="__codelineno-0-2985"></a>
-<a id="__codelineno-0-2986" name="__codelineno-0-2986"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2987" name="__codelineno-0-2987"></a>
-<a id="__codelineno-0-2988" name="__codelineno-0-2988"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2989" name="__codelineno-0-2989"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
-<a id="__codelineno-0-2990" name="__codelineno-0-2990"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2991" name="__codelineno-0-2991"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
-<a id="__codelineno-0-2992" name="__codelineno-0-2992"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2993" name="__codelineno-0-2993"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2994" name="__codelineno-0-2994"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-2995" name="__codelineno-0-2995"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
-<a id="__codelineno-0-2996" name="__codelineno-0-2996"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
-<a id="__codelineno-0-2997" name="__codelineno-0-2997"></a>    <span class="c1"># whose data has just been let go (see `on_pick`). This runs on **every** close, owned or borrowed:</span>
-<a id="__codelineno-0-2998" name="__codelineno-0-2998"></a>    <span class="c1"># a borrowed-axes scene still connected its own handler, and that is the scene&#39;s to take back.</span>
-<a id="__codelineno-0-2999" name="__codelineno-0-2999"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
-<a id="__codelineno-0-3000" name="__codelineno-0-3000"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-3001" name="__codelineno-0-3001"></a>    <span class="c1"># Close the figure only when this scene created it (`_owns_fig`, set in `__init__`). A figure handed</span>
-<a id="__codelineno-0-3002" name="__codelineno-0-3002"></a>    <span class="c1"># in through `ax=`/`fig=` — and so every `grid` panel and every `inset` locator — belongs to whoever</span>
-<a id="__codelineno-0-3003" name="__codelineno-0-3003"></a>    <span class="c1"># laid it out; closing it here tore down the caller&#39;s whole figure, which was the #371 footgun. This</span>
-<a id="__codelineno-0-3004" name="__codelineno-0-3004"></a>    <span class="c1"># matches `TexturedGlobe.close`, which has always gated on `_owns_fig`.</span>
-<a id="__codelineno-0-3005" name="__codelineno-0-3005"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_owns_fig</span><span class="p">:</span>
-<a id="__codelineno-0-3006" name="__codelineno-0-3006"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-3006">3006</a></span>
+<span class="normal"><a href="#__codelineno-0-3007">3007</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2947" name="__codelineno-0-2947"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2948" name="__codelineno-0-2948"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the figure and let go of the in-memory data this scene registered.</span>
+<a id="__codelineno-0-2949" name="__codelineno-0-2949"></a>
+<a id="__codelineno-0-2950" name="__codelineno-0-2950"></a><span class="sd">    Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib&#39;s,</span>
+<a id="__codelineno-0-2951" name="__codelineno-0-2951"></a><span class="sd">    and a long run of scenes that never closes one keeps every axes alive. The **object table** is this</span>
+<a id="__codelineno-0-2952" name="__codelineno-0-2952"></a><span class="sd">    package&#39;s: it is process-global and holds strong references, so a session that builds maps keeps</span>
+<a id="__codelineno-0-2953" name="__codelineno-0-2953"></a><span class="sd">    every dataset they drew until something says otherwise. This is the caller saying so, and it is what</span>
+<a id="__codelineno-0-2954" name="__codelineno-0-2954"></a><span class="sd">    ``with`` calls on the way out.</span>
+<a id="__codelineno-0-2955" name="__codelineno-0-2955"></a>
+<a id="__codelineno-0-2956" name="__codelineno-0-2956"></a><span class="sd">    Closing twice is harmless, and a scene that drew nothing has nothing to forget.</span>
+<a id="__codelineno-0-2957" name="__codelineno-0-2957"></a>
+<a id="__codelineno-0-2958" name="__codelineno-0-2958"></a><span class="sd">    An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards</span>
+<a id="__codelineno-0-2959" name="__codelineno-0-2959"></a><span class="sd">    — which is what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and</span>
+<a id="__codelineno-0-2960" name="__codelineno-0-2960"></a><span class="sd">    reference it by path to keep such a figure readable.</span>
+<a id="__codelineno-0-2961" name="__codelineno-0-2961"></a>
+<a id="__codelineno-0-2962" name="__codelineno-0-2962"></a><span class="sd">    **The figure is closed only when this scene created it.** A figure the scene **made** itself (a</span>
+<a id="__codelineno-0-2963" name="__codelineno-0-2963"></a><span class="sd">    bare ``Map()``/``Scene()``, and so every :meth:`from_figure` round trip) is closed here; a figure</span>
+<a id="__codelineno-0-2964" name="__codelineno-0-2964"></a><span class="sd">    handed in through ``ax=``/``fig=`` is **spared**, because it belongs to whoever laid it out. This is</span>
+<a id="__codelineno-0-2965" name="__codelineno-0-2965"></a><span class="sd">    #371, resolved: a borrowed figure is spared (R2-L12), which brings this into line with</span>
+<a id="__codelineno-0-2966" name="__codelineno-0-2966"></a><span class="sd">    :meth:`~digitalearth.static.textured_globe.TexturedGlobe.close`, always gated the same way. The</span>
+<a id="__codelineno-0-2967" name="__codelineno-0-2967"></a><span class="sd">    object table and the pick handler are released on **every** close regardless — see below.</span>
+<a id="__codelineno-0-2968" name="__codelineno-0-2968"></a>
+<a id="__codelineno-0-2969" name="__codelineno-0-2969"></a><span class="sd">    .. warning::</span>
+<a id="__codelineno-0-2970" name="__codelineno-0-2970"></a><span class="sd">        When the scene owns the figure, this closes the **entire** ``self.fig``. The panels returned by</span>
+<a id="__codelineno-0-2971" name="__codelineno-0-2971"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure none of them owns (each is built</span>
+<a id="__codelineno-0-2972" name="__codelineno-0-2972"></a><span class="sd">        with ``ax=``/``fig=``), so closing a single panel no longer closes its siblings — and an</span>
+<a id="__codelineno-0-2973" name="__codelineno-0-2973"></a><span class="sd">        :meth:`~digitalearth.static.maps.inset.InsetMixin.inset` locator, drawn on the host&#39;s own</span>
+<a id="__codelineno-0-2974" name="__codelineno-0-2974"></a><span class="sd">        figure, likewise spares the host when closed. Close the scene that **made** the figure (or call</span>
+<a id="__codelineno-0-2975" name="__codelineno-0-2975"></a><span class="sd">        :meth:`save` and close it yourself) to take the whole figure down. The pick handler this scene</span>
+<a id="__codelineno-0-2976" name="__codelineno-0-2976"></a><span class="sd">        connected comes off on close whether the figure is owned or borrowed, so a closed borrowed-axes</span>
+<a id="__codelineno-0-2977" name="__codelineno-0-2977"></a><span class="sd">        scene stops answering clicks even though its figure lives on.</span>
+<a id="__codelineno-0-2978" name="__codelineno-0-2978"></a>
+<a id="__codelineno-0-2979" name="__codelineno-0-2979"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2980" name="__codelineno-0-2980"></a><span class="sd">        - A scene that drew nothing closes quietly:</span>
+<a id="__codelineno-0-2981" name="__codelineno-0-2981"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2982" name="__codelineno-0-2982"></a><span class="sd">            &gt;&gt;&gt; import matplotlib</span>
+<a id="__codelineno-0-2983" name="__codelineno-0-2983"></a><span class="sd">            &gt;&gt;&gt; matplotlib.use(&quot;Agg&quot;)</span>
+<a id="__codelineno-0-2984" name="__codelineno-0-2984"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.static import Scene</span>
+<a id="__codelineno-0-2985" name="__codelineno-0-2985"></a><span class="sd">            &gt;&gt;&gt; Scene().close()</span>
+<a id="__codelineno-0-2986" name="__codelineno-0-2986"></a>
+<a id="__codelineno-0-2987" name="__codelineno-0-2987"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2988" name="__codelineno-0-2988"></a>
+<a id="__codelineno-0-2989" name="__codelineno-0-2989"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2990" name="__codelineno-0-2990"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
+<a id="__codelineno-0-2991" name="__codelineno-0-2991"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2992" name="__codelineno-0-2992"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
+<a id="__codelineno-0-2993" name="__codelineno-0-2993"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2994" name="__codelineno-0-2994"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_opts</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2995" name="__codelineno-0-2995"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_held_objects</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-2996" name="__codelineno-0-2996"></a>    <span class="c1"># A closed figure has no pointer over it, so its click handler goes with it: the canvas outlives</span>
+<a id="__codelineno-0-2997" name="__codelineno-0-2997"></a>    <span class="c1"># `plt.close` as a Python object, and a handler left connected would go on answering for a scene</span>
+<a id="__codelineno-0-2998" name="__codelineno-0-2998"></a>    <span class="c1"># whose data has just been let go (see `on_pick`). This runs on **every** close, owned or borrowed:</span>
+<a id="__codelineno-0-2999" name="__codelineno-0-2999"></a>    <span class="c1"># a borrowed-axes scene still connected its own handler, and that is the scene&#39;s to take back.</span>
+<a id="__codelineno-0-3000" name="__codelineno-0-3000"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_disconnect_picks</span><span class="p">()</span>
+<a id="__codelineno-0-3001" name="__codelineno-0-3001"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pick_handlers</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-3002" name="__codelineno-0-3002"></a>    <span class="c1"># Close the figure only when this scene created it (`_owns_fig`, set in `__init__`). A figure handed</span>
+<a id="__codelineno-0-3003" name="__codelineno-0-3003"></a>    <span class="c1"># in through `ax=`/`fig=` — and so every `grid` panel and every `inset` locator — belongs to whoever</span>
+<a id="__codelineno-0-3004" name="__codelineno-0-3004"></a>    <span class="c1"># laid it out; closing it here tore down the caller&#39;s whole figure, which was the #371 footgun. This</span>
+<a id="__codelineno-0-3005" name="__codelineno-0-3005"></a>    <span class="c1"># matches `TexturedGlobe.close`, which has always gated on `_owns_fig`.</span>
+<a id="__codelineno-0-3006" name="__codelineno-0-3006"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_owns_fig</span><span class="p">:</span>
+<a id="__codelineno-0-3007" name="__codelineno-0-3007"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
