@@ -7,6 +7,7 @@ Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the
 """
 
 import pathlib
+import sys
 
 import numpy as np
 import pytest
@@ -209,6 +210,24 @@ class TestTheMp4Encoder:
             pathlib.Path(
                 frame
             ).unlink()  # raises PermissionError on Windows if still open
+
+    def test_a_missing_ffmpeg_encoder_is_refused(self, frames, tmp_path, monkeypatch):
+        """Without ``imageio-ffmpeg`` the encoder is absent, so the caller gets an actionable ImportError.
+
+        Args:
+            frames: The synthetic frame paths, so the empty-frames guard is passed before the import.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's monkeypatch fixture.
+
+        Test scenario:
+            ``imageio-ffmpeg`` is an optional dependency ``digitalearth[web]`` does not pull. Blanking it in
+            ``sys.modules`` makes the in-method ``import imageio_ffmpeg`` raise, and the message must name the
+            missing package and the GIF fallback rather than failing obscurely inside ffmpeg.
+        """
+        monkeypatch.setitem(sys.modules, "imageio_ffmpeg", None)
+        destination = str(tmp_path / "out.mp4")
+        with pytest.raises(ImportError, match="imageio-ffmpeg"):
+            _write_mp4(frames, destination, fps=3.0)
 
 
 class TestWhichStepsAreAnimated:

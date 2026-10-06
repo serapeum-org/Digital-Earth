@@ -113,6 +113,11 @@ class TestControlOptionsReachTheDescription:
             is True
         )
 
+    def test_attribution_records_custom_credit_text(self):
+        """Extra credit text a caller passes is part of the description and is recorded as ``custom``."""
+        item = _item(WebMap().attribution(custom="My data source"), "attribution")
+        assert item.options["custom"] == "My data source", item.options
+
     def test_attribution_defaults_to_the_bottom_right(self):
         """Attribution sits bottom-right unless the caller moves it, as it does in every MapLibre map."""
         assert _item(WebMap().attribution(), "attribution").anchor == "bottom-right"

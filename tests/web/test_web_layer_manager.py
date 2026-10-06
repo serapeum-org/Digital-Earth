@@ -102,6 +102,19 @@ class TestOpacityIsAppliedDeclaratively:
             is two_layers
         )
 
+    def test_a_flat_opacity_layer_is_rewritten(self):
+        """A graticule carries a flat ``opacity`` prop (no paint dict), so that flat value is rewritten.
+
+        Test scenario:
+            Vector layers dim through a ``*-opacity`` paint key, but a graticule / raster field records its
+            opacity flat in ``props["opacity"]``; ``layer_control(opacity=)`` has to reach that flat prop, not
+            only the paint branch, or those reference layers could never be dimmed.
+        """
+        mapped = WebMap().graticule(name="grid")
+        grid_id = mapped.layer_ids[0]
+        dimmed = mapped.layer_control(opacity={grid_id: 0.3})
+        assert dimmed.get_layer(grid_id).symbology.props["opacity"] == 0.3
+
     def test_an_unknown_layer_is_refused(self, two_layers):
         """An opacity keyed by an id that is not on the map is a typo, and reads as one.
 

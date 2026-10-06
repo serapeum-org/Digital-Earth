@@ -51,6 +51,21 @@ class TestGeocoderRecordsFurniture:
         item = _geocoder_item(WebMap().geocoder("FAKE-KEY", placeholder="Find a place"))
         assert item.options["placeholder"] == "Find a place", item.options
 
+    def test_the_language_option_is_recorded(self):
+        """A result-language code is a non-secret layout choice, so it travels with the figure."""
+        item = _geocoder_item(WebMap().geocoder("FAKE-KEY", language="en"))
+        assert item.options["language"] == "en", item.options
+
+    def test_the_country_bias_is_recorded(self):
+        """A country bias is a non-secret layout choice, so it is part of the description."""
+        item = _geocoder_item(WebMap().geocoder("FAKE-KEY", country="NL"))
+        assert item.options["country"] == "NL", item.options
+
+    def test_the_suggestion_limit_is_recorded_as_an_int(self):
+        """The maximum suggestion count is coerced to an int and recorded as a non-secret option."""
+        item = _geocoder_item(WebMap().geocoder("FAKE-KEY", limit=5))
+        assert item.options["limit"] == 5, item.options
+
     def test_the_builder_is_chainable(self):
         """Every builder on this tier returns the map, so calls chain."""
         web_map = WebMap()
