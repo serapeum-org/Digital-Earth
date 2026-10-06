@@ -1220,8 +1220,10 @@ class DecorationMixin(_MixinBase):
         position: str = "top-right",
         controls: Optional[list] = None,
         theme: str = "default",
+        opacity: Optional[dict] = None,
+        order: Optional[list] = None,
     ) -> Self:
-        """Add a switcher so a viewer can turn the data layers on and off.
+        """Add a switcher so a viewer can turn the data layers on and off, dim them, and reorder them.
 
         A map with a basemap, a choropleth and a point overlay had no way to look underneath — which is the
         single most common thing anyone does with a web map. The switch lists the data layers only:
@@ -1231,6 +1233,18 @@ class DecorationMixin(_MixinBase):
         as well — the layers to include, the position, the controls to expose — so the same call adds a layer
         control on either tier (#264). What was ``layer_ids=`` here is ``layers=``, the name that tier uses
         for the same thing.
+
+        **The manager widens past visibility (WB-8), and the widening is declarative.** ``opacity=`` dims a
+        layer and ``order=`` reorders the stack, each applied **now** — ``opacity`` through
+        :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rewrites the layer's own paint, and
+        ``order`` through :meth:`~digitalearth.web.base.WebMapBase.move_layer` — so the saved page draws the
+        layers dimmed and in that order. The visibility switcher stays a **live page-side control**
+        (py-maplibregl's ``LayerSwitcherControl``); a live opacity slider or a drag-to-reorder control would
+        each need a browser-JS layer this tier does not ship (the X-2 limitation), so ``controls=`` still
+        refuses ``"opacity"`` rather than accept a control it cannot build — the inertness #242/#244 removed.
+        The two are therefore different questions: ``controls=`` selects the *live* switcher controls, while
+        ``opacity=``/``order=`` are a one-time transform baked into the page and recorded on the switcher's
+        furniture.
 
         Args:
             layers: The layers to offer, by id, defaulting to every data layer added so far — that is,
@@ -1250,6 +1264,15 @@ class DecorationMixin(_MixinBase):
                 to know that this tier draws one.
             theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
                 keyword: it styles the switcher rather than choosing what the switcher contains.
+            opacity: A mapping of layer id to opacity in ``[0, 1]``, applied **now** by rewriting each named
+                layer's paint through :meth:`~digitalearth.web.base.WebMapBase.replace_layer`. A layer that
+                records no opacity to change — a text annotation has none — is refused rather than silently
+                left opaque. ``None`` dims nothing.
+            order: The bottom-to-top draw order for the named layers, applied **now** through
+                :meth:`~digitalearth.web.base.WebMapBase.move_layer`. The ids must share a draw-order band —
+                a layer cannot be dragged under the basemap, which is the one move the bands forbid — and an
+                order that crosses a band is refused with the ``IndexError`` ``move_layer`` raises. ``None``
+                leaves the order untouched.
 
         Note:
             A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
@@ -1264,7 +1287,11 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when ``position`` is not one of the four legal corners, when ``controls`` names
                 something outside the shared vocabulary or something this tier cannot build, when no data
-                layer has been added yet, or when an id was given that is not on this map.
+                layer has been added yet, when an id was given (in ``layers``, ``opacity`` or ``order``)
+                that is not on this map, when an ``opacity`` value is not a finite fraction in ``[0, 1]``,
+                or when an ``opacity`` names a layer that records no opacity to change.
+            IndexError: when ``order`` would move a layer out of its draw-order band, as
+                :meth:`~digitalearth.web.base.WebMapBase.move_layer` refuses it.
 
         Examples:
             - Two layers and a switch between them:
@@ -1314,12 +1341,19 @@ class DecorationMixin(_MixinBase):
                 "the ground rather than a layer a viewer toggles."
             )
         wanted = list(layers) if layers is not None else offered
-        unknown = [layer_id for layer_id in wanted if layer_id not in available]
+        named = [*wanted, *(opacity or {}), *(order or [])]
+        unknown = [layer_id for layer_id in named if layer_id not in available]
         if unknown:
             raise ValueError(
                 f"layer_control() was given {unknown}, which are not on this map; its layers are "
                 f"{available}"
             )
+        # The declarative half (WB-8): dim, then reorder, through the map's own `replace_layer`/`move_layer`
+        # rather than a new mechanism, so the saved page draws what the layers now carry. Opacity before
+        # order because `replace_layer` keeps a layer's place — so the two do not fight — and both before
+        # the switcher is recorded, so a refusal leaves no half-built control behind.
+        applied_opacity = self._apply_layer_opacity(opacity)
+        applied_order = self._apply_layer_order(order)
         # Held as a request, not appended as a layer: the live layers are resolved when the widget is
         # built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling
         # this twice replaces the request rather than stacking a second identical panel.
@@ -1334,8 +1368,110 @@ class DecorationMixin(_MixinBase):
             layers=tuple(wanted),
             theme=theme,
             controls=exposed,
+            opacity=applied_opacity,
+            order=applied_order,
         )
         return self
+
+    def _apply_layer_opacity(self, opacity: Optional[dict]) -> tuple:
+        """Dim each named layer to its asked opacity, by rewriting its paint through ``replace_layer``.
+
+        The web tier builds no live opacity slider (py-maplibregl's switcher is visibility rows), so opacity
+        is applied declaratively: the value is written into the layer's own recorded paint — a vector layer's
+        ``*-opacity`` paint key, or a raster's flat ``opacity`` prop — and
+        :meth:`~digitalearth.web.base.WebMapBase.replace_layer` rebuilds the MapLibre layer from it, so the
+        saved page draws the layer dimmed.
+
+        Args:
+            opacity: A mapping of layer id to opacity in ``[0, 1]``, or ``None`` to dim nothing. Every id has
+                already been checked to be on the map.
+
+        Returns:
+            The applied pairs as a tuple of ``(layer_id, value)``, sorted by id, for the switcher furniture
+            to record what the control did. Empty when nothing was dimmed.
+
+        Raises:
+            ValueError: when a value is not a finite fraction in ``[0, 1]``, or when a named layer records no
+                opacity to change (a text annotation has none).
+        """
+        if not opacity:
+            return ()
+        applied = []
+        for layer_id, value in opacity.items():
+            opacity_value = as_finite(
+                value, f"opacity[{layer_id!r}]", "WebMap.layer_control()"
+            )
+            if not 0.0 <= opacity_value <= 1.0:
+                raise ValueError(
+                    f"WebMap.layer_control() opacity[{layer_id!r}]={opacity_value} must be a fraction "
+                    "in [0, 1]"
+                )
+            self.replace_layer(self._layer_with_opacity(layer_id, opacity_value))
+            applied.append((layer_id, opacity_value))
+        return tuple(sorted(applied))
+
+    def _layer_with_opacity(self, layer_id: str, value: float) -> LayerSpec:
+        """Return a copy of a layer's description with its opacity set to ``value``.
+
+        Args:
+            layer_id: The layer to dim.
+            value: The opacity in ``[0, 1]``.
+
+        Returns:
+            A new :class:`~digitalearth.base.spec.LayerSpec` with the same id, kind, source and encodings,
+            and the opacity rewritten — in the ``*-opacity`` key of its paint dict (a vector layer) or in
+            its flat ``opacity`` prop (a raster / field / graticule).
+
+        Raises:
+            ValueError: when the layer records no opacity to change — a text annotation carries none, so
+                dimming it is refused rather than accepted and ignored.
+        """
+        layer = self.get_layer(layer_id)
+        props = dict(layer.symbology.props)
+        paint = props.get("paint")
+        if isinstance(paint, dict) and any(key.endswith("-opacity") for key in paint):
+            props["paint"] = {
+                key: (value if key.endswith("-opacity") else held)
+                for key, held in paint.items()
+            }
+        elif "opacity" in props:
+            props["opacity"] = value
+        else:
+            raise ValueError(
+                f"WebMap.layer_control(opacity=...) cannot dim layer {layer_id!r} (kind {layer.kind!r}): "
+                "it records no opacity to change. Only the data layers that carry a fill/line/circle/raster "
+                "opacity can be dimmed."
+            )
+        symbology = Symbology(encodings=dict(layer.symbology.encodings), props=props)
+        return _with_fields(layer, symbology=symbology)
+
+    def _apply_layer_order(self, order: Optional[list]) -> tuple:
+        """Reorder the named layers bottom-to-top, through the map's own ``move_layer``.
+
+        The web tier builds no drag-to-reorder control, so ordering is applied declaratively: each listed
+        layer is moved to its place in draw order with
+        :meth:`~digitalearth.web.base.WebMapBase.move_layer`. Anchored at the lowest position the listed
+        layers currently occupy and filled upward, so the listed set ends up contiguous in the given order;
+        a list that crosses a band surfaces the ``IndexError`` ``move_layer`` raises rather than swallowing it.
+
+        Args:
+            order: The bottom-to-top order for the named layers, or ``None`` to leave the order untouched.
+                Every id has already been checked to be on the map.
+
+        Returns:
+            The applied order as a tuple of ids, for the switcher furniture to record. Empty when the order
+            was untouched.
+
+        Raises:
+            IndexError: when a move would take a layer out of its draw-order band, as ``move_layer`` refuses
+                it (a data layer cannot be dragged under the basemap).
+        """
+        if not order:
+            return ()
+        anchor = min(self.layer_ids.index(layer_id) for layer_id in order)
+        for offset, layer_id in enumerate(order):
+            self.move_layer(layer_id, anchor + offset)
+        return tuple(order)
 
     def text(
         self,
