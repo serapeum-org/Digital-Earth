@@ -78,6 +78,9 @@ CAPABILITIES = Capabilities(
             "layer_switcher",
             "time_slider",
             "measure",
+            # WB-15: a MapTiler-backed place-search box (`DecorationMixin.geocoder`). The control ships in
+            # py-maplibregl 0.3.6 but was never exposed; it is keyed, and the caller supplies the key.
+            "geocoder",
             "attribution",
             # The tier's colour key: `colorbar()` selects a layer's classification and `legend()` draws it.
             # It was listed as absent, on the grounds that the key is a builder rather than a toggle — but

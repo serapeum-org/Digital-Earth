@@ -1110,6 +1110,7 @@ _BUILT_IN_FURNITURE = (
         "a slider over the time steps — web timeslider, interactive player",
     ),
     ("measure", "top-left", "a tool that measures distances — web measure"),
+    ("geocoder", "top-left", "a place-search box — web geocoder (MapTiler)"),
 )
 
 for _name, _anchor, _doc in _BUILT_IN_FURNITURE:

@@ -1740,6 +1740,86 @@ class DecorationMixin(_MixinBase):
         self._record_furniture("measure", anchor=position, distance=distance, area=area)
         return self._queue(apply)
 
+    def geocoder(
+        self,
+        api_key: str,
+        *,
+        position: str = "top-left",
+        placeholder: Optional[str] = None,
+        language: Optional[str] = None,
+        country: Optional[str] = None,
+        limit: Optional[int] = None,
+        fly_to: bool = True,
+    ) -> Self:
+        """Add a place-search box backed by MapTiler's geocoding service (WB-15).
+
+        py-maplibregl ships ``MapTilerGeocodingControl`` but the tier exposed no way to add it. The service
+        is keyed, and **Digital-Earth ships no key**: the caller supplies their own MapTiler key here, which
+        is held only on the live control and is deliberately **not** recorded in the figure's description —
+        the same rule ST-24 follows for a basemap credential, so a saved page cannot leak the key. A figure
+        read back carries the geocoder as furniture without a key, and so draws its map without the search
+        box, rather than embedding the secret.
+
+        Args:
+            api_key: The caller's MapTiler API key. Pass your own, for example from the environment
+                (``geocoder(os.environ["MAPTILER_KEY"])``); it is never hardcoded or defaulted here.
+            position: One of the four MapLibre corners for the search box.
+            placeholder: The box's placeholder text; ``None`` leaves py-maplibregl's own.
+            language: A language code for the result labels; ``None`` leaves the service default.
+            country: An ISO country code to bias results toward; ``None`` searches everywhere.
+            limit: The maximum number of suggestions to list; ``None`` leaves the service default.
+            fly_to: Whether picking a result flies the map to it.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``api_key`` is not a non-empty string — the service could not authenticate
+                without one, so an empty or non-string key is refused at the call rather than failing in a
+                browser — or when ``position`` is not one of the four legal MapLibre corners.
+
+        Examples:
+            - Add a search box in the top-left corner (needs the ``web`` extra, so the block is skipped
+              without it):
+                ```python
+                >>> from digitalearth.web import WebMap                     # doctest: +SKIP
+                >>> WebMap().basemap().geocoder("YOUR-MAPTILER-KEY")        # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.navigation: the control-wiring pattern this follows.
+        """
+        _require_maplibre()
+        _check_position(position)
+        if not isinstance(api_key, str) or not api_key:
+            raise ValueError(
+                "geocoder() needs api_key as a non-empty MapTiler API key; the service is keyed and "
+                "Digital-Earth ships none — pass your own, e.g. geocoder(os.environ['MAPTILER_KEY'])"
+            )
+        from maplibre.controls import MapTilerGeocodingControl
+
+        # The description half: non-secret layout options only. The key is left out on purpose so that
+        # `figure_spec` — which a saved page serialises — never carries it (ST-24's rule for a credential).
+        recorded: dict = {"fly_to": bool(fly_to)}
+        if placeholder is not None:
+            recorded["placeholder"] = placeholder
+        if language is not None:
+            recorded["language"] = language
+        if country is not None:
+            recorded["country"] = country
+        if limit is not None:
+            recorded["limit"] = int(limit)
+        # The live half: the real control, carrying the key, added through a queued closure so the secret
+        # stays out of the serialisable figure and only ever reaches the widget the caller renders.
+        control = MapTilerGeocodingControl(api_key=api_key, **recorded)
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture("geocoder", anchor=position, **recorded)
+        return self._queue(apply)
+
     def drawn_features(self, widget: Any = None) -> Any:
         """Return the shapes drawn on the map, as a pyramids ``FeatureCollection`` in EPSG:4326.
 
