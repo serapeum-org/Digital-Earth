@@ -129,8 +129,9 @@ class TestMalformedCallsAreRefused:
 
     def test_an_unknown_resolution_is_refused(self):
         """Natural Earth ships 110m/50m/10m; anything else is a mistake named here."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="resolution"):
-            WebMap().coastlines(resolution="1m")
+            mapped.coastlines(resolution="1m")
 
 
 class TestItRenders:

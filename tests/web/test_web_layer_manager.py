@@ -117,8 +117,9 @@ class TestOpacityIsAppliedDeclaratively:
         Args:
             two_layers: The map under test.
         """
+        bad_id = two_layers.layer_ids[2]
         with pytest.raises(ValueError, match="opacity"):
-            two_layers.layer_control(opacity={two_layers.layer_ids[2]: 1.5})
+            two_layers.layer_control(opacity={bad_id: 1.5})
 
     def test_a_layer_with_no_opacity_paint_is_refused(self, points):
         """A text annotation carries no opacity paint, so asking to dim it is refused rather than ignored.
@@ -155,8 +156,9 @@ class TestOrderingIsAppliedDeclaratively:
         Args:
             two_layers: The map under test.
         """
+        known_id = two_layers.layer_ids[1]
         with pytest.raises(ValueError, match="not on this map"):
-            two_layers.layer_control(order=["circle-999", two_layers.layer_ids[1]])
+            two_layers.layer_control(order=["circle-999", known_id])
 
     def test_crossing_a_band_is_refused(self, two_layers):
         """A basemap is the ground; dragging a data layer beneath it is the one move the bands forbid.

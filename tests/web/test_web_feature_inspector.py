@@ -125,10 +125,12 @@ class TestMalformedBindingsAreRefused:
 
     def test_an_unknown_id_in_the_list_is_refused(self):
         """A named id the map has not drawn is a mistake, named the way a single bad id already is."""
+        mapped = _two_layer_map()
         with pytest.raises(KeyError, match="no layer 'typo'"):
-            _two_layer_map().popup(["v"], layer=["a", "typo"])
+            mapped.popup(["v"], layer=["a", "typo"])
 
     def test_an_empty_list_is_refused(self):
         """``layer=[]`` names nothing to inspect, so it is refused rather than binding nothing."""
+        mapped = _two_layer_map()
         with pytest.raises(ValueError, match="names no layer"):
-            _two_layer_map().popup(["v"], layer=[])
+            mapped.popup(["v"], layer=[])

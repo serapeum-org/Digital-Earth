@@ -97,8 +97,10 @@ class TestEachControlIsWired:
         Args:
             kind: The control furniture kind under test.
         """
+        bad_control = BAD_POSITION[kind]
+        mapped = WebMap()
         with pytest.raises(ValueError, match="control position"):
-            BAD_POSITION[kind](WebMap())
+            bad_control(mapped)
 
 
 class TestControlOptionsReachTheDescription:
@@ -130,5 +132,6 @@ class TestControlOptionsReachTheDescription:
 
     def test_terrain_control_requires_a_source(self):
         """Without a DEM source id the control has nothing to drive, so it is refused at the call."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="source"):
-            WebMap().terrain_control("")
+            mapped.terrain_control("")

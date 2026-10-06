@@ -108,8 +108,9 @@ class TestStylingByValue:
         Args:
             points_gdf: The point fixture.
         """
+        m = WebMap()
         with pytest.raises(ValueError, match="aggregate"):
-            WebMap().cluster(points_gdf, color_by="value", aggregate="median")
+            m.cluster(points_gdf, color_by="value", aggregate="median")
 
     def test_an_unknown_column_is_refused(self, points_gdf):
         """``color_by`` naming no attribute is a mistake, and surfaces as the missing-column error.
@@ -117,8 +118,9 @@ class TestStylingByValue:
         Args:
             points_gdf: The point fixture.
         """
+        m = WebMap()
         with pytest.raises(KeyError):
-            WebMap().cluster(points_gdf, color_by="nope")
+            m.cluster(points_gdf, color_by="nope")
 
 
 class TestTheClusterLegend:

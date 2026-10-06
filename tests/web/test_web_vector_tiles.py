@@ -118,13 +118,15 @@ class TestTheSourceIsNamedOneOfTwoWays:
 
     def test_naming_neither_is_refused(self):
         """A vector source needs a tile set; with neither given there is nothing to draw."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="exactly one of"):
-            WebMap().vector_tiles(source_layer="roads")
+            mapped.vector_tiles(source_layer="roads")
 
     def test_naming_both_is_refused(self):
         """A template and a TileJSON are two ways to say the same thing; giving both is ambiguous."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="exactly one of"):
-            WebMap().vector_tiles(
+            mapped.vector_tiles(
                 "https://tiles.example.org/{z}/{x}/{y}.pbf",
                 url="https://tiles.example.org/roads.json",
                 source_layer="roads",
@@ -132,8 +134,9 @@ class TestTheSourceIsNamedOneOfTwoWays:
 
     def test_an_unknown_geometry_is_refused(self):
         """A vector tile is drawn as a point, line or area; nothing else has a MapLibre layer type."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="geometry="):
-            WebMap().vector_tiles(
+            mapped.vector_tiles(
                 "https://tiles.example.org/{z}/{x}/{y}.pbf",
                 source_layer="roads",
                 geometry="raster",

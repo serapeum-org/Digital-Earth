@@ -98,15 +98,18 @@ class TestGeocoderRefuses:
 
     def test_an_empty_api_key_is_refused(self):
         """The service is keyed and the tier ships no key, so an empty one is a mistake named here."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="api_key"):
-            WebMap().geocoder("")
+            mapped.geocoder("")
 
     def test_a_non_string_api_key_is_refused(self):
         """A key that is not even a string could not authenticate, so it is refused the same way."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="api_key"):
-            WebMap().geocoder(None)
+            mapped.geocoder(None)
 
     def test_a_bad_position_is_refused(self):
         """A corner MapLibre does not know is silently dropped, so it is refused at the call."""
+        mapped = WebMap()
         with pytest.raises(ValueError, match="control position"):
-            WebMap().geocoder("FAKE-KEY", position="middle")
+            mapped.geocoder("FAKE-KEY", position="middle")
