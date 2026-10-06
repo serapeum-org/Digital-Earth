@@ -3438,7 +3438,7 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
             ValueError: propagated from :meth:`~digitalearth.web.export.ExportMixin.save_animation` for a
-                ``.gif`` destination on a map that carries no renderable time series.
+                ``.gif`` or ``.mp4`` destination on a map that carries no renderable time series.
 
         Examples:
             - Write a standalone page and carry straight on from the path that comes back, instead
@@ -3475,7 +3475,7 @@ class WebMapBase:
                 ```
 
         See Also:
-            digitalearth.web.export.ExportMixin.animate: the ``.gif`` branch.
+            digitalearth.web.export.ExportMixin.save_animation: the ``.gif``/``.mp4`` branch.
             render: the in-notebook counterpart — the same widget, without writing a file.
         """
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
