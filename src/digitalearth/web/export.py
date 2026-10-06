@@ -69,6 +69,31 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
     )
 
 
+def _require_ffmpeg() -> Any:
+    """Import and return the ``imageio-ffmpeg`` encoder, or raise an actionable ``ImportError``.
+
+    ffmpeg is an optional dependency ``digitalearth[web]`` does not pull (just as the headless browser the
+    frames themselves need is not). This is the one place that names the missing package and the GIF
+    fallback, so :meth:`ExportMixin.save_animation` can probe it **before** rendering any frame and
+    :func:`_write_mp4` can import it at encode time, both failing with the same sentence rather than obscurely
+    inside ffmpeg.
+
+    Returns:
+        The imported ``imageio_ffmpeg`` module.
+
+    Raises:
+        ImportError: when ``imageio-ffmpeg`` (the bundled ffmpeg encoder) is not installed.
+    """
+    try:
+        import imageio_ffmpeg
+    except ImportError as err:
+        raise ImportError(
+            "MP4 export needs imageio-ffmpeg (the bundled ffmpeg encoder), which is not part of "
+            "digitalearth[web]. Install it with `pip install imageio-ffmpeg`, or save a .gif instead."
+        ) from err
+    return imageio_ffmpeg
+
+
 def _write_mp4(frames: list, path: str, *, fps: float) -> None:
     """Encode PNG frames into an H.264 MP4 video.
 
@@ -93,13 +118,7 @@ def _write_mp4(frames: list, path: str, *, fps: float) -> None:
 
     if not frames:
         raise ValueError("no frames to write")
-    try:
-        import imageio_ffmpeg
-    except ImportError as err:
-        raise ImportError(
-            "MP4 export needs imageio-ffmpeg (the bundled ffmpeg encoder), which is not part of "
-            "digitalearth[web]. Install it with `pip install imageio-ffmpeg`, or save a .gif instead."
-        ) from err
+    imageio_ffmpeg = _require_ffmpeg()
 
     arrays = []
     for frame in frames:
@@ -327,6 +346,11 @@ class ExportMixin(_MixinBase):
         if float(fps) <= 0:
             raise ValueError(f"fps= must be positive; got {fps!r}")
         container = self._animation_format(path, format)
+        if container == "mp4":
+            # Probe the encoder before rendering a single frame — each render launches a headless browser, so
+            # a missing encoder must not cost the whole (slow) render first. This matches the up-front format
+            # validation above; `_write_mp4` imports it again at encode time, raising the same message (L1).
+            _require_ffmpeg()
         frames = self._temporal_frames()
         with tempfile.TemporaryDirectory() as work:
             images = [

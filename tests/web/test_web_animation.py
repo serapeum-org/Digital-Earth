@@ -561,3 +561,33 @@ class TestTheAnimationOrchestration:
         assert rendered == [], (
             "nothing should be rendered before the format is validated"
         )
+
+    def test_a_missing_mp4_encoder_is_refused_before_any_frame_renders(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """An ``.mp4`` save with ``imageio-ffmpeg`` absent must refuse before rendering a single frame.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+
+        Test scenario:
+            ``imageio-ffmpeg`` is an optional dependency ``digitalearth[web]`` does not pull. Blanking it in
+            ``sys.modules`` makes the encoder import raise; the encoder must be probed up front — like the
+            format already is — so a missing encoder costs no frame render (each of which launches a headless
+            browser), the way ``test_an_unknown_format_is_refused`` guards the format check.
+        """
+        from digitalearth.web import WebMap
+
+        rendered = []
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(rendered))
+        monkeypatch.setitem(sys.modules, "imageio_ffmpeg", None)
+        m = WebMap().basemap().timeslider(raster_stack)
+        destination = str(tmp_path / "series.mp4")
+        with pytest.raises(ImportError, match="imageio-ffmpeg"):
+            m.save_animation(destination)
+        assert rendered == [], (
+            "nothing should be rendered before the mp4 encoder is checked"
+        )
