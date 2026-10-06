@@ -18,7 +18,7 @@ for pyramids to compute geodesic distance/area (the GIS part).
 import html
 import re
 from dataclasses import replace as _with_fields
-from typing import TYPE_CHECKING, Any, List, Optional, Self
+from typing import TYPE_CHECKING, Any, List, Optional, Self, Union
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.basemaps import (
@@ -2186,69 +2186,147 @@ class DecorationMixin(_MixinBase):
         return {"template": template}
 
     def popup(
-        self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
+        self,
+        fields: Optional[List[str]] = None,
+        *,
+        layer: Optional[Union[str, List[str]]] = None,
     ) -> Self:
-        """Show an attribute popup on **click** for a layer's features (recipe W2).
+        """Show an attribute popup on **click** for one or several layers' features (recipe W2, WB-11).
 
         Args:
             fields: Attribute columns to display (one → that property; several → an HTML table). ``None``
                 shows the feature's raw properties.
-            layer: Target layer id; defaults to the most recently added data layer.
+            layer: Which layer(s) to bind. A single id binds that layer; a **list of ids** binds each one,
+                so a map with several queryable layers is inspected in one call (``layer=map.layer_ids``
+                binds them all). ``None`` defaults to the most recently added data layer, as before.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).
+            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet), or when
+                ``layer`` is an empty list, which names nothing to inspect.
+            KeyError: when a named id — alone or in the list — is not a layer on this map.
+        """
+        return self._bind_attribute(fields, layer, trigger="click", add="add_popup")
+
+    def tooltip(
+        self,
+        fields: Optional[List[str]] = None,
+        *,
+        layer: Optional[Union[str, List[str]]] = None,
+    ) -> Self:
+        """Show an attribute tooltip on **hover** for one or several layers' features (recipe W2, WB-11).
+
+        Args:
+            fields: Attribute columns to display (one → that property; several → an HTML table). ``None``
+                shows the feature's raw properties.
+            layer: Which layer(s) to bind. A single id binds that layer; a **list of ids** binds each one
+                (``layer=map.layer_ids`` binds them all). ``None`` defaults to the most recently added data
+                layer, as before.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet), or when
+                ``layer`` is an empty list, which names nothing to inspect.
+            KeyError: when a named id — alone or in the list — is not a layer on this map.
+        """
+        return self._bind_attribute(fields, layer, trigger="hover", add="add_tooltip")
+
+    def _bind_attribute(
+        self,
+        fields: Optional[List[str]],
+        layer: Optional[Union[str, List[str]]],
+        *,
+        trigger: str,
+        add: str,
+    ) -> Self:
+        """Bind a click popup or a hover tooltip across the resolved target layers.
+
+        :meth:`popup` and :meth:`tooltip` are one mechanism under two names — click versus hover — so the
+        body lives here and each name passes its trigger and the ``add_*`` method the widget wires it with.
+        A target list is bound layer by layer: each gets its own recorded interaction and its own queued
+        closure, tagged with its id so :meth:`~digitalearth.web.base.WebMapBase.remove_layer` takes the
+        right popup off.
+
+        Args:
+            fields: The attribute columns to show, as :meth:`popup` documents.
+            layer: The caller's target — ``None`` for the last layer, one id, or a list of ids.
+            trigger: ``"click"`` for a popup, ``"hover"`` for a tooltip.
+            add: The widget method each closure calls — ``"add_popup"`` or ``"add_tooltip"``.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: as :meth:`popup` documents.
+            KeyError: as :meth:`popup` documents.
         """
         _require_layer_api()
-        layer_id = layer or self._last_layer_id
-        if layer_id is None:
-            raise ValueError(
-                "popup() needs a layer — draw a data layer first or pass layer=..."
-            )
+        targets = self._inspector_targets(layer)
         kwargs = self._attribute_template(fields)
+        explicit = layer is not None
+        for layer_id in targets:
+            # An id a caller wrote is checked by `_record_tooltip` (explicit) and raises KeyError by name;
+            # an id the tier chose — a cluster's loose points — is not in the tree and is recorded as the
+            # undescribed layer it is. Recorded before the closure is queued so a bad id in the list leaves
+            # no half-bound closure behind it.
+            self._record_tooltip(layer_id, fields, trigger=trigger, explicit=explicit)
+            self._queue(self._attribute_closure(layer_id, add, kwargs))
+        return self
+
+    def _inspector_targets(self, layer: Optional[Union[str, List[str]]]) -> List[str]:
+        """Resolve a ``popup``/``tooltip`` ``layer=`` into the list of layer ids to bind.
+
+        Args:
+            layer: ``None`` for the most recent data layer, one id, or a list of ids.
+
+        Returns:
+            The ids to bind, in the order the caller gave them.
+
+        Raises:
+            ValueError: when ``layer`` is ``None`` and nothing has been drawn, or when it is an empty list.
+        """
+        if layer is None:
+            last = self._last_layer_id
+            if last is None:
+                raise ValueError(
+                    "popup()/tooltip() needs a layer — draw a data layer first or pass layer=..."
+                )
+            return [last]
+        if isinstance(layer, str):
+            return [layer]
+        targets = list(layer)
+        if not targets:
+            raise ValueError(
+                "popup()/tooltip() was given layer=[], which names no layer to inspect; pass one id, a "
+                "list of ids, or leave it to bind the most recent layer"
+            )
+        return targets
+
+    @staticmethod
+    def _attribute_closure(layer_id: str, add: str, kwargs: dict) -> Any:
+        """Build the queued ``apply(widget)`` closure that wires one layer's popup or tooltip.
+
+        Built in its own frame rather than in :meth:`_bind_attribute`'s loop so that ``layer_id`` is a
+        fresh closure cell per target — a loop-local would late-bind every closure to the last id — and so
+        it reads back as a nonlocal, which is how ``remove_layer`` finds a closure's layer.
+
+        Args:
+            layer_id: The layer this closure binds.
+            add: The widget method to call — ``"add_popup"`` or ``"add_tooltip"``.
+            kwargs: The ``prop``/``template`` kwargs that method takes.
+
+        Returns:
+            The ``apply(widget)`` callable, tagged with its layer id for removal.
+        """
 
         def apply(widget: Any) -> None:
-            widget.add_popup(layer_id, **kwargs)
+            getattr(widget, add)(layer_id, **kwargs)
 
         # Tagged with the layer it belongs to, so `remove_layer` takes the popup off with it rather than
         # leaving a page that pops up over a layer nobody can see.
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._record_tooltip(
-            layer_id, fields, trigger="click", explicit=layer is not None
-        )
-        return self._queue(apply)
-
-    def tooltip(
-        self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
-    ) -> Self:
-        """Show an attribute tooltip on **hover** for a layer's features (recipe W2).
-
-        Args:
-            fields: Attribute columns to display (one → that property; several → an HTML table). ``None``
-                shows the feature's raw properties.
-            layer: Target layer id; defaults to the most recently added data layer.
-
-        Returns:
-            The same map instance, so builder calls chain.
-
-        Raises:
-            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).
-        """
-        _require_layer_api()
-        layer_id = layer or self._last_layer_id
-        if layer_id is None:
-            raise ValueError(
-                "tooltip() needs a layer — draw a data layer first or pass layer=..."
-            )
-        kwargs = self._attribute_template(fields)
-
-        def apply(widget: Any) -> None:
-            widget.add_tooltip(layer_id, **kwargs)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._record_tooltip(
-            layer_id, fields, trigger="hover", explicit=layer is not None
-        )
-        return self._queue(apply)
+        return apply
