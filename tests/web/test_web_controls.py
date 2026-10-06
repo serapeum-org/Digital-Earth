@@ -140,3 +140,16 @@ class TestControlOptionsReachTheDescription:
         mapped = WebMap()
         with pytest.raises(ValueError, match="source"):
             mapped.terrain_control("")
+
+    def test_terrain_control_refuses_a_non_finite_exaggeration(self):
+        """A NaN exaggeration is refused at the call, not late in the figure serializer like every sibling.
+
+        Test scenario:
+            ``text``/``coastlines``/``borders``/``vector_tiles`` run numeric kwargs through ``as_finite`` and
+            refuse NaN/inf at the call; ``terrain_control`` must do the same rather than record the NaN and
+            fail only when the figure is written down.
+        """
+        mapped = WebMap()
+        not_a_number = float("nan")
+        with pytest.raises(ValueError, match="exaggeration= as a finite number"):
+            mapped.terrain_control("dem", exaggeration=not_a_number)

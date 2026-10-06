@@ -2175,8 +2175,10 @@ class DecorationMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``source`` is not a non-empty string — the control would drive nothing — or
-                when ``position`` is not one of the four legal MapLibre corners.
+            ValueError: when ``source`` is not a non-empty string — the control would drive nothing — when
+                ``exaggeration`` is not a finite number (NaN/inf, refused at the call because a figure holding
+                it could not be written down), or when ``position`` is not one of the four legal MapLibre
+                corners.
         """
         _require_maplibre()
         _check_position(position)
@@ -2185,9 +2187,15 @@ class DecorationMixin(_MixinBase):
                 "terrain_control() needs source= as the MapLibre id of a raster-DEM source to drive; the "
                 "control toggles that source's terrain and has nothing to toggle without one"
             )
+        # Run `exaggeration` through `as_finite`, as every sibling builder does its numeric kwargs: a NaN/inf
+        # value is refused here, named for what the caller wrote, rather than recorded and left to fail late
+        # as a figure-serializer `TypeError` when the furniture is written down (L2).
+        exaggeration = as_finite(
+            exaggeration, "exaggeration", "WebMap.terrain_control()"
+        )
         from maplibre.controls import TerrainControl
 
-        control = TerrainControl(source=source, exaggeration=float(exaggeration))
+        control = TerrainControl(source=source, exaggeration=exaggeration)
 
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
@@ -2196,7 +2204,7 @@ class DecorationMixin(_MixinBase):
             "terrain_control",
             anchor=position,
             source=source,
-            exaggeration=float(exaggeration),
+            exaggeration=exaggeration,
         )
         return self._queue(apply)
 
