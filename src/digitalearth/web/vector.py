@@ -95,6 +95,100 @@ class ContourInterval:
             )
 
 
+@dataclass(frozen=True)
+class VectorTileSource:
+    """A MapLibre ``vector`` source — the tile set a :meth:`VectorMixin.vector_tiles` layer draws from.
+
+    The five fields that name the source — the tile template, the TileJSON URL and the service's coverage —
+    are born together, travel together into one source dict and die together, so they are one value rather
+    than five parameters threaded through the builder. The tiles-xor-url rule is theirs too: a vector source
+    is reached by **exactly one** of ``tiles`` or ``url``, and MapLibre reads a template and a TileJSON as the
+    same thing said twice — so the pairing is refused at construction, before a builder is ever called.
+
+    Attributes:
+        tiles: An MVT tile URL template carrying ``{z}/{x}/{y}``, or a sequence of them, or ``None`` when the
+            set is named by `url` instead.
+        url: A TileJSON URL the service publishes, or ``None`` when `tiles` names the set instead.
+        min_zoom: The shallowest zoom the service serves, or ``None`` to leave the source unbounded.
+        max_zoom: The deepest zoom the service serves — past it MapLibre over-zooms the last real tiles rather
+            than requesting levels that do not exist — or ``None``.
+        attribution: Attribution text shown in the map's attribution control; empty adds none.
+
+    Raises:
+        ValueError: when neither `tiles` nor `url` is given, or both are — a vector source is reached by
+            exactly one of them.
+
+    Examples:
+        - A ``{z}/{x}/{y}`` template becomes a ``vector`` source listing that one template:
+            ```python
+            >>> from digitalearth.web.vector import VectorTileSource
+            >>> VectorTileSource(tiles="https://tiles.example.org/{z}/{x}/{y}.pbf").to_source()
+            {'type': 'vector', 'tiles': ['https://tiles.example.org/{z}/{x}/{y}.pbf']}
+
+            ```
+        - A TileJSON ``url`` and a zoom range fold into the same dict:
+            ```python
+            >>> from digitalearth.web.vector import VectorTileSource
+            >>> VectorTileSource(url="https://tiles.example.org/roads.json", max_zoom=14).to_source()
+            {'type': 'vector', 'url': 'https://tiles.example.org/roads.json', 'maxzoom': 14}
+
+            ```
+        - Naming neither tile set is refused, at construction rather than at the builder:
+            ```python
+            >>> from digitalearth.web.vector import VectorTileSource
+            >>> VectorTileSource()
+            Traceback (most recent call last):
+                ...
+            ValueError: vector_tiles() takes exactly one of tiles= (a {z}/{x}/{y} template)...
+
+            ```
+    """
+
+    tiles: Any = None
+    url: str | None = None
+    min_zoom: int | None = None
+    max_zoom: int | None = None
+    attribution: str = ""
+
+    def __post_init__(self) -> None:
+        """Refuse a source named by neither tile set or by both.
+
+        Raises:
+            ValueError: when neither `tiles` nor `url` is given, or both are — a vector source is reached by
+                exactly one of them, and MapLibre reads a template and a TileJSON as the same thing said
+                twice.
+        """
+        if (self.tiles is None) == (self.url is None):
+            raise ValueError(
+                "vector_tiles() takes exactly one of tiles= (a {z}/{x}/{y} template) or url= (a TileJSON "
+                f"URL); got tiles={self.tiles!r} and url={self.url!r}"
+            )
+
+    def to_source(self) -> dict:
+        """Build the MapLibre ``vector`` source dict, naming the tile set exactly one way.
+
+        Returns:
+            The source dict :func:`draw_vector_tiles` builds the MapLibre source from — plain JSON, so it is
+            written straight into a saved figure.
+        """
+        source: dict = {"type": "vector"}
+        if self.url is not None:
+            source["url"] = self.url
+        else:
+            source["tiles"] = (
+                [self.tiles]
+                if isinstance(self.tiles, str)
+                else [str(tile) for tile in self.tiles]
+            )
+        if self.min_zoom is not None:
+            source["minzoom"] = int(self.min_zoom)
+        if self.max_zoom is not None:
+            source["maxzoom"] = int(self.max_zoom)
+        if self.attribution:
+            source["attribution"] = self.attribution
+        return source
+
+
 #: How many levels `contours` traces when the caller names none and the band's variable carries none. Ten,
 #: which is what the interactive tier has always fallen back to and what matplotlib's own `levels=10` means,
 #: so the same call describes the same number of levels on either tier (#262).
@@ -1665,71 +1759,18 @@ class VectorMixin(_MixinBase):
             color_encoding=color_encoding,
         )
 
-    def _vector_tile_source(
-        self,
-        tiles: Any,
-        url: Optional[str],
-        *,
-        min_zoom: Optional[int],
-        max_zoom: Optional[int],
-        attribution: str,
-    ) -> dict:
-        """Build the MapLibre ``vector`` source dict, naming the tile set exactly one way.
-
-        Args:
-            tiles: An MVT tile URL template carrying ``{z}/{x}/{y}``, or a sequence of them, or `None` when
-                the set is named by `url` instead.
-            url: A TileJSON URL the service publishes, or `None` when `tiles` names the set instead.
-            min_zoom: The shallowest zoom the service serves, or `None` to leave the source unbounded.
-            max_zoom: The deepest zoom the service serves — past it MapLibre over-zooms the last real tiles
-                rather than requesting levels that do not exist — or `None`.
-            attribution: Attribution text shown in the map's attribution control; empty adds none.
-
-        Returns:
-            The source dict :func:`draw_vector_tiles` builds the MapLibre source from — plain JSON, so it is
-            written straight into a saved figure.
-
-        Raises:
-            ValueError: when neither `tiles` nor `url` is given, or both are — a vector source is reached by
-                exactly one of them, and MapLibre reads a template and a TileJSON as the same thing said
-                twice.
-        """
-        if (tiles is None) == (url is None):
-            raise ValueError(
-                "vector_tiles() takes exactly one of tiles= (a {z}/{x}/{y} template) or url= (a TileJSON "
-                f"URL); got tiles={tiles!r} and url={url!r}"
-            )
-        source: dict = {"type": "vector"}
-        if url is not None:
-            source["url"] = url
-        else:
-            source["tiles"] = (
-                [tiles] if isinstance(tiles, str) else [str(t) for t in tiles]
-            )
-        if min_zoom is not None:
-            source["minzoom"] = int(min_zoom)
-        if max_zoom is not None:
-            source["maxzoom"] = int(max_zoom)
-        if attribution:
-            source["attribution"] = attribution
-        return source
-
     def vector_tiles(
         self,
-        tiles: Any = None,
+        source: VectorTileSource,
         *,
         source_layer: str,
-        url: Optional[str] = None,
         geometry: str = "line",
         color: str = VECTOR_COLOR,
         width: Maybe[float] = UNSET,
         size: Maybe[float] = UNSET,
         opacity: Maybe[float] = UNSET,
         outline_color: str = "#ffffff",
-        min_zoom: Optional[int] = None,
-        max_zoom: Optional[int] = None,
-        attribution: str = "",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a Mapbox Vector Tile (MVT) set as a circle / line / fill layer (WB-6).
@@ -1741,16 +1782,16 @@ class VectorMixin(_MixinBase):
         never read into memory, so a continent of roads costs the page a URL rather than a GeoJSON blob.
 
         The source is the tile URL, not a :class:`~pyramids.feature.FeatureCollection`, so there is no
-        reprojection and no pyramids involvement — a vector tile set is already Web-Mercator tiles. Give the
-        set exactly one way: a ``{z}/{x}/{y}`` template as ``tiles``, or a TileJSON ``url``.
+        reprojection and no pyramids involvement — a vector tile set is already Web-Mercator tiles. The tile
+        set and its coverage travel as one :class:`VectorTileSource`, which names the set exactly one way — a
+        ``{z}/{x}/{y}`` template as ``tiles`` or a TileJSON ``url`` — and refuses an ambiguous pairing when it
+        is constructed, before this builder is reached.
 
         Args:
-            tiles: An MVT tile URL template containing ``{z}/{x}/{y}``, or a sequence of them. Give this or
-                ``url``, not both.
+            source: The tile set to draw, as a :class:`VectorTileSource` carrying its template-or-``url`` and
+                the service's zoom range and attribution.
             source_layer: The name of the layer to draw *inside* the tile set — a vector tile holds many
                 named layers (``roads``, ``buildings``, ``water``, …), and MapLibre draws one at a time.
-            url: A TileJSON URL the service publishes, naming the tile set and its coverage. Give this or
-                ``tiles``, not both.
             geometry: How to draw the features — ``"line"`` (the default, for roads and boundaries),
                 ``"fill"`` (for buildings and land use) or ``"circle"`` (for points of interest). Each maps
                 to the MapLibre layer type of the same shape.
@@ -1762,11 +1803,6 @@ class VectorMixin(_MixinBase):
             opacity: Layer opacity in ``[0, 1]``; not passed leaves the geometry's own default
                 (:data:`LINE_OPACITY`, :data:`FILL_OPACITY` or :data:`POINT_OPACITY`).
             outline_color: Polygon outline colour, used by ``geometry="fill"``.
-            min_zoom: The shallowest zoom the service serves, passed to the source; ``None`` leaves it
-                unbounded.
-            max_zoom: The deepest zoom the service serves. Past it MapLibre over-zooms the last real tiles
-                instead of requesting levels that do not exist; ``None`` leaves the source unbounded.
-            attribution: Attribution text shown in the map's attribution control.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
@@ -1774,19 +1810,19 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when neither ``tiles`` nor ``url`` is given, or both are; when ``geometry`` is not
-                ``"line"``, ``"fill"`` or ``"circle"``; or when ``width``, ``size`` or ``opacity`` is not a
-                finite number, refused at this call because a figure holding NaN or infinity could not be
-                written down.
+            ValueError: when ``geometry`` is not ``"line"``, ``"fill"`` or ``"circle"``; or when ``width``,
+                ``size`` or ``opacity`` is not a finite number, refused at this call because a figure holding
+                NaN or infinity could not be written down. The tiles-xor-``url`` rule is refused earlier, when
+                the :class:`VectorTileSource` is constructed.
             ImportError: when the ``web`` extra is not installed, so there is no MapLibre layer API.
 
         Examples:
             - Draw a roads tile set as lines, addressable by the name it was given (needs the ``web``
               extra, so the block is skipped without it):
                 ```python
-                >>> from digitalearth.web import WebMap                       # doctest: +SKIP
-                >>> m = WebMap().basemap().vector_tiles(                      # doctest: +SKIP
-                ...     "https://tiles.example.org/{z}/{x}/{y}.pbf",
+                >>> from digitalearth.web import VectorTileSource, WebMap      # doctest: +SKIP
+                >>> m = WebMap().basemap().vector_tiles(                       # doctest: +SKIP
+                ...     VectorTileSource(tiles="https://tiles.example.org/{z}/{x}/{y}.pbf"),
                 ...     source_layer="roads", name="roads",
                 ... )
                 >>> m.layer_ids                                              # doctest: +SKIP
@@ -1803,9 +1839,7 @@ class VectorMixin(_MixinBase):
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.vector_tiles()"
         _, layer_types = _require_layer_api()
-        source = self._vector_tile_source(
-            tiles, url, min_zoom=min_zoom, max_zoom=max_zoom, attribution=attribution
-        )
+        source_spec = source.to_source()
         ask = Ask()
         if geometry == "line":
             width = as_finite(ask("line-width", width, LINE_WIDTH), "width", call)
@@ -1837,9 +1871,8 @@ class VectorMixin(_MixinBase):
             )
         layer_id = self._layer_id(prefix, name)
         # Recorded as values — the source dict, the source-layer, the MapLibre type and the paint — never a
-        # closure: :func:`draw_vector_tiles` rebuilds the layer from exactly this, and `source=None` keeps
-        # the figure from recording a feature source there is none of, so the layer draws from its
-        # description alone, as a raster basemap does.
+        # closure: :func:`draw_vector_tiles` rebuilds the layer from exactly this, and no feature source is
+        # recorded (there is none of), so the layer draws from its description alone, as a raster basemap does.
         self._index_layer(
             layer_id,
             name,
@@ -1847,7 +1880,7 @@ class VectorMixin(_MixinBase):
             visible=visible,
             symbology=Symbology(
                 props={
-                    "source": source,
+                    "source": source_spec,
                     "source_layer": str(source_layer),
                     # The enum's value, not the member: a description holds plain values a saved figure can
                     # carry, and the spec refuses the member.
