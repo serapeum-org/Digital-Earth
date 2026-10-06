@@ -3415,8 +3415,9 @@ class WebMapBase:
         """Save the map — a standalone HTML page or a PNG snapshot — and return its path (DW.6).
 
         The output kind is ``fmt`` if given, else inferred from the suffix: ``.png`` renders a snapshot,
-        ``.gif`` runs the animation export (:meth:`~digitalearth.web.export.ExportMixin.save_animation`, which
-        needs a temporal map and a headless browser), anything else writes the HTML page.
+        ``.gif`` or ``.mp4`` runs the animation export
+        (:meth:`~digitalearth.web.export.ExportMixin.save_animation`, which needs a temporal map and a headless
+        browser), anything else writes the HTML page.
         HTML is serialised via ``MapWidget.to_html`` and written as UTF-8 ourselves — sidestepping maplibre's
         cp1252-on-Windows writer bug (see :func:`_patch_maplibre_html_encoding`). By default the page embeds
         the map state and widget JS but references ``maplibre-gl`` from a CDN; ``offline=True`` inlines the
@@ -3425,7 +3426,7 @@ class WebMapBase:
 
         Args:
             path: Output file (``*.html`` or ``*.png``).
-            fmt: Force the format (``"html"`` / ``"png"`` / ``"gif"``); ``None`` infers it from ``path``.
+            fmt: Force the format (``"html"`` / ``"png"`` / ``"gif"`` / ``"mp4"``); ``None`` infers it from ``path``.
             title: HTML document title.
             offline: When True (HTML only), inline the ``maplibre-gl`` JS/CSS so the page opens offline.
             **kwargs: Forwarded to ``MapWidget.to_html`` (HTML) or the PNG renderer.
@@ -3461,8 +3462,8 @@ class WebMapBase:
 
                 ```
             - The suffix, not a flag, picks the branch: ``.gif`` hands the call to
-              :meth:`~digitalearth.web.export.ExportMixin.save_animation`, which says so when the map has
-              nothing to animate. That dispatch needs no engine, so it runs here:
+              :meth:`~digitalearth.web.export.ExportMixin.save_animation` (as does ``.mp4``), which says so
+              when the map has nothing to animate. That dispatch needs no engine, so it runs here:
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> try:
@@ -3478,10 +3479,11 @@ class WebMapBase:
             render: the in-notebook counterpart — the same widget, without writing a file.
         """
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
-        kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()
-        if kind == "gif":
+        kind = (fmt or (suffix if suffix in {"png", "gif", "mp4"} else "html")).lower()
+        if kind in {"gif", "mp4"}:
             # The contract's name: calling the alias told a caller who wrote `save()` to write
-            # `save_animation()`, from a line inside the library (review M14).
+            # `save_animation()`, from a line inside the library (review M14). `save_animation`
+            # reads the suffix to pick the encoder, so `.gif` and `.mp4` both land here.
             return self.save_animation(path, title=title, **kwargs)
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
