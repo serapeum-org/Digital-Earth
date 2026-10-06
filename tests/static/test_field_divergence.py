@@ -585,9 +585,12 @@ class TestTheRampIsBuiltFromAColormapObjectToo:
 class TestCenteredLimitsWithoutACentre:
     """`centered_limits` only widens when a centre is stated; with none it hands the limits straight back.
 
-    The animation path bakes the symmetric domain in once over the stack, so it asks `centered_limits` of
-    every field — including the ones the caller left centre-less. That branch has to return the band it was
-    given, or a frame with no `center=` would be widened to something the clip never measured.
+    This exercises the `self.center is None` arm directly. Production never routes a centre-less field
+    through it: `_freeze_animation_ramp` calls `centered_limits` only under `if colors.from_center:`, and
+    `from_center` is `True` only when a centre was stated, so a centre-less `FieldColors` never reaches the
+    animation call. The arm is a defensive contract of `centered_limits` itself — safe to call
+    unconditionally, returning the band unchanged when no centre is stated — which this test pins by calling
+    it straight.
     """
 
     def test_no_centre_returns_the_limits_unchanged(self):
