@@ -101,8 +101,9 @@ CAPABILITIES = Capabilities(
             "renderer to make on top of one"
         ),
         "coastline_overlay": (
-            "coastlines come with the basemap style a caller picks, rather than as a Natural Earth layer the "
-            "tier draws"
+            "the tier draws coastlines and borders as Natural-Earth overlay layers through coastlines() and "
+            "borders(); what is absent is the quickmap(coastlines=True) overlay kwarg, whose cross-tier wiring "
+            "is tracked in #398"
         ),
         "vectors": "MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier",
         "streamlines": "there is no streamline primitive to trace a field with in a browser",

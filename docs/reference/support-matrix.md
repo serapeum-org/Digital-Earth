@@ -143,8 +143,9 @@ omissions with no positive counterpart on any backend, so they appear only in th
 
 ### web
 
-- **`coastline_overlay`** — coastlines come with the basemap style a caller picks, rather than as a Natural
-  Earth layer the tier draws
+- **`coastline_overlay`** — the tier draws coastlines and borders as Natural-Earth overlay layers through
+  coastlines() and borders(); what is absent is the quickmap(coastlines=True) overlay kwarg, whose cross-tier
+  wiring is tracked in #398
 - **`domain`** — a web map pans and zooms, so it is framed by a centre and a zoom rather than by a region
 - **`export_vector`** — a page is a raster canvas; a PDF of it would be a screenshot in a wrapper
 - **`mesh`** — a raster is drawn as an image rather than as cells, which is what a tile pipeline expects

@@ -237,8 +237,10 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #:   ``colorbar`` toggle reaches the tier's own `colorbar`/`legend` through :func:`_add_3d_key` (order 24):
 #:   PyVista's scalar bar for a layer coloured by a ramp, its keyed legend for one coloured by classes, and
 #:   nothing at all — without an error — for a layer whose colour is flat.
-#: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
-#:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
+#: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It draws
+#:   coastlines and borders as Natural-Earth overlay layers through ``WebMap.coastlines``/``WebMap.borders``;
+#:   what it does not yet take is the ``quickmap(coastlines=True)`` overlay kwarg, whose cross-tier wiring is
+#:   deferred to #398. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
 #:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
 #:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
