@@ -99,7 +99,8 @@ class TestAListBindsEveryNamedLayer:
         """A feature inspector over the whole map is ``layer=m.layer_ids`` — the common case."""
         m = _two_layer_map()
         m.tooltip(["v"], layer=m.layer_ids)
-        assert "hover" in _interactions(m, "a") and "hover" in _interactions(m, "b")
+        assert "hover" in _interactions(m, "a")
+        assert "hover" in _interactions(m, "b")
 
 
 class TestTheSingleLayerBehaviourIsUnchanged:

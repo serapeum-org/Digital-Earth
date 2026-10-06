@@ -121,7 +121,8 @@ class TestReferenceGeographySitsUnderTheData:
         frame = gpd.GeoDataFrame({"v": [1.0]}, geometry=[Point(4.9, 52.4)], crs=4326)
         m = WebMap().points(frame, name="obs").coastlines()
         # The reference entry is inserted at the front of the queue, ahead of the data layer.
-        assert m._reference_count == 1 and len(m._queued) == 2, m._queued
+        assert m._reference_count == 1, m._queued
+        assert len(m._queued) == 2, m._queued
 
 
 class TestMalformedCallsAreRefused:
