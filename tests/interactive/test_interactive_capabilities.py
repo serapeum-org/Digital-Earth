@@ -340,7 +340,7 @@ class TestEachLayerKeepsItsOwnStyle:
         m.field(_dem(), cmap="magma", clim=(0.0, 10.0))
         m.field(_dem(), cmap="Blues", clim=(0.0, 80.0))
         styles = self._styles(
-            m._compose_visible_layers(["0: Image", "1: Image"], op=0.5)
+            m._compose_visible_layers(list(m.layer_ids), op=0.5)
         )
         assert [style.get("cmap") for style in styles] == ["magma", "Blues"], styles
 
@@ -350,7 +350,7 @@ class TestEachLayerKeepsItsOwnStyle:
         m.field(_dem(), cmap="magma")
         m.field(_dem(), cmap="Blues")
         styles = self._styles(
-            m._compose_visible_layers(["0: Image", "1: Image"], op=0.25)
+            m._compose_visible_layers(list(m.layer_ids), op=0.25)
         )
         assert [style.get("alpha") for style in styles] == [0.25, 0.25], styles
 

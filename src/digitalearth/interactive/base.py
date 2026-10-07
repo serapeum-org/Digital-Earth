@@ -131,10 +131,11 @@ def _epsg_of(crs: Any) -> int | None:
     """Return the EPSG code a GeoViews element's ``crs`` resolves to, or ``None`` when it does not (IN-16).
 
     A GeoViews element carries a cartopy projection. The clear-cut case — a projection that *is* a known
-    EPSG code — resolves through ``to_epsg()``; the rest (a bare ``PlateCarree``, a custom projection) resolve
-    through pyproj on the CRS's own definition where they can. Anything that resolves to no code comes back
-    ``None``, and the guard that reads this stays silent for it rather than guess a mismatch — GeoViews' own
-    ``find_crs`` still refuses a genuinely incompatible overlay at render time.
+    EPSG code — resolves through its ``to_epsg()``; a bare ``PlateCarree`` or a custom projection resolves to
+    no code, and the guard that reads this stays silent for it rather than guess a mismatch (pyproj is a
+    forbidden GIS competitor here — :mod:`tests.test_no_competitor_imports` — so there is deliberately no
+    deeper resolver). GeoViews' own ``find_crs`` still refuses a genuinely incompatible overlay at render
+    time, so the unresolved case loses nothing but the early, clearer message.
 
     Args:
         crs: A cartopy CRS read off an element's ``crs`` attribute.
@@ -143,18 +144,11 @@ def _epsg_of(crs: Any) -> int | None:
         The EPSG integer, or ``None`` when the CRS resolves to none.
     """
     to_epsg = getattr(crs, "to_epsg", None)
-    if callable(to_epsg):
-        try:
-            code = to_epsg()
-        except Exception:  # pragma: no cover - a CRS whose to_epsg raises is treated as unresolved
-            code = None
-        if code:
-            return int(code)
+    if not callable(to_epsg):
+        return None
     try:
-        from pyproj import CRS as _PyCRS
-
-        code = _PyCRS.from_user_input(crs).to_epsg()
-    except Exception:  # pragma: no cover - anything pyproj cannot read is left unresolved
+        code = to_epsg()
+    except Exception:  # pragma: no cover - a CRS whose to_epsg raises is treated as unresolved
         return None
     return int(code) if code else None
 
