@@ -975,6 +975,26 @@ class InteractiveMapBase:
 
         Raises:
             ValueError: when the URL carries no ``state=`` parameter.
+
+        Examples:
+            - A map encoded with ``share_url`` is rebuilt from the link, display CRS and all (needs no
+              engine for a sourceless map):
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> url = InteractiveMap(crs=4326).share_url()
+                >>> InteractiveMap.from_share_url(url).crs
+                4326
+
+                ```
+            - A URL with no ``state=`` is refused rather than silently returning an empty map:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap.from_share_url("https://host/app?tab=1")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: no shareable state in ...
+
+                ```
         """
         import base64
         import json

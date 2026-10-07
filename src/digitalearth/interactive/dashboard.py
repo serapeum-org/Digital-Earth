@@ -612,6 +612,35 @@ class DashboardMixin(_MixinBase):
         Raises:
             ValueError: for an unknown widget name (with a did-you-mean), or ``"basemap"`` on a
                 non-Web-Mercator map — the same vocabulary :meth:`dashboard` enforces.
+
+        Examples:
+            - A colormap selector (8 options) and a sampled opacity slider (3) bake 24 pre-rendered states,
+              well within the default cap:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> plan = InteractiveMap().field(dem).export_plan(           # doctest: +SKIP
+                ...     widgets=("cmap", "alpha")
+                ... )
+                >>> plan.total_states                                        # doctest: +SKIP
+                24
+                >>> plan.embeddable                                          # doctest: +SKIP
+                True
+
+                ```
+            - Past the cap the plan is not embeddable and its ``warning`` names the breakdown, so the caller
+              serves the app instead of baking a truncated file:
+                ```python
+                >>> plan = InteractiveMap().field(dem).export_plan(           # doctest: +SKIP
+                ...     widgets=("cmap",), max_states=5
+                ... )
+                >>> plan.embeddable                                          # doctest: +SKIP
+                False
+                >>> "over the 5 cap" in plan.warning                         # doctest: +SKIP
+                True
+
+                ```
         """
         pn = _require_panel()
         controls, _ = self._build_widgets(pn, widgets)

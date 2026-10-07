@@ -100,6 +100,21 @@ def tabs(**named_maps: Any) -> Any:
 
     Raises:
         ValueError: when no maps are given.
+
+    Examples:
+        - Two named maps become a two-tab layout, labelled in the order given:
+            ```python
+            >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+            >>> from digitalearth.interactive import InteractiveMap, tabs # doctest: +SKIP
+            >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+            >>> layout = tabs(                                           # doctest: +SKIP
+            ...     rain=InteractiveMap().field(dem),
+            ...     temp=InteractiveMap().field(dem),
+            ... )
+            >>> len(layout)                                              # doctest: +SKIP
+            2
+
+            ```
     """
     pn = _panel()
     if not named_maps:
@@ -119,6 +134,21 @@ def swipe(before: Any, after: Any) -> Any:
 
     Returns:
         A ``panel.layout.Swipe`` of the two.
+
+    Examples:
+        - Reveal an "after" raster over a "before" one with a draggable divider:
+            ```python
+            >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+            >>> from digitalearth.interactive import InteractiveMap, swipe  # doctest: +SKIP
+            >>> before = Dataset.read_file("examples/data/before.tif")    # doctest: +SKIP
+            >>> after = Dataset.read_file("examples/data/after.tif")      # doctest: +SKIP
+            >>> compare = swipe(                                         # doctest: +SKIP
+            ...     InteractiveMap().field(before), InteractiveMap().field(after)
+            ... )
+            >>> type(compare).__name__                                  # doctest: +SKIP
+            'Swipe'
+
+            ```
     """
     pn = _panel()
     return pn.Swipe(_rendered(before), _rendered(after))

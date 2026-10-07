@@ -207,6 +207,31 @@ class InteractionMixin(_MixinBase):
 
         Raises:
             ValueError: for an unknown ``kind``, or when there is no source layer.
+
+        Examples:
+            - A box selection wires a ``BoundsXY`` stream onto the last layer; the returned ``DynamicMap``
+              carries it, ready to fire its callback once a kernel is live:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> import holoviews as hv                                    # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> dmap = InteractiveMap().field(dem).on_select(             # doctest: +SKIP
+                ...     lambda bounds: hv.Points([]), kind="box"
+                ... )
+                >>> [type(stream).__name__ for stream in dmap.streams]        # doctest: +SKIP
+                ['BoundsXY']
+
+                ```
+            - ``kind="index"`` listens for the picked row indices instead:
+                ```python
+                >>> dmap = InteractiveMap().field(dem).on_select(             # doctest: +SKIP
+                ...     lambda index: hv.Points([]), kind="index"
+                ... )
+                >>> [type(stream).__name__ for stream in dmap.streams]        # doctest: +SKIP
+                ['Selection1D']
+
+                ```
         """
         _require_holoviz()
         from holoviews import streams
@@ -241,6 +266,22 @@ class InteractionMixin(_MixinBase):
 
         Raises:
             ValueError: when there is no source layer.
+
+        Examples:
+            - A ``PlotReset`` stream is wired onto the last layer, so clicking Bokeh's reset tool re-runs the
+              callback:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> import holoviews as hv                                    # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> dmap = InteractiveMap().field(dem).on_reset(              # doctest: +SKIP
+                ...     lambda resetting: hv.Points([])
+                ... )
+                >>> [type(stream).__name__ for stream in dmap.streams]        # doctest: +SKIP
+                ['PlotReset']
+
+                ```
         """
         _require_holoviz()
         import holoviews as hv
@@ -344,6 +385,27 @@ class InteractionMixin(_MixinBase):
 
         Returns:
             One captured geometry per draw tool that has captured something, oldest first.
+
+        Examples:
+            - Two draw tools on one map, read back together once a kernel has captured each — the box as a
+              bbox tuple, the point tool as its raw stream dict:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> m = InteractiveMap().draw("box").draw("point")            # doctest: +SKIP
+                >>> m._draw_streams[0].event(                                 # doctest: +SKIP
+                ...     data={"x0": [1.0], "y0": [2.0], "x1": [3.0], "y1": [4.0]}
+                ... )
+                >>> m.drawn_geometries[0]                                     # doctest: +SKIP
+                (1.0, 2.0, 3.0, 4.0)
+
+                ```
+            - Nothing drawn yet reads as an empty list, not an error:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> InteractiveMap().draw("box").drawn_geometries             # doctest: +SKIP
+                []
+
+                ```
         """
         captured = []
         for stream in self._draw_streams:
@@ -381,6 +443,19 @@ class InteractionMixin(_MixinBase):
             The ``holoviews.annotate`` **instance** it was applied through: ``.annotated`` is the edited
             element and ``.selected`` the picked rows, both live, and displaying the instance shows the
             draw-tool-plus-table layout. A fresh instance per call, so two annotators do not share state.
+
+        Examples:
+            - Open an annotator with one attribute column; its ``.annotated`` holds the edited geometry and
+              ``.selected`` the picked rows, both read back into Python once a kernel is live:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> annotator = InteractiveMap().annotate(annotations=["label"])  # doctest: +SKIP
+                >>> annotator.annotated.crs is not None                       # doctest: +SKIP
+                True
+                >>> "label" in annotator.annotated.columns                    # doctest: +SKIP
+                True
+
+                ```
         """
         gv, _ = _require_holoviz()
         from holoviews import annotate as _annotate
@@ -451,6 +526,23 @@ class InteractionMixin(_MixinBase):
         Returns:
             The ``link_selections`` instance applied to the panels. Read ``.selection_expr`` for the live
             predicate, or ``.selection_param(element)`` for the filtered data.
+
+        Examples:
+            - Link a map to a companion panel and read the brush settings back off the linker; its
+              ``selection_expr`` is the live predicate a kernel updates as you drag:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> linker = InteractiveMap().field(dem).cross_filter(        # doctest: +SKIP
+                ...     selection_mode="intersect", unselected_alpha=0.3
+                ... )
+                >>> linker.selection_mode                                     # doctest: +SKIP
+                'intersect'
+                >>> linker.unselected_alpha                                   # doctest: +SKIP
+                0.3
+
+                ```
         """
         gv, hv = _require_holoviz()
         from holoviews.selection import link_selections
