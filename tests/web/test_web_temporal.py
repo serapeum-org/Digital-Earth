@@ -266,8 +266,9 @@ class TestTimeSliderNeedsEngine:
             A figure cannot hold a NaN/inf opacity. The inline paint must restore the ``as_finite`` guard
             the point/polygon/choropleth builders carried, so the refusal lands at the call, not at save.
         """
+        m = WebMap()
         with pytest.raises(ValueError, match="opacity"):
-            WebMap().timeslider(timed_points, kdim="time", opacity=float("nan"))
+            m.timeslider(timed_points, kdim="time", opacity=float("nan"))
 
     def test_a_large_vector_series_warns_about_page_size(
         self, timed_points, monkeypatch, warning_log
