@@ -18,16 +18,20 @@ from digitalearth.three_d.bigdata import reduce_points
 from digitalearth.three_d.layer import drawing_props
 from digitalearth.three_d.point_cloud import (
     SCALAR,
-    _color_encoding as _point_encoding,
     _coords_from_array,
     _coords_from_geodataframe,
+)
+from digitalearth.three_d.point_cloud import (
+    _color_encoding as _point_encoding,
 )
 from digitalearth.three_d.vector import (
     VALUE,
     _cap_with_holes,
     _classify_or_refuse,
-    _color_encoding as _polygon_encoding,
     _polygon_parts,
+)
+from digitalearth.three_d.vector import (
+    _color_encoding as _polygon_encoding,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime

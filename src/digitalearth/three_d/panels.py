@@ -11,7 +11,8 @@ rather than being re-added with defaults. With ``link=True`` the cameras are lin
 orbits them all, which is what makes a before/after read as one comparison.
 """
 
-from typing import TYPE_CHECKING, Any, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 from digitalearth.base.spec import FigureSpec, PanelSpec
 from digitalearth.three_d.base import DEFAULT_CAMERA, PANEL_ID

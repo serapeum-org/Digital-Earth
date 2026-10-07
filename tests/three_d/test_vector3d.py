@@ -129,7 +129,8 @@ def test_extruded_polygons_public_path_carves_holes():
         {"pop": [1.0]},
         geometry=[
             Polygon(
-                [(0, 0), (4, 0), (4, 4), (0, 4)], holes=[[(1, 1), (3, 1), (3, 3), (1, 3)]]
+                [(0, 0), (4, 0), (4, 4), (0, 4)],
+                holes=[[(1, 1), (3, 1), (3, 3), (1, 3)]],
             )
         ],
     )

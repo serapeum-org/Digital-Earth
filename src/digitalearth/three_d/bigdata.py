@@ -358,7 +358,9 @@ def reduce_points(cloud: Any, budget: int, *, kind: str = "point_cloud") -> Any:
     # budget is close to the count, and a repeat would draw one point twice and land the result over budget.
     stride = np.unique(np.linspace(0, count - 1, budget).round().astype("int64"))
     smaller = cloud.extract_points(stride, adjacent_cells=False)
-    _report_reduction(kind, count, int(smaller.n_points), budget, _SUBSAMPLE, unit="points")
+    _report_reduction(
+        kind, count, int(smaller.n_points), budget, _SUBSAMPLE, unit="points"
+    )
     return smaller
 
 

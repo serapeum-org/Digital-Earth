@@ -146,7 +146,9 @@ def test_terrain_nodata_is_a_gap_not_fabricated_ground():
     dem[0, 0] = np.nan
     mesh = _terrain_mesh(dem, np.arange(5.0), np.arange(5.0), vertical_scale=1.0)
 
-    assert np.isfinite(mesh.points).all()  # geometry has no NaN coordinates — VTK can build it
+    assert np.isfinite(
+        mesh.points
+    ).all()  # geometry has no NaN coordinates — VTK can build it
 
     # The nodata node is blanked (VTK's hidden-point ghost flag), every finite node is not.
     ghost = mesh.point_data["vtkGhostType"]

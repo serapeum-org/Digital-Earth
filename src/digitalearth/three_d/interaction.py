@@ -14,7 +14,8 @@ A widget added over a layer hides that layer's plain actor first, so the interac
 drawn rather than a second mesh on top of the first.
 """
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.three_d.base import Scene3DBase as _MixinBase

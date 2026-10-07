@@ -366,7 +366,9 @@ def redraw_decoration(scene: Any) -> None:
         _draw_orientation_axes(plotter, scene.display_crs, held["orientation_axes"])
 
 
-def draw_reference_lines(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
+def draw_reference_lines(
+    scene: Any, _data: Any, layer: LayerSpec
+) -> tuple[Any, Any] | None:
     """Draw the Natural-Earth coastline or border lines a `reference_lines` layer describes.
 
     Args:
@@ -405,7 +407,9 @@ def draw_reference_lines(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any,
 
     import pyvista as pv
 
-    parts = [np.asarray(part, dtype="float64") for part in natural_earth(dataset, resolution)]
+    parts = [
+        np.asarray(part, dtype="float64") for part in natural_earth(dataset, resolution)
+    ]
     lines = [_polyline(part) for part in parts if len(part) >= 2]
     if not lines:
         scene._skip_empty(layer.kind, f"natural_earth({dataset!r}) returned no lines")

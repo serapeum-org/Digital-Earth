@@ -16,7 +16,9 @@ from digitalearth.three_d import Scene3D
 
 def _dem():
     """A small ramped DEM Source with real relief."""
-    return get_source(np.add.outer(np.linspace(0.0, 1.0, 10), np.linspace(0.0, 1.0, 10)))
+    return get_source(
+        np.add.outer(np.linspace(0.0, 1.0, 10), np.linspace(0.0, 1.0, 10))
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +40,9 @@ def test_clip_plane_adds_a_widget_and_hides_the_plain_layer():
     scene.close()
 
 
-@pytest.mark.parametrize("method", ["slice_planes", "threshold", "isovalue", "clip_box"])
+@pytest.mark.parametrize(
+    "method", ["slice_planes", "threshold", "isovalue", "clip_box"]
+)
 def test_each_mesh_widget_returns_a_handle(method):
     """Every mesh widget instantiates headless over a terrain layer and returns a handle."""
     scene = Scene3D(off_screen=True)
@@ -61,7 +65,9 @@ def test_slider_drives_its_callback_range():
     scene = Scene3D(off_screen=True)
     scene.terrain(_dem())
     seen = []
-    widget = scene.slider(lambda value: seen.append(value), (0.0, 10.0), value=5.0, title="h")
+    widget = scene.slider(
+        lambda value: seen.append(value), (0.0, 10.0), value=5.0, title="h"
+    )
     assert widget is not None
     scene.close()
 

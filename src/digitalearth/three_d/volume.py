@@ -102,7 +102,9 @@ def _grid_geo(
     Returns:
         The ``(origin, spacing)`` to build the grid with, each a float triple in VTK's ``(x, y, z)`` order.
     """
-    resolved_origin = _UNIT_ORIGIN if origin is None else tuple(float(v) for v in origin)
+    resolved_origin = (
+        _UNIT_ORIGIN if origin is None else tuple(float(v) for v in origin)
+    )
     resolved_spacing = (
         _UNIT_SPACING if spacing is None else tuple(float(v) for v in spacing)
     )
