@@ -122,6 +122,10 @@ _ALPHA_ONLY_STYLE = ("alpha",)
 #: dropped, and a new widget is one builder in `_dashboard_widget_builders`, not another `elif`.
 _DASHBOARD_WIDGETS: tuple[str, ...] = ("cmap", "alpha", "basemap")
 
+#: The widget set `dashboard`/`export_plan`/`save_app` default to when the caller names none. One constant so
+#: the export-size pre-check in `save_app` cannot disagree with what `dashboard` actually builds (F6).
+_DEFAULT_DASHBOARD_WIDGETS: tuple[str, ...] = ("cmap", "alpha")
+
 #: The Panel templates `dashboard(template=...)` can host the app in (IN-9): the short name → the class on
 #: `panel.template`. Held as data for the same reason the widgets are.
 _DASHBOARD_TEMPLATES: dict[str, str] = {
@@ -264,7 +268,7 @@ class DashboardMixin(_MixinBase):
     def dashboard(
         self,
         *,
-        widgets: Sequence[str] = ("cmap", "alpha"),
+        widgets: Sequence[str] = _DEFAULT_DASHBOARD_WIDGETS,
         sidebar: bool = True,
         title: str = "",
         template: str | None = None,
@@ -388,18 +392,24 @@ class DashboardMixin(_MixinBase):
         builders = self._dashboard_widget_builders(pn)
         controls, bindings = [], {}
         for name in widgets:
-            builder = builders.get(name)
-            if builder is None:
+            # The vocabulary consulted is the declared :data:`_DASHBOARD_WIDGETS` tuple, in its own order, so
+            # the "choose from" list and the did-you-mean read the data rather than the builder dict's keys
+            # (F3). The builders cover exactly that tuple — pinned by a test — so the lookup below is total.
+            if name not in _DASHBOARD_WIDGETS:
                 raise ValueError(
-                    _did_you_mean("dashboard widget", name, sorted(builders))
+                    _did_you_mean("dashboard widget", name, _DASHBOARD_WIDGETS)
                 )
-            widget = builder()
+            widget = builders[name]()
             controls.append(widget)
             bindings[name] = widget
         return controls, bindings
 
     def _dashboard_widget_builders(self, pn: Any) -> dict:
-        """Return the declared dashboard-widget vocabulary: name → a builder of its Panel widget (IN-9).
+        """Return the builder for each name in the declared vocabulary :data:`_DASHBOARD_WIDGETS` (IN-9).
+
+        Keyed by exactly the names in :data:`_DASHBOARD_WIDGETS` (pinned by
+        ``test_the_widget_vocabulary_is_declared_data``), so the constant is the single source of truth the
+        validation and did-you-mean read, and this just says how each declared name is built.
 
         Args:
             pn: The imported panel module.
@@ -574,7 +584,7 @@ class DashboardMixin(_MixinBase):
     def export_plan(
         self,
         *,
-        widgets: Sequence[str] = ("cmap", "alpha"),
+        widgets: Sequence[str] = _DEFAULT_DASHBOARD_WIDGETS,
         max_states: int = 1000,
         max_opts: int = 3,
     ) -> ExportPlan:
@@ -657,7 +667,7 @@ class DashboardMixin(_MixinBase):
                 ```
         """
         if embed:
-            widgets = kwargs.get("widgets", ("cmap", "alpha"))
+            widgets = kwargs.get("widgets", _DEFAULT_DASHBOARD_WIDGETS)
             plan = self.export_plan(widgets=widgets)
             if plan.warning is not None:
                 from loguru import logger
