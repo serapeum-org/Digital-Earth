@@ -66,6 +66,13 @@ NOT_A_DRAWING_CALL = {
     "save": "writes the scene that was already drawn; its keywords reach the exporter",
     "screenshot": "captures the scene that was already drawn; its keywords reach the plotter's own call",
     "show": "opens the window on the scene that was already drawn",
+    "clip_plane": "a live widget below the seam: its keywords reach add_mesh_clip_plane, not a derived style",
+    "slice_planes": "a live widget below the seam: its keywords reach add_mesh_slice, not a derived style",
+    "clip_box": "a live widget below the seam: its keywords reach add_mesh_clip_box, not a derived style",
+    "threshold": "a live widget below the seam: its keywords reach add_mesh_threshold, not a derived style",
+    "isovalue": "a live widget below the seam: its keywords reach add_mesh_isovalue, not a derived style",
+    "slider": "a live widget below the seam: its keywords reach add_slider_widget, not a derived style",
+    "enable_picking": "turns on a pick gesture; its keywords reach enable_*_picking, not a derived style",
 }
 
 

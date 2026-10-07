@@ -14,6 +14,9 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
   :meth:`orientation_axes` (what the scene says about itself, rather than what it draws).
 - :class:`~digitalearth.three_d.guides.GuideMixin` → :meth:`colorbar` / :meth:`legend` (the colour key, as a
   guide on the layer's own encoding rather than figure decoration a tier draws and forgets).
+- :class:`~digitalearth.three_d.interaction.InteractionMixin` → :meth:`clip_plane` / :meth:`slice_planes` /
+  :meth:`threshold` / :meth:`isovalue` / :meth:`slider` / :meth:`enable_picking` (live widgets and picking —
+  below the description seam, so they return a handle rather than recording a layer).
 - :class:`~digitalearth.three_d.animation.AnimationMixin` → :meth:`orbit` / :meth:`record` / :meth:`jupyter`.
 
 Every layer is built from pyramids-sourced numpy + geometry — **never** xarray/rasterio/pyvista-xarray (enforced
@@ -25,6 +28,7 @@ from digitalearth.three_d.base import Scene3DBase, house_theme
 from digitalearth.three_d.decoration import DecorationMixin
 from digitalearth.three_d.globe import GlobeMixin
 from digitalearth.three_d.guides import GuideMixin
+from digitalearth.three_d.interaction import InteractionMixin
 from digitalearth.three_d.point_cloud import PointCloudMixin
 from digitalearth.three_d.terrain import TerrainMixin
 from digitalearth.three_d.vector import VectorMixin
@@ -41,6 +45,7 @@ class Scene3D(
     GlobeMixin,
     DecorationMixin,
     GuideMixin,
+    InteractionMixin,
     AnimationMixin,
     Scene3DBase,
 ):
