@@ -158,3 +158,64 @@ class TestCrossFilterParameters:
         """
         linker = m.cross_filter()
         assert hasattr(linker, "selection_expr")
+
+    def test_the_optional_colour_and_index_knobs_reach_the_linker(self, m):
+        """``index_cols``/``selected_color``/``unselected_color`` are forwarded only when given.
+
+        Args:
+            m: The map fixture.
+        """
+        linker = m.cross_filter(
+            index_cols=["fid"],
+            selected_color="#ff0000",
+            unselected_color="#cccccc",
+        )
+        assert linker.index_cols == ["fid"]
+        assert linker.selected_color == "#ff0000"
+        assert linker.unselected_color == "#cccccc"
+
+
+class TestStreamSourceResolution:
+    """A stream listens on the layer added last, or on an explicit ``source=`` (IN-8)."""
+
+    def test_on_tap_honours_an_explicit_source(self, m):
+        """Passing ``source=`` binds the tap there rather than to the last layer.
+
+        Args:
+            m: The map fixture.
+        """
+        element = m.layers[0]
+        dmap = m.on_tap(lambda x, y: hv.Overlay([]), source=element)
+        assert isinstance(dmap, hv.DynamicMap)
+
+    def test_on_select_honours_an_explicit_source(self, m):
+        """``on_select(source=...)`` binds the selection there (the ``_source_layer`` explicit branch).
+
+        Args:
+            m: The map fixture.
+        """
+        dmap = m.on_select(lambda **kw: hv.Overlay([]), source=m.layers[0])
+        assert any(isinstance(s, streams.BoundsXY) for s in dmap.streams)
+
+
+class TestDrawnGeometriesEdgeCases:
+    """``drawn_geometries`` skips tools that captured nothing (IN-11)."""
+
+    def test_a_tool_with_no_capture_is_skipped(self, m):
+        """A draw tool that never fired contributes nothing, so the list is empty.
+
+        Args:
+            m: The map fixture.
+        """
+        m.draw("box")
+        assert m.drawn_geometries == []
+
+    def test_a_box_with_empty_data_is_skipped(self, m):
+        """A box whose captured ``x0`` is an empty list is skipped, not returned as a degenerate bbox.
+
+        Args:
+            m: The map fixture.
+        """
+        m.draw("box")
+        m._draw_streams[0].event(data={"x0": [], "y0": [], "x1": [], "y1": []})
+        assert m.drawn_geometries == []

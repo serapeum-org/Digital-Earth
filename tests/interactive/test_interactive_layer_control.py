@@ -342,6 +342,44 @@ class TestReorderIsNotAControl:
         top_down.clicks += 1
         assert two_layers.layer_ids == [before[-1], before[0]]
 
+    def test_up_on_the_top_layer_is_a_no_op(self, two_layers):
+        """Moving the top layer further up leaves its band, so the button does nothing (IndexError path).
+
+        Args:
+            two_layers: The map under test.
+        """
+        import panel as pn
+
+        before = list(two_layers.layer_ids)
+        built = two_layers.layer_control(reorder=True)
+        ups = [
+            b
+            for b in built.layer_control_panel.select(pn.widgets.Button)
+            if b.label.startswith("▲")
+        ]
+        top_up = next(b for b in ups if b.label.endswith(before[-1]))
+        top_up.clicks += 1
+        assert two_layers.layer_ids == before
+
+    def test_a_button_for_a_removed_layer_is_a_no_op(self, two_layers):
+        """A reorder button whose layer was removed since the control was built does nothing, not crash.
+
+        Args:
+            two_layers: The map under test.
+        """
+        import panel as pn
+
+        built = two_layers.layer_control(reorder=True)
+        removed = two_layers.layer_ids[0]
+        two_layers.remove_layer(removed)
+        stale = next(
+            b
+            for b in built.layer_control_panel.select(pn.widgets.Button)
+            if b.label.endswith(removed)
+        )
+        stale.clicks += 1  # must not raise
+        assert removed not in two_layers.layer_ids
+
     def test_reorder_is_not_in_the_shared_control_vocabulary(self, two_layers):
         """Naming it through ``controls=`` would read as a control every tier exposes; only this one does.
 
