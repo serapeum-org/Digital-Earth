@@ -29,7 +29,7 @@ from digitalearth.base.clim import (
 )
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.spec import DEFAULT_BAND
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, as_finite
 
 #: Members scanned when computing a stack's shared colour range — `digitalearth.base.clim`'s cap, the one
 #: number the static and interactive tiers read too, picked at the same evenly-spread positions. The scan
@@ -396,13 +396,14 @@ class TemporalMixin(_MixinBase):
         from digitalearth.web.vector import POINT_SIZE, VECTOR_COLOR
 
         _, layer_types = _require_layer_api()
-        geom_types = set(gdf.geometry.geom_type.unique())
-        is_polygon = geom_types <= {"Polygon", "MultiPolygon"}
-        # Classify over the DRAWN subset, not the whole frame: a row with a null `kdim` lands in no step
-        # (`gdf[gdf[kdim] == step]` never matches it), so it is never drawn — and it must not shift the
-        # breaks of the rows that are. `drawn` is the union of the per-step subsets; the paint is resolved
-        # once over it so every step colours by the same classification. `_color_expr` records
-        # `last_breaks`/`last_legend` here too, describing the drawn series the colour key belongs to.
+        # Guard opacity the way the point/polygon/choropleth builders this path once delegated to did:
+        # a non-finite value cannot be written into a figure, so it is refused at the call, not at save.
+        opacity = as_finite(opacity, "opacity", "WebMap.timeslider()")
+        # Route, classify, and size-warn over the DRAWN subset, not the whole frame. A row with a null
+        # `kdim` lands in no step (`gdf[gdf[kdim] == step]` never matches it), so it is never drawn — and a
+        # never-drawn row must not shift the colour breaks of the rows that are, nor flip the whole series
+        # between the fill and circle builders by its geometry type. `drawn` is the union of the per-step
+        # subsets; `timeslider` has already refused an all-null series, so it is never empty.
         drawn = gdf[gdf[kdim].notna()]
         if len(drawn) > _LARGE_SERIES_FEATURES:
             logger.warning(
@@ -411,6 +412,11 @@ class TemporalMixin(_MixinBase):
                 len(drawn),
                 len(times),
             )
+        geom_types = set(drawn.geometry.geom_type.unique())
+        is_polygon = geom_types <= {"Polygon", "MultiPolygon"}
+        # The paint is resolved once over `drawn` so every step colours by the same classification.
+        # `_color_expr` records `last_breaks`/`last_legend` here too, describing the drawn series the colour
+        # key belongs to.
         color_encoding: Any = None
         if is_polygon and column is not None:
             fill, color_encoding = self._color_expr(

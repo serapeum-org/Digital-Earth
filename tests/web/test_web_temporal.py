@@ -231,6 +231,44 @@ class TestTimeSliderNeedsEngine:
             f"the never-drawn outlier must not enter the breaks, got {m.last_breaks}"
         )
 
+    def test_a_null_kdim_row_does_not_decide_the_geometry_path(self):
+        """L1: the geometry routing follows the drawn rows, not a never-drawn null-``kdim`` row's type.
+
+        Test scenario:
+            Two polygon steps plus a stray null-``kdim`` Point. The point is never drawn, so it must not
+            flip the whole series onto the circle builder: the step layers must be polygon fills.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point, Polygon
+
+        gdf = gpd.GeoDataFrame(
+            {"time": [2000, 2010, None]},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (0.5, 1)]),
+                Polygon([(2, 0), (3, 0), (2.5, 1)]),
+                Point(9, 9),
+            ],
+            crs=4326,
+        )
+        m = WebMap().timeslider(gdf, kdim="time")
+        kinds = {m._layer_tree.get(i).kind for i in m._temporal["layer_ids"]}
+        assert kinds == {"polygons"}, (
+            f"routing must follow the drawn polygons, not the null-time point, got {kinds}"
+        )
+
+    def test_a_non_finite_opacity_is_refused(self, timed_points):
+        """L2: a non-finite ``opacity`` is refused at the call, as the delegated builders did.
+
+        Args:
+            timed_points: A point series to attempt the build on.
+
+        Test scenario:
+            A figure cannot hold a NaN/inf opacity. The inline paint must restore the ``as_finite`` guard
+            the point/polygon/choropleth builders carried, so the refusal lands at the call, not at save.
+        """
+        with pytest.raises(ValueError, match="opacity"):
+            WebMap().timeslider(timed_points, kdim="time", opacity=float("nan"))
+
     def test_a_large_vector_series_warns_about_page_size(
         self, timed_points, monkeypatch, warning_log
     ):
