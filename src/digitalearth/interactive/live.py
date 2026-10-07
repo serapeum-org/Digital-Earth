@@ -10,6 +10,12 @@ A ``Pipe`` carries whatever you send it (the push replaces the layer's data); a 
 keeps a sliding window of the last ``length`` rows, for a feed you want to tail. Data is taken in the display
 CRS, like a hand-built element handed to ``add_layer`` — a live feed is pushed too often to reproject through
 pyramids on every tick, so reproject once at the source.
+
+A layer's stream goes when its layer does: removing the layer, or drawing a different figure over it, drops
+the stream, and :meth:`~digitalearth.interactive.base.InteractiveMapBase.close` lets every live stream go with
+the rest of the map's data. After any of those, :meth:`LiveMixin.push`/:meth:`LiveMixin.live_stream` refuse
+the id even though a closed map still renders the layer's last frame — a push is a data operation, and the
+data has been let go.
 """
 
 from typing import TYPE_CHECKING, Any, Self
@@ -85,7 +91,8 @@ class LiveMixin(_MixinBase):
                 >>> m = InteractiveMap().live(kind="points", name="cars")      # doctest: +SKIP
                 >>> isinstance(m.layers[-1], hv.DynamicMap)                    # doctest: +SKIP
                 True
-                >>> m.push("cars", pd.DataFrame({"x": [0.0], "y": [0.0]}))     # doctest: +SKIP
+                >>> m.push("cars", pd.DataFrame({"x": [0.0], "y": [0.0]})) is m  # doctest: +SKIP
+                True
                 >>> len(m.live_stream("cars").data)                           # doctest: +SKIP
                 1
 
@@ -208,7 +215,7 @@ class LiveMixin(_MixinBase):
         self._live_streams[layer_id].send(data)
         return self
 
-    def _require_live(self, layer_id: Any) -> None:
+    def _require_live(self, layer_id: str) -> None:
         """Refuse an id that is not a live layer, naming the ones that are.
 
         Args:
