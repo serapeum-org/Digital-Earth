@@ -167,7 +167,12 @@ class AnimationMixin(_MixinBase):
         return pn.Column(pn.panel(view), player)
 
     def save_animation(
-        self, path: Any, *, fps: float = DEFAULT_FPS, layer: str | None = None, **kwargs: Any
+        self,
+        path: Any,
+        *,
+        fps: float = DEFAULT_FPS,
+        layer: str | None = None,
+        **kwargs: Any,
     ) -> Path:
         """Export the time cube as a GIF/MP4 (matplotlib backend) or a scrubber HTML.
 

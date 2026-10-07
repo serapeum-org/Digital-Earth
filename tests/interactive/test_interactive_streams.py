@@ -45,7 +45,11 @@ class TestSelectionStreams:
 
     @pytest.mark.parametrize(
         ("kind", "stream_type"),
-        [("box", streams.BoundsXY), ("lasso", streams.Lasso), ("index", streams.Selection1D)],
+        [
+            ("box", streams.BoundsXY),
+            ("lasso", streams.Lasso),
+            ("index", streams.Selection1D),
+        ],
     )
     def test_on_select_binds_the_right_stream(self, m, kind, stream_type):
         """Each selection kind attaches its matching HoloViews stream.
@@ -102,7 +106,9 @@ class TestSeveralDrawTools:
             m: The map fixture.
         """
         m.draw("box").draw("point")
-        m._draw_streams[0].event(data={"x0": [1.0], "y0": [2.0], "x1": [3.0], "y1": [4.0]})
+        m._draw_streams[0].event(
+            data={"x0": [1.0], "y0": [2.0], "x1": [3.0], "y1": [4.0]}
+        )
         m._draw_streams[1].event(data={"Longitude": [5.0], "Latitude": [6.0]})
         captured = m.drawn_geometries
         assert captured[0] == (1.0, 2.0, 3.0, 4.0)

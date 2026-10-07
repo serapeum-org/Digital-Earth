@@ -332,7 +332,11 @@ class TestReorderIsNotAControl:
 
         before = list(two_layers.layer_ids)
         built = two_layers.layer_control(reorder=True)
-        downs = [b for b in built.layer_control_panel.select(pn.widgets.Button) if b.label.startswith("▼")]
+        downs = [
+            b
+            for b in built.layer_control_panel.select(pn.widgets.Button)
+            if b.label.startswith("▼")
+        ]
         # The ▼ for the top layer (drawn last) nudges it one place earlier in draw order.
         top_down = next(b for b in downs if b.label.endswith(before[-1]))
         top_down.clicks += 1

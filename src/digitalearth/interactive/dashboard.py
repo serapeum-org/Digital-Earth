@@ -355,7 +355,9 @@ class DashboardMixin(_MixinBase):
         class_name = _DASHBOARD_TEMPLATES.get(template)
         if class_name is None:
             raise ValueError(
-                _did_you_mean("dashboard template", template, sorted(_DASHBOARD_TEMPLATES))
+                _did_you_mean(
+                    "dashboard template", template, sorted(_DASHBOARD_TEMPLATES)
+                )
             )
         template_class = getattr(pn.template, class_name)
         return template_class(
@@ -541,7 +543,9 @@ class DashboardMixin(_MixinBase):
         # Restyle only when a widget value is in play; otherwise the elements pass through untouched, which is
         # what makes a basemap-only change a reconcile rather than a rebuild. `.opts()` on an overlay applies
         # per element *type*, so the restyle happens per layer before the compose, not after it (#300).
-        restyled = self._restyled_layers(overrides, layers) if overrides else list(layers)
+        restyled = (
+            self._restyled_layers(overrides, layers) if overrides else list(layers)
+        )
         obj = self._projected(self._compose(restyled))
         if basemap:
             obj = self._with_basemap(obj, basemap, context=basemap_context)
@@ -1090,7 +1094,9 @@ class DashboardMixin(_MixinBase):
         wanted_ids = {layer_id for layer_id in shown} | {
             layer_id for layer_id in always
         }
-        indices = sorted(order.index(layer_id) for layer_id in wanted_ids if layer_id in order)
+        indices = sorted(
+            order.index(layer_id) for layer_id in wanted_ids if layer_id in order
+        )
         chosen = [self.layers[index] for index in indices]
         if not chosen:
             return hv.Overlay([])
@@ -1234,6 +1240,8 @@ class DashboardMixin(_MixinBase):
         import json
 
         state = self.figure_spec.to_dict()
-        blob = base64.urlsafe_b64encode(json.dumps(state).encode("utf-8")).decode("ascii")
+        blob = base64.urlsafe_b64encode(json.dumps(state).encode("utf-8")).decode(
+            "ascii"
+        )
         separator = "&" if "?" in base_url else "?"
         return f"{base_url}{separator}state={blob}"

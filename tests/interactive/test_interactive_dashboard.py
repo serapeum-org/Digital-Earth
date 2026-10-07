@@ -665,7 +665,9 @@ class TestInertFlagsAreRefused:
         import panel as pn
 
         built = multi.layer_control(reorder=True)
-        assert built.layer_control_panel.select(pn.widgets.Button), "reorder buttons missing"
+        assert built.layer_control_panel.select(pn.widgets.Button), (
+            "reorder buttons missing"
+        )
 
     def test_layer_control_reorder_defaults_to_false(self, multi):
         """The default must not promise reordering."""

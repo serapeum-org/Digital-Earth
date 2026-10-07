@@ -148,7 +148,9 @@ def _epsg_of(crs: Any) -> int | None:
         return None
     try:
         code = to_epsg()
-    except Exception:  # pragma: no cover - a CRS whose to_epsg raises is treated as unresolved
+    except (
+        Exception
+    ):  # pragma: no cover - a CRS whose to_epsg raises is treated as unresolved
         return None
     return int(code) if code else None
 
