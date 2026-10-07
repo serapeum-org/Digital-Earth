@@ -152,3 +152,53 @@ class TestMinimapRendersInABrowser:
         assert sorted(probe["maps"]) == ["de-map-main", "de-minimap"], probe["maps"]
         assert probe["minimaps"] == ["de-minimap"], probe["minimaps"]
         assert probe["has_rect"], "the overview must draw the main map's view rectangle"
+
+
+class TestMeasureRendersInABrowser:
+    """WB-17 — the measure page loads the draw control and computes a drawn line's length live."""
+
+    def test_drawing_a_line_updates_the_readout(self):
+        """The draw control loads and a drawn 1-degree line reads ~111 km in the on-map readout.
+
+        Test scenario:
+            The readout runs in the browser off mapbox-gl-draw's events, so only a browser can show
+            it: a line from (0,0) to (1,0) — one degree of longitude at the equator — must read about
+            111 km, proving the draw control, the geodesic length, and the readout are all live.
+        """
+        from digitalearth.web import measure_html
+
+        html = measure_html(WebMap().basemap(), title="measure-smoke")
+        probe_js = """() => {
+            const DE = window.DE || {};
+            const h = DE.measures && DE.measures['de-map-measure'];
+            let readout = null;
+            if (h && h.draw) {
+                h.draw.add({
+                    type: 'Feature', properties: {},
+                    geometry: { type: 'LineString', coordinates: [[0, 0], [1, 0]] },
+                });
+                h.update();
+                readout = document.getElementById('de-measure-readout').textContent;
+            }
+            return {
+                canvas_count: document.querySelectorAll('canvas').length,
+                measures: Object.keys(DE.measures || {}),
+                has_draw: typeof window.MapboxDraw !== 'undefined',
+                readout: readout,
+            };
+        }"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "measure.html"
+            path.write_text(html, encoding="utf-8")
+            page_errors, console_errors, probe = _render_and_probe(
+                path.as_uri(), probe_js
+            )
+
+        assert page_errors == [], f"uncaught JS error(s): {page_errors}"
+        assert _ignore_network_console(console_errors) == [], console_errors
+        assert probe["canvas_count"] >= 1, f"the map must draw a canvas: {probe}"
+        assert probe["measures"] == ["de-map-measure"], probe["measures"]
+        assert probe["has_draw"], "mapbox-gl-draw did not load"
+        assert probe["readout"] and "Distance: 111" in probe["readout"], (
+            f"a 1-degree line must read ~111 km, got {probe['readout']!r}"
+        )

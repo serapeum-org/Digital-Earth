@@ -29,6 +29,12 @@ MAPLIBRE_VERSION = "5.3.0"
 _MAPLIBRE_JS = f"https://unpkg.com/maplibre-gl@{MAPLIBRE_VERSION}/dist/maplibre-gl.js"
 _MAPLIBRE_CSS = f"https://unpkg.com/maplibre-gl@{MAPLIBRE_VERSION}/dist/maplibre-gl.css"
 
+#: mapbox-gl-draw, loaded only for the measure document (WB-17) — the draw control the readout reads.
+#: Pinned, and the version py-maplibregl itself uses for its draw control.
+MAPBOX_DRAW_VERSION = "1.4.3"
+_DRAW_JS = f"https://unpkg.com/@mapbox/mapbox-gl-draw@{MAPBOX_DRAW_VERSION}/dist/mapbox-gl-draw.js"
+_DRAW_CSS = f"https://unpkg.com/@mapbox/mapbox-gl-draw@{MAPBOX_DRAW_VERSION}/dist/mapbox-gl-draw.css"
+
 _SRCJS = Path(__file__).parent / "srcjs"
 
 
@@ -70,12 +76,15 @@ class HtmlDocument:
             once the maps are ready.
         feature_js: ``True`` when the page needs ``de_features.js`` (a cross-map feature); ``False``
             for a plain single-map page that needs only the runtime.
+        needs_draw: ``True`` when the page needs mapbox-gl-draw on it (the measure document, WB-17);
+            the draw library is loaded from the CDN only then, not on every page.
     """
 
     panels: tuple[MapPanel, ...]
     body_html: str
     bootstrap_js: str
     feature_js: bool
+    needs_draw: bool = False
 
     @classmethod
     def swipe(
@@ -165,6 +174,55 @@ class HtmlDocument:
             feature_js=True,
         )
 
+    @classmethod
+    def measure(
+        cls,
+        main: dict,
+        *,
+        height: int = 600,
+        distance: bool = True,
+        area: bool = True,
+    ) -> HtmlDocument:
+        """Build the document for a WB-17 live measure readout.
+
+        The page adds a mapbox-gl-draw control to the map; on every draw change the feature computes
+        the drawn line's length and/or polygon's area and writes it into an on-map readout. This is a
+        convenience readout — the authoritative geodesic measure is still ``WebMap.drawn_features()``
+        handing the geometry to pyramids.
+
+        Args:
+            main: The map's ``to_dict()`` state (the map measured on).
+            height: The map height in CSS pixels.
+            distance: Offer the line tool and show the drawn length.
+            area: Offer the polygon tool and show the drawn area.
+
+        Returns:
+            The :class:`HtmlDocument` for the measure page.
+        """
+        wrap, main_id, readout = (
+            "de-measure-wrap",
+            "de-map-measure",
+            "de-measure-readout",
+        )
+        body = (
+            f'<div id="{wrap}" class="de-measure-wrap" style="height:{int(height)}px">'
+            f'<div id="{main_id}" class="de-measure-map"></div>'
+            f'<div id="{readout}" class="de-measure-readout"></div>'
+            f"</div>"
+        )
+        opts = json.dumps({"distance": bool(distance), "area": bool(area)})
+        bootstrap = (
+            f'window.DE.buildMap("{main_id}",{json.dumps(main)},function(){{'
+            f'window.DE.measure("{main_id}","{readout}",{opts});}});'
+        )
+        return cls(
+            panels=(MapPanel(main_id, main),),
+            body_html=body,
+            bootstrap_js=bootstrap,
+            feature_js=True,
+            needs_draw=True,
+        )
+
     def render(self, *, title: str = "Digital-Earth map") -> str:
         """Return the standalone HTML string.
 
@@ -172,24 +230,31 @@ class HtmlDocument:
             title: The document ``<title>``.
 
         Returns:
-            A complete HTML document: maplibre-gl (CDN) + our CSS/runtime/feature scripts, the
-            feature markup, and the bootstrap that builds the maps and starts the feature.
+            A complete HTML document: maplibre-gl (CDN, plus mapbox-gl-draw when a measure document
+            needs it) + our CSS/runtime/feature scripts, the feature markup, and the bootstrap that
+            builds the maps and starts the feature.
         """
         scripts = [_asset("de_maplibre.js")]
         if self.feature_js:
             scripts.append(_asset("de_features.js"))
         scripts.append(self.bootstrap_js)
         script_tags = "\n".join(f"<script>\n{js}\n</script>" for js in scripts)
+        draw_css = (
+            f'<link rel="stylesheet" href="{_DRAW_CSS}"/>\n' if self.needs_draw else ""
+        )
+        draw_js = f'<script src="{_DRAW_JS}"></script>\n' if self.needs_draw else ""
         return (
             "<!DOCTYPE html>\n"
             '<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
             f"<title>{title}</title>\n"
             '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
             f'<link rel="stylesheet" href="{_MAPLIBRE_CSS}"/>\n'
+            f"{draw_css}"
             f"<style>\n{_asset('de_maplibre.css')}\n</style>\n"
             "</head>\n<body>\n"
             f"{self.body_html}\n"
             f'<script src="{_MAPLIBRE_JS}"></script>\n'
+            f"{draw_js}"
             f"{script_tags}\n"
             "</body>\n</html>\n"
         )

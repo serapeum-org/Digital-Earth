@@ -173,4 +173,96 @@
     (DE.minimaps = DE.minimaps || {})[miniId] = handle;
     return handle;
   };
+
+  /* ------------------------------------------------------------------- measure */
+
+  const EARTH_R = 6371008.8; // mean Earth radius (m), the value pyramids/GDAL use for geodesics
+  const TO_RAD = Math.PI / 180;
+
+  // Great-circle distance between two [lng, lat] points, in metres (haversine).
+  function haversine(a, b) {
+    const dLat = (b[1] - a[1]) * TO_RAD;
+    const dLng = (b[0] - a[0]) * TO_RAD;
+    const la1 = a[1] * TO_RAD;
+    const la2 = b[1] * TO_RAD;
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+    return 2 * EARTH_R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  function lineLength(coords) {
+    let d = 0;
+    for (let i = 1; i < coords.length; i++) d += haversine(coords[i - 1], coords[i]);
+    return d;
+  }
+
+  // Spherical polygon area (m²) of one ring, by the shoelace-on-a-sphere formula.
+  function ringArea(coords) {
+    let total = 0;
+    for (let i = 0; i < coords.length; i++) {
+      const p1 = coords[i];
+      const p2 = coords[(i + 1) % coords.length];
+      total +=
+        (p2[0] - p1[0]) *
+        TO_RAD *
+        (2 + Math.sin(p1[1] * TO_RAD) + Math.sin(p2[1] * TO_RAD));
+    }
+    return Math.abs((total * EARTH_R * EARTH_R) / 2);
+  }
+
+  function formatLength(m) {
+    return m >= 1000 ? (m / 1000).toFixed(2) + " km" : m.toFixed(0) + " m";
+  }
+  function formatArea(m2) {
+    return m2 >= 1e6 ? (m2 / 1e6).toFixed(2) + " km²" : m2.toFixed(0) + " m²";
+  }
+
+  // WB-17 — a live on-map measure readout. Adds a MapboxDraw control for a line and/or polygon and,
+  // on every draw change, computes the drawn geometry's length / area and writes it into the readout
+  // element. This is a convenience readout, not the authoritative GIS answer: `WebMap.drawn_features()`
+  // still hands the drawn geometry to pyramids for an exact geodesic measure.
+  DE.measure = function (mapId, readoutId, options) {
+    const map = DE.maps[mapId];
+    const readout = document.getElementById(readoutId);
+    const MB = global.MapboxDraw;
+    if (!map || !readout) {
+      throw new Error("de_maplibre: measure needs a built map and a readout element");
+    }
+    if (!MB) {
+      throw new Error("de_maplibre: measure needs mapbox-gl-draw on the page");
+    }
+    options = options || {};
+    const wantDistance = options.distance !== false;
+    const wantArea = options.area !== false;
+    const draw = new MB({
+      displayControlsDefault: false,
+      controls: { line_string: wantDistance, polygon: wantArea, trash: true },
+    });
+    map.addControl(draw);
+
+    const hint = "Draw a line or polygon to measure";
+    function update() {
+      const fc = draw.getAll();
+      let dist = 0;
+      let area = 0;
+      for (const f of fc.features) {
+        const g = f.geometry;
+        if (g.type === "LineString") dist += lineLength(g.coordinates);
+        else if (g.type === "Polygon") area += ringArea(g.coordinates[0]);
+      }
+      const parts = [];
+      if (wantDistance && dist > 0) parts.push("Distance: " + formatLength(dist));
+      if (wantArea && area > 0) parts.push("Area: " + formatArea(area));
+      readout.innerHTML = parts.length ? parts.join("<br>") : hint;
+    }
+    for (const ev of ["draw.create", "draw.update", "draw.delete"]) {
+      map.on(ev, update);
+    }
+    update();
+
+    const handle = { draw: draw, update: update };
+    (DE.measures = DE.measures || {})[mapId] = handle;
+    return handle;
+  };
 })(typeof window !== "undefined" ? window : this);

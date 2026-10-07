@@ -11,7 +11,9 @@ import pytest
 
 from digitalearth.web import (
     WebMap,
+    measure_html,
     minimap_html,
+    save_measure,
     save_minimap,
     save_swipe,
     swipe_html,
@@ -231,3 +233,76 @@ class TestMinimapHtml:
         out = save_minimap(WebMap().basemap(), str(tmp_path / "mini.html"))
         text = out.read_text(encoding="utf-8")
         assert text.startswith("<!DOCTYPE html>") and "de-minimap-wrap" in text
+
+
+class TestHtmlDocumentMeasure:
+    """``HtmlDocument.measure`` describes a map with a live measure readout."""
+
+    def test_one_panel_a_readout_and_draw_assets(self):
+        """The page has the map, the readout element, the draw library, and starts ``DE.measure``.
+
+        Test scenario:
+            The readout needs the draw control and the live map, so the document carries one map
+            panel, the readout div, mapbox-gl-draw (loaded only here, via ``needs_draw``), and the
+            bootstrap that starts the measure feature once the map is ready.
+        """
+        doc = HtmlDocument.measure({"mapOptions": {}, "calls": []})
+        assert [p.container_id for p in doc.panels] == ["de-map-measure"]
+        assert doc.needs_draw, "measure needs mapbox-gl-draw on the page"
+        html = doc.render()
+        assert 'id="de-measure-readout"' in html, "readout element missing"
+        assert "dist/mapbox-gl-draw" in html, "draw library not loaded"
+        assert "DE.measure" in html, "measure feature not started"
+
+    def test_a_non_measure_document_does_not_load_draw(self):
+        """mapbox-gl-draw is loaded only for a measure page, not for swipe/minimap.
+
+        Test scenario:
+            ``needs_draw`` gates the draw library, so a swipe page is not padded with a library it
+            does not use.
+        """
+        html = HtmlDocument.swipe(
+            {"mapOptions": {}, "calls": []}, {"mapOptions": {}, "calls": []}
+        ).render()
+        # The shared runtime mentions the library by name in the measure code; what must be absent
+        # from a swipe page is the CDN library asset itself.
+        assert "dist/mapbox-gl-draw" not in html, "swipe must not load the draw library"
+
+    def test_tools_follow_the_distance_and_area_flags(self):
+        """``distance``/``area`` select which tools the readout offers.
+
+        Test scenario:
+            A caller measuring only distance should get only the line tool in the started feature's
+            options, so the flag reaches the bootstrap.
+        """
+        html = HtmlDocument.measure(
+            {"mapOptions": {}, "calls": []}, distance=True, area=False
+        ).render()
+        assert '"distance": true' in html and '"area": false' in html
+
+
+class TestMeasureHtml:
+    """``measure_html`` renders a live-measure page from a plain map."""
+
+    def test_embeds_the_map_and_offers_the_readout(self):
+        """The map's state reaches the page and the readout/draw are present.
+
+        Test scenario:
+            The draw control is added by the page's runtime, so a plain map (no ``measure()`` call)
+            is enough; its basemap source and the readout both appear.
+        """
+        pytest.importorskip("maplibre")
+        html = measure_html(WebMap().basemap())
+        assert "basemaps.cartocdn.com" in html, "the map did not reach the page"
+        assert "de-measure-readout" in html and "DE.measure" in html
+
+    def test_save_measure_writes_a_file(self, tmp_path):
+        """``save_measure`` writes a real HTML document.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+        """
+        pytest.importorskip("maplibre")
+        out = save_measure(WebMap().basemap(), str(tmp_path / "measure.html"))
+        text = out.read_text(encoding="utf-8")
+        assert text.startswith("<!DOCTYPE html>") and "de-measure-wrap" in text

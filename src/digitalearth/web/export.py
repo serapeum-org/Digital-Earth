@@ -610,3 +610,79 @@ def save_minimap(
     out = pathlib.Path(path)
     out.write_text(html, encoding="utf-8")
     return out
+
+
+def measure_html(
+    map_: Any,
+    *,
+    distance: bool = True,
+    area: bool = True,
+    title: str = DEFAULT_TITLE,
+    height: int = 600,
+) -> str:
+    """Return a standalone HTML page with a live on-map measure readout (WB-17).
+
+    The page adds a draw control; drawing a line shows its geodesic length and drawing a polygon
+    shows its area, updated live in an on-map panel. It is rendered through our own
+    :class:`~digitalearth.web.htmldoc.HtmlDocument` because the readout needs the live map object
+    and injected page JS, which py-maplibregl's sealed export does not expose. The readout is a
+    convenience; the exact geodesic measure is still ``WebMap.drawn_features()`` through pyramids.
+
+    The map is passed **without** calling :meth:`~digitalearth.web.decoration.DecorationMixin.measure`
+    — the draw control is added by this page's own runtime, so a plain map is all that is needed.
+
+    Args:
+        map_: The map to measure on (a :class:`~digitalearth.web.map.WebMap`).
+        distance: Offer the line tool and show the drawn length.
+        area: Offer the polygon tool and show the drawn area.
+        title: The HTML document title.
+        height: The map height in CSS pixels.
+
+    Returns:
+        The standalone HTML document as a string.
+    """
+    from digitalearth.web.htmldoc import HtmlDocument
+
+    document = HtmlDocument.measure(
+        map_._build_map_widget().to_dict(),
+        height=height,
+        distance=distance,
+        area=area,
+    )
+    return document.render(title=title)
+
+
+def save_measure(
+    map_: Any,
+    path: str,
+    *,
+    distance: bool = True,
+    area: bool = True,
+    title: str = DEFAULT_TITLE,
+    height: int = 600,
+    offline: bool = False,
+) -> pathlib.Path:
+    """Write a WB-17 live-measure page (see :func:`measure_html`) to ``path``.
+
+    Args:
+        map_: The map to measure on.
+        path: Where to write the ``.html`` file.
+        distance: Offer the line tool and show the drawn length.
+        area: Offer the polygon tool and show the drawn area.
+        title: The HTML document title.
+        height: The map height in CSS pixels.
+        offline: When ``True``, inline the CDN assets (both maplibre-gl and mapbox-gl-draw) so the
+            page opens with no network (best-effort, fetched once at save time).
+
+    Returns:
+        The :class:`pathlib.Path` written.
+
+    Raises:
+        RuntimeError: when ``offline=True`` and an asset cannot be fetched (no network at save time).
+    """
+    html = measure_html(map_, distance=distance, area=area, title=title, height=height)
+    if offline:
+        html = ExportMixin._inline_offline_assets(html)
+    out = pathlib.Path(path)
+    out.write_text(html, encoding="utf-8")
+    return out

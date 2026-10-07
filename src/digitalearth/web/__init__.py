@@ -25,7 +25,9 @@ builder/render method without it raises an actionable ``ImportError`` (``pip ins
 """
 
 from digitalearth.web.export import (
+    measure_html,
     minimap_html,
+    save_measure,
     save_minimap,
     save_swipe,
     swipe_html,
@@ -43,4 +45,6 @@ __all__ = [
     "save_swipe",
     "minimap_html",
     "save_minimap",
+    "measure_html",
+    "save_measure",
 ]
