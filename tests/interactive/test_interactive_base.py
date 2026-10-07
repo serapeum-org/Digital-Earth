@@ -421,7 +421,7 @@ class TestConstructionDefaults:
         )
 
     def test_composition_includes_all_mixins(self):
-        """``InteractiveMap`` composes the base plus all nine capability mixins.
+        """``InteractiveMap`` composes the base plus all ten capability mixins.
 
         Test scenario:
             The MRO must contain every mixin the architecture promises, so later DI tasks
@@ -433,6 +433,7 @@ class TestConstructionDefaults:
         from digitalearth.interactive.dashboard import DashboardMixin
         from digitalearth.interactive.decoration import DecorationMixin
         from digitalearth.interactive.interaction import InteractionMixin
+        from digitalearth.interactive.live import LiveMixin
         from digitalearth.interactive.projection import ProjectionMixin
         from digitalearth.interactive.raster import RasterMixin
         from digitalearth.interactive.temporal import TemporalMixin
@@ -447,6 +448,7 @@ class TestConstructionDefaults:
             TemporalMixin,
             DecorationMixin,
             InteractionMixin,
+            LiveMixin,
             ProjectionMixin,
             AnimationMixin,
             DashboardMixin,

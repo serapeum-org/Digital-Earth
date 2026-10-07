@@ -547,6 +547,10 @@ class InteractiveMapBase:
         # several at once; `_draw_stream` stays the most recent for the `drawn_geometry` single-tool read.
         self._draw_streams: list[Any] = []
         self._draw_stream: Any = None
+        # Live-layer streams (IN-17), by layer id: a HoloViews Pipe or Buffer whose `.send()` pushes new
+        # data into a `live()` layer so only the changed glyphs redraw. Empty until a live layer is added;
+        # let go on `close()` with the rest of the engine state.
+        self._live_streams: dict[str, Any] = {}
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
         # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
         self._built_mesh: tuple | None = None
@@ -884,6 +888,19 @@ class InteractiveMapBase:
         # policy the static and web tiers settled on for the same reason.
         kept = set(candidate.layers.ids)
         self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
+        # Reconcile the per-layer side tables to the surviving ids, here — the one path every tree mutation
+        # shares — so a layer dropped by `draw_figure`/`replace_layer` cannot leave a stale credential, held
+        # value or live stream behind (review round-2 M1). Done after `apply`, which reads the held/keys of
+        # the layers it draws, exactly as `remove_layer` pops them after the change for the same reason.
+        self._layer_keys = {
+            key: value for key, value in self._layer_keys.items() if key in kept
+        }
+        self._layer_held = {
+            key: value for key, value in self._layer_held.items() if key in kept
+        }
+        self._live_streams = {
+            key: value for key, value in self._live_streams.items() if key in kept
+        }
 
     def draw_figure(self, figure: FigureSpec) -> Self:
         """Draw a figure into this map, bringing it from whatever it showed before.
@@ -1072,6 +1089,7 @@ class InteractiveMapBase:
         # so dropping them first would leave the reconcile unable to draw the layer it is taking off.
         self._layer_keys.pop(layer_id, None)
         self._layer_held.pop(layer_id, None)
+        self._live_streams.pop(layer_id, None)
         self._issued_ids.discard(layer_id)
         if self._last_layer_id == layer_id:
             remaining = self._layer_tree.ids
@@ -1528,6 +1546,7 @@ class InteractiveMapBase:
             forget_object(ref.uri)
         self._layer_keys.pop(layer_id, None)
         self._layer_held.pop(layer_id, None)
+        self._live_streams.pop(layer_id, None)
         if self._last_layer_id == layer_id:
             remaining = self._layer_tree.ids
             self._last_layer_id = remaining[-1] if remaining else None
@@ -2288,6 +2307,7 @@ class InteractiveMapBase:
         forget_namespace(self._objects_ns)
         self._layer_keys.clear()
         self._layer_held.clear()
+        self._live_streams.clear()
 
     def __enter__(self) -> Self:
         """Enter the runtime context, returning the map.
