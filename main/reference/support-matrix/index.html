@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4200,6 +4200,13 @@ declaration. <code>✓</code> means the backend supports it; <code>—</code> me
 <td>—</td>
 </tr>
 <tr>
+<td><code>vector_tiles</code></td>
+<td>—</td>
+<td>✓</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
 <td><code>vectors</code></td>
 <td>✓</td>
 <td>—</td>
@@ -4466,6 +4473,27 @@ declaration. <code>✓</code> means the backend supports it; <code>—</code> me
 <td>—</td>
 </tr>
 <tr>
+<td><code>geocoder</code></td>
+<td>—</td>
+<td>✓</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>geolocate</code></td>
+<td>—</td>
+<td>✓</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>globe_control</code></td>
+<td>—</td>
+<td>✓</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
 <td><code>layer_switcher</code></td>
 <td>—</td>
 <td>✓</td>
@@ -4502,6 +4530,13 @@ declaration. <code>✓</code> means the backend supports it; <code>—</code> me
 </tr>
 <tr>
 <td><code>scale_bar</code></td>
+<td>—</td>
+<td>✓</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>terrain_control</code></td>
 <td>—</td>
 <td>✓</td>
 <td>—</td>
@@ -4548,8 +4583,9 @@ omissions with no positive counterpart on any backend, so they appear only in th
 </ul>
 <h3 id="web"><a class="toclink" href="#web">web</a><a class="headerlink" href="#web" title="Permanent link">#</a></h3>
 <ul>
-<li><strong><code>coastline_overlay</code></strong> — coastlines come with the basemap style a caller picks, rather than as a Natural
-  Earth layer the tier draws</li>
+<li><strong><code>coastline_overlay</code></strong> — the tier draws coastlines and borders as Natural-Earth overlay layers through
+  coastlines() and borders(); what is absent is the quickmap(coastlines=True) overlay kwarg, whose cross-tier
+  wiring is tracked in #398</li>
 <li><strong><code>domain</code></strong> — a web map pans and zooms, so it is framed by a centre and a zoom rather than by a region</li>
 <li><strong><code>export_vector</code></strong> — a page is a raster canvas; a PDF of it would be a screenshot in a wrapper</li>
 <li><strong><code>mesh</code></strong> — a raster is drawn as an image rather than as cells, which is what a tile pipeline expects</li>
