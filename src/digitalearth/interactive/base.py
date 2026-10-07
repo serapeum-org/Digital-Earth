@@ -888,6 +888,19 @@ class InteractiveMapBase:
         # policy the static and web tiers settled on for the same reason.
         kept = set(candidate.layers.ids)
         self._sources = {key: ref for key, ref in self._sources.items() if key in kept}
+        # Reconcile the per-layer side tables to the surviving ids, here — the one path every tree mutation
+        # shares — so a layer dropped by `draw_figure`/`replace_layer` cannot leave a stale credential, held
+        # value or live stream behind (review round-2 M1). Done after `apply`, which reads the held/keys of
+        # the layers it draws, exactly as `remove_layer` pops them after the change for the same reason.
+        self._layer_keys = {
+            key: value for key, value in self._layer_keys.items() if key in kept
+        }
+        self._layer_held = {
+            key: value for key, value in self._layer_held.items() if key in kept
+        }
+        self._live_streams = {
+            key: value for key, value in self._live_streams.items() if key in kept
+        }
 
     def draw_figure(self, figure: FigureSpec) -> Self:
         """Draw a figure into this map, bringing it from whatever it showed before.

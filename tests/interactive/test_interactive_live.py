@@ -99,6 +99,15 @@ class TestLiveLayerLifecycle:
         m.close()
         assert m._live_streams == {}
 
+    def test_draw_figure_that_drops_a_live_layer_drops_its_stream(self):
+        """A `_change`/`draw_figure` that drops the live layer must not leave a detached stream (round-2 M1)."""
+        m = InteractiveMap().live(kind="points", name="cars")
+        m.draw_figure(InteractiveMap().figure_spec)  # an empty figure drops every layer
+        frame = _xy((0.0, 0.0))
+        assert "cars" not in m._live_streams
+        with pytest.raises(KeyError, match="no live layer"):
+            m.push("cars", frame)
+
 
 class TestLiveKeying:
     """Each live layer's stream is keyed by its own id, even when ids are auto-generated (I1)."""
