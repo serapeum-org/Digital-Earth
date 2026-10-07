@@ -14,6 +14,7 @@ non-uniform spacing. The one subtlety VTK imposes: scalars/elevation attach in *
 (``ravel(order="F")``) to line up with the structured point ordering — C-order silently mirrors the terrain.
 """
 
+import os
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -98,6 +99,62 @@ def _terrain_mesh(
     return grid
 
 
+def _as_texture(image: Any) -> "pv.Texture":
+    """Turn an image into a :class:`pyvista.Texture` to drape on the relief (#202).
+
+    Args:
+        image: The imagery to drape — a path to an image file (read through PyVista/VTK, image I/O rather than
+            GIS), a numpy ``(H, W, 3)``/``(H, W, 4)`` RGB(A) array, or a band-first ``(3|4, H, W)`` array as
+            pyramids hands a multi-band raster's ``values`` (transposed to band-last here). A non-``uint8``
+            array is scaled into ``0-255`` by its own range.
+
+    Returns:
+        pyvista.Texture: the texture to pass to ``add_mesh(texture=...)``.
+
+    Raises:
+        ValueError: if an array is not 3-D with 3 or 4 colour channels.
+    """
+    import pyvista as pv
+
+    if isinstance(image, (str, os.PathLike)):
+        return pv.read_texture(str(image))
+    arr = np.asarray(image.values if hasattr(image, "values") else image)
+    # Band-first (bands, rows, cols), as a pyramids raster's `.values` is → band-last for an RGB image.
+    if arr.ndim == 3 and arr.shape[0] in (3, 4) and arr.shape[2] not in (3, 4):
+        arr = np.transpose(arr, (1, 2, 0))
+    if arr.ndim != 3 or arr.shape[2] not in (3, 4):
+        raise ValueError(
+            f"terrain(texture=) expects an (H, W, 3|4) RGB(A) image, got shape {arr.shape}"
+        )
+    if arr.dtype != np.uint8:
+        values = arr.astype("float64")
+        low, high = float(np.nanmin(values)), float(np.nanmax(values))
+        scaled = (values - low) / (high - low) if high > low else np.zeros_like(values)
+        arr = (scaled * 255.0).astype("uint8")
+    return pv.Texture(arr)
+
+
+def _drape_uv(mesh: "pv.StructuredGrid") -> None:
+    """Attach planar ``(u, v)`` texture coordinates to ``mesh`` from its own x/y extent (#202).
+
+    Each node's ``u``/``v`` is its x/y position normalised into ``[0, 1]`` across the surface's bounding box,
+    so an image drapes orthographically over the relief — the planar case; the spherical/antimeridian case is
+    left to a later pass (`three_d-missing-functionality.md` item 7).
+
+    Args:
+        mesh: The terrain surface to texture, modified in place.
+    """
+    points = mesh.points
+
+    def _normalise(axis: np.ndarray) -> np.ndarray:
+        low, high = float(axis.min()), float(axis.max())
+        return (axis - low) / (high - low) if high > low else np.zeros_like(axis)
+
+    mesh.active_texture_coordinates = np.column_stack(
+        [_normalise(points[:, 0]), _normalise(points[:, 1])]
+    )
+
+
 def _color_encoding(scalars: Any, kwargs: dict[str, Any]) -> dict[str, Encoding] | None:
     """Return the colour encoding a terrain publishes, or `None` for a genuinely flat surface.
 
@@ -158,6 +215,7 @@ class TerrainMixin(_MixinBase):
         z_exaggeration: float | None = None,
         cmap: str | None = None,
         scalars: str | None = ELEVATION,
+        texture: Any = None,
         big_data_threshold: int | None = None,
         **kwargs: Any,
     ) -> Any:
@@ -195,7 +253,13 @@ class TerrainMixin(_MixinBase):
                 it from the variable through :func:`~digitalearth.base.autostyle.auto_style` — the same lookup
                 the static, interactive and web tiers use, so a DEM/field is drawn in the same colours on all
                 four — falling back to ``"terrain"`` only when the lookup yields nothing.
-            scalars: Scalar array to colour by (default the elevation); ``None`` for a flat colour.
+            scalars: Scalar array to colour by (default the elevation); ``None`` for a flat colour. Ignored
+                when ``texture`` is given — a draped image colours the surface instead of a scalar ramp.
+            texture: Imagery to drape over the relief (#202) — a path to an image file, a numpy
+                ``(H, W, 3|4)`` RGB(A) array, or a band-first ``(3|4, H, W)`` array as a pyramids RGB raster's
+                ``values``. The image is mapped orthographically from the surface's own x/y extent (planar
+                draping); ``None`` (the default) colours by ``scalars`` as before. When given, no colour key
+                is published, since the surface is coloured by the image rather than by a field.
             big_data_threshold: Cells above which the surface is simplified with ``decimate_pro`` before it is
                 drawn (#207). ``None`` (the default) uses the scene's
                 :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a DEM at or under the budget
@@ -265,10 +329,12 @@ class TerrainMixin(_MixinBase):
             selection=Selection(band=(band,)),
             # The array the surface's colour comes from, so a key over this layer explains that array and is
             # titled after it (order 24). No scale: VTK holds the mapping from the array's own range through
-            # its lookup table, which is what `scale=None` means.
-            encodings=_color_encoding(scalars, kwargs),
+            # its lookup table, which is what `scale=None` means. A draped image is not a field, so a textured
+            # terrain publishes no colour encoding — a key over it would label nothing.
+            encodings=None if texture is not None else _color_encoding(scalars, kwargs),
             cmap=cmap,
             scalars=scalars,
+            texture=texture,
             big_data_threshold=self._resolve_big_data_threshold(
                 big_data_threshold, caller="Scene3D.terrain()"
             ),
@@ -296,6 +362,7 @@ def draw_terrain(scene: Any, data: Any, layer: LayerSpec) -> Any:
     """
     props = drawing_props(layer.symbology.props)
     cmap = props.pop("cmap", None)
+    texture = props.pop("texture", None)
     budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
     band = layer.selection.band[0] if layer.selection.band else 1
     placed = scene._place(data, layer="terrain")
@@ -311,13 +378,17 @@ def draw_terrain(scene: Any, data: Any, layer: LayerSpec) -> Any:
     # conversion the scene's CRS dictates — the horizontal units every layer is drawn in — and the
     # layer's own only when the scene has none; exaggeration is the view scale, kept on the camera.
     units_crs = src.crs if scene.display_crs is None else scene.display_crs
-    mesh = reduce_surface(
-        _terrain_mesh(
-            src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
-        ),
-        budget,
-        kind="terrain",
+    surface = _terrain_mesh(
+        src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
     )
+    if texture is not None:
+        # Attach the planar UV before the big-data reduction, so a decimated surface still carries its
+        # texture coordinates. A draped image colours the surface, so the elevation scalar is dropped.
+        _drape_uv(surface)
+    mesh = reduce_surface(surface, budget, kind="terrain")
+    if texture is not None:
+        props.pop("scalars", None)
+        return mesh, scene.plotter.add_mesh(mesh, texture=_as_texture(texture), **props)
     return mesh, scene.plotter.add_mesh(
         mesh, cmap=scene._auto_cmap(src, cmap, fallback="terrain"), **props
     )
