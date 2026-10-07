@@ -299,6 +299,7 @@ class TestComposedClassMro:
                     "TemporalMixin",
                     "DecorationMixin",
                     "InteractionMixin",
+                    "LiveMixin",
                     "ProjectionMixin",
                     "AnimationMixin",
                     "DashboardMixin",

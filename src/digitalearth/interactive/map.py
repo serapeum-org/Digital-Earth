@@ -16,6 +16,7 @@ from digitalearth.interactive.bigdata import BigDataMixin
 from digitalearth.interactive.dashboard import DashboardMixin
 from digitalearth.interactive.decoration import DecorationMixin
 from digitalearth.interactive.interaction import InteractionMixin
+from digitalearth.interactive.live import LiveMixin
 from digitalearth.interactive.projection import ProjectionMixin
 from digitalearth.interactive.raster import RasterMixin
 from digitalearth.interactive.temporal import TemporalMixin
@@ -29,6 +30,7 @@ class InteractiveMap(
     TemporalMixin,
     DecorationMixin,
     InteractionMixin,
+    LiveMixin,
     ProjectionMixin,
     AnimationMixin,
     DashboardMixin,
