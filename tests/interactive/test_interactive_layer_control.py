@@ -148,8 +148,9 @@ class TestTheLayersToInclude:
             list it.
         """
         keep = two_layers.layer_ids[0]
+        left_out = two_layers.layer_ids[1]
         two_layers.layer_control(layers=[keep])
-        composed = two_layers._compose_visible_layers([], always=(1,))
+        composed = two_layers._compose_visible_layers([], always=(left_out,))
         assert len(composed.dimension_values(0)) > 0
 
     def test_an_unknown_layer_is_refused(self, two_layers):
@@ -306,19 +307,39 @@ class TestAskingForABasemapSwitchOutright:
 
 
 class TestReorderIsNotAControl:
-    """``reorder`` names a manipulation this tier cannot do, so it is refused rather than exposed."""
+    """``reorder`` is its own flag, not a shared control — only this tier builds the buttons (IN-1)."""
 
-    def test_reorder_true_is_still_refused(self, two_layers):
-        """#242 — an inert flag is worse than a missing one, and this one stays refused.
+    def test_reorder_true_builds_move_buttons(self, two_layers):
+        """IN-1 — the flag now adds ``▲``/``▼`` buttons instead of refusing (it was #242's inert flag).
 
         Args:
             two_layers: The map under test.
         """
-        with pytest.raises(NotImplementedError, match="reorder"):
-            two_layers.layer_control(reorder=True)
+        import panel as pn
+
+        built = two_layers.layer_control(reorder=True)
+        buttons = built.layer_control_panel.select(pn.widgets.Button)
+        # Two layers → an up and a down button each.
+        assert len(buttons) == 4, [b.label for b in buttons]
+
+    def test_a_down_button_restacks_the_overlay(self, two_layers):
+        """Clicking ``▼`` on the top layer moves it under the other — the operation the widget drives.
+
+        Args:
+            two_layers: The map under test.
+        """
+        import panel as pn
+
+        before = list(two_layers.layer_ids)
+        built = two_layers.layer_control(reorder=True)
+        downs = [b for b in built.layer_control_panel.select(pn.widgets.Button) if b.label.startswith("▼")]
+        # The ▼ for the top layer (drawn last) nudges it one place earlier in draw order.
+        top_down = next(b for b in downs if b.label.endswith(before[-1]))
+        top_down.clicks += 1
+        assert two_layers.layer_ids == [before[-1], before[0]]
 
     def test_reorder_is_not_in_the_shared_control_vocabulary(self, two_layers):
-        """Naming it through ``controls=`` would read as a control the tier exposes.
+        """Naming it through ``controls=`` would read as a control every tier exposes; only this one does.
 
         Args:
             two_layers: The map under test.

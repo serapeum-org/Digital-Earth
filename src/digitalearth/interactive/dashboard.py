@@ -482,10 +482,11 @@ class DashboardMixin(_MixinBase):
     def _control_layer_indices(self, layers: Sequence[str] | None) -> tuple[int, ...]:
         """Return the positions of the layers a control offers, in draw order.
 
-        Positions rather than ids, because the toggle labels are indexed (``"0: Image"``) and
-        :meth:`_compose_visible_layers` reads the index back out of the label it was handed.
-        ``self.layers`` and :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` are built in
-        step — each element is inserted at the position its id holds in the tree — so one indexes the other.
+        Positions, because the human-readable toggle label still shows the build-time index (``"0: Image"``);
+        the control's *value*, though, is the layer id the position maps to (IN-1), so
+        :meth:`_compose_visible_layers` reads ids, never a parsed position. ``self.layers`` and
+        :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` are built in step — each element
+        is inserted at the position its id holds in the tree — so one indexes the other.
 
         Args:
             layers: The ids the caller wants offered, or ``None`` for every layer on the map.
@@ -510,14 +511,17 @@ class DashboardMixin(_MixinBase):
         return tuple(sorted(available.index(layer_id) for layer_id in wanted))
 
     def _layer_control_widgets(
-        self, pn: Any, wanted: Sequence[str], *, labels: list, requested: bool
+        self, pn: Any, wanted: Sequence[str], *, label_to_id: dict, requested: bool
     ) -> dict:
         """Build the widgets a layer control exposes, keyed by the control each answers to.
 
         Args:
             pn: The imported panel module.
             wanted: The controls to build, from :data:`~digitalearth.base.controls.LAYER_CONTROLS`.
-            labels: The ``"i: Type"`` label per offered layer, which the toggle group lists.
+            label_to_id: The ``"i: Type"`` label → layer **id** mapping for each offered layer, in draw
+                order. The toggle group lists the labels but carries the ids as its values, so toggling,
+                reordering and removal stay keyed to the layer rather than to the position it held when the
+                control was built (IN-1).
             requested: Whether the controls were named outright, which decides how a basemap switch on a
                 non-Web-Mercator map is answered — see :meth:`_basemap_select`.
 
@@ -525,7 +529,14 @@ class DashboardMixin(_MixinBase):
             ``{control: widget}`` in build order, so the layout lays them out in it. ``"basemap"`` is absent
             when the switch was offered unprompted and the display CRS cannot take it.
         """
-        built = {"visibility": pn.widgets.CheckBoxGroup(value=labels, options=labels)}
+        # Options are a `{label: id}` mapping, so the group's *value* is the list of layer ids rather than
+        # the list of labels — the toggle carries the id, and `_compose_visible_layers` never has to parse a
+        # position back out of a label that a later reorder or removal would have invalidated (IN-1).
+        built = {
+            "visibility": pn.widgets.CheckBoxGroup(
+                value=list(label_to_id.values()), options=dict(label_to_id)
+            )
+        }
         if "opacity" in wanted:
             built["opacity"] = pn.widgets.FloatSlider(
                 label="Opacity", start=0.0, end=1.0, value=1.0
@@ -553,11 +564,15 @@ class DashboardMixin(_MixinBase):
 
         The toggle order follows **draw** order — the order `layers` is in, which is the band each layer's
         kind declares and then the order they were built in within that band, so a basemap added last is
-        still the first toggle. Drag-reorder is **not implemented**, and the reason is the **widget**, not
-        the operation: reordering a layer is ``move_layer(layer_id, index)``, which this tier has, but no tier
-        builds the drag control a switcher would need to expose it — so ``reorder=True`` is refused outright
-        rather than accepted and ignored. That is also why ``reorder`` is not one of the ``controls``: it would
-        advertise a control every tier would then have to refuse.
+        still the first toggle. ``reorder=True`` adds a ``▲``/``▼`` button per offered layer that moves it
+        within its band (``move_layer(layer_id, index)``) and re-stacks the overlay live (IN-1); it is **off
+        by default** because the buttons are furniture most maps do not need. It is still not one of the
+        ``controls``: those are the vocabulary the two tiers share, and only this tier builds the reorder
+        buttons, so advertising it there would make the web tier refuse a name this one honours.
+
+        The control is keyed by layer **id**, not by the position a layer held when it was built: toggling,
+        reordering and removing all address the layer, so the switch keeps working after the overlay is
+        re-stacked or a layer is taken off the map.
 
         Bokeh renders tiles in EPSG:3857 only, so the basemap switch is Web-Mercator-only — and which
         way that lands depends on whether it was *asked for*. Left at the default ``controls`` the switch
@@ -581,7 +596,8 @@ class DashboardMixin(_MixinBase):
                 :data:`~digitalearth.base.controls.LAYER_CONTROLS`; ``None`` (default) offers all three, and
                 ``"visibility"`` cannot be dropped. Naming a control is an explicit request — see the
                 basemap policy above.
-            reorder: Must stay ``False``; ``True`` raises ``NotImplementedError``.
+            reorder: Add a ``▲``/``▼`` reorder button per offered layer (IN-1). ``False`` (default) builds
+                visibility/opacity/basemap only.
 
         Returns:
             The same map instance, so builder calls chain. The panel is :attr:`layer_control_panel`.
@@ -592,13 +608,11 @@ class DashboardMixin(_MixinBase):
                 build; when there are no layers to control; when a ``layers`` id is not on this map; or when
                 ``"basemap"`` is named on a map whose display CRS is not EPSG:3857 (Bokeh renders tiles in
                 Web Mercator only).
-            NotImplementedError: when ``reorder=True`` is passed — reordering is not implemented,
-                and the flag is refused rather than accepted and ignored (roadmap IN-1; the static
-                twin is #216).
 
         Examples:
-            - One toggle per registered layer, labelled by index and element type, in draw order — and the
-              map comes back, so the control is part of the chain rather than the end of it:
+            - One toggle per registered layer, labelled by index and element type, in draw order, carrying
+              each layer's id as its value — and the map comes back, so the control is part of the chain
+              rather than the end of it:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
@@ -606,20 +620,16 @@ class DashboardMixin(_MixinBase):
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
                 >>> m = InteractiveMap().field(dem).points(fc).layer_control()  # doctest: +SKIP
-                >>> m.layer_control_panel[1][0].options                        # doctest: +SKIP
+                >>> list(m.layer_control_panel[1][0].options)                  # doctest: +SKIP
                 ['0: Image', '1: Points']
 
                 ```
-            - ``reorder=True`` is refused outright: the operation exists as ``move_layer``, but no tier
-              builds the drag control, and silently ignoring the flag was how the control looked inert:
+            - ``reorder=True`` adds the move buttons, so the overlay can be re-stacked from the control:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem)                            # doctest: +SKIP
-                >>> try:                                                       # doctest: +SKIP
-                ...     m.layer_control(reorder=True)
-                ... except NotImplementedError as error:
-                ...     print(str(error).split(" — ")[0])
-                layer_control(reorder=True) is not implemented
+                >>> m = InteractiveMap().field(dem).points(fc).layer_control(reorder=True)  # doctest: +SKIP
+                >>> bool(m.layer_control_panel.select(type(m.layer_control_panel[1][-1][0])))  # doctest: +SKIP
+                True
 
                 ```
             - Unprompted, the switch is furniture: on a Web-Mercator map the controls are toggles +
@@ -655,14 +665,6 @@ class DashboardMixin(_MixinBase):
         # and the flush inserts it at index 0 — so labels frozen beforehand named the layer one place to
         # their left, and the control drew the basemap where the data should be (review H10).
         self._flush_deferred_tiles()
-        if reorder:
-            raise NotImplementedError(
-                "layer_control(reorder=True) is not implemented — the operation is move_layer(layer_id, "
-                "index), which this tier has, but no tier builds the drag control a switcher would need to "
-                "expose it. Pass reorder=False "
-                "(the default); the toggles follow draw order — each layer's band, then the order you "
-                "built in within that band."
-            )
         check_control_position(position)
         wanted, requested = _controls_named(
             controls, caller="InteractiveMap.layer_control()"
@@ -672,17 +674,26 @@ class DashboardMixin(_MixinBase):
                 "layer_control() needs at least one layer — add a builder call first"
             )
         offered = self._control_layer_indices(layers)
-        labels = [f"{index}: {type(self.layers[index]).__name__}" for index in offered]
+        # Label → id, in draw order. The label still shows the build-time position for a human to read, but
+        # the control carries the **id**: a toggle, a reorder or a removal addresses the layer, not the
+        # position it happened to hold when the control was built (IN-1).
+        offered_ids = [self.layer_ids[index] for index in offered]
+        label_to_id = {
+            f"{index}: {type(self.layers[index]).__name__}": layer_id
+            for index, layer_id in zip(offered, offered_ids)
+        }
         widgets = self._layer_control_widgets(
-            pn, wanted, labels=labels, requested=requested
+            pn, wanted, label_to_id=label_to_id, requested=requested
         )
         # A layer nobody offered is not a layer the viewer chose to hide, so it is composed in whatever the
         # toggles say — the same thing `layers=` means on the web tier, where the switch lists a subset of a
-        # map that still draws all of it.
+        # map that still draws all of it. Named by id, so a reorder cannot turn "always on" into a different
+        # layer than the one the caller left off the switch.
+        offered_set = set(offered_ids)
         bound: dict = {
             "shown": widgets["visibility"],
             "always": tuple(
-                index for index in range(len(self.layers)) if index not in offered
+                layer_id for layer_id in self.layer_ids if layer_id not in offered_set
             ),
         }
         if "opacity" in widgets:
@@ -690,16 +701,83 @@ class DashboardMixin(_MixinBase):
         if "basemap" in widgets:
             bound["basemap"] = widgets["basemap"]
         view = pn.bind(self._compose_visible_layers, **bound)
+        controls_built = list(widgets.values())
+        if reorder:
+            # Reordering is `move_layer(layer_id, index)`, which this tier has; what no tier had was a
+            # widget to drive it (#242). A pair of up/down buttons per offered layer is that widget: each
+            # click moves the layer within its band and re-triggers the composed view, so the overlay
+            # re-stacks live. The toggles keep working across the move because they carry ids, not positions.
+            controls_built.append(
+                self._reorder_controls(pn, offered_ids, widgets["visibility"])
+            )
         # The corner, as far as a row of two cells can honour one: the side is the order of the cells, and
         # the top/bottom half is the column's own alignment across the row.
         column = pn.Column(
-            *widgets.values(), align="start" if position.startswith("top") else "end"
+            *controls_built, align="start" if position.startswith("top") else "end"
         )
         body = pn.panel(view)
         self._layer_control_panel = (
             pn.Row(column, body) if position.endswith("left") else pn.Row(body, column)
         )
         return self
+
+    def _reorder_controls(
+        self, pn: Any, offered_ids: Sequence[str], trigger: Any
+    ) -> Any:
+        """Build the per-layer up/down reorder buttons for ``layer_control(reorder=True)`` (IN-1).
+
+        Each offered layer gets a ``▲``/``▼`` pair whose click moves it one place within its band
+        (:meth:`~digitalearth.interactive.base.InteractiveMapBase.move_layer`) and then re-triggers the
+        composed view by poking ``trigger`` — the visibility group the bound compose function reads — so the
+        overlay re-stacks without rebuilding the control. A move that would leave the layer's band is a no-op
+        (``move_layer`` raises ``IndexError`` for it), so the end buttons simply do nothing at the ends.
+
+        Args:
+            pn: The imported panel module.
+            offered_ids: The ids the control offers, in draw order.
+            trigger: The widget whose ``value`` the composed view is bound to; poked after each move so the
+                view recomposes in the new order.
+
+        Returns:
+            A ``panel.Column`` of one ``▲``/``▼`` button row per offered layer, labelled by id.
+        """
+
+        def _mover(layer_id: str, delta: int) -> Any:
+            """Return the click handler that nudges ``layer_id`` by ``delta`` places in draw order.
+
+            Args:
+                layer_id: The layer the button moves.
+                delta: ``-1`` to move down the overlay (drawn earlier), ``+1`` to move up (drawn later).
+
+            Returns:
+                A ``callback(event)`` for ``Button.on_click``.
+            """
+
+            def _move(_event: Any) -> None:
+                """Move the layer and re-trigger the composed view, ignoring a move out of its band.
+
+                Args:
+                    _event: The Panel button event, unused — the layer and direction are captured above.
+                """
+                order = self.layer_ids
+                if layer_id not in order:  # removed since the control was built
+                    return
+                try:
+                    self.move_layer(layer_id, order.index(layer_id) + delta)
+                except IndexError:  # already at the end of its band — nothing to do
+                    return
+                trigger.param.trigger("value")
+
+            return _move
+
+        rows = []
+        for layer_id in offered_ids:
+            up = pn.widgets.Button(label=f"▲ {layer_id}", width=110)
+            down = pn.widgets.Button(label=f"▼ {layer_id}", width=110)
+            up.on_click(_mover(layer_id, 1))
+            down.on_click(_mover(layer_id, -1))
+            rows.append(pn.Row(up, down))
+        return pn.Column(*rows)
 
     def _basemap_select(self, pn: Any, *, requested: bool) -> Any:
         """Build the layer-control basemap ``Select``, or ``None`` on a non-Web-Mercator map.
@@ -734,10 +812,10 @@ class DashboardMixin(_MixinBase):
 
     def _compose_visible_layers(
         self,
-        shown: list,
+        shown: Sequence[str],
         op: float = 1.0,
         basemap: Any = None,
-        always: Sequence[int] = (),
+        always: Sequence[str] = (),
     ) -> Any:
         """Compose the layers named in ``shown`` into a styled overlay (the layer-control view).
 
@@ -747,10 +825,11 @@ class DashboardMixin(_MixinBase):
         is what merging them into one spec did (#300).
 
         Args:
-            shown: The ``"i: Type"`` labels of the visible layers (from the toggle widget).
+            shown: The **ids** of the visible layers (the toggle widget's values — IN-1). An id no longer on
+                the map (removed since the control was built) is skipped rather than raising.
             op: Opacity applied to colour-mapped layers.
             basemap: Provider name from the basemap ``Select``, or ``None`` to leave the basemap as built.
-            always: Positions of the layers the control never offered — ``layer_control(layers=...)`` lists a
+            always: Ids of the layers the control never offered — ``layer_control(layers=...)`` lists a
                 subset, and a layer nobody can toggle is not a layer anybody hid, so it is composed in
                 regardless of ``shown``. Empty when the control offered every layer.
 
@@ -761,13 +840,16 @@ class DashboardMixin(_MixinBase):
         gv, hv = _require_holoviz()
         # The other widget path does this too: a deferred basemap is one of the layers, and composing
         # without flushing drew a map that never had one (review H9). `layer_control` has already flushed,
-        # so this is a no-op there and the indices below still mean what the labels meant.
+        # so this is a no-op there.
         self._flush_deferred_tiles()
-        # Back into draw order, and de-duplicated: the toggles and the always-on set are two ways of naming
-        # positions in `self.layers`, and the overlay has to be built bottom-first either way.
-        indices = sorted(
-            {int(label.split(":")[0]) for label in shown} | {int(i) for i in always}
-        )
+        # Ids → current positions, read fresh each call so a reorder since the control was built is honoured.
+        # De-duplicated and sorted into draw order: the toggles and the always-on set are two ways of naming
+        # layers, and the overlay has to be built bottom-first either way.
+        order = self.layer_ids
+        wanted_ids = {layer_id for layer_id in shown} | {
+            layer_id for layer_id in always
+        }
+        indices = sorted(order.index(layer_id) for layer_id in wanted_ids if layer_id in order)
         chosen = [self.layers[index] for index in indices]
         if not chosen:
             return hv.Overlay([])
