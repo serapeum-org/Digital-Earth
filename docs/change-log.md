@@ -1,5 +1,18 @@
 # Change log
 
+## 0.12.0 (2026-10-07)
+
+### Feat
+
+- **interactive**: streaming / live-updating layers (IN-17) (#425)
+- **interactive**: clear the HoloViz capability backlog (IN-1..IN-18) (#408)
+- **web**: persist the vector time-slider in exported HTML and add a basemap gallery (#407)
+- **web**: add vector tiles, controls, reference lines, MP4 export and cluster styling (#397)
+
+### Fix
+
+- **static**: warn on off-band center=, normalise blank titles, validate inset extent (#394)
+
 ## 0.11.0 (2026-10-05)
 
 ### BREAKING CHANGE
