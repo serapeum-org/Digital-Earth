@@ -269,7 +269,9 @@ class TestPerLayerInteraction:
         frames = points.assign(t=["2020", "2021"])
         m = WebMap().timeslider(frames, kdim="t")
         m.remove_layer(m.layer_ids[0])
-        assert m._temporal is None, "_temporal must be nulled once a series drops below two steps"
+        assert m._temporal is None, (
+            "_temporal must be nulled once a series drops below two steps"
+        )
         kinds = [item.kind for item in m.figure_spec.panels[0].furniture]
         assert "time_slider" not in kinds, (
             f"a one-step remnant must not leave a time_slider furniture, got {kinds}"

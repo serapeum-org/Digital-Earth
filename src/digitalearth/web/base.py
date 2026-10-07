@@ -1799,7 +1799,11 @@ class WebMapBase:
                 **dict(slider.options),
                 "layers": tuple(kept),
                 **(
-                    {"frames": tuple(f for f, held in zip(frames, named) if held != layer_id)}
+                    {
+                        "frames": tuple(
+                            f for f, held in zip(frames, named) if held != layer_id
+                        )
+                    }
                     if len(frames) == len(named)
                     else {}
                 ),
