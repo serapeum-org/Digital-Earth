@@ -11,7 +11,7 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 gpd = pytest.importorskip("geopandas")
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.three_d import Scene3D
@@ -139,6 +139,89 @@ def test_extruded_polygons_public_path_carves_holes():
     # the hole carved, 32 if it were filled.
     surface = scene.layers[0][0].extract_surface(algorithm="dataset_surface")
     assert surface.volume == pytest.approx(24.0)
+    scene.close()
+
+
+def _rivers():
+    """Two line features with a flow value (a tiny lines fixture)."""
+    return gpd.GeoDataFrame(
+        {"flow": [3.0, 7.0]},
+        geometry=[
+            LineString([(0, 0), (1, 1), (2, 0)]),
+            LineString([(0, 2), (2, 2)]),
+        ],
+    )
+
+
+def test_lines_render_one_cell_per_part():
+    """#201: lines() draws LineString features as polylines — one cell per part — and renders."""
+    scene = Scene3D(off_screen=True)
+    actor = scene.lines(_rivers(), width=4.0)
+    assert actor is not None
+    assert len(scene.layers) == 1
+    assert scene.layers[0][0].n_cells == 2  # one polyline cell per feature
+    assert bool(scene.screenshot().any())
+    scene.close()
+
+
+def test_lines_multilinestring_yields_a_cell_per_part():
+    """A MultiLineString contributes one polyline cell per member part."""
+    gdf = gpd.GeoDataFrame(
+        {"flow": [1.0]},
+        geometry=[MultiLineString([[(0, 0), (1, 0)], [(0, 1), (1, 1)]])],
+    )
+    scene = Scene3D(off_screen=True)
+    scene.lines(gdf)
+    assert scene.layers[0][0].n_cells == 2
+    scene.close()
+
+
+def test_lines_colour_by_column_classifies():
+    """column= with a graduated scheme bins the lines into class codes on the mesh (like the 2-D tiers)."""
+    scene = Scene3D(off_screen=True)
+    scene.lines(_rivers(), column="flow", scheme="quantiles", k=2)
+    mesh = scene.layers[0][0]
+    assert VALUE in mesh.cell_data
+    assert sorted({int(v) for v in mesh.cell_data[VALUE]}) == [0, 1]
+    scene.close()
+
+
+def test_lines_lift_a_2d_line_onto_z0():
+    """A 2-D line is lifted onto z=0 so it has a valid 3-D coordinate for the scene."""
+    scene = Scene3D(off_screen=True)
+    scene.lines(_rivers())
+    assert scene.layers[0][0].points[:, 2].tolist() == pytest.approx([0.0] * 5)
+    scene.close()
+
+
+def test_lines_empty_skips_and_warns(caplog):
+    """An empty line collection is skipped with a warning, not a crash."""
+    empty = gpd.GeoDataFrame({"flow": []}, geometry=[])
+    scene = Scene3D(off_screen=True)
+    with caplog.at_level(logging.WARNING):
+        assert scene.lines(empty) is None
+    assert not scene.layers
+    assert "lines" in caplog.text
+    scene.close()
+
+
+def test_lines_reject_non_line_geometry():
+    """lines() refuses a non-line geometry (e.g. a Polygon) with a clear TypeError."""
+    gdf = gpd.GeoDataFrame(
+        {"flow": [1.0]}, geometry=[Polygon([(0, 0), (1, 0), (1, 1)])]
+    )
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(TypeError, match="LineString"):
+        scene.lines(gdf)
+    scene.close()
+
+
+def test_lines_hidden_when_visible_false():
+    """visible=False adds the layer described but drawn hidden, still addressable by id."""
+    scene = Scene3D(off_screen=True)
+    scene.lines(_rivers(), name="rivers", visible=False)
+    assert "rivers" in scene.layer_ids
+    assert scene.renderer.is_visible("rivers") is False
     scene.close()
 
 

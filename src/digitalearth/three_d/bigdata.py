@@ -111,6 +111,12 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "block merges neighbouring arrows into shapes that are no longer arrows; the field is thinned by "
             "passing fewer samples"
         ),
+        "lines": (
+            "a line is a path of segments, not a sampled surface, and decimate_pro refuses a mesh that is not "
+            "all triangles; simplifying a block of polylines would weld separate features together, so lines "
+            "are thinned by dropping vertices or whole features before they are drawn, which is #207's "
+            "remaining ask"
+        ),
         "extrusion": (
             "prisms are combined into an UnstructuredGrid, which PyVista gives no decimate_pro at all, and "
             "simplifying their outer surface would merge separate footprints into one building"

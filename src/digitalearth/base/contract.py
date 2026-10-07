@@ -391,7 +391,10 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                     "a caller's own object is a PyVista mesh or volume, so it is added with add_mesh() or "
                     "add_volume(), each of which records a custom:pyvista layer"
                 ),
-                "lines": "line features in three dimensions — #201",
+                # `lines` was listed here against #201, which has now built it: `Scene3D.lines` draws
+                # LineString/MultiLineString features as 3-D polylines over its own renderer
+                # (`digitalearth.three_d.vector.draw_lines`), with the Core keywords, so it is a drawn kind
+                # (`three_d/capabilities.py`) rather than a pending one.
                 "polygons": "polygons are drawn extruded here; a flat fill is unscheduled",
                 "choropleth": "a classified fill follows polygons, and is unscheduled with them",
                 # `colorbar` ("the scalar bar is PyVista's, and becomes a guide on the encoding") and

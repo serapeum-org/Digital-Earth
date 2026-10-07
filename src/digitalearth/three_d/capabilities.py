@@ -32,6 +32,7 @@ CAPABILITIES = Capabilities(
             "isosurface",
             "vectors",
             "extrusion",
+            "lines",
             "raster",
             # A globe draws its own shoreline onto the sphere — `globe(data)` records one by default — so the
             # tier draws this kind even though it has no standalone coastline builder (review M6).

@@ -1655,6 +1655,7 @@ class Scene3DBase:
         band: Any = None,
         selection: Any = None,
         label: Any = None,
+        visible: bool = True,
         encodings: Mapping[str, Encoding] | None = None,
         **props: Any,
     ) -> Any:
@@ -1673,6 +1674,9 @@ class Scene3DBase:
             band: Where it is drawn relative to the data (#292); `None` takes the kind's own band.
             selection: Which slice of the source it draws.
             label: What a layer switcher would call it.
+            visible: Whether the layer is drawn when it is added. `False` adds it hidden — described and
+                addressable by id, so `set_visible(id, True)` later reveals it without a rebuild — which is
+                what the Core `visible=` keyword means on every tier.
             encodings: The visual channels this layer's data drives, by channel name — today the `color`
                 encoding a builder publishes when its colour comes from a band, a variable or a column
                 (order 24). `None` for a layer whose look is engine keywords alone, which is what publishing
@@ -1708,9 +1712,12 @@ class Scene3DBase:
                 encodings=dict(encodings or {}), props=stored_props(**props)
             ),
         )
-        candidate = self._figure_with(
-            layers=self._figure.layers.add(spec), sources=sources
-        )
+        layers = self._figure.layers.add(spec)
+        if not visible:
+            # Added hidden: the layer is described and keeps its id, and `draw_layer` reads the tree's
+            # visibility and draws the actor hidden — so `set_visible(id, True)` later reveals it with no rebuild.
+            layers = layers.set_visible(layer_id, False)
+        candidate = self._figure_with(layers=layers, sources=sources)
         actor = self._renderer.draw_layer(candidate, layer_id)
         if actor is None:
             # A skipped layer is not kept: `layer_ids` lists what the scene actually draws, and a figure that

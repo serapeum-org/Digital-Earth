@@ -25,7 +25,7 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 import geopandas as gpd  # noqa: E402
-from shapely.geometry import Polygon  # noqa: E402
+from shapely.geometry import LineString, Polygon  # noqa: E402
 
 from digitalearth.base.spec import Scale  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
@@ -82,6 +82,22 @@ def _polygons() -> gpd.GeoDataFrame:
     )
 
 
+def _lines() -> gpd.GeoDataFrame:
+    """Return two line features with a numeric column.
+
+    Returns:
+        The collection `lines` is given.
+    """
+    return gpd.GeoDataFrame(
+        {"value": [1.0, 2.0]},
+        geometry=[
+            LineString([(4.0, 52.0), (5.0, 52.5), (6.0, 52.0)]),
+            LineString([(4.0, 53.0), (6.0, 53.0)]),
+        ],
+        crs=4326,
+    )
+
+
 def _dem():
     """Return the committed raster.
 
@@ -107,6 +123,7 @@ BUILDERS = {
     "isosurface": lambda scene: scene.isosurface(_cube(), isosurfaces=[0.5]),
     "vectors": lambda scene: scene.vectors(np.zeros((2, 3)), np.ones((2, 3))),
     "extrusion": lambda scene: scene.extruded_polygons(_polygons(), height=10.0),
+    "lines": lambda scene: scene.lines(_lines()),
     "raster": lambda scene: scene.globe(_dem()),
     "coastlines": lambda scene: scene.globe(_dem()),
     "text": lambda scene: scene.text(0.0, 0.0, "here"),

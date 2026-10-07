@@ -27,7 +27,7 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 gpd = pytest.importorskip("geopandas")
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
@@ -45,6 +45,7 @@ DRAWS_WITH_KWARGS = {
     "point_cloud": "this drawer's own guard, which names the keyword and the colouring that derives it",
     "vectors": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "extruded_polygons": "`_classify_or_refuse`, which names the keyword and the scheme that derives it",
+    "lines": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
     "isosurface": "`add_mesh(mesh, scalars=FIELD, **props)` — Python's duplicate-keyword TypeError",
     "globe": "geovista's own `add_mesh` call, reached with `scalars` already pinned",
@@ -111,6 +112,21 @@ def _squares():
     )
 
 
+def _lines():
+    """Return two line features with a numeric column.
+
+    Returns:
+        The frame a `lines` layer is built from.
+    """
+    return gpd.GeoDataFrame(
+        {"flow": [3.0, 7.0]},
+        geometry=[
+            LineString([(0, 0), (1, 1), (2, 0)]),
+            LineString([(0, 2), (2, 2)]),
+        ],
+    )
+
+
 def _grid():
     """Return a small `ImageData` carrying a cell field.
 
@@ -146,6 +162,7 @@ def _draw(scene, builder: str, extra: dict):
         "extruded_polygons": lambda: scene.extruded_polygons(
             _squares(), column="pop", height=2.0, **extra
         ),
+        "lines": lambda: scene.lines(_lines(), column="flow", **extra),
         "volume": lambda: scene.volume(_cube(), **extra),
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),
