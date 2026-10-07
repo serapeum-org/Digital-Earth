@@ -62,10 +62,56 @@ class TestBufferLiveLayer:
         m.push("track", _xy((2.0, 2.0)))
         assert len(m.live_stream("track").data) == 2
 
-    def test_a_path_kind_is_accepted(self):
-        """``kind="path"`` builds a growing-track live layer."""
+    def test_a_path_kind_renders_empty_and_after_a_push(self):
+        """``kind="path"`` renders an empty frame and a pushed track (N1 — exercise the draw/push path)."""
         m = InteractiveMap().live(kind="path", name="route")
         assert isinstance(m.live_stream("route"), streams.Pipe)
+        assert len(m.layers[-1][()].dimension_values(0)) == 0  # empty path renders
+        m.push("route", _xy((0.0, 0.0), (1.0, 1.0)))
+        assert len(m.live_stream("route").data) == 2
+        assert len(m.layers[-1][()].dimension_values(0)) == 2  # pushed track renders
+
+
+class TestLiveLayerLifecycle:
+    """A live stream is dropped when its layer goes, so a removed/reused id is no longer live (M1)."""
+
+    def test_remove_layer_drops_the_live_stream(self):
+        """After ``remove_layer`` the id is not a live layer, so ``push`` refuses it."""
+        m = InteractiveMap().live(kind="points", name="cars")
+        m.remove_layer("cars")
+        frame = _xy((0.0, 0.0))
+        assert "cars" not in m._live_streams
+        with pytest.raises(KeyError, match="no live layer"):
+            m.push("cars", frame)
+
+    def test_a_reused_id_is_not_live_after_remove(self):
+        """Re-adding a non-live layer with a freed id does not inherit the old live stream."""
+        m = InteractiveMap().live(kind="points", name="cars")
+        m.remove_layer("cars")
+        m.add_layer(gv.Points([], crs=gv.util.process_crs(m.crs)), name="cars")
+        frame = _xy((0.0, 0.0))
+        with pytest.raises(KeyError, match="no live layer"):
+            m.push("cars", frame)
+
+    def test_close_clears_the_live_streams(self):
+        """``close()`` lets go of every live stream with the rest of the engine state."""
+        m = InteractiveMap().live(kind="points", name="cars")
+        m.close()
+        assert m._live_streams == {}
+
+
+class TestLiveKeying:
+    """Each live layer's stream is keyed by its own id, even when ids are auto-generated (I1)."""
+
+    def test_two_auto_named_live_layers_key_independently(self):
+        """Two unnamed live layers get distinct ids, and a push reaches only the one addressed."""
+        m = InteractiveMap().live(kind="points").live(kind="path")
+        first, second = m.layer_ids[-2], m.layer_ids[-1]
+        assert first != second
+        assert {first, second} <= set(m._live_streams)
+        m.push(first, _xy((0.0, 0.0), (1.0, 1.0)))
+        assert len(m.live_stream(first).data) == 2
+        assert m.live_stream(second).data is None  # untouched
 
 
 class TestLiveRefusals:

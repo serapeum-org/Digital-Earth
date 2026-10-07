@@ -1076,6 +1076,7 @@ class InteractiveMapBase:
         # so dropping them first would leave the reconcile unable to draw the layer it is taking off.
         self._layer_keys.pop(layer_id, None)
         self._layer_held.pop(layer_id, None)
+        self._live_streams.pop(layer_id, None)
         self._issued_ids.discard(layer_id)
         if self._last_layer_id == layer_id:
             remaining = self._layer_tree.ids
@@ -1532,6 +1533,7 @@ class InteractiveMapBase:
             forget_object(ref.uri)
         self._layer_keys.pop(layer_id, None)
         self._layer_held.pop(layer_id, None)
+        self._live_streams.pop(layer_id, None)
         if self._last_layer_id == layer_id:
             remaining = self._layer_tree.ids
             self._last_layer_id = remaining[-1] if remaining else None

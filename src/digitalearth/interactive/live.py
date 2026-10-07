@@ -12,7 +12,7 @@ CRS, like a hand-built element handed to ``add_layer`` — a live feed is pushed
 pyramids on every tick, so reproject once at the source.
 """
 
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.interactive.base import _require_holoviz
 
@@ -62,7 +62,9 @@ class LiveMixin(_MixinBase):
             buffer: ``False`` (default) uses a ``Pipe`` — a push **replaces** the layer's data; ``True`` uses a
                 ``Buffer`` that **appends** each push and keeps the last ``length`` rows.
             length: The sliding-window size for ``buffer=True`` (ignored for a ``Pipe``).
-            name: The caller's own layer id/label; ``None`` generates one from the element kind.
+            name: The caller's own layer id/label. ``None`` generates one from the HoloViews engine name
+                (``holoviews-1``, ``holoviews-2``, …) — it does **not** reflect ``kind``, so name the layer
+                when you want points vs path told apart (and the id is what :meth:`push` addresses).
             visible: Whether the layer is drawn.
             **opts: HoloViews style options applied to every frame of the live element.
 
@@ -134,11 +136,14 @@ class LiveMixin(_MixinBase):
             stream: Any = streams.Buffer(data, length=length)
         else:
             stream = streams.Pipe(data=data)
+        before = set(self.layer_ids)
         dmap = hv.DynamicMap(_draw, streams=[stream])
         self.add_layer(dmap, kind=None, name=name, visible=visible)
-        # `add_layer` has just registered this layer, so `_last_layer_id` is its id (never None here); the
-        # cast tells the checker what the call guarantees.
-        self._live_streams[cast(str, self._last_layer_id)] = stream
+        # Key the stream off the id `add_layer` just issued — the one new id in the tree — rather than off
+        # `_last_layer_id`, which is only the just-added layer while `custom:holoviews` sits in a non-underlay
+        # band (an invariant this mixin does not own). The set difference is exactly that new id (I1).
+        added = [layer_id for layer_id in self.layer_ids if layer_id not in before]
+        self._live_streams[added[-1]] = stream
         return self
 
     def live_stream(self, layer_id: str) -> Any:
