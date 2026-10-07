@@ -30,6 +30,14 @@ from digitalearth.three_d.bigdata import (
 #: Attribute name the field scalar is stored under on the generated grids.
 FIELD = "field"
 
+#: The blending modes :meth:`pyvista.Plotter.add_volume` accepts — how samples along a ray are combined.
+#: ``"composite"`` is front-to-back alpha compositing (the default); ``"maximum"``/``"minimum"`` are
+#: maximum/minimum-intensity projection; ``"average"`` and ``"additive"`` sum. Validated here so an unknown
+#: mode is a clear error naming the choices rather than a VTK failure deep in the renderer.
+VOLUME_BLENDING: frozenset[str] = frozenset(
+    {"composite", "maximum", "minimum", "average", "additive"}
+)
+
 
 def _cube(data: Any) -> np.ndarray:
     """Coerce ``data`` to a 3-D float numpy cube (reading ``DatasetCollection.values`` when present).
@@ -189,6 +197,9 @@ class VolumeMixin(_MixinBase):
         name: Any = None,
         cmap: str = "viridis",
         opacity: Any = "sigmoid",
+        blending: str = "composite",
+        clim: tuple[float, float] | None = None,
+        shade: bool = False,
         origin: tuple[float, float, float] | None = None,
         spacing: tuple[float, float, float] | None = None,
         big_data_threshold: int | None = None,
@@ -200,7 +211,17 @@ class VolumeMixin(_MixinBase):
             data: A 3-D numpy cube, or a pyramids ``DatasetCollection`` whose ``.values`` is a 3-D stack.
             cmap: Colormap for the field.
             opacity: Opacity transfer function — a named ramp (``"sigmoid"``, ``"linear"``, ``"geom"`` …), a
-                scalar, or an array. Controls how much of the field is see-through.
+                scalar, or an array. Controls how much of the field is see-through. A ray-cast volume with the
+                wrong ramp shows a fog bank or nothing, so this is the control that most decides whether the
+                render reads at all.
+            blending: How samples along each ray are combined — one of :data:`VOLUME_BLENDING`:
+                ``"composite"`` (front-to-back alpha, the default), ``"maximum"``/``"minimum"`` (intensity
+                projection), ``"average"`` or ``"additive"``.
+            clim: Fixed ``(low, high)`` colour range for the field. ``None`` lets the lookup table span the
+                data's own range; pinning it is what keeps the colours steady across the frames of an
+                :meth:`~digitalearth.three_d.animation.AnimationMixin.record` so a time stack does not flicker.
+            shade: Whether the volume is lit (gradient shading). Off by default — shading a smooth field can
+                read as noise — but on it gives solid-looking structure a surface-like relief.
             origin: World ``(x, y, z)`` of the cube's lower-left-bottom corner (#198). ``None`` derives it
                 from the data's pyramids ``geotransform`` when it has one, else places the cube at the world
                 origin — so a volume given a georeferenced cube shares a scene with a terrain in the same CRS
@@ -218,7 +239,8 @@ class VolumeMixin(_MixinBase):
             The registered volume actor.
 
         Raises:
-            ValueError: if ``big_data_threshold`` is negative or not a whole number of cells.
+            ValueError: if ``blending`` is not one of :data:`VOLUME_BLENDING`, or if ``big_data_threshold``
+                is negative or not a whole number of cells.
 
         Examples:
             - Volume-render a synthetic 3-D Gaussian blob:
@@ -229,13 +251,17 @@ class VolumeMixin(_MixinBase):
                 >>> xx, yy, zz = np.meshgrid(ax, ax, ax, indexing="ij")
                 >>> cube = np.exp(-(xx**2 + yy**2 + zz**2))
                 >>> scene = Scene3D(off_screen=True)
-                >>> _ = scene.volume(cube)
+                >>> _ = scene.volume(cube, blending="maximum", clim=(0.0, 1.0))
                 >>> len(scene.layers)
                 1
                 >>> scene.close()
 
                 ```
         """
+        if blending not in VOLUME_BLENDING:
+            raise ValueError(
+                f"volume() got blending={blending!r}; choose one of {sorted(VOLUME_BLENDING)}"
+            )
         return self._add_described_layer(
             kind="volume",
             data=data,
@@ -246,6 +272,9 @@ class VolumeMixin(_MixinBase):
             encodings={"color": Encoding.by_field("color", FIELD)},
             cmap=cmap,
             opacity=opacity,
+            blending=blending,
+            clim=clim,
+            shade=shade,
             origin=origin,
             spacing=spacing,
             big_data_threshold=self._resolve_big_data_threshold(

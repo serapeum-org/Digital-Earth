@@ -93,6 +93,29 @@ def test_isosurface_takes_explicit_placement():
     scene.close()
 
 
+def test_volume_rejects_an_unknown_blending_mode():
+    """#TD-11: an unknown blending mode is refused by name, naming the choices."""
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(ValueError, match="blending="):
+        scene.volume(_gaussian_cube(6), blending="bogus")
+    scene.close()
+
+
+def test_volume_accepts_blending_clim_and_shade():
+    """#TD-11: the transfer-function controls are exposed, recorded on the layer, and render."""
+    scene = Scene3D(off_screen=True)
+    actor = scene.volume(
+        _gaussian_cube(8), blending="maximum", clim=(0.0, 1.0), shade=True
+    )
+    assert actor is not None
+    props = scene.figure_spec.layers.get(scene.layer_ids[-1]).symbology.props
+    assert props["blending"] == "maximum"
+    assert tuple(props["clim"]) == (0.0, 1.0)
+    assert props["shade"] is True
+    assert bool(scene.screenshot().any())
+    scene.close()
+
+
 def test_volume_registers_and_renders():
     """volume() ray-casts a cube, registers one layer, and produces a non-empty frame."""
     scene = Scene3D(off_screen=True)
