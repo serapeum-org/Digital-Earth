@@ -17,6 +17,8 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
 - :class:`~digitalearth.three_d.interaction.InteractionMixin` → :meth:`clip_plane` / :meth:`slice_planes` /
   :meth:`threshold` / :meth:`isovalue` / :meth:`slider` / :meth:`enable_picking` (live widgets and picking —
   below the description seam, so they return a handle rather than recording a layer).
+- :class:`~digitalearth.three_d.serve.ServeMixin` → :meth:`serve` (a live, streaming trame view — the
+  alternative to the frozen page :meth:`export_html` writes).
 - :class:`~digitalearth.three_d.animation.AnimationMixin` → :meth:`orbit` / :meth:`record` / :meth:`jupyter`.
 
 Every layer is built from pyramids-sourced numpy + geometry — **never** xarray/rasterio/pyvista-xarray (enforced
@@ -30,6 +32,7 @@ from digitalearth.three_d.globe import GlobeMixin
 from digitalearth.three_d.guides import GuideMixin
 from digitalearth.three_d.interaction import InteractionMixin
 from digitalearth.three_d.point_cloud import PointCloudMixin
+from digitalearth.three_d.serve import ServeMixin
 from digitalearth.three_d.terrain import TerrainMixin
 from digitalearth.three_d.vector import VectorMixin
 from digitalearth.three_d.volume import VolumeMixin
@@ -46,6 +49,7 @@ class Scene3D(
     DecorationMixin,
     GuideMixin,
     InteractionMixin,
+    ServeMixin,
     AnimationMixin,
     Scene3DBase,
 ):

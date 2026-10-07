@@ -73,6 +73,7 @@ NOT_A_DRAWING_CALL = {
     "isovalue": "a live widget below the seam: its keywords reach add_mesh_isovalue, not a derived style",
     "slider": "a live widget below the seam: its keywords reach add_slider_widget, not a derived style",
     "enable_picking": "turns on a pick gesture; its keywords reach enable_*_picking, not a derived style",
+    "serve": "opens a live trame view of the already-described scene; its keywords reach show_trame",
 }
 
 
