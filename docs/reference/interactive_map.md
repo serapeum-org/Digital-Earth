@@ -75,6 +75,19 @@ A live kernel or server is what makes these round-trip to Python; in a saved HTM
 box/polygon/point/freehand tool and `drawn_geometry`/`aoi_crop` read the sketch back **in pyramids' CRS** to
 drive a crop. `cross_filter` links a selection across panels and hands the selected rows back.
 
+## Live data
+
+`live()` adds a streaming layer backed by a HoloViews `Pipe` (each `push` **replaces** the data) or a
+`Buffer` (each `push` **appends**, keeping the last `length` rows). Only the changed glyphs redraw — the IN-2
+reconcile applied to a feed — so a moving vehicle or a sensor stream does not rebuild the map. Reach the
+stream with `live_stream(id)` and feed it with `push(id, data)`; the data is in the display CRS, and the
+repaint reaches the browser under a live kernel/server.
+
+```python
+m = InteractiveMap().live(kind="points", name="cars")
+m.push("cars", positions_df)        # positions_df: x/y in the display CRS
+```
+
 ## Themes
 
 `theme()` sets one Bokeh theme for every render of the map — a built-in name (`"dark_minimal"`, `"night_sky"`,
@@ -117,6 +130,9 @@ WASM — GDAL does not run in the browser. `share()` syncs the view into the URL
         - rasterize
         - datashade
         - trajectory
+        - live
+        - live_stream
+        - push
         - tiles
         - coastlines
         - graticule
