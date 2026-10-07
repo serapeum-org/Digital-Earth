@@ -380,8 +380,10 @@ class DashboardMixin(_MixinBase):
             The composed, projected HoloViews object, over the chosen basemap when one is selected.
         """
         # Before the layers are read: a deferred basemap is one of them, so composing without flushing drew a
-        # map that never had one (review H9).
+        # map that never had one (review H9). The theme is set on the renderer here too, so a dashboard draws
+        # under the same theme a bare render would (IN-18).
         self._flush_deferred_tiles()
+        self._apply_theme()
         # Restyle only when a widget value is in play; otherwise the elements pass through untouched, which is
         # what makes a basemap-only change a reconcile rather than a rebuild. `.opts()` on an overlay applies
         # per element *type*, so the restyle happens per layer before the compose, not after it (#300).

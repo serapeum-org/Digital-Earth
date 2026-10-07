@@ -537,6 +537,9 @@ class InteractiveMapBase:
         self.title = title
         # Display projection for the matplotlib-backend path (DI.9); None = Bokeh Web-Mercator.
         self._projection: Any = None
+        # A Bokeh theme applied to every render of this map (IN-18); None = Bokeh's default. A built-in
+        # name or a `bokeh.themes.Theme`, set through `theme()` and applied in `render()`/`_reconcile_view`.
+        self._theme: Any = None
         # Draw-tool stream (DI.8), set by the interaction mixin's draw(); None until a draw tool is added.
         self._draw_stream: Any = None
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
@@ -1951,6 +1954,77 @@ class InteractiveMapBase:
             return drawn[0]
         return reduce(mul, drawn)
 
+    #: The Bokeh built-in theme names :meth:`theme` accepts, besides a ``bokeh.themes.Theme`` instance. Held
+    #: as a constant so the refusal can list them without importing bokeh until a theme is actually asked for.
+    _BUILTIN_THEMES: tuple[str, ...] = (
+        "caliber",
+        "carbon",
+        "contrast",
+        "dark_minimal",
+        "light_minimal",
+        "night_sky",
+    )
+
+    def theme(self, theme: Any) -> Self:
+        """Set the Bokeh theme every render of this map draws under (IN-18).
+
+        A dark-mode map used to be expressible only by threading ``bgcolor`` through ``**opts`` at every
+        builder call; this records one theme on the map instead, applied to the Bokeh renderer whenever the
+        map composes (:meth:`render`, the dashboard widgets, :meth:`save`). It is a builder, so it chains with
+        the rest.
+
+        Args:
+            theme: A Bokeh built-in theme name — one of :data:`_BUILTIN_THEMES` (``"dark_minimal"``,
+                ``"night_sky"``, …) — or a ``bokeh.themes.Theme`` instance built from a YAML/JSON file or a
+                dict. ``None`` clears the theme back to Bokeh's default.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: for a string that is not one of the built-in theme names.
+
+        Examples:
+            - A built-in dark theme, set once and kept for every render:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().theme("dark_minimal")._theme
+                'dark_minimal'
+
+                ```
+            - An unknown name is refused, with the built-ins named:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().theme("darkmode")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: unknown Bokeh theme 'darkmode'; choose one of [...] or pass a bokeh.themes.Theme
+
+                ```
+        """
+        if isinstance(theme, str) and theme not in self._BUILTIN_THEMES:
+            raise ValueError(
+                f"unknown Bokeh theme {theme!r}; choose one of {list(self._BUILTIN_THEMES)} or pass a "
+                f"bokeh.themes.Theme"
+            )
+        self._theme = theme
+        return self
+
+    def _apply_theme(self) -> None:
+        """Apply this map's theme to the Bokeh renderer, so the next composition draws under it (IN-18).
+
+        HoloViews holds the theme on its Bokeh renderer rather than on the element, so a theme is set there
+        each time the map composes and the most recently rendered map's theme is the one in force — which is
+        the single-map workflow this serves. A map with no theme leaves the renderer untouched, so it never
+        clears a theme another map set deliberately.
+        """
+        if self._theme is None:
+            return
+        _require_holoviz()  # registers the bokeh renderer and gives the actionable error when absent
+        import holoviews as hv
+
+        hv.Store.renderers["bokeh"].theme = self._theme
+
     def render(self) -> Any:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
 
@@ -1985,6 +2059,7 @@ class InteractiveMapBase:
                 ```
         """
         self._flush_deferred_tiles()
+        self._apply_theme()
         return self._projected(self._compose(self.layers))
 
     # Note: the dashboard's widget paths call `_flush_deferred_tiles`, `_compose` and `_projected`
