@@ -6,6 +6,8 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
 
 - :class:`~digitalearth.three_d.terrain.TerrainMixin` → :meth:`terrain` (DEM/raster → 3-D relief).
 - :class:`~digitalearth.three_d.point_cloud.PointCloudMixin` → :meth:`point_cloud` (scattered points / LiDAR).
+- :class:`~digitalearth.three_d.flat.FlatMixin` → :meth:`points` / :meth:`polygons` / :meth:`choropleth` (the
+  flat Core features, drawn on the ground plane under the 3-D scene).
 - :class:`~digitalearth.three_d.volume.VolumeMixin` → :meth:`volume` / :meth:`isosurface` (3-D scalar fields).
 - :class:`~digitalearth.three_d.vector.VectorMixin` → :meth:`vectors` / :meth:`extruded_polygons`.
 - :class:`~digitalearth.three_d.globe.GlobeMixin` → :meth:`globe` (global field on a textured sphere, via the
@@ -28,6 +30,7 @@ by ``tests/test_no_competitor_imports.py``); all CRS/reproject work stays in pyr
 from digitalearth.three_d.animation import AnimationMixin
 from digitalearth.three_d.base import Scene3DBase, house_theme
 from digitalearth.three_d.decoration import DecorationMixin
+from digitalearth.three_d.flat import FlatMixin
 from digitalearth.three_d.globe import GlobeMixin
 from digitalearth.three_d.guides import GuideMixin
 from digitalearth.three_d.interaction import InteractionMixin
@@ -43,6 +46,7 @@ __all__ = ["Scene3D", "house_theme"]
 class Scene3D(
     TerrainMixin,
     PointCloudMixin,
+    FlatMixin,
     VolumeMixin,
     VectorMixin,
     GlobeMixin,

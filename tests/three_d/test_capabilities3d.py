@@ -130,6 +130,9 @@ def _dem():
 BUILDERS = {
     "terrain": lambda scene: scene.terrain(_dem()),
     "point_cloud": lambda scene: scene.point_cloud(_cloud()),
+    "points": lambda scene: scene.points(_cloud()),
+    "polygons": lambda scene: scene.polygons(_polygons()),
+    "choropleth": lambda scene: scene.choropleth(_polygons(), column="value"),
     "volume": lambda scene: scene.volume(_cube()),
     "isosurface": lambda scene: scene.isosurface(_cube(), isosurfaces=[0.5]),
     "vectors": lambda scene: scene.vectors(np.zeros((2, 3)), np.ones((2, 3))),
@@ -373,13 +376,15 @@ class TestARefusalCarriesTheDeclaredReason:
         """The other half: no declared reason, no sentence written at the call site.
 
         Test scenario:
-            The tier says nothing about `choropleth` — it is simply another tier's kind — so the refusal
-            names it and lists what this tier draws, and stops there. If the clause were unconditional it
-            would be the hand-written sentence #294 exists to remove, wearing the declaration's clothes.
+            The tier says nothing about `hexbin` — it is simply another tier's kind — so the refusal names it
+            and lists what this tier draws, and stops there. If the clause were unconditional it would be the
+            hand-written sentence #294 exists to remove, wearing the declaration's clothes. (`choropleth` used
+            to be the example here; it is a drawn 3-D kind now that the flat builders landed, so a kind the
+            tier still does not draw stands in.)
         """
-        assert CAPABILITIES.reason("choropleth") is None, CAPABILITIES.absent
+        assert CAPABILITIES.reason("hexbin") is None, CAPABILITIES.absent
         with pytest.raises(KeyError) as refused:
-            drawer_for("choropleth")
+            drawer_for("hexbin")
         assert "—" not in str(refused.value), str(refused.value)
 
 

@@ -40,6 +40,9 @@ logger = logging.getLogger(__name__)
 DRAWN_KINDS: tuple[str, ...] = (
     "terrain",
     "point_cloud",
+    "points",
+    "polygons",
+    "choropleth",
     "volume",
     "isosurface",
     "vectors",
@@ -105,6 +108,7 @@ def drawer_for(kind: str) -> Any:
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.
     from digitalearth.three_d import (
         decoration,
+        flat,
         globe,
         point_cloud,
         terrain,
@@ -115,6 +119,9 @@ def drawer_for(kind: str) -> Any:
     drawers = {
         "terrain": terrain.draw_terrain,
         "point_cloud": point_cloud.draw_point_cloud,
+        "points": flat.draw_points,
+        "polygons": flat.draw_polygons,
+        "choropleth": flat.draw_polygons,
         "volume": volume.draw_volume,
         "isosurface": volume.draw_isosurface,
         "vectors": vector.draw_vectors,

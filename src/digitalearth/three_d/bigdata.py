@@ -100,6 +100,7 @@ REDUCTIONS: Mapping[str, str] = MappingProxyType(
         "isosurface": _DECIMATE,
         "volume": _RESAMPLE,
         "point_cloud": _SUBSAMPLE,
+        "points": _SUBSAMPLE,
     }
 )
 
@@ -128,6 +129,15 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
         "extrusion": (
             "prisms are combined into an UnstructuredGrid, which PyVista gives no decimate_pro at all, and "
             "simplifying their outer surface would merge separate footprints into one building"
+        ),
+        "polygons": (
+            "flat filled footprints are combined into an UnstructuredGrid, which PyVista gives no decimate_pro "
+            "at all, and simplifying them would weld separate footprints together; coarsen the geometry "
+            "upstream in pyramids instead"
+        ),
+        "choropleth": (
+            "a choropleth is the polygons fill coloured by a column, so it reduces — or does not — exactly as "
+            "polygons does: welding footprints would merge separate areas into one"
         ),
         "raster": (
             "geovista builds the sphere and owns its resolution; decimating a sphere's quads flattens the "

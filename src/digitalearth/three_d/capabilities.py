@@ -28,6 +28,9 @@ CAPABILITIES = Capabilities(
         {
             "terrain",
             "point_cloud",
+            "points",
+            "polygons",
+            "choropleth",
             "volume",
             "isosurface",
             "vectors",

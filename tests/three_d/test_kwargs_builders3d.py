@@ -27,7 +27,7 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 gpd = pytest.importorskip("geopandas")
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
@@ -45,6 +45,9 @@ DRAWS_WITH_KWARGS = {
     "point_cloud": "this drawer's own guard, which names the keyword and the colouring that derives it",
     "vectors": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "extruded_polygons": "`_classify_or_refuse`, which names the keyword and the scheme that derives it",
+    "points": "`add_points(cloud, scalars=SCALAR, **style, **props)` — Python's duplicate-keyword TypeError",
+    "polygons": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
+    "choropleth": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "lines": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "streamlines": "`add_mesh(mesh, scalars=_SPEED, **props)` — Python's duplicate-keyword TypeError",
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
@@ -121,6 +124,14 @@ def _squares():
     )
 
 
+def _point_gdf():
+    """Return a GeoDataFrame of points with a numeric column (for the flat points builder)."""
+    return gpd.GeoDataFrame(
+        {"pop": [1.0, 2.0, 3.0]},
+        geometry=[Point(0, 0), Point(1, 1), Point(2, 0)],
+    )
+
+
 def _flow_field():
     """Return a small rotational vector field.
 
@@ -184,6 +195,9 @@ def _draw(scene, builder: str, extra: dict):
         ),
         "lines": lambda: scene.lines(_lines(), column="flow", **extra),
         "streamlines": lambda: scene.streamlines(_flow_field(), n_points=30, **extra),
+        "points": lambda: scene.points(_point_gdf(), column="pop", **extra),
+        "polygons": lambda: scene.polygons(_squares(), column="pop", **extra),
+        "choropleth": lambda: scene.choropleth(_squares(), column="pop", **extra),
         "volume": lambda: scene.volume(_cube(), **extra),
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),
