@@ -271,3 +271,31 @@ class TestDeckAndGeocoderInABrowser:
         assert page_errors == [], f"uncaught JS error(s): {page_errors}"
         assert _ignore_network_console(console_errors) == [], console_errors
         assert probe["has_box"], "the reimplemented geocoder search box did not render"
+
+    def test_a_nested_deck_accessor_is_refused(self):
+        """A deck layer carrying a nested ``@@`` accessor is refused loudly, not silently mis-rendered.
+
+        Test scenario:
+            The layers are built directly (not through deck's JSONConverter), so an accessor
+            expression would be copied through and silently fail. A nested ``{"@@function": …}`` on a
+            layer prop must raise in the runtime (a page error), not pass through — the recursive
+            refusal (M1), which the old top-level-only scan missed.
+        """
+        from digitalearth.web.htmldoc import HtmlDocument
+
+        base = WebMap().basemap()._build_map_widget().to_dict()
+        spec = {
+            "@@type": "GeoJsonLayer",
+            "id": "x",
+            "data": {"type": "FeatureCollection", "features": []},
+            "getFillColor": {"@@function": "interpolate"},
+        }
+        accessor = {**base, "calls": [*base["calls"], ["addDeckOverlay", [[spec]]]]}
+        html = HtmlDocument.swipe(accessor, {"mapOptions": {}, "calls": []}).render()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "accessor.html"
+            path.write_text(html, encoding="utf-8")
+            page_errors, _console, _probe = _render_and_probe(path.as_uri(), "() => ({})")
+        assert any("accessor" in e for e in page_errors), (
+            f"a nested deck accessor must be refused with an error, got {page_errors}"
+        )

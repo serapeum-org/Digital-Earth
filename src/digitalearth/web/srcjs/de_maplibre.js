@@ -242,12 +242,40 @@
     addMarker: "markers",
   };
 
+  // Refuse any deck.gl `@@` accessor, at any depth — a string value beginning with `@@` (e.g.
+  // `"@@=properties.v"`) or an object key beginning with `@@` (e.g. `{"@@function": …}`). Because the
+  // layers are built directly (not through deck's JSONConverter), such an accessor would be copied
+  // through and silently mis-render, so it is refused loudly instead. The GeoJSON `data` is not
+  // scanned — it is feature data, not deck config, and a property value that happens to start with
+  // `@@` is not an accessor.
+  function refuseDeckAccessors(value) {
+    if (typeof value === "string") {
+      if (value.indexOf("@@") === 0) {
+        throw new Error("de_maplibre: deck.gl accessor expression not supported: " + value);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) refuseDeckAccessors(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const key in value) {
+        if (key.indexOf("@@") === 0) {
+          throw new Error("de_maplibre: deck.gl accessor key not supported: " + key);
+        }
+        refuseDeckAccessors(value[key]);
+      }
+    }
+  }
+
   // deck.gl layers are serialized in deck's `@@type` JSON. The tier's specs use only plain values —
   // the accessors (getFillColor, getPointRadius, …) are constants, never `@@function`/`@@=` closures —
   // so each layer is built directly from its class in the deck.gl standalone bundle (which ships the
   // layers and `MapboxOverlay` but not the separate `@deck.gl/json` converter). A `MapboxOverlay`
-  // draws the layers over the map; the overlay is kept on the map so a later `setDeckLayers` can
-  // swap them. An unexpected `@@`-prefixed accessor is refused rather than passed through as a string.
+  // draws the layers over the map; the overlay is kept on the map so a later `setDeckLayers` can swap
+  // them. Any `@@` accessor (at any depth, outside the GeoJSON data) is refused rather than passed
+  // through — see `refuseDeckAccessors`.
   function deckLayersFrom(specs) {
     const deck = global.deck;
     return (specs || []).map(function (spec) {
@@ -257,11 +285,8 @@
       const props = {};
       for (const key in spec) {
         if (key === "@@type") continue;
-        const value = spec[key];
-        if (typeof value === "string" && value.indexOf("@@") === 0) {
-          throw new Error("de_maplibre: deck.gl accessor expression not supported: " + value);
-        }
-        props[key] = value;
+        if (key !== "data") refuseDeckAccessors(spec[key]);
+        props[key] = spec[key];
       }
       return new Layer(props);
     });
