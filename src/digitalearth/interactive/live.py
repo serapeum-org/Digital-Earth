@@ -152,6 +152,19 @@ class LiveMixin(_MixinBase):
 
         Raises:
             KeyError: when ``layer_id`` is not a live layer, naming the ones that are.
+
+        Examples:
+            - The stream a ``live`` layer was built with is reached by its id, ready to ``.send()`` to:
+                ```python
+                >>> import pandas as pd                                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().live(kind="points", name="cars")      # doctest: +SKIP
+                >>> stream = m.live_stream("cars")                            # doctest: +SKIP
+                >>> stream.send(pd.DataFrame({"x": [0.0], "y": [0.0]}))        # doctest: +SKIP
+                >>> len(m.live_stream("cars").data)                           # doctest: +SKIP
+                1
+
+                ```
         """
         self._require_live(layer_id)
         return self._live_streams[layer_id]
@@ -172,6 +185,19 @@ class LiveMixin(_MixinBase):
 
         Raises:
             KeyError: when ``layer_id`` is not a live layer, naming the ones that are.
+
+        Examples:
+            - Pushing to a ``Pipe`` layer replaces its data, and pushes chain:
+                ```python
+                >>> import pandas as pd                                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().live(kind="points", name="cars")      # doctest: +SKIP
+                >>> m.push("cars", pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 1.0]})) is m  # doctest: +SKIP
+                True
+                >>> len(m.live_stream("cars").data)                           # doctest: +SKIP
+                2
+
+                ```
         """
         self._require_live(layer_id)
         self._live_streams[layer_id].send(data)
