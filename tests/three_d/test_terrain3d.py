@@ -111,12 +111,30 @@ def test_vertical_scale_stretches_the_mesh():
     assert tall_h == pytest.approx(5.0 * flat_h)
 
 
-def test_terrain_handles_nan_nodata():
-    """NaN (masked nodata) cells do not crash the mesh build and are filled to the surface floor."""
+def test_terrain_nodata_is_a_gap_not_fabricated_ground():
+    """#200: a NaN (masked nodata) cell renders as a hole, not as flat ground at the surface floor.
+
+    The geometry must still be well-formed (no NaN coordinates, or VTK cannot build the grid), but the nodata
+    node is **blanked** so every cell touching it is hidden — a gap — and its elevation scalar stays NaN so a
+    still-visible edge reads as missing rather than as the floor value.
+    """
     dem = np.add.outer(np.linspace(0.0, 1.0, 5), np.linspace(0.0, 1.0, 5))
     dem[0, 0] = np.nan
     mesh = _terrain_mesh(dem, np.arange(5.0), np.arange(5.0), vertical_scale=1.0)
-    assert np.isfinite(mesh.points).all()  # geometry has no NaN coordinates
+
+    assert np.isfinite(mesh.points).all()  # geometry has no NaN coordinates — VTK can build it
+
+    # The nodata node is blanked (VTK's hidden-point ghost flag), every finite node is not.
+    ghost = mesh.point_data["vtkGhostType"]
+    nodata = ~np.isfinite(dem.ravel(order="F"))
+    assert nodata.sum() == 1
+    assert (ghost[nodata] != 0).all()  # the one nodata node is hidden
+    assert (ghost[~nodata] == 0).all()  # no finite node is hidden
+
+    # The elevation scalar keeps the NaN, so missing data is coloured missing rather than as the floor.
+    elevation = mesh.point_data[ELEVATION]
+    assert np.isnan(elevation[nodata]).all()
+    assert np.isfinite(elevation[~nodata]).all()
 
 
 def test_vertical_unit_scale_geographic_vs_projected():

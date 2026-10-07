@@ -76,15 +76,25 @@ def _terrain_mesh(
     """
     z = np.asarray(z, dtype="float64")
     xx, yy = np.meshgrid(np.asarray(x, dtype="float64"), np.asarray(y, dtype="float64"))
-    zz = (
-        np.nan_to_num(z, nan=float(np.nanmin(z)) if np.isfinite(z).any() else 0.0)
-        * vertical_scale
-    )
+    nodata = ~np.isfinite(z)
+    # A nodata node still needs a finite coordinate or VTK cannot build the structured grid at all; it is
+    # given the surface floor so the geometry is well-formed, then **blanked** below so it is never drawn.
+    # The floor is only read when at least one cell is finite — `draw_terrain` skips an all-nodata raster
+    # before it reaches here — but the guard is kept so the helper is safe to call directly.
+    floor = float(np.nanmin(z)) if np.isfinite(z).any() else 0.0
+    zz = np.where(nodata, floor, z) * vertical_scale
     import pyvista as pv
 
     grid = pv.StructuredGrid(xx, yy, zz)
     # VTK structured points are Fortran-ordered: ravel(order="F") keeps the terrain right-side up (see module docs).
     grid.point_data[ELEVATION] = z.ravel(order="F")
+    if nodata.any():
+        # #200: nodata is a **gap**, not fabricated ground at the floor. Blanking the nodata nodes hides every
+        # cell that touches one — the VTK equivalent of geovista's `extract_points(adjacent_cells=False)` — so
+        # the surface has a hole there rather than a flat sheet at `floor`, while the mesh stays a
+        # `StructuredGrid` (the shape `bigdata.reduce_surface` counts without triangulating). The mask is
+        # ravelled in the same Fortran order as the points and the elevation scalar, so it lines up with both.
+        grid.hide_points(nodata.ravel(order="F"))
     return grid
 
 
