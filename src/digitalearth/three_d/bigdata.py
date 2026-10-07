@@ -21,21 +21,22 @@ Measured end to end through the tier, a full-resolution 1000x1000 DEM — 998 00
 measured), so a budget low enough to fire on ordinary data would spend seconds to save nothing.
 ``ImageData.resample`` is output-driven and costs 0.01-0.06 s whatever it is given.
 
-**Two routes, and a declaration for every other kind.** A route is only meaningful where the cells form one
-sampled surface, and a filter that fits a `PolyData` can refuse or ruin another class, so the route is keyed by
-**layer kind** rather than sniffed off the object: :data:`REDUCTIONS` says how a kind reduces,
-:data:`UNREDUCED` says why a kind does not, and ``tests/three_d/test_bigdata3d.py`` fails if a drawn kind is in
-neither or in both. Type-sniffing is what that avoids — measured on PyVista 0.48.4, ``triangulate()`` on a
-vertex-only point cloud returns a mesh of **zero cells**, so a generic "triangulate, then decimate" path would
-have deleted every point cloud it was asked to thin.
+**Three routes, and a declaration for every other kind.** A route is only meaningful for the shape it fits, and
+a filter that fits a `PolyData` surface can refuse or ruin another class, so the route is keyed by **layer kind**
+rather than sniffed off the object: :data:`REDUCTIONS` says how a kind reduces — a surface by ``decimate_pro``, a
+volume by ``resample``, a point cloud by **subsampling** (``extract_points`` over an even stride) — :data:`UNREDUCED`
+says why a kind does not, and ``tests/three_d/test_bigdata3d.py`` fails if a drawn kind is in neither or in both.
+Type-sniffing is what that avoids — measured on PyVista 0.48.4, ``triangulate()`` on a vertex-only point cloud
+returns a mesh of **zero cells**, so a generic "triangulate, then decimate" path would have deleted every point
+cloud it was asked to thin; subsampling it by index instead keeps real points.
 
 **The budget counts what is drawn, in the unit the route reduces in**: triangles for the surface route, where
-a structured quad counts as the two triangles VTK draws it as, and voxels for the volume route. Both sides of
-each comparison are therefore the same quantity as the table above — the gate used to read a terrain's quad
-count against a triangle budget, which admitted twice the geometry the number was chosen for (review R2-M11).
-:func:`report_unreduced` is the exception, and deliberately so: it compares the object's own cells, because a
-kind with no route has no triangle count the budget could be about — a point cloud draws none, and a block of
-arrows is one small solid per sample.
+a structured quad counts as the two triangles VTK draws it as, voxels for the volume route, and **points** for
+the point-cloud route. Both sides of each comparison are therefore the same quantity as the table above — the
+gate used to read a terrain's quad count against a triangle budget, which admitted twice the geometry the number
+was chosen for (review R2-M11). :func:`report_unreduced` is the exception, and deliberately so: it compares the
+object's own cells, because a kind with no route has no reducible count the budget could be about — a block of
+arrows is one small solid per sample, and a set of prisms is one solid per footprint.
 
 An object at or under the budget is passed through untouched — not triangulated, not copied — so nothing that
 renders today renders differently: the two shapes this tier builds, an all-triangle `PolyData` and a
@@ -53,6 +54,7 @@ __all__ = [
     "DEFAULT_CELL_BUDGET",
     "REDUCTIONS",
     "UNREDUCED",
+    "reduce_points",
     "reduce_surface",
     "reduce_volume",
     "report_unreduced",
@@ -85,6 +87,11 @@ _DECIMATE: str = "decimate_pro"
 #: The PyVista filter that reduces a uniform volume: it resamples to fewer voxels per axis.
 _RESAMPLE: str = "resample"
 
+#: The PyVista filter that thins a point cloud: it keeps a chosen subset of points by index. A cloud has no
+#: surface to decimate and no grid to resample, so it is reduced by **subsampling** — an even stride over the
+#: points (:func:`reduce_points`), which keeps the spatial spread and is deterministic so the render repeats.
+_SUBSAMPLE: str = "extract_points"
+
 #: How each drawn kind is reduced above the budget, by the name of the PyVista filter that does it. Keyed by
 #: kind, not by class, so the route is a decision recorded here rather than one guessed from an object.
 REDUCTIONS: Mapping[str, str] = MappingProxyType(
@@ -92,6 +99,7 @@ REDUCTIONS: Mapping[str, str] = MappingProxyType(
         "terrain": _DECIMATE,
         "isosurface": _DECIMATE,
         "volume": _RESAMPLE,
+        "point_cloud": _SUBSAMPLE,
     }
 )
 
@@ -101,11 +109,6 @@ REDUCTIONS: Mapping[str, str] = MappingProxyType(
 #: whole; nothing is silently thinned.
 UNREDUCED: Mapping[str, str] = MappingProxyType(
     {
-        "point_cloud": (
-            "a cloud is vertices with no faces, and decimate_pro refuses a mesh that is not all triangles; "
-            "triangulating one returns zero cells, so the surface route would delete the layer rather than "
-            "thin it. Thinning a cloud is a stride or a random sample, which is #207's remaining ask"
-        ),
         "vectors": (
             "arrow glyphs are one small solid per sample rather than one sampled surface, so simplifying the "
             "block merges neighbouring arrows into shapes that are no longer arrows; the field is thinned by "
@@ -291,6 +294,55 @@ def reduce_volume(
     return smaller
 
 
+def reduce_points(cloud: Any, budget: int, *, kind: str = "point_cloud") -> Any:
+    """Return `cloud` drawing at most `budget` points, subsampled by an even stride if it has more.
+
+    The route for a **point cloud**. A cloud has no surface to decimate and no grid to resample — ``decimate_pro``
+    refuses it and ``triangulate()`` empties it — so it is thinned by keeping a subset of its points. The subset
+    is an **even stride** across the index range rather than a random draw: it keeps the cloud's spatial spread
+    (a random sample clumps), it is deterministic so the same cloud renders the same way every time, and it
+    carries every point array (the colour scalar included) through ``extract_points`` untouched.
+
+    Args:
+        cloud: The ``pyvista.PolyData`` of points the drawer built, with any colour scalar already attached.
+        budget: The most points to draw. A cloud at or under it is returned **as it is** — same object, nothing
+            copied — so no render that fits the budget changes.
+        kind: The layer kind, named in the log line.
+
+    Returns:
+        The cloud to draw: `cloud` itself, or a subsampled copy of it.
+
+    Examples:
+        - A cloud over the budget comes back at or under it:
+            ```python
+            >>> import numpy as np, pyvista as pv
+            >>> from digitalearth.three_d.bigdata import reduce_points
+            >>> cloud = pv.PolyData(np.random.default_rng(0).random((1000, 3)))
+            >>> reduce_points(cloud, 100).n_points <= 100
+            True
+
+            ```
+        - One under the budget is the very same object:
+            ```python
+            >>> import numpy as np, pyvista as pv
+            >>> from digitalearth.three_d.bigdata import reduce_points
+            >>> cloud = pv.PolyData(np.random.default_rng(0).random((50, 3)))
+            >>> reduce_points(cloud, 500_000) is cloud
+            True
+
+            ```
+    """
+    count = int(cloud.n_points)
+    if count <= budget:
+        return cloud
+    # An even stride over the index range, deduplicated: `linspace(...).round()` can repeat an index when the
+    # budget is close to the count, and a repeat would draw one point twice and land the result over budget.
+    stride = np.unique(np.linspace(0, count - 1, budget).round().astype("int64"))
+    smaller = cloud.extract_points(stride, adjacent_cells=False)
+    _report_reduction(kind, count, int(smaller.n_points), budget, _SUBSAMPLE, unit="points")
+    return smaller
+
+
 def report_unreduced(kind: str, drawn: Any, budget: int) -> None:
     """Say so when a layer with no reduction route is drawn over the budget.
 
@@ -422,7 +474,13 @@ def _triangles(mesh: Any) -> Any:
 
 
 def _report_reduction(
-    kind: str, before: int, after: int, budget: int, filter_name: str
+    kind: str,
+    before: int,
+    after: int,
+    budget: int,
+    filter_name: str,
+    *,
+    unit: str = "cells",
 ) -> None:
     """Log what a reduction actually did.
 
@@ -431,10 +489,12 @@ def _report_reduction(
 
     Args:
         kind: The layer kind.
-        before: Cells in the mesh the drawer built.
-        after: Cells in the mesh that is drawn.
+        before: Units in the mesh the drawer built.
+        after: Units in the mesh that is drawn.
         budget: The budget that triggered it.
         filter_name: The PyVista filter that did it.
+        unit: What the counts are of — ``"cells"`` for the surface/volume routes, ``"points"`` for the
+            point-cloud route — so the line reads in the same unit the budget was compared in.
     """
     if after > budget:
         # A reduction that overshot and said "reduced to N" read as a success, so a caller who saw the line
@@ -443,11 +503,11 @@ def _report_reduction(
         # `ImageData.resample` declines a target of two points on every axis outright (measured, PyVista
         # 0.48.4), which leaves the grid as it was.
         logger.warning(
-            f"{kind}: {before:,} cells exceed big_data_threshold={budget:,} and {filter_name} could not "
-            f"reach it — drawn at {after:,} cells. Raise the budget, or pass a coarser layer"
+            f"{kind}: {before:,} {unit} exceed big_data_threshold={budget:,} and {filter_name} could not "
+            f"reach it — drawn at {after:,} {unit}. Raise the budget, or pass a coarser layer"
         )
         return
     logger.info(
-        f"{kind}: {before:,} cells exceed big_data_threshold={budget:,} — reduced to {after:,} with "
+        f"{kind}: {before:,} {unit} exceed big_data_threshold={budget:,} — reduced to {after:,} with "
         f"{filter_name} (raise the budget to draw it whole)"
     )

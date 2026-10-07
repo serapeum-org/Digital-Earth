@@ -17,6 +17,7 @@ import numpy as np
 
 from digitalearth.base.points import PointArrays
 from digitalearth.three_d.base import classified_scalars
+from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET, reduce_points
 
 #: Attribute name the per-point colour scalar is stored under on the generated cloud.
 SCALAR = "scalar"
@@ -111,6 +112,7 @@ class PointCloudMixin(_MixinBase):
         render_points_as_spheres: bool = True,
         eye_dome_lighting: bool = True,
         cmap: str = "viridis",
+        big_data_threshold: int | None = None,
         **kwargs: Any,
     ) -> Any:
         """Render a point cloud (LiDAR / observations / raster cells) and register it as a layer.
@@ -134,6 +136,11 @@ class PointCloudMixin(_MixinBase):
             render_points_as_spheres: Draw points as shaded spheres (cleaner than flat dots).
             eye_dome_lighting: Enable depth-cueing eye-dome lighting (recommended for dense clouds).
             cmap: Colormap used when the cloud is coloured by a scalar.
+            big_data_threshold: Points above which the cloud is subsampled (an even stride over the points)
+                before it is drawn (#207). ``None`` (the default) uses the scene's
+                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a cloud at or under the
+                budget keeps every point. The subsample is deterministic, so the render repeats, and the
+                colour scalar is carried through.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`. A coloured cloud derives ``scalars``,
                 ``clim`` and ``n_colors``, so pinning one of those beside ``values=``/``value_column=`` is a
                 ``TypeError`` naming the keyword. ``nan_color`` is honoured instead of refused: the colour
@@ -200,6 +207,9 @@ class PointCloudMixin(_MixinBase):
             render_points_as_spheres=render_points_as_spheres,
             eye_dome_lighting=eye_dome_lighting,
             cmap=cmap,
+            big_data_threshold=self._resolve_big_data_threshold(
+                big_data_threshold, caller="Scene3D.point_cloud()"
+            ),
             **kwargs,
         )
 
@@ -345,6 +355,7 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
     k = props.pop("k", 5)
     cmap = props.pop("cmap", "viridis")
     eye_dome_lighting = props.pop("eye_dome_lighting", True)
+    budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
     _refuse_folded_marker_size(props)
     props["point_size"] = props.pop("size", None)
     placed = scene._place(data, layer="point_cloud")
@@ -394,6 +405,9 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
             style["nan_color"] = chosen_nan_color
         props.update(scalars=SCALAR, **style)
 
+    # Thin the cloud to the budget last, once its colour scalar is attached, so `extract_points` carries the
+    # scalar through and the subsample is of the finished cloud rather than of bare coordinates (#207).
+    cloud = reduce_points(cloud, budget, kind="point_cloud")
     actor = scene.plotter.add_points(cloud, **props)
     if eye_dome_lighting:
         scene.plotter.enable_eye_dome_lighting()
