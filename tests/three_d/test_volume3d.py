@@ -96,8 +96,9 @@ def test_isosurface_takes_explicit_placement():
 def test_volume_rejects_an_unknown_blending_mode():
     """#TD-11: an unknown blending mode is refused by name, naming the choices."""
     scene = Scene3D(off_screen=True)
+    cube = _gaussian_cube(6)
     with pytest.raises(ValueError, match="blending="):
-        scene.volume(_gaussian_cube(6), blending="bogus")
+        scene.volume(cube, blending="bogus")
     scene.close()
 
 

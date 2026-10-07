@@ -202,7 +202,7 @@ class TestWhatC7DoesNotCover:
     UNDRAWN_PER_TIER = [
         ("static", "digitalearth.static.renderer", "terrain"),
         ("interactive", "digitalearth.interactive.renderer", "terrain"),
-        ("3d", "digitalearth.three_d.renderer", "choropleth"),
+        ("3d", "digitalearth.three_d.renderer", "hexbin"),
         ("web", "digitalearth.web.renderer", "mesh"),
     ]
 

@@ -247,8 +247,9 @@ def test_streamlines_integrate_and_render():
 def test_streamlines_reject_a_non_vector_field():
     """streamlines() refuses an array that is not (nz, ny, nx, 3)."""
     scene = Scene3D(off_screen=True)
+    not_a_field = np.zeros((4, 4, 4))
     with pytest.raises(ValueError, match=r"\(nz, ny, nx, 3\)"):
-        scene.streamlines(np.zeros((4, 4, 4)))
+        scene.streamlines(not_a_field)
     scene.close()
 
 

@@ -130,8 +130,9 @@ def test_terrain_texture_rejects_a_non_image_array():
     """A texture array that is not (H, W, 3|4) is refused by name."""
     from digitalearth.three_d.terrain import _as_texture
 
+    flat = np.zeros((8, 8))
     with pytest.raises(ValueError, match=r"\(H, W, 3\|4\)"):
-        _as_texture(np.zeros((8, 8)))
+        _as_texture(flat)
 
 
 def test_terrain_nodata_is_a_gap_not_fabricated_ground():

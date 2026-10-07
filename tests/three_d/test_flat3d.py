@@ -83,8 +83,9 @@ def test_choropleth_classifies_the_fill():
 def test_choropleth_needs_a_column():
     """A choropleth with no column is refused — there is nothing to colour by."""
     scene = Scene3D(off_screen=True)
+    squares = _squares()
     with pytest.raises(ValueError, match="needs a column"):
-        scene.choropleth(_squares())
+        scene.choropleth(squares)
     scene.close()
 
 

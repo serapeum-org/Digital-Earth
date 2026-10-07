@@ -229,32 +229,22 @@ EXPECTED_SEED = (
 #: what it excuses — the same shape as `UNDRAWN_KINDS` in the renderer contract. Taking a tier off the list
 #: is what turns its `test_a_layer_built_hidden_is_described_hidden` on.
 #:
-#: **The interactive tier came off it, and the 3-D tier went on.** The interactive tier was listed here:
-#: `points(visible=False)` fell through the builder's `**opts` to HoloViews as a style option, so the element
-#: was hidden while the figure went on describing the layer visible (#327). The flag is a declared parameter
-#: of every builder on that tier now, so it reaches `add_layer(visible=)` and the description and the
-#: drawing say the same thing. The 3-D tier never gained it: measured,
-#: `Scene3D().point_cloud(cloud, visible=False)` raises `TypeError: "visible" is an invalid keyword argument
-#: for _common_arg_parser` — the flag falls through `**kwargs` to PyVista, which refuses it, and
-#: `set_visible()` after the build is the only way to hide a 3-D layer. The static tier is **not** listed:
-#: measured, `Map(crs=4326).points(features, visible=False)` describes the layer `visible=False` (R-M4).
+#: **The interactive and 3-D tiers both came off it; the table is empty now.** The interactive tier was
+#: listed here: `points(visible=False)` fell through the builder's `**opts` to HoloViews as a style option,
+#: so the element was hidden while the figure went on describing the layer visible (#327); the flag is a
+#: declared parameter of every builder on that tier now. The 3-D tier was listed too — `visible=` fell
+#: through its builders' `**kwargs` to PyVista, which raised `TypeError` — until
+#: `Scene3DBase._add_described_layer` gained a `visible` parameter (added with the line/flat builders that the
+#: Core contract requires it on). Every 3-D builder forwards its `**kwargs` through that method, so
+#: `Scene3D().point_cloud(cloud, visible=False)` now binds the flag and describes the layer hidden, and
+#: `set_visible()` is no longer the only way. The static tier was never listed: measured,
+#: `Map(crs=4326).points(features, visible=False)` describes the layer `visible=False` (R-M4).
 #:
-#: **Where the reverse branch actually runs, and where it does not.** The base class used to carry a reverse
-#: probe of its own, and it could never execute: it skips unless the tier is on this table, the only tier on
-#: it is `3d`, and the only subclasses are `web` and `interactive` — so it was skipped in `dev`, `web` and
-#: `interactive` and not collected at all in `viz3d`, while this comment credited the R-L7 fix to it (review
-#: R2-M7). It is gone. The guard that runs is
-#: :meth:`TestTheTablesDescribeThePackage.test_a_tier_excused_from_hiding_at_build_still_cannot`, which
-#: reaches the 3-D tier through :data:`ABSENT_TIERS` and passes in `viz3d`; every tier named here is
-#: reachable from there, which
-#: :meth:`TestTheTablesDescribeThePackage.test_every_tier_a_table_excuses_can_be_re_asked_the_question`
-#: is what holds.
-CANNOT_HIDE_AT_BUILD: dict[str, str] = {
-    "3d": (
-        "visible= is not a parameter of its builders; it reaches PyVista through **kwargs, which raises "
-        "TypeError, so a 3-D layer is hidden with set_visible() after it is built"
-    ),
-}
+#: The table is **empty**, and the guards below still hold it in both directions — a tier taken off it fails
+#: :meth:`TestTheTablesDescribeThePackage.test_a_tier_excused_from_hiding_at_build_still_cannot` the day it is
+#: fixed, and a tier named here must be reachable from :data:`ABSENT_TIERS` or a subclass — so the next tier
+#: that genuinely cannot hide at build has a home.
+CANNOT_HIDE_AT_BUILD: dict[str, str] = {}
 
 #: The tiers that record no portable channel for a layer's style, each with what they record instead.
 #:

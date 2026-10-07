@@ -63,5 +63,6 @@ def test_grid_refuses_an_empty_sequence():
 
 def test_grid_refuses_a_shape_too_small():
     """A shape with fewer cells than scenes is refused, naming the shape."""
+    scenes = [_scene(), _scene(), _scene()]
     with pytest.raises(ValueError, match="cells for"):
-        grid([_scene(), _scene(), _scene()], shape=(1, 2), off_screen=True)
+        grid(scenes, shape=(1, 2), off_screen=True)
