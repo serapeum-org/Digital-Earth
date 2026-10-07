@@ -249,10 +249,16 @@ class TestWhichStepsAreAnimated:
             web_map._temporal_frames()
 
     def test_the_vector_slider_is_named_as_unsupported(self, points_with_time):
-        """Its steps are a filter over one layer, so they cannot be rendered separately.
+        """A vector series is exported as a layer-switcher step picker, not rendered to animation frames.
 
         Args:
             points_with_time: A GeoDataFrame carrying a time column.
+
+        Test scenario:
+            ``save_animation`` renders only the raster stack (``_temporal_frames`` keys on
+            ``mode != "raster"``). A vector series does build separate per-step layers (WB-4), but it is
+            exported as the saved-page step picker rather than as frames, so the refusal stands and is
+            raised by name.
         """
         web_map = WebMap().basemap().timeslider(points_with_time, kdim="time")
         with pytest.raises(ValueError, match="vector time-slider"):

@@ -185,23 +185,27 @@ class TestTimeSliderNeedsEngine:
             "the picker must list every step layer"
         )
 
-    def test_vector_colour_scale_is_frozen_across_steps(self, timed_points):
+    @pytest.mark.parametrize("scheme", [None, "quantiles", "categorical"])
+    def test_vector_colour_scale_is_frozen_across_steps(self, timed_points, scheme):
         """WB-4: every step shares one classification, so the colour scale is stable across steps.
+
+        Args:
+            scheme: The classification arm under test — continuous ramp, graduated, or categorical.
 
         Test scenario:
             A MapLibre colour expression is a value-to-colour function; computed once over the whole series
             and reused, every step's paint is byte-for-byte the same, so a step holding only part of the
-            range still colours by the series' classes.
+            range still colours by the series' classes. All three colour arms must hold, not just graduated.
         """
         m = WebMap().timeslider(
-            timed_points, kdim="time", column="pop", scheme="quantiles", k=3
+            timed_points, kdim="time", column="pop", scheme=scheme, k=3
         )
         colours = [
             m._layer_tree.get(i).symbology.props["paint"]["circle-color"]
             for i in m._temporal["layer_ids"]
         ]
         assert all(c == colours[0] for c in colours), (
-            f"every step must paint by the one frozen expression, got {colours}"
+            f"every step ({scheme!r}) must paint by the one frozen expression, got {colours}"
         )
 
     def test_a_null_kdim_row_does_not_shift_the_colour_scale(self):
