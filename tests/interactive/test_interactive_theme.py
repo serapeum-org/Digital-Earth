@@ -39,3 +39,16 @@ class TestTheme:
         """A typo'd theme name is refused, naming the built-ins."""
         with pytest.raises(ValueError, match="unknown Bokeh theme"):
             InteractiveMap().theme("darkmode")
+
+    def test_theme_none_clears_a_previously_set_theme(self):
+        """M1 — ``theme(None)`` restores the default; it does not leave the last theme in force."""
+        m = InteractiveMap().add_layer(hv.Points([(0.0, 0.0)]))
+        m.theme("dark_minimal").render()
+        m.theme(None).render()
+        assert hv.Store.renderers["bokeh"].theme != "dark_minimal"
+
+    def test_a_themeless_map_does_not_inherit_a_prior_theme(self):
+        """M1 — a map with no theme rendered after a themed one is not drawn under the leaked theme."""
+        InteractiveMap().add_layer(hv.Points([(0.0, 0.0)])).theme("night_sky").render()
+        InteractiveMap().add_layer(hv.Points([(1.0, 1.0)])).render()
+        assert hv.Store.renderers["bokeh"].theme != "night_sky"

@@ -232,6 +232,13 @@ def cmap_name(cmap: Any) -> str | None:
     return name if isinstance(name, str) and name in colormaps else None
 
 
+#: Sentinel + capture slot for the Bokeh renderer's original theme (IN-18 / M1). The renderer theme is
+#: process-global `hv.Store` state, not per-figure, so a themeless map restores this captured default rather
+#: than leaving another map's theme in force. Captured once, the first time any map applies a theme.
+_THEME_UNSET = object()
+_ORIGINAL_BOKEH_THEME: Any = _THEME_UNSET
+
+
 #: The property every builder records its resolved style under, and every drawer reads it back from.
 STYLE_KEY = "common"
 
@@ -2049,17 +2056,26 @@ class InteractiveMapBase:
     def _apply_theme(self) -> None:
         """Apply this map's theme to the Bokeh renderer, so the next composition draws under it (IN-18).
 
-        HoloViews holds the theme on its Bokeh renderer rather than on the element, so a theme is set there
-        each time the map composes and the most recently rendered map's theme is the one in force — which is
-        the single-map workflow this serves. A map with no theme leaves the renderer untouched, so it never
-        clears a theme another map set deliberately.
+        HoloViews holds the theme on its Bokeh renderer rather than on the element, so the theme is set there
+        each time the map composes. The renderer's original theme is captured once — the first time any map
+        applies one, before it is ever overwritten — and a map with ``_theme is None`` **restores** that
+        captured default rather than leaving the renderer as the last themed map left it (M1). So
+        ``theme(None)`` genuinely clears, and a themeless map does not inherit another map's theme; the cost
+        is one idempotent write per render, which the global, process-wide ``hv.Store`` renderer theme makes
+        unavoidable — it is not per-figure state.
         """
-        if self._theme is None:
-            return
         _require_holoviz()  # registers the bokeh renderer and gives the actionable error when absent
         import holoviews as hv
 
-        hv.Store.renderers["bokeh"].theme = self._theme
+        global _ORIGINAL_BOKEH_THEME
+        renderer = hv.Store.renderers["bokeh"]
+        if _ORIGINAL_BOKEH_THEME is _THEME_UNSET:
+            # Capture whatever was in force before this process first set a theme through us — Bokeh's own
+            # default in the usual case — so a None-themed map can put it back.
+            _ORIGINAL_BOKEH_THEME = renderer.theme
+        renderer.theme = (
+            self._theme if self._theme is not None else _ORIGINAL_BOKEH_THEME
+        )
 
     def render(self) -> Any:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
