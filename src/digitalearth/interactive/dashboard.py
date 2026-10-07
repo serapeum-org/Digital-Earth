@@ -977,8 +977,10 @@ class DashboardMixin(_MixinBase):
         Each offered layer gets a ``▲``/``▼`` pair whose click moves it one place within its band
         (:meth:`~digitalearth.interactive.base.InteractiveMapBase.move_layer`) and then re-triggers the
         composed view by poking ``trigger`` — the visibility group the bound compose function reads — so the
-        overlay re-stacks without rebuilding the control. A move that would leave the layer's band is a no-op
-        (``move_layer`` raises ``IndexError`` for it), so the end buttons simply do nothing at the ends.
+        overlay re-stacks without rebuilding the control. A move past either end is a no-op: the top end
+        overshoots the list and ``move_layer`` raises ``IndexError``, which is caught; the bottom end would
+        reach index ``-1``, which ``move_layer`` instead *wraps* to the top, so a sub-zero target is refused
+        explicitly before the call (F1) rather than left to a guard that never fires for it.
 
         Args:
             pn: The imported panel module.
@@ -1010,9 +1012,15 @@ class DashboardMixin(_MixinBase):
                 order = self.layer_ids
                 if layer_id not in order:  # removed since the control was built
                     return
+                target = order.index(layer_id) + delta
+                # Refuse a sub-zero target explicitly: `move_layer` accepts a negative index and wraps it
+                # (`index % count`) to the top of the band, so `-1` on the bottom layer would invert the
+                # overlay instead of doing nothing (F1). The top end raises IndexError and is caught below.
+                if target < 0:
+                    return
                 try:
-                    self.move_layer(layer_id, order.index(layer_id) + delta)
-                except IndexError:  # already at the end of its band — nothing to do
+                    self.move_layer(layer_id, target)
+                except IndexError:  # already at the top of its band — nothing to do
                     return
                 trigger.param.trigger("value")
 

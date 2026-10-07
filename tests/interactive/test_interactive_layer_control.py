@@ -342,6 +342,25 @@ class TestReorderIsNotAControl:
         top_down.clicks += 1
         assert two_layers.layer_ids == [before[-1], before[0]]
 
+    def test_down_on_the_bottom_layer_is_a_no_op(self, two_layers):
+        """IN-1 (F1) — ``▼`` on the bottom layer must not wrap it to the top via a negative index.
+
+        Args:
+            two_layers: The map under test.
+        """
+        import panel as pn
+
+        before = list(two_layers.layer_ids)
+        built = two_layers.layer_control(reorder=True)
+        downs = [
+            b
+            for b in built.layer_control_panel.select(pn.widgets.Button)
+            if b.label.startswith("▼")
+        ]
+        bottom_down = next(b for b in downs if b.label.endswith(before[0]))
+        bottom_down.clicks += 1
+        assert two_layers.layer_ids == before
+
     def test_up_on_the_top_layer_is_a_no_op(self, two_layers):
         """Moving the top layer further up leaves its band, so the button does nothing (IndexError path).
 
