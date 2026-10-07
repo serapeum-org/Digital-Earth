@@ -342,37 +342,74 @@ class DashboardMixin(_MixinBase):
         ]
         return reduce(_mul, [tile, *data])
 
+    def _reconcile_view(
+        self,
+        layers: Sequence[Any],
+        overrides: dict,
+        basemap: Any = None,
+        *,
+        basemap_context: str = "dashboard basemap",
+    ) -> Any:
+        """Recompose ``layers`` with ``overrides`` applied, reusing every untouched element (IN-2).
+
+        **The one composition path every widget event takes.** The dashboard's cmap/alpha/basemap widgets and
+        the layer switcher's visibility/opacity/basemap widgets used to each rebuild the overlay their own
+        way — ``_render_with_overrides`` and ``_compose_visible_layers`` grew a reduce apiece beside
+        ``render``'s, so a style fix had to be made in three places and a divergence between them was a bug
+        waiting (detail doc gap 2). They route through here now, so there is one recipe: flush the deferred
+        basemap, restyle only the layers a widget actually claims, compose, project, and drop the chosen
+        basemap underneath.
+
+        This is a reconcile rather than a rebuild: :meth:`_restyled_layers` re-``.opts()``s only the
+        colour-mapped (and alpha-only) layers a widget value reaches and hands **the same element object**
+        back for every other layer, so a slider tick on a two-layer map re-styles the one raster and leaves
+        the points layer's element — and the hover tools and colorbar filed against it — untouched. When no
+        override is in play the layers pass through with their identity intact, so a basemap switch alone
+        never re-styles a thing.
+
+        Args:
+            layers: The elements to compose, bottom first — every layer for the dashboard, the chosen subset
+                for the switcher.
+            overrides: The widget values to apply over each layer's own recorded style (``cmap``/``alpha``);
+                empty leaves every element exactly as it was.
+            basemap: Provider name from a basemap ``Select``, or ``None`` to leave the basemap as built.
+            basemap_context: The entry point quoted in the Web-Mercator refusal, so a basemap switch names
+                the widget the caller actually touched.
+
+        Returns:
+            The composed, projected HoloViews object, over the chosen basemap when one is selected.
+        """
+        # Before the layers are read: a deferred basemap is one of them, so composing without flushing drew a
+        # map that never had one (review H9).
+        self._flush_deferred_tiles()
+        # Restyle only when a widget value is in play; otherwise the elements pass through untouched, which is
+        # what makes a basemap-only change a reconcile rather than a rebuild. `.opts()` on an overlay applies
+        # per element *type*, so the restyle happens per layer before the compose, not after it (#300).
+        restyled = self._restyled_layers(overrides, layers) if overrides else list(layers)
+        obj = self._projected(self._compose(restyled))
+        if basemap:
+            obj = self._with_basemap(obj, basemap, context=basemap_context)
+        return obj
+
     def _render_with_overrides(self, values: dict) -> Any:
-        """Re-render the composed map, applying widget values as style overrides.
+        """Re-render the whole map, applying the dashboard widgets' values as style overrides.
+
+        A thin reading of the widget values into the one :meth:`_reconcile_view` path (IN-2).
 
         Args:
             values: Widget values keyed by widget name (``cmap``/``alpha``/``basemap``).
 
         Returns:
-            The composed HoloViews object with the overrides applied — each layer redrawn with the widget
-            values over **its own** recorded style, over the chosen tile basemap.
-
-            Whether a widget moved decides how the layers are styled, and nothing else: both branches flush
-            the deferred basemap and apply the map's projection, which is what `render()` does besides
-            composing. Skipping them left a map built with `tiles=` without one, permanently — both default
-            widgets carry a value, so the override branch is taken on the very first render.
+            The composed HoloViews object with the overrides applied — each colour-mapped layer redrawn with
+            the widget values over **its own** recorded style, every other element reused, over the chosen
+            tile basemap.
         """
         overrides: dict = {}
         if values.get("cmap"):
             overrides["cmap"] = values["cmap"]
         if values.get("alpha") is not None:
             overrides["alpha"] = values["alpha"]
-        # Before the layers are read: a deferred basemap is one of them.
-        self._flush_deferred_tiles()
-        if not overrides:
-            obj = self._projected(self._compose(self.layers))
-        else:
-            # Composed from the restyled layers rather than restyled after composing: `.opts()` on an overlay
-            # applies per element *type*, so one spec cannot give two rasters different colormaps (#300).
-            obj = self._projected(self._compose(self._restyled_layers(overrides)))
-        if values.get("basemap"):
-            obj = self._with_basemap(obj, values["basemap"])
-        return obj
+        return self._reconcile_view(self.layers, overrides, values.get("basemap"))
 
     def serve(self, **kwargs: Any) -> Any:
         """Mark the dashboard servable for ``panel serve`` and return it.
@@ -838,13 +875,10 @@ class DashboardMixin(_MixinBase):
             chosen layers in draw order at opacity ``op``, over the chosen basemap when one is selected.
         """
         gv, hv = _require_holoviz()
-        # The other widget path does this too: a deferred basemap is one of the layers, and composing
-        # without flushing drew a map that never had one (review H9). `layer_control` has already flushed,
-        # so this is a no-op there.
-        self._flush_deferred_tiles()
         # Ids → current positions, read fresh each call so a reorder since the control was built is honoured.
         # De-duplicated and sorted into draw order: the toggles and the always-on set are two ways of naming
-        # layers, and the overlay has to be built bottom-first either way.
+        # layers, and the overlay has to be built bottom-first either way. The flush a stale basemap needs is
+        # inside `_reconcile_view`, the one composition path this now shares with the dashboard widgets (IN-2).
         order = self.layer_ids
         wanted_ids = {layer_id for layer_id in shown} | {
             layer_id for layer_id in always
@@ -853,12 +887,9 @@ class DashboardMixin(_MixinBase):
         chosen = [self.layers[index] for index in indices]
         if not chosen:
             return hv.Overlay([])
-        overlay = self._compose(self._restyled_layers({"alpha": op}, layers=chosen))
-        if basemap:
-            overlay = self._with_basemap(
-                overlay, basemap, context="layer_control basemap"
-            )
-        return overlay
+        return self._reconcile_view(
+            chosen, {"alpha": op}, basemap, basemap_context="layer_control basemap"
+        )
 
     def attribute_table(self, features: Any, *, linked: bool = False) -> Any:
         """Build a read-only ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13).

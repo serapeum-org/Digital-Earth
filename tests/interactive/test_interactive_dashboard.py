@@ -188,11 +188,11 @@ class TestLayerControlAndTable:
         assert len(out) == 0
 
     def test_compose_visible_single_layer(self, multi):
-        out = multi._compose_visible_layers(["0: Image"], op=0.5)
+        out = multi._compose_visible_layers([multi.layer_ids[0]], op=0.5)
         assert isinstance(out, hv.core.Dimensioned)
 
     def test_compose_visible_multiple_layers(self, multi):
-        out = multi._compose_visible_layers(["0: Image", "1: Points"], op=0.7)
+        out = multi._compose_visible_layers(list(multi.layer_ids), op=0.7)
         assert isinstance(out, hv.Overlay)
         assert len(out) == 2
 
@@ -288,7 +288,7 @@ class TestBasemapWidgetIsWired:
 
     def test_layer_control_compose_honours_the_basemap(self, multi):
         """The bound view really composes the chosen provider under the visible layers."""
-        out = multi._compose_visible_layers(["0: Image"], op=0.5, basemap="OSM")
+        out = multi._compose_visible_layers([multi.layer_ids[0]], op=0.5, basemap="OSM")
         tiles = [e for e in out if type(e).__name__ in ("WMTS", "Tiles")]
         assert tiles, (
             "the layer-control basemap must reach the overlay: "
@@ -429,11 +429,7 @@ class TestBothOverridePathsRestyleTheSameElements:
             This path restyled ``Image`` and ``RGB``, so a ``QuadMesh`` layer ignored the opacity slider
             while the widget still moved — the mirror image of the dashboard's gap.
         """
-        labels = [
-            f"{index}: {type(layer).__name__}"
-            for index, layer in enumerate(mixed.layers)
-        ]
-        out = mixed._compose_visible_layers(labels, op=0.25)
+        out = mixed._compose_visible_layers(list(mixed.layer_ids), op=0.25)
         styled = {type(element).__name__: _resolved_style(element) for element in out}
         assert set(styled) == {"Image", "QuadMesh", "RGB"}, sorted(styled)
         assert all(styled[name].get("alpha") == 0.25 for name in styled), {
@@ -451,17 +447,13 @@ class TestBothOverridePathsRestyleTheSameElements:
             reintroduce quietly: one path gaining or losing an element type now fails here, not in a
             widget that moves without changing the picture.
         """
-        labels = [
-            f"{index}: {type(layer).__name__}"
-            for index, layer in enumerate(mixed.layers)
-        ]
         dashboard_alphas = {
             type(element).__name__: _resolved_style(element).get("alpha")
             for element in mixed._render_with_overrides({"alpha": 0.4})
         }
         control_alphas = {
             type(element).__name__: _resolved_style(element).get("alpha")
-            for element in mixed._compose_visible_layers(labels, op=0.4)
+            for element in mixed._compose_visible_layers(list(mixed.layer_ids), op=0.4)
         }
         assert dashboard_alphas == control_alphas, (
             f"the two paths restyle different elements: {dashboard_alphas} vs {control_alphas}"
@@ -508,8 +500,8 @@ class TestTheLayerControlSeesTheSameLayersItLabels:
             dataset: The raster fixture.
         """
         m = InteractiveMap(crs=3857, tiles="OSM").field(dataset, cmap="magma")
-        labels = self._labels(m.layer_control())
-        drawn = m._compose_visible_layers(list(labels))
+        m.layer_control()
+        drawn = m._compose_visible_layers(list(m.layer_ids))
         assert self._names(drawn) == ["WMTS", "Image"], self._names(drawn)
 
     @staticmethod
@@ -647,10 +639,12 @@ class TestInertFlagsAreRefused:
     def multi(self, dataset, point_fc):
         return InteractiveMap().field(dataset).points(point_fc)
 
-    def test_layer_control_reorder_true_raises(self, multi):
-        """#242 — ``reorder=True`` is refused (reordering needs stable layer identity)."""
-        with pytest.raises(NotImplementedError, match="reorder"):
-            multi.layer_control(reorder=True)
+    def test_layer_control_reorder_true_builds_buttons(self, multi):
+        """IN-1 — ``reorder=True`` now adds the move buttons instead of refusing (was #242's inert flag)."""
+        import panel as pn
+
+        built = multi.layer_control(reorder=True)
+        assert built.layer_control_panel.select(pn.widgets.Button), "reorder buttons missing"
 
     def test_layer_control_reorder_defaults_to_false(self, multi):
         """The default must not promise reordering."""
