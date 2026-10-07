@@ -152,7 +152,9 @@ class TemporalMixin(_MixinBase):
                 ``None`` (the default) is a continuous ramp, matching every other builder.
             k: Vector only — number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
-            opacity: Layer opacity in ``[0, 1]``.
+            opacity: Layer opacity in ``[0, 1]``. Vector only — applied uniformly to every step layer,
+                points included; a point series is drawn at this value (``0.85``) rather than the standalone
+                ``points`` builder's ``0.9``, so the one slider keyword governs every geometry.
             clim: Raster only — frozen ``(vmin, vmax)``; ``None`` computes one range for the whole series
                 from at most :data:`_CLIM_SCAN_CAP` members sampled evenly across it.
 
@@ -417,6 +419,11 @@ class TemporalMixin(_MixinBase):
         # The paint is resolved once over `drawn` so every step colours by the same classification.
         # `_color_expr` records `last_breaks`/`last_legend` here too, describing the drawn series the colour
         # key belongs to.
+        # The three paint dicts mirror `points`/`polygons`/`choropleth` in `vector.py` rather than calling
+        # them, because those builders classify over the data they are handed (one step) and route big data
+        # to deck.gl, neither of which suits a whole-series slider. The keys must track the builders if they
+        # change; the slider exposes no per-paint `Ask`, so no `asked=` keys are recorded (there is no
+        # caller "ask" to preserve here).
         color_encoding: Any = None
         if is_polygon and column is not None:
             fill, color_encoding = self._color_expr(
@@ -449,8 +456,9 @@ class TemporalMixin(_MixinBase):
         for index, step in enumerate(times):
             step_gdf = gdf[gdf[kdim] == step]
             # dict(paint): each layer takes its own copy of the one frozen paint, so a later per-layer
-            # restyle touches one step rather than aliasing them all. The colour encoding is filed on every
-            # step, so the key is present whichever step is the visible one.
+            # restyle touches one step rather than aliasing them all. The one `color_encoding` object is
+            # filed on every step so the colour key is present whichever step is visible — safe because an
+            # `Encoding` is an immutable value (the "description, not closure" idiom), never mutated in place.
             self._vector_layer(
                 step_gdf,
                 prefix,

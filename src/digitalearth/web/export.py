@@ -406,6 +406,10 @@ class ExportMixin(_MixinBase):
         """
         config = getattr(self, "_temporal", None)
         layer_ids = list((config or {}).get("layer_ids") or [])
+        # The `mode != "raster"` gate is a deliberate policy, not a capability limit: since WB-4 a vector
+        # series also builds one addressable layer per step, so `[[id] for id in layer_ids]` would render it
+        # frame-by-frame exactly as the raster stack does. A vector series is exported as the saved-page
+        # step picker instead; dropping this gate is all it would take to animate one, if that is ever wanted.
         if config is None or (config.get("mode") != "raster") or len(layer_ids) < 2:
             raise ValueError(
                 "save_animation() needs a raster time series with at least two steps; add one with "
