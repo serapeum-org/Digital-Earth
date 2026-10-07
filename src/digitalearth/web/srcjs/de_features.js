@@ -105,4 +105,72 @@
     (DE.swipes = DE.swipes || {})[wrapId] = handle;
     return handle;
   };
+
+  // WB-20 — a small overview map (`miniId`) that follows the main map (`mainId`): it recentres on
+  // every main move at a lower zoom and draws a rectangle of the main map's current view, so a
+  // viewer sees where the main map sits in the wider area. Clicking the overview recentres the main
+  // map. The overview's own pan/zoom are disabled — it is a locator, not a second controllable map.
+  DE.minimap = function (mainId, miniId, options) {
+    const main = DE.maps[mainId];
+    const mini = DE.maps[miniId];
+    if (!main || !mini) {
+      throw new Error("de_maplibre: minimap needs the main and overview maps built");
+    }
+    options = options || {};
+    const zoomOffset = options.zoomOffset != null ? options.zoomOffset : 4;
+    for (const handler of [
+      "boxZoom",
+      "scrollZoom",
+      "dragPan",
+      "dragRotate",
+      "doubleClickZoom",
+      "touchZoomRotate",
+      "keyboard",
+    ]) {
+      if (mini[handler] && mini[handler].disable) mini[handler].disable();
+    }
+
+    function viewRect() {
+      const b = main.getBounds();
+      const w = b.getWest();
+      const s = b.getSouth();
+      const e = b.getEast();
+      const n = b.getNorth();
+      return {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]],
+        },
+      };
+    }
+
+    const RECT = "de-view-rect";
+    function sync() {
+      mini.jumpTo({
+        center: main.getCenter(),
+        zoom: Math.max(0, main.getZoom() - zoomOffset),
+      });
+      if (!mini.getSource(RECT)) {
+        mini.addSource(RECT, { type: "geojson", data: viewRect() });
+        mini.addLayer({
+          id: RECT,
+          type: "line",
+          source: RECT,
+          paint: { "line-color": "#ee5555", "line-width": 2 },
+        });
+      } else {
+        mini.getSource(RECT).setData(viewRect());
+      }
+    }
+
+    main.on("move", sync);
+    mini.on("click", (ev) => main.easeTo({ center: ev.lngLat }));
+    sync();
+
+    const handle = { sync: sync };
+    (DE.minimaps = DE.minimaps || {})[miniId] = handle;
+    return handle;
+  };
 })(typeof window !== "undefined" ? window : this);

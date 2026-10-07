@@ -119,6 +119,52 @@ class HtmlDocument:
             feature_js=True,
         )
 
+    @classmethod
+    def minimap(
+        cls,
+        main: dict,
+        overview: dict,
+        *,
+        height: int = 600,
+        mini_size: tuple[int, int] = (200, 150),
+    ) -> HtmlDocument:
+        """Build the document for a WB-20 minimap: a main map with a synced overview inset.
+
+        The overview map follows the main map at a lower zoom and draws a rectangle of the main
+        map's current view; clicking it recentres the main map.
+
+        Args:
+            main: The main map's ``to_dict()`` state (fills the page).
+            overview: The overview map's ``to_dict()`` state (the small inset — usually a basemap).
+            height: The main map height in CSS pixels.
+            mini_size: ``(width, height)`` of the overview inset, in CSS pixels.
+
+        Returns:
+            The :class:`HtmlDocument` for the minimap page.
+        """
+        wrap, main_id, mini_id = "de-minimap-wrap", "de-map-main", "de-minimap"
+        mini_w, mini_h = mini_size
+        body = (
+            f'<div id="{wrap}" class="de-minimap-wrap" style="height:{int(height)}px">'
+            f'<div id="{main_id}" class="de-minimap-main"></div>'
+            f'<div id="{mini_id}" class="de-minimap" '
+            f'style="width:{int(mini_w)}px;height:{int(mini_h)}px"></div>'
+            f"</div>"
+        )
+        bootstrap = (
+            "(function(){var ready=0;function go(){if(++ready===2){"
+            f'window.DE.minimap("{main_id}","{mini_id}");}}}}'
+            f'window.DE.buildMap("{main_id}",{json.dumps(main)},go);'
+            f'window.DE.buildMap("{mini_id}",{json.dumps(overview)},go);'
+            "})();"
+        )
+        return cls(
+            panels=(MapPanel(main_id, main), MapPanel(mini_id, overview)),
+            body_html=body,
+            bootstrap_js=bootstrap,
+            feature_js=True,
+        )
+
     def render(self, *, title: str = "Digital-Earth map") -> str:
         """Return the standalone HTML string.
 

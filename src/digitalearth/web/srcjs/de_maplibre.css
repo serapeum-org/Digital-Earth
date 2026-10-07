@@ -35,6 +35,26 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
+.de-minimap-wrap {
+  position: relative;
+  width: 100%;
+}
+.de-minimap-main {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.de-minimap {
+  position: absolute;
+  right: 10px;
+  bottom: 26px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  z-index: 2;
+}
+
 .de-layer-switcher {
   padding: 6px 8px;
   font: 12px/1.4 sans-serif;

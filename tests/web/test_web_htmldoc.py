@@ -9,7 +9,13 @@ which runs in the browser-smoke CI job.
 
 import pytest
 
-from digitalearth.web import WebMap, save_swipe, swipe_html
+from digitalearth.web import (
+    WebMap,
+    minimap_html,
+    save_minimap,
+    save_swipe,
+    swipe_html,
+)
 from digitalearth.web.htmldoc import HtmlDocument, MapPanel
 
 
@@ -152,3 +158,76 @@ class TestSaveSwipe:
         text = out.read_text(encoding="utf-8")
         assert text.startswith("<!DOCTYPE html>"), "not an HTML document"
         assert "de-swipe-wrap" in text and out.stat().st_size > 2_000, "looks empty"
+
+
+class TestHtmlDocumentMinimap:
+    """``HtmlDocument.minimap`` describes a main map with an overview inset."""
+
+    def test_builds_the_main_and_overview_panels(self):
+        """The document carries a main panel and an overview panel in the minimap containers.
+
+        Test scenario:
+            The runtime builds the main map and the inset by id and the feature syncs the inset to
+            the main, so the panels must name exactly the main/overview containers.
+        """
+        doc = HtmlDocument.minimap(
+            {"mapOptions": {}, "calls": []}, {"mapOptions": {}, "calls": []}
+        )
+        assert [p.container_id for p in doc.panels] == ["de-map-main", "de-minimap"]
+        assert doc.feature_js, "a minimap needs the cross-map feature script"
+
+    def test_render_sizes_the_inset_and_wires_the_feature(self):
+        """The inset is sized and the bootstrap starts the minimap over both built maps.
+
+        Test scenario:
+            The overview is a fixed-size inset the feature follows; both maps are built, then
+            ``DE.minimap`` is started once they are ready.
+        """
+        html = HtmlDocument.minimap(
+            {"mapOptions": {}, "calls": []},
+            {"mapOptions": {}, "calls": []},
+            mini_size=(240, 160),
+        ).render()
+        assert 'id="de-minimap"' in html and "width:240px;height:160px" in html
+        assert "DE.minimap" in html, "minimap feature missing"
+        assert html.count("window.DE.buildMap(") == 2, "both maps must be built"
+
+
+class TestMinimapHtml:
+    """``minimap_html`` renders a main map with a default or supplied overview."""
+
+    def test_default_overview_is_a_basemap(self):
+        """With no overview given, the inset is a plain basemap, so the locator always has ground.
+
+        Test scenario:
+            A caller who just wants "a minimap" should get a usable overview without building one;
+            the default basemap's source reaches the inset panel.
+        """
+        pytest.importorskip("maplibre")
+        html = minimap_html(WebMap().basemap())
+        # Two basemap sources appear: the main map's and the overview's.
+        assert html.count("basemaps.cartocdn.com") >= 2, (
+            "the overview basemap is missing"
+        )
+
+    def test_supplied_overview_is_used(self):
+        """A caller's own overview map drives the inset.
+
+        Test scenario:
+            The overview is an ordinary map, so a caller can give it its own basemap/tiles; the
+            supplied tiles reach the page.
+        """
+        pytest.importorskip("maplibre")
+        overview = WebMap().tiles("https://inset.example/{z}/{x}/{y}.png")
+        assert "inset.example" in minimap_html(WebMap().basemap(), overview=overview)
+
+    def test_save_minimap_writes_a_file(self, tmp_path):
+        """``save_minimap`` writes a real HTML document.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+        """
+        pytest.importorskip("maplibre")
+        out = save_minimap(WebMap().basemap(), str(tmp_path / "mini.html"))
+        text = out.read_text(encoding="utf-8")
+        assert text.startswith("<!DOCTYPE html>") and "de-minimap-wrap" in text

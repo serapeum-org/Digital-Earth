@@ -19,18 +19,20 @@ pytest.importorskip("maplibre")
 from digitalearth.web import WebMap, swipe_html  # noqa: E402
 
 
-def _render_and_probe(uri: str):
-    """Load ``uri`` in headless Chromium and return ``(page_errors, console_errors, probe)``.
+def _render_and_probe(uri: str, probe_js: str):
+    """Load ``uri`` in headless Chromium, run ``probe_js``, return ``(page_errors, console_errors, probe)``.
 
     Skips (not fails) when no Chromium binary is available, so the Playwright package without an
     installed browser does not produce a false failure.
 
     Args:
         uri: A ``file://`` URI of the page to load.
+        probe_js: A zero-argument JS function (as a string) run after the maps render; its return
+            value is handed back as ``probe``.
 
     Returns:
-        ``(page_errors, console_errors, probe)`` — JS exceptions, console errors, and a dict of
-        ``canvas_count`` / built map ids / wired swipe ids / the after map's clip after a set.
+        ``(page_errors, console_errors, probe)`` — JS exceptions, console errors, and whatever
+        ``probe_js`` returned.
     """
     from playwright.sync_api import TimeoutError as PWTimeout
     from playwright.sync_api import sync_playwright
@@ -56,22 +58,7 @@ def _render_and_probe(uri: str):
         except PWTimeout:
             pass
         page.wait_for_timeout(4000)  # let both maps finish their first render
-        probe = page.evaluate(
-            """() => {
-                const DE = window.DE || {};
-                let clip = null;
-                if (DE.swipes && DE.swipes['de-swipe']) {
-                    DE.swipes['de-swipe'].setFraction(0.3);
-                    clip = document.getElementById('de-map-after').style.clipPath;
-                }
-                return {
-                    canvas_count: document.querySelectorAll('canvas').length,
-                    maps: Object.keys(DE.maps || {}),
-                    swipes: Object.keys(DE.swipes || {}),
-                    clip: clip,
-                };
-            }"""
-        )
+        probe = page.evaluate(probe_js)
         browser.close()
     return page_errors, console_errors, probe
 
@@ -96,10 +83,26 @@ class TestSwipeRendersInABrowser:
         before = WebMap().basemap().navigation()
         after = WebMap().basemap().navigation()
         html = swipe_html(before, after, title="smoke")
+        probe_js = """() => {
+            const DE = window.DE || {};
+            let clip = null;
+            if (DE.swipes && DE.swipes['de-swipe']) {
+                DE.swipes['de-swipe'].setFraction(0.3);
+                clip = document.getElementById('de-map-after').style.clipPath;
+            }
+            return {
+                canvas_count: document.querySelectorAll('canvas').length,
+                maps: Object.keys(DE.maps || {}),
+                swipes: Object.keys(DE.swipes || {}),
+                clip: clip,
+            };
+        }"""
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "swipe.html"
             path.write_text(html, encoding="utf-8")
-            page_errors, console_errors, probe = _render_and_probe(path.as_uri())
+            page_errors, console_errors, probe = _render_and_probe(
+                path.as_uri(), probe_js
+            )
 
         assert page_errors == [], f"uncaught JS error(s): {page_errors}"
         assert _ignore_network_console(console_errors) == [], console_errors
@@ -109,3 +112,43 @@ class TestSwipeRendersInABrowser:
         assert probe["clip"] == "inset(0px 0px 0px 30%)", (
             f"setting the split to 0.3 must clip the after map, got {probe['clip']!r}"
         )
+
+
+class TestMinimapRendersInABrowser:
+    """WB-20 — the minimap page builds a main map and a synced overview that draws a view rectangle."""
+
+    def test_overview_renders_and_tracks_the_main_map(self):
+        """Both maps draw, the minimap is wired, and the overview carries the view-rectangle layer.
+
+        Test scenario:
+            The overview is a second map our runtime builds and the feature syncs to the main map,
+            drawing a rectangle of the main view onto it — behaviour only a browser can show.
+        """
+        from digitalearth.web import minimap_html
+
+        html = minimap_html(WebMap().basemap().navigation(), title="mini-smoke")
+        probe_js = """() => {
+            const DE = window.DE || {};
+            const mini = DE.maps && DE.maps['de-minimap'];
+            return {
+                canvas_count: document.querySelectorAll('canvas').length,
+                maps: Object.keys(DE.maps || {}),
+                minimaps: Object.keys(DE.minimaps || {}),
+                has_rect: !!(mini && mini.getSource && mini.getSource('de-view-rect')),
+            };
+        }"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "mini.html"
+            path.write_text(html, encoding="utf-8")
+            page_errors, console_errors, probe = _render_and_probe(
+                path.as_uri(), probe_js
+            )
+
+        assert page_errors == [], f"uncaught JS error(s): {page_errors}"
+        assert _ignore_network_console(console_errors) == [], console_errors
+        assert probe["canvas_count"] >= 2, (
+            f"main + overview must draw a canvas: {probe}"
+        )
+        assert sorted(probe["maps"]) == ["de-map-main", "de-minimap"], probe["maps"]
+        assert probe["minimaps"] == ["de-minimap"], probe["minimaps"]
+        assert probe["has_rect"], "the overview must draw the main map's view rectangle"

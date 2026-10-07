@@ -534,3 +534,79 @@ def save_swipe(
     out = pathlib.Path(path)
     out.write_text(html, encoding="utf-8")
     return out
+
+
+def minimap_html(
+    main: Any,
+    *,
+    overview: Any = None,
+    title: str = DEFAULT_TITLE,
+    height: int = 600,
+    mini_size: tuple[int, int] = (200, 150),
+) -> str:
+    """Return a standalone HTML page with a main map and a synced overview minimap (WB-20).
+
+    A module-level function for the same reason as :func:`swipe_html` — it composes a main map and
+    an overview into one artifact. The overview follows the main map at a lower zoom, draws a
+    rectangle of the main map's current view, and recentres the main map when clicked. It is
+    rendered through our own :class:`~digitalearth.web.htmldoc.HtmlDocument`, because py-maplibregl's
+    single-container ``to_html`` cannot host the second (overview) map.
+
+    Args:
+        main: The main map (a :class:`~digitalearth.web.map.WebMap`), shown full size.
+        overview: The map drawn in the inset; ``None`` uses a plain ``WebMap().basemap()`` overview.
+        title: The HTML document title.
+        height: The main map height in CSS pixels.
+        mini_size: ``(width, height)`` of the overview inset, in CSS pixels.
+
+    Returns:
+        The standalone HTML document as a string.
+    """
+    from digitalearth.web.htmldoc import HtmlDocument
+    from digitalearth.web.map import WebMap
+
+    inset = overview if overview is not None else WebMap().basemap()
+    document = HtmlDocument.minimap(
+        main._build_map_widget().to_dict(),
+        inset._build_map_widget().to_dict(),
+        height=height,
+        mini_size=mini_size,
+    )
+    return document.render(title=title)
+
+
+def save_minimap(
+    main: Any,
+    path: str,
+    *,
+    overview: Any = None,
+    title: str = DEFAULT_TITLE,
+    height: int = 600,
+    mini_size: tuple[int, int] = (200, 150),
+    offline: bool = False,
+) -> pathlib.Path:
+    """Write a WB-20 minimap page (see :func:`minimap_html`) to ``path``.
+
+    Args:
+        main: The main map, shown full size.
+        path: Where to write the ``.html`` file.
+        overview: The inset map; ``None`` uses a plain basemap overview.
+        title: The HTML document title.
+        height: The main map height in CSS pixels.
+        mini_size: ``(width, height)`` of the overview inset, in CSS pixels.
+        offline: When ``True``, inline the maplibre-gl CDN assets (best-effort, fetched once).
+
+    Returns:
+        The :class:`pathlib.Path` written.
+
+    Raises:
+        RuntimeError: when ``offline=True`` and an asset cannot be fetched (no network at save time).
+    """
+    html = minimap_html(
+        main, overview=overview, title=title, height=height, mini_size=mini_size
+    )
+    if offline:
+        html = ExportMixin._inline_offline_assets(html)
+    out = pathlib.Path(path)
+    out.write_text(html, encoding="utf-8")
+    return out
