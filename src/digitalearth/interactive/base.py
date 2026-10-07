@@ -540,7 +540,9 @@ class InteractiveMapBase:
         # A Bokeh theme applied to every render of this map (IN-18); None = Bokeh's default. A built-in
         # name or a `bokeh.themes.Theme`, set through `theme()` and applied in `render()`/`_reconcile_view`.
         self._theme: Any = None
-        # Draw-tool stream (DI.8), set by the interaction mixin's draw(); None until a draw tool is added.
+        # Draw-tool streams (DI.8 / IN-11). `draw()` appends each tool's stream here, so a map can carry
+        # several at once; `_draw_stream` stays the most recent for the `drawn_geometry` single-tool read.
+        self._draw_streams: list[Any] = []
         self._draw_stream: Any = None
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
         # count its faces and hands it to the drawer rather than have it built twice. None outside that call.

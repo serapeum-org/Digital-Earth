@@ -952,10 +952,11 @@ class DashboardMixin(_MixinBase):
         """
         if linked:
             raise NotImplementedError(
-                "attribute_table(linked=True) is not implemented — two-way selection linking needs a "
-                "holoviews.link_selections shared with the map's elements (roadmap IN-5/DE-13), and the "
-                "table is disabled=True, so it cannot emit a selection. Pass linked=False (the default) "
-                "for the read-only attribute view."
+                "attribute_table(linked=True) is not implemented — this Tabulator is disabled=True, so it "
+                "cannot emit a selection. For brushing that links the map to its data use "
+                "cross_filter(...), whose link_selections instance carries selection_expr back into Python, "
+                "or annotate(...) for an editable attribute table over a drawn layer. Pass linked=False "
+                "(the default) for the read-only attribute view."
             )
         pn = _require_panel()
         pn.extension("tabulator")
