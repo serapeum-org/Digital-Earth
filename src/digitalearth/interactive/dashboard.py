@@ -14,8 +14,10 @@ live app must be *served*, not converted. ``save_app`` is the offline path (pre-
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from functools import reduce
 from importlib.util import find_spec
+from math import prod
 from operator import mul as _mul
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
@@ -128,6 +130,61 @@ _DASHBOARD_TEMPLATES: dict[str, str] = {
     "material": "MaterialTemplate",
     "vanilla": "VanillaTemplate",
 }
+
+
+@dataclass(frozen=True)
+class ExportPlan:
+    """What a ``save_app(embed=True)`` export will contain, modelled before it is written (IN-10).
+
+    Panel's ``embed`` bakes a pre-rendered page for the cartesian product of the widgets' discrete states —
+    a Select contributes one state per option, a continuous slider is *sampled* down to a few. The product
+    grows fast, and past Panel's cap the export silently drops states. This states the shape up front: the
+    per-widget state counts, their product, the cap, and whether the product is within it — so a caller finds
+    out their app survives the trip *before* exporting rather than from a truncated file.
+
+    Attributes:
+        widgets: ``(name, state_count)`` per embedded widget, in order.
+        total_states: The product of the state counts — the number of pages ``embed`` would bake.
+        max_states: The cap the product is judged against (Panel warns and truncates past its own).
+
+    Examples:
+        - A colormap Select (8 options) and a sampled opacity slider (3) make 24 pre-rendered states:
+            ```python
+            >>> from digitalearth.interactive.dashboard import ExportPlan
+            >>> plan = ExportPlan(widgets=(("cmap", 8), ("alpha", 3)), total_states=24, max_states=1000)
+            >>> plan.total_states, plan.embeddable
+            (24, True)
+
+            ```
+    """
+
+    widgets: tuple[tuple[str, int], ...]
+    total_states: int
+    max_states: int
+
+    @property
+    def embeddable(self) -> bool:
+        """Whether the export's state count is within the cap.
+
+        Returns:
+            ``True`` when :attr:`total_states` does not exceed :attr:`max_states`.
+        """
+        return self.total_states <= self.max_states
+
+    @property
+    def warning(self) -> str | None:
+        """A one-line caution when the export would exceed the cap, else ``None``.
+
+        Returns:
+            The warning naming the counts and the cap, or ``None`` when the export is within it.
+        """
+        if self.embeddable:
+            return None
+        breakdown = " × ".join(f"{name}:{count}" for name, count in self.widgets)
+        return (
+            f"save_app(embed=True) would bake {self.total_states} states ({breakdown}), over the "
+            f"{self.max_states} cap — Panel will truncate it. Drop a widget, or serve() the app instead."
+        )
 
 
 def _did_you_mean(kind: str, name: str, known: Sequence[str]) -> str:
@@ -510,6 +567,46 @@ class DashboardMixin(_MixinBase):
             overrides["alpha"] = values["alpha"]
         return self._reconcile_view(self.layers, overrides, values.get("basemap"))
 
+    def export_plan(
+        self,
+        *,
+        widgets: Sequence[str] = ("cmap", "alpha"),
+        max_states: int = 1000,
+        max_opts: int = 3,
+    ) -> ExportPlan:
+        """Model what a ``save_app(embed=True)`` of these widgets would bake, before writing it (IN-10).
+
+        Each widget's discrete state count is read the way Panel's ``embed`` reads it — a Select contributes
+        one state per option, a continuous slider is sampled to ``max_opts`` — and their product is the
+        number of pages the export would pre-render. :class:`ExportPlan` says whether that product is within
+        ``max_states``, so a caller can decide between an offline export and a served app *before* the file
+        is written rather than after it is truncated.
+
+        Args:
+            widgets: The widgets the export would carry (as :meth:`dashboard` takes them).
+            max_states: The cap the baked-state count is judged against.
+            max_opts: How many samples a continuous slider contributes under ``embed`` (Panel's own default
+                is 3).
+
+        Returns:
+            The :class:`ExportPlan` for this widget set.
+
+        Raises:
+            ValueError: for an unknown widget name (with a did-you-mean), or ``"basemap"`` on a
+                non-Web-Mercator map — the same vocabulary :meth:`dashboard` enforces.
+        """
+        pn = _require_panel()
+        controls, _ = self._build_widgets(pn, widgets)
+        counts: list[tuple[str, int]] = []
+        for name, widget in zip(widgets, controls):
+            options = getattr(widget, "options", None)
+            # A Select carries its discrete options; a continuous slider has none, so embed samples it.
+            counts.append((name, len(options) if options is not None else max_opts))
+        total = prod(count for _, count in counts) if counts else 1
+        return ExportPlan(
+            widgets=tuple(counts), total_states=total, max_states=max_states
+        )
+
     def serve(self, **kwargs: Any) -> Any:
         """Mark the dashboard servable for ``panel serve`` and return it.
 
@@ -531,6 +628,10 @@ class DashboardMixin(_MixinBase):
         sliders are sampled). A live, unrestricted app must be served, not exported — and a
         pyramids-backed app cannot run in WASM/Pyodide (no GDAL in the browser).
 
+        Before writing, the export is modelled with :meth:`export_plan` (IN-10): if ``embed`` would bake more
+        states than the cap, the oversize is logged with the per-widget breakdown — so a truncated file is
+        explained rather than discovered. :meth:`export_plan` lets a caller check this before calling here.
+
         Args:
             path: Destination ``.html`` file (``str`` or ``pathlib.Path``).
             embed: Bake widget states for offline interactivity (``True``) or export a static
@@ -551,6 +652,13 @@ class DashboardMixin(_MixinBase):
 
                 ```
         """
+        if embed:
+            widgets = kwargs.get("widgets", ("cmap", "alpha"))
+            plan = self.export_plan(widgets=widgets)
+            if plan.warning is not None:
+                from loguru import logger
+
+                logger.warning(plan.warning)
         app = self.dashboard(**kwargs)
         app.save(path, embed=embed)
         return Path(path)
