@@ -1524,9 +1524,15 @@ class InteractiveMapBase:
         display CRS. An element a caller builds and hands to :meth:`add_layer` (or to ``rasterize`` /
         ``datashade``) is not covered by that, and a GeoViews element silently drawn in the wrong CRS
         mis-registers with the rest of the map rather than failing — the mis-overlay GeoViews' own ``find_crs``
-        calls worse than a crash. This refuses it at the door, with both CRSs named, when the mismatch can be
-        resolved to EPSG codes; when it cannot (:func:`_epsg_of` returns ``None``), GeoViews still refuses a
-        genuinely incompatible overlay at render time.
+        calls worse than a crash. Both CRSs are named in the refusal when the mismatch resolves to EPSG codes;
+        when it cannot (:func:`_epsg_of` returns ``None``), GeoViews still refuses a genuinely incompatible
+        overlay at render time.
+
+        **When it fires depends on the path.** :meth:`add_layer` calls this before it registers the element,
+        so a bad-CRS custom layer is refused at the builder call. ``rasterize`` / ``datashade`` take the
+        element as their ``source=`` and defer drawing to their drawer, so the guard runs there — at
+        ``render``/compose time — not at the builder call. Either way the layer is refused rather than drawn
+        misaligned; only the moment differs.
 
         Args:
             element: The object a caller handed in. ``None`` (a builder's drawn kind) and a plain HoloViews
