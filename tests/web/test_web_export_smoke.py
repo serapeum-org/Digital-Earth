@@ -299,3 +299,51 @@ class TestDeckAndGeocoderInABrowser:
         assert any("accessor" in e for e in page_errors), (
             f"a nested deck accessor must be refused with an error, got {page_errors}"
         )
+
+
+class TestRuntimeSafety:
+    """Runtime robustness: popup escaping (L1) and the setDeckLayers refusal (L5)."""
+
+    def test_popup_property_values_are_html_escaped(self):
+        """A feature property containing markup is escaped in popup HTML, not rendered as live markup.
+
+        Test scenario:
+            Popups are built as HTML strings and set with ``setHTML`` (``innerHTML``), so an unescaped
+            property value would inject markup (same class as the embedded-state defect). ``propertyHtml``
+            must escape ``<``/``>``/``&`` in both keys and values.
+        """
+        html = swipe_html(WebMap().basemap(), WebMap().basemap(), title="popup-escape")
+        probe_js = """() => window.DE.propertyHtml(
+            { properties: { 'a<b>': '<img src=q onerror=alert(1)>' } }, null
+        )"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "p.html"
+            path.write_text(html, encoding="utf-8")
+            page_errors, _console, result = _render_and_probe(path.as_uri(), probe_js)
+        assert page_errors == [], f"uncaught JS error(s): {page_errors}"
+        assert "<img" not in result and "<b>" not in result, (
+            f"popup property markup was not escaped: {result!r}"
+        )
+        assert "&lt;img" in result and "a&lt;b&gt;" in result, (
+            f"expected escaped entities, got {result!r}"
+        )
+
+    def test_set_deck_layers_without_an_overlay_is_refused(self):
+        """``setDeckLayers`` replayed without a prior ``addDeckOverlay`` raises, not silently no-ops.
+
+        Test scenario:
+            The runtime's posture is refuse-don't-drop; a ``setDeckLayers`` with no overlay to update
+            must raise (a page error), matching the unknown-call and marker refusals.
+        """
+        from digitalearth.web.htmldoc import HtmlDocument
+
+        base = WebMap().basemap()._build_map_widget().to_dict()
+        data = {**base, "calls": [*base["calls"], ["setDeckLayers", [[]]]]}
+        html = HtmlDocument.swipe(data, {"mapOptions": {}, "calls": []}).render()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "sdl.html"
+            path.write_text(html, encoding="utf-8")
+            page_errors, _console, _probe = _render_and_probe(path.as_uri(), "() => ({})")
+        assert any("setDeckLayers" in e for e in page_errors), (
+            f"setDeckLayers without an overlay must be refused, got {page_errors}"
+        )

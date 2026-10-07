@@ -186,13 +186,23 @@
 
   /* -------------------------------------------------------------- popups/tooltips */
 
+  // Escape a value for safe insertion into popup HTML. A popup is built as an HTML string and set
+  // with `setHTML` (which assigns `innerHTML`), so a feature property containing markup would render
+  // as live HTML — the same injection class as the embedded map state. Keys and values are escaped.
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
   function propertyHtml(feature, field) {
     const props = (feature && feature.properties) || {};
     if (field && Object.prototype.hasOwnProperty.call(props, field)) {
-      return String(field) + ": " + String(props[field]);
+      return escapeHtml(field) + ": " + escapeHtml(props[field]);
     }
     return Object.keys(props)
-      .map((k) => String(k) + ": " + String(props[k]))
+      .map((k) => escapeHtml(k) + ": " + escapeHtml(props[k]))
       .join("<br>");
   }
 
@@ -331,7 +341,12 @@
       return;
     }
     if (name === "setDeckLayers") {
-      if (map._deOverlay) map._deOverlay.setProps({ layers: deckLayersFrom(args[0]) });
+      if (!map._deOverlay) {
+        throw new Error(
+          "de_maplibre: setDeckLayers with no deck overlay on the map (addDeckOverlay must come first)"
+        );
+      }
+      map._deOverlay.setProps({ layers: deckLayersFrom(args[0]) });
       return;
     }
     if (name === "addMapboxDraw") {
@@ -379,4 +394,7 @@
 
   DE.DELayerSwitcher = DELayerSwitcher;
   DE.DEInfoBox = DEInfoBox;
+  // Exposed so a test can check popup content is HTML-escaped without having to fire a map event.
+  DE.propertyHtml = propertyHtml;
+  DE.escapeHtml = escapeHtml;
 })(typeof window !== "undefined" ? window : this);
