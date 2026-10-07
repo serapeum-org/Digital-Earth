@@ -227,6 +227,26 @@ class TestTimeSliderNeedsEngine:
             f"the never-drawn outlier must not enter the breaks, got {m.last_breaks}"
         )
 
+    def test_a_large_vector_series_warns_about_page_size(
+        self, timed_points, monkeypatch, warning_log
+    ):
+        """L4: an inlined vector series past the feature threshold warns, as the raster stack does.
+
+        Args:
+            timed_points: Six features across three steps.
+            monkeypatch: Lowers the threshold so six features trip it.
+            warning_log: The tier's loguru warnings.
+
+        Test scenario:
+            The per-step layers inline as GeoJSON into the saved page; a large series bloats it, so the
+            vector path warns to serve tiles instead — the counterpart of the raster stack's pixel guard.
+        """
+        from digitalearth.web import temporal as web_temporal
+
+        monkeypatch.setattr(web_temporal, "_LARGE_SERIES_FEATURES", 2)
+        WebMap().timeslider(timed_points, kdim="time", column="pop")
+        assert any("vector series" in line for line in warning_log), warning_log
+
 
 class TestTimeSliderRejectsUnsupportedInput:
     """Input that is neither a vector layer nor a raster stack is turned away with an actionable error.

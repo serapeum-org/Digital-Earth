@@ -41,6 +41,11 @@ _CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 #: fires for a stack of individually-modest members that is collectively enormous.
 _LARGE_STACK_PIXELS = 8_000_000
 
+#: Total features above which an inlined vector series is warned against. The per-step layers are inlined
+#: into the saved page as GeoJSON, so a large series bloats it — the vector counterpart of the raster
+#: stack's `_LARGE_STACK_PIXELS` guard; serve vector tiles instead past this.
+_LARGE_SERIES_FEATURES = 100_000
+
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
@@ -399,6 +404,13 @@ class TemporalMixin(_MixinBase):
         # once over it so every step colours by the same classification. `_color_expr` records
         # `last_breaks`/`last_legend` here too, describing the drawn series the colour key belongs to.
         drawn = gdf[gdf[kdim].notna()]
+        if len(drawn) > _LARGE_SERIES_FEATURES:
+            logger.warning(
+                "timeslider: inlining a {}-feature vector series as GeoJSON across {} steps bloats the "
+                "saved page; for a large series serve vector tiles from pyramids instead",
+                len(drawn),
+                len(times),
+            )
         color_encoding: Any = None
         if is_polygon and column is not None:
             fill, color_encoding = self._color_expr(
