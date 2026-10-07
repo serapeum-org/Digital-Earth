@@ -987,3 +987,48 @@ class DashboardMixin(_MixinBase):
             return tuple(params)
         location.sync(self, {name: name for name in params})
         return location
+
+    def share_url(self, base_url: str = "") -> str:
+        """Encode the **whole figure** into a shareable URL, not four hardcoded names (IN-14).
+
+        Where :meth:`share` syncs a fixed handful of view parameters into a running server's URL, this
+        serialises the entire :attr:`~digitalearth.interactive.base.InteractiveMapBase.figure_spec` — every
+        layer, its source, its symbology and the view — into a URL-safe ``?state=`` blob, so a link
+        reconstructs the map exactly through
+        :meth:`~digitalearth.interactive.base.InteractiveMapBase.from_share_url`. It needs no server, which is
+        what makes it the general answer the four-name ``share`` is not.
+
+        The figure must be one that can be *written*: a layer built from an in-memory ``FeatureCollection`` or
+        dataset has an ``object:`` source that only this process can open, and
+        :meth:`~digitalearth.base.spec.FigureSpec.to_dict` refuses it — give the builders a path or URL for a
+        figure that can be shared (the same limit :meth:`save`-to-figure has).
+
+        Args:
+            base_url: An optional base to hang the query on, e.g. ``"https://host/app"``. Empty returns the
+                query string alone (``"?state=…"``).
+
+        Returns:
+            The URL carrying the encoded figure.
+
+        Raises:
+            ValueError: when the figure holds an in-memory (``object:``) source that cannot be serialised.
+
+        Examples:
+            - A sourceless map round-trips through the URL it produces:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> url = InteractiveMap(crs=4326).share_url()
+                >>> url.startswith("?state=")
+                True
+                >>> InteractiveMap.from_share_url(url).crs
+                4326
+
+                ```
+        """
+        import base64
+        import json
+
+        state = self.figure_spec.to_dict()
+        blob = base64.urlsafe_b64encode(json.dumps(state).encode("utf-8")).decode("ascii")
+        separator = "&" if "?" in base_url else "?"
+        return f"{base_url}{separator}state={blob}"

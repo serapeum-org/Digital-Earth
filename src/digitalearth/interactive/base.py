@@ -954,6 +954,38 @@ class InteractiveMapBase:
         scene.draw_figure(figure)
         return scene
 
+    @classmethod
+    def from_share_url(cls, url: str, **scene_kwargs: Any) -> Self:
+        """Rebuild a map from a URL produced by ``share_url`` (IN-14).
+
+        The decode half of :meth:`~digitalearth.interactive.dashboard.DashboardMixin.share_url`: it reads the
+        ``?state=`` blob, decodes the figure and draws it through :meth:`from_figure`. A figure that carried
+        only path/URL sources reconstructs fully; one whose sources were in-memory could not be encoded in
+        the first place, so there is no half-open case here.
+
+        Args:
+            url: A URL (or bare query string) carrying a ``state=`` parameter ``share_url`` wrote.
+            **scene_kwargs: Passed to the constructor, overriding what the figure's viewport carries.
+
+        Returns:
+            The map, with every layer drawn.
+
+        Raises:
+            ValueError: when the URL carries no ``state=`` parameter.
+        """
+        import base64
+        import json
+        from urllib.parse import parse_qs, urlparse
+
+        query = urlparse(url).query or url.lstrip("?")
+        values = parse_qs(query).get("state")
+        if not values:
+            raise ValueError(
+                f"no shareable state in {url!r}; expected a ?state= parameter from share_url()"
+            )
+        state = json.loads(base64.urlsafe_b64decode(values[0].encode("ascii")))
+        return cls.from_figure(FigureSpec.from_dict(state), **scene_kwargs)
+
     def get_layer(self, layer_id: str) -> LayerSpec:
         """Return the description of one layer, by id.
 
