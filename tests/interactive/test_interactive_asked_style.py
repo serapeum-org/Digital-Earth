@@ -19,9 +19,10 @@ Measured rather than assumed: every builder on this tier was drawn bare and its 
 only those two derive anything a declared channel can hold.
 """
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Callable, Dict, Mapping, Tuple
+from typing import Any
 
 import pytest
 
@@ -104,7 +105,7 @@ class Probe:
     draw: Callable[[Any, dict], Any]
     own_default: Mapping[str, Any]
     channel: str
-    records: Tuple[str, ...]
+    records: tuple[str, ...]
 
 
 #: The two builder parameters on this tier that drive a declared channel and default to a value.
@@ -113,7 +114,7 @@ class Probe:
 #: these two deriving anything `CHANNEL_KEYWORDS` translates — `points` writes `common['size']` and `field` a
 #: flat `alpha`. `polygons` derives `fill_alpha`, which drives no channel, and a classified `color` is a value
 #: dimension rather than a colour.
-PARAMETERS: Dict[str, Probe] = {
+PARAMETERS: dict[str, Probe] = {
     "points": Probe(
         lambda m, style: m.points(_points(), **style),
         MappingProxyType({"size": 6.0}),
@@ -135,7 +136,7 @@ PARAMETERS: Dict[str, Probe] = {
 #: and `alpha` on the builders that take no such parameter go straight through `**opts`. Kept as probes
 #: because "this needs no record" is a claim about the builders, and a builder that started resolving one of
 #: these into a parameter would quietly lose the attribution again.
-THROUGH_OPTS: Dict[str, Probe] = {
+THROUGH_OPTS: dict[str, Probe] = {
     "polygons-opacity": Probe(
         lambda m, style: m.polygons(_polygons(), **style),
         MappingProxyType({"opacity": 1.0}),
@@ -163,7 +164,7 @@ THROUGH_OPTS: Dict[str, Probe] = {
 }
 
 #: Every probe, for the questions that hold of all of them.
-EVERY: Dict[str, Probe] = {**PARAMETERS, **THROUGH_OPTS}
+EVERY: dict[str, Probe] = {**PARAMETERS, **THROUGH_OPTS}
 
 
 def _drawn(probe: Probe, style: Mapping[str, Any]):

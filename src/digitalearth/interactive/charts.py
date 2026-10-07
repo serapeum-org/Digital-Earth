@@ -11,7 +11,7 @@ holoviews is imported lazily (the optional ``interactive`` extra): importing thi
 calling a chart builder does, and a missing extra raises an actionable :class:`ImportError`.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -37,7 +37,7 @@ def _require_holoviews():
 
 
 def histogram(
-    data: Any, *, column: Optional[str] = None, bins: int = 15, **opts: Any
+    data: Any, *, column: str | None = None, bins: int = 15, **opts: Any
 ) -> Any:
     """Interactive histogram of a field (``hv.Histogram``) — the HoloViz DC.1 (DC.6).
 
@@ -123,7 +123,7 @@ def line(x: Any, y: Any, **opts: Any) -> Any:
 
 
 def bar_by(
-    data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum", **opts: Any
+    data: Any, by: str, column: str | None = None, *, agg: str = "sum", **opts: Any
 ) -> Any:
     """Interactive bar chart of an aggregate per category (``hv.Bars``) — the HoloViz DC.4 (DC.6).
 
@@ -147,7 +147,7 @@ def bar_by(
 
 
 def line_by(
-    data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum", **opts: Any
+    data: Any, by: str, column: str | None = None, *, agg: str = "sum", **opts: Any
 ) -> Any:
     """Interactive line of an aggregate per ordered/time key (``hv.Curve``) — the HoloViz DC.4 (DC.6).
 

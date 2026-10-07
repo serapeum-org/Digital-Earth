@@ -31,7 +31,8 @@ The one matplotlib chore that used to sit alongside these (``fig_of``) is not he
 the matplotlib backend rather than to the engine-neutral shared layer.
 """
 
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
@@ -40,7 +41,7 @@ from digitalearth.base.spec import DEFAULT_BAND
 __all__ = ["NAN_REDUCERS", "finite", "read_masked_band", "ring_runs"]
 
 
-def ring_runs(visible: Any) -> List[np.ndarray]:
+def ring_runs(visible: Any) -> list[np.ndarray]:
     """Split a closed ring's visibility mask into runs of consecutive visible vertex indices.
 
     A ring is circular, so the stretch that runs off the end of the array carries on at its start. Splitting the
@@ -100,7 +101,7 @@ def ring_runs(visible: Any) -> List[np.ndarray]:
 #: NaN-aware spatial/array reducers keyed by name — the single source consumed by the temporal time-series
 #: reducer and the quadtree per-cell aggregator (which adds its own ``"count"`` on top). Each maps a name to a
 #: callable taking a 1-D array and returning a scalar.
-NAN_REDUCERS: Dict[str, Callable[..., Any]] = {
+NAN_REDUCERS: dict[str, Callable[..., Any]] = {
     "mean": np.nanmean,
     "sum": np.nansum,
     "median": np.nanmedian,

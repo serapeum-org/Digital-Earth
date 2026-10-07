@@ -20,9 +20,10 @@ This type does not resolve anything — it says *what* to read, and :class:`~dig
 says *where* from. Materialising both is the data tier's job (`DE-16`, Wave 2).
 """
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from numbers import Integral
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any
 
 from digitalearth.base.spec._serial import (
     as_list,
@@ -37,7 +38,7 @@ __all__ = ["DEFAULT_BAND", "Selection"]
 DEFAULT_BAND: int = 1
 
 
-def _as_bands(band: Any) -> Tuple[Any, ...]:
+def _as_bands(band: Any) -> tuple[Any, ...]:
     """Normalise a band argument to a tuple, leaving validation to :class:`Selection`.
 
     Args:
@@ -110,12 +111,12 @@ class Selection:
             ```
     """
 
-    band: Tuple[int, ...] = (DEFAULT_BAND,)
+    band: tuple[int, ...] = (DEFAULT_BAND,)
     time: Any = None
     level: Any = None
     member: Any = None
-    overview: Optional[int] = None
-    budget: Optional[int] = None
+    overview: int | None = None
+    budget: int | None = None
 
     def __post_init__(self) -> None:
         """Refuse a selection that names no readable band.
@@ -132,7 +133,7 @@ class Selection:
             object.__setattr__(self, axis, frozen_value(getattr(self, axis)))
         if not self.band:
             raise ValueError("Selection needs at least one band")
-        bands: List[int] = []
+        bands: list[int] = []
         for index in self.band:
             # bool is an int in Python, and True would read as band 1 — almost never what a caller meant.
             if isinstance(index, bool) or not isinstance(index, Integral):
@@ -258,7 +259,7 @@ class Selection:
         bands = _as_bands(band)
         return replace(self, band=bands)
 
-    def frames(self) -> Tuple["Selection", ...]:
+    def frames(self) -> tuple["Selection", ...]:
         """Return one single-band selection per band, in order.
 
         Returns:
@@ -279,7 +280,7 @@ class Selection:
 
     # ------------------------------------------------------------------ serialisation
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -316,7 +317,7 @@ class Selection:
 
                 ```
         """
-        out: Dict[str, Any] = {"band": list(self.band)}
+        out: dict[str, Any] = {"band": list(self.band)}
         for name in ("time", "level", "member", "overview", "budget"):
             value = getattr(self, name)
             if value is not None:

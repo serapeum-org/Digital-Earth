@@ -18,7 +18,7 @@ for pyramids to compute geodesic distance/area (the GIS part).
 import html
 import re
 from dataclasses import replace as _with_fields
-from typing import TYPE_CHECKING, Any, List, Optional, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.basemaps import (
@@ -159,7 +159,7 @@ def _format_number(value: Any) -> str:
     return f"{value:.3f}".rstrip("0").rstrip(".")
 
 
-def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) -> str:
+def _legend_rows(kind: str, values: list, colors: list, labels: list | None) -> str:
     """Build the body of a legend for one classification.
 
     Args:
@@ -217,7 +217,7 @@ DEFAULT_KEY_ANCHOR = "bottom-right"
 LEGEND_LABELS = "legend_labels"
 
 
-def keyable_layer_ids(web_map: Any) -> List[str]:
+def keyable_layer_ids(web_map: Any) -> list[str]:
     """Return the live layers a colour key could describe, bottom-first.
 
     A layer qualifies when two things hold: its ``color`` channel is driven by a **field** rather than by a
@@ -231,7 +231,7 @@ def keyable_layer_ids(web_map: Any) -> List[str]:
     Returns:
         The qualifying ids in draw order, bottom first, so the caller reads the topmost off the end.
     """
-    keyed: List[str] = []
+    keyed: list[str] = []
     for layer_id in web_map.layer_ids:
         encoding = web_map._layer_tree.get(layer_id).symbology.encoding("color")
         if encoding is None or encoding.is_constant:
@@ -241,7 +241,7 @@ def keyable_layer_ids(web_map: Any) -> List[str]:
     return keyed
 
 
-def guided_layer_ids(web_map: Any) -> List[str]:
+def guided_layer_ids(web_map: Any) -> list[str]:
     """Return the live layers asking to have their colour explained, bottom-first.
 
     The keyable layers (:func:`keyable_layer_ids`) narrowed to those carrying a
@@ -256,7 +256,7 @@ def guided_layer_ids(web_map: Any) -> List[str]:
     Returns:
         The ids in draw order, bottom first, so the caller reads the topmost off the end.
     """
-    asked: List[str] = []
+    asked: list[str] = []
     for layer_id in keyable_layer_ids(web_map):
         guide = web_map._layer_tree.get(layer_id).symbology.guide()
         if guide is not None and guide.show:
@@ -264,7 +264,7 @@ def guided_layer_ids(web_map: Any) -> List[str]:
     return asked
 
 
-def drawn_guide_layer(web_map: Any) -> Optional[str]:
+def drawn_guide_layer(web_map: Any) -> str | None:
     """Return the layer whose colour key is on screen, or `None` when none is.
 
     **This tier draws one key**, and this is the one function that decides whose — the topmost *visible*
@@ -287,7 +287,7 @@ def drawn_guide_layer(web_map: Any) -> Optional[str]:
     return None
 
 
-def _legend_panel(spec: dict, guide: Guide, labels: Optional[Any]) -> tuple:
+def _legend_panel(spec: dict, guide: Guide, labels: Any | None) -> tuple:
     """Build one colour key as a floating panel.
 
     Args:
@@ -356,6 +356,10 @@ def refresh_legend_panel(web_map: Any) -> None:
         layer.symbology.props.get(LEGEND_LABELS),
     )
 
+
+#: The Natural-Earth resolutions `cleopatra.basemap.reference` publishes, for `coastlines`/`borders` to refuse
+#: anything else by name rather than letting the read fail deeper down.
+_NATURAL_EARTH_RESOLUTIONS = frozenset({"110m", "50m", "10m"})
 
 #: Degrees between graticule lines when a caller names neither step — the interactive tier's own default, so
 #: one `graticule()` call draws the same grid on both (#263).
@@ -674,9 +678,9 @@ class DecorationMixin(_MixinBase):
         attribution: str = "",
         tile_size: int = 256,
         opacity: Maybe[float] = UNSET,
-        max_zoom: Optional[int] = None,
-        bounds: Optional[Any] = None,
-        name: Optional[str] = None,
+        max_zoom: int | None = None,
+        bounds: Any | None = None,
+        name: str | None = None,
     ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
@@ -793,9 +797,9 @@ class DecorationMixin(_MixinBase):
         provider: str = DEFAULT_BASEMAP_PROVIDER,
         *,
         opacity: Maybe[float] = UNSET,
-        api_key: Optional[str] = None,
-        preset: Optional[dict] = None,
-        name: Optional[str] = None,
+        api_key: str | None = None,
+        preset: dict | None = None,
+        name: str | None = None,
     ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
@@ -877,10 +881,10 @@ class DecorationMixin(_MixinBase):
     def legend(
         self,
         *,
-        layer_id: Optional[str] = None,
-        title: Optional[str] = None,
+        layer_id: str | None = None,
+        title: str | None = None,
         position: str = DEFAULT_KEY_ANCHOR,
-        labels: Optional[list] = None,
+        labels: list | None = None,
         visible: bool = True,
     ) -> Self:
         """Add a key for a classified layer (recipe W2).
@@ -978,11 +982,11 @@ class DecorationMixin(_MixinBase):
 
     def _record_key(
         self,
-        layer_id: Optional[str],
+        layer_id: str | None,
         *,
-        title: Optional[str],
+        title: str | None,
         position: str = DEFAULT_KEY_ANCHOR,
-        labels: Optional[list],
+        labels: list | None,
         visible: bool,
         caller: str,
     ) -> Self:
@@ -1046,11 +1050,11 @@ class DecorationMixin(_MixinBase):
 
     def _check_key_arguments(
         self,
-        layer_id: Optional[str],
+        layer_id: str | None,
         *,
-        title: Optional[str],
+        title: str | None,
         position: str,
-        labels: Optional[list],
+        labels: list | None,
     ) -> None:
         """Refuse a malformed key description, before the `visible` flag has been read at all.
 
@@ -1090,7 +1094,7 @@ class DecorationMixin(_MixinBase):
             # KeyError by name, then ValueError for no classification — the same two refusals
             # `_guide_target` gives a named layer, reached here so neither waits on the flag.
             self._legend_of(layer_id)
-            described: Optional[str] = layer_id
+            described: str | None = layer_id
         else:
             keyable = keyable_layer_ids(self)
             described = keyable[-1] if keyable else None
@@ -1100,8 +1104,8 @@ class DecorationMixin(_MixinBase):
             _legend_panel(self._legend_of(described), guide, rows)
 
     def _guide_target(
-        self, layer_id: Optional[str], *, visible: bool, caller: str = "legend()"
-    ) -> Optional[str]:
+        self, layer_id: str | None, *, visible: bool, caller: str = "legend()"
+    ) -> str | None:
         """Return the layer a colour key should describe.
 
         Args:
@@ -1175,9 +1179,7 @@ class DecorationMixin(_MixinBase):
             "choropleth (or any builder given column=...) first."
         )
 
-    def _attach_guide(
-        self, layer_id: str, guide: Guide, labels: Optional[list]
-    ) -> None:
+    def _attach_guide(self, layer_id: str, guide: Guide, labels: list | None) -> None:
         """Record on one layer that its colour is explained, and how.
 
         Args:
@@ -1212,12 +1214,14 @@ class DecorationMixin(_MixinBase):
     def layer_control(
         self,
         *,
-        layers: Optional[list] = None,
+        layers: list | None = None,
         position: str = "top-right",
-        controls: Optional[list] = None,
+        controls: list | None = None,
         theme: str = "default",
+        opacity: dict | None = None,
+        order: list | None = None,
     ) -> Self:
-        """Add a switcher so a viewer can turn the data layers on and off.
+        """Add a switcher so a viewer can turn the data layers on and off, dim them, and reorder them.
 
         A map with a basemap, a choropleth and a point overlay had no way to look underneath — which is the
         single most common thing anyone does with a web map. The switch lists the data layers only:
@@ -1227,6 +1231,18 @@ class DecorationMixin(_MixinBase):
         as well — the layers to include, the position, the controls to expose — so the same call adds a layer
         control on either tier (#264). What was ``layer_ids=`` here is ``layers=``, the name that tier uses
         for the same thing.
+
+        **The manager widens past visibility (WB-8), and the widening is declarative.** ``opacity=`` dims a
+        layer and ``order=`` reorders the stack, each applied **now** — ``opacity`` through
+        :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rewrites the layer's own paint, and
+        ``order`` through :meth:`~digitalearth.web.base.WebMapBase.move_layer` — so the saved page draws the
+        layers dimmed and in that order. The visibility switcher stays a **live page-side control**
+        (py-maplibregl's ``LayerSwitcherControl``); a live opacity slider or a drag-to-reorder control would
+        each need a browser-JS layer this tier does not ship (the X-2 limitation), so ``controls=`` still
+        refuses ``"opacity"`` rather than accept a control it cannot build — the inertness #242/#244 removed.
+        The two are therefore different questions: ``controls=`` selects the *live* switcher controls, while
+        ``opacity=``/``order=`` are a one-time transform baked into the page and recorded on the switcher's
+        furniture.
 
         Args:
             layers: The layers to offer, by id, defaulting to every data layer added so far — that is,
@@ -1246,6 +1262,15 @@ class DecorationMixin(_MixinBase):
                 to know that this tier draws one.
             theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
                 keyword: it styles the switcher rather than choosing what the switcher contains.
+            opacity: A mapping of layer id to opacity in ``[0, 1]``, applied **now** by rewriting each named
+                layer's paint through :meth:`~digitalearth.web.base.WebMapBase.replace_layer`. A layer that
+                records no opacity to change — a text annotation has none — is refused rather than silently
+                left opaque. ``None`` dims nothing.
+            order: The bottom-to-top draw order for the named layers, applied **now** through
+                :meth:`~digitalearth.web.base.WebMapBase.move_layer`. The ids must share a draw-order band —
+                a layer cannot be dragged under the basemap, which is the one move the bands forbid — and an
+                order that crosses a band is refused with the ``IndexError`` ``move_layer`` raises. ``None``
+                leaves the order untouched.
 
         Note:
             A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
@@ -1260,7 +1285,11 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when ``position`` is not one of the four legal corners, when ``controls`` names
                 something outside the shared vocabulary or something this tier cannot build, when no data
-                layer has been added yet, or when an id was given that is not on this map.
+                layer has been added yet, when an id was given (in ``layers``, ``opacity`` or ``order``)
+                that is not on this map, when an ``opacity`` value is not a finite fraction in ``[0, 1]``,
+                or when an ``opacity`` names a layer that records no opacity to change.
+            IndexError: when ``order`` would move a layer out of its draw-order band, as
+                :meth:`~digitalearth.web.base.WebMapBase.move_layer` refuses it.
 
         Examples:
             - Two layers and a switch between them:
@@ -1310,12 +1339,25 @@ class DecorationMixin(_MixinBase):
                 "the ground rather than a layer a viewer toggles."
             )
         wanted = list(layers) if layers is not None else offered
-        unknown = [layer_id for layer_id in wanted if layer_id not in available]
+        named = [*wanted, *(opacity or {}), *(order or [])]
+        unknown = [layer_id for layer_id in named if layer_id not in available]
         if unknown:
             raise ValueError(
                 f"layer_control() was given {unknown}, which are not on this map; its layers are "
                 f"{available}"
             )
+        # The declarative half (WB-8): dim, then reorder, through the map's own `replace_layer`/`move_layer`
+        # rather than a new mechanism, so the saved page draws what the layers now carry. The WHOLE request is
+        # validated before any layer is touched — mirroring `_bind_attribute`'s whole-list pre-check (M2):
+        # `_resolve_layer_opacity` rewrites every target's paint (raising on a bad value or a layer with no
+        # opacity to dim) and `_check_layer_order` proves the full order a legal in-band permutation on a trial
+        # tree, both without mutating. Only then are they applied — opacity before order because `replace_layer`
+        # keeps a layer's place, so the two do not fight — and both before the switcher is recorded. So a refusal
+        # leaves no half-built control behind: no opacity applied, no move done, no furniture recorded (M1).
+        resolved_opacity = self._resolve_layer_opacity(opacity)
+        self._check_layer_order(order)
+        applied_opacity = self._apply_layer_opacity(resolved_opacity)
+        applied_order = self._apply_layer_order(order)
         # Held as a request, not appended as a layer: the live layers are resolved when the widget is
         # built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling
         # this twice replaces the request rather than stacking a second identical panel.
@@ -1330,21 +1372,164 @@ class DecorationMixin(_MixinBase):
             layers=tuple(wanted),
             theme=theme,
             controls=exposed,
+            opacity=applied_opacity,
+            order=applied_order,
         )
         return self
+
+    def _resolve_layer_opacity(self, opacity: dict | None) -> tuple:
+        """Validate the whole opacity request and build each layer's rewritten spec, without mutating the map.
+
+        The web tier builds no live opacity slider (py-maplibregl's switcher is visibility rows), so opacity
+        is applied declaratively: the value is written into the layer's own recorded paint — a vector layer's
+        ``*-opacity`` paint key, or a raster's flat ``opacity`` prop. This resolves every target up front — so
+        a bad value or a layer with no opacity to change is refused before :meth:`_apply_layer_opacity` touches
+        a single layer, which is what keeps :meth:`layer_control` atomic (M1).
+
+        Args:
+            opacity: A mapping of layer id to opacity in ``[0, 1]``, or ``None`` to dim nothing. Every id has
+                already been checked to be on the map.
+
+        Returns:
+            One ``(layer_id, value, spec)`` triple per target, in the order given — ``spec`` being the rewritten
+            :class:`~digitalearth.base.spec.LayerSpec` for :meth:`_apply_layer_opacity` to install. Empty when
+            nothing was asked to be dimmed.
+
+        Raises:
+            ValueError: when a value is not a finite fraction in ``[0, 1]``, or when a named layer records no
+                opacity to change (a text annotation has none).
+        """
+        if not opacity:
+            return ()
+        resolved = []
+        for layer_id, value in opacity.items():
+            opacity_value = as_finite(
+                value, f"opacity[{layer_id!r}]", "WebMap.layer_control()"
+            )
+            if not 0.0 <= opacity_value <= 1.0:
+                raise ValueError(
+                    f"WebMap.layer_control() opacity[{layer_id!r}]={opacity_value} must be a fraction "
+                    "in [0, 1]"
+                )
+            spec = self._layer_with_opacity(layer_id, opacity_value)
+            resolved.append((layer_id, opacity_value, spec))
+        return tuple(resolved)
+
+    def _apply_layer_opacity(self, resolved: tuple) -> tuple:
+        """Install the rewritten specs from :meth:`_resolve_layer_opacity` through ``replace_layer``.
+
+        The request was fully validated by :meth:`_resolve_layer_opacity`, so nothing here raises — each spec
+        is handed to :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rebuilds the MapLibre layer
+        from it so the saved page draws the layer dimmed.
+
+        Args:
+            resolved: The ``(layer_id, value, spec)`` triples :meth:`_resolve_layer_opacity` returned.
+
+        Returns:
+            The applied pairs as a tuple of ``(layer_id, value)``, sorted by id, for the switcher furniture
+            to record what the control did. Empty when nothing was dimmed.
+        """
+        for _, _, spec in resolved:
+            self.replace_layer(spec)
+        return tuple(sorted((layer_id, value) for layer_id, value, _ in resolved))
+
+    def _layer_with_opacity(self, layer_id: str, value: float) -> LayerSpec:
+        """Return a copy of a layer's description with its opacity set to ``value``.
+
+        Args:
+            layer_id: The layer to dim.
+            value: The opacity in ``[0, 1]``.
+
+        Returns:
+            A new :class:`~digitalearth.base.spec.LayerSpec` with the same id, kind, source and encodings,
+            and the opacity rewritten — in the ``*-opacity`` key of its paint dict (a vector layer) or in
+            its flat ``opacity`` prop (a raster / field / graticule).
+
+        Raises:
+            ValueError: when the layer records no opacity to change — a text annotation carries none, so
+                dimming it is refused rather than accepted and ignored.
+        """
+        layer = self.get_layer(layer_id)
+        props = dict(layer.symbology.props)
+        paint = props.get("paint")
+        if isinstance(paint, dict) and any(key.endswith("-opacity") for key in paint):
+            props["paint"] = {
+                key: (value if key.endswith("-opacity") else held)
+                for key, held in paint.items()
+            }
+        elif "opacity" in props:
+            props["opacity"] = value
+        else:
+            raise ValueError(
+                f"WebMap.layer_control(opacity=...) cannot dim layer {layer_id!r} (kind {layer.kind!r}): "
+                "it records no opacity to change. Only the data layers that carry a fill/line/circle/raster "
+                "opacity can be dimmed."
+            )
+        symbology = Symbology(encodings=dict(layer.symbology.encodings), props=props)
+        return _with_fields(layer, symbology=symbology)
+
+    def _check_layer_order(self, order: list | None) -> None:
+        """Prove the full order is a legal in-band permutation, replaying the moves on a trial tree only.
+
+        :meth:`_apply_layer_order` moves each listed layer through the map's own ``move_layer``, and a move
+        that crosses a draw-order band raises an ``IndexError`` partway — leaving the stack half-reordered. So
+        the moves are first replayed against a throwaway copy of the layer tree, in the exact sequence (and
+        from the same anchor) :meth:`_apply_layer_order` uses, so a band-crossing order is refused before any
+        layer actually moves and :meth:`layer_control` stays atomic (M1).
+
+        Args:
+            order: The bottom-to-top order for the named layers, or ``None`` to leave the order untouched.
+                Every id has already been checked to be on the map.
+
+        Raises:
+            IndexError: when a move would take a layer out of its draw-order band, as
+                :class:`~digitalearth.base.spec.LayerTree` refuses it — the same error
+                :meth:`_apply_layer_order` would raise, surfaced before anything moves.
+        """
+        if not order:
+            return
+        tree = self._layer_tree
+        anchor = min(self.layer_ids.index(layer_id) for layer_id in order)
+        for offset, layer_id in enumerate(order):
+            tree = tree.move(layer_id, anchor + offset)
+
+    def _apply_layer_order(self, order: list | None) -> tuple:
+        """Reorder the named layers bottom-to-top, through the map's own ``move_layer``.
+
+        The web tier builds no drag-to-reorder control, so ordering is applied declaratively: each listed
+        layer is moved to its place in draw order with
+        :meth:`~digitalearth.web.base.WebMapBase.move_layer`. Anchored at the lowest position the listed
+        layers currently occupy and filled upward, so the listed set ends up contiguous in the given order.
+        The order was already proven a legal in-band permutation by :meth:`_check_layer_order`, so no move
+        here crosses a band — the atomicity pre-check is what makes that true.
+
+        Args:
+            order: The bottom-to-top order for the named layers, or ``None`` to leave the order untouched.
+                Every id has already been checked to be on the map, and the permutation proven legal.
+
+        Returns:
+            The applied order as a tuple of ids, for the switcher furniture to record. Empty when the order
+            was untouched.
+        """
+        if not order:
+            return ()
+        anchor = min(self.layer_ids.index(layer_id) for layer_id in order)
+        for offset, layer_id in enumerate(order):
+            self.move_layer(layer_id, anchor + offset)
+        return tuple(order)
 
     def text(
         self,
         lon: float,
         lat: float,
-        s: Optional[str] = None,
+        s: str | None = None,
         *,
         crs: Any = 4326,
         text_size: float = 14.0,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> Self:
         """Place a single line of text at a coordinate.
 
@@ -1425,7 +1610,7 @@ class DecorationMixin(_MixinBase):
         heading: str,
         *,
         position: str = "top-left",
-        subtitle: Optional[str] = None,
+        subtitle: str | None = None,
     ) -> Self:
         """Put a title on the map itself, so a saved page carries its own heading.
 
@@ -1463,14 +1648,14 @@ class DecorationMixin(_MixinBase):
     def graticule(
         self,
         *,
-        lon_step: Optional[float] = None,
-        lat_step: Optional[float] = None,
-        spacing: Optional[float] = None,
+        lon_step: float | None = None,
+        lat_step: float | None = None,
+        spacing: float | None = None,
         color: str = "#888888",
         width: float = 0.5,
         opacity: Maybe[float] = UNSET,
         labels: bool = True,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a lat/lon grid over the map.
@@ -1570,6 +1755,186 @@ class DecorationMixin(_MixinBase):
         # Reference geography says nothing about where to look, so it does not frame the map. Its band —
         # over the basemap, under the data — comes from the kind's registration, not from here.
         return self
+
+    def coastlines(
+        self,
+        resolution: str = "110m",
+        *,
+        color: str = "#000000",
+        width: float = 0.8,
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Self:
+        """Overlay Natural-Earth coastlines as reference lines (WB-16).
+
+        Coastlines came only with whatever basemap style a caller picked; a map built from the caller's own
+        sources, or one with ``basemap(opacity=...)`` turned down, had none. This draws them as a line
+        overlay in the reference band — over the basemap, under the data — from the same
+        ``cleopatra.basemap.reference`` Natural-Earth coordinates the static tier reads, built here into
+        ordinary GeoJSON so the lines embed in a saved page and need no network. No GIS is reimplemented:
+        the coordinates are read from the shared source and packaged, nothing more.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``, matching
+                the static tier's spelling.
+            color: Line colour.
+            width: Line width in pixels.
+            opacity: Line opacity in ``[0, 1]``; reference geography sits visually under the data.
+            visible: Whether the overlay starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``, or when
+                ``width`` or ``opacity`` is not a finite number.
+
+        Examples:
+            - Coastlines over a basemap, under the data (needs the ``web`` extra, so the block is skipped
+              without it):
+                ```python
+                >>> from digitalearth.web import WebMap        # doctest: +SKIP
+                >>> WebMap().basemap().coastlines()            # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.borders: the same line path for country boundaries.
+            digitalearth.web.base.WebMapBase.add_reference: the band that keeps it under the data.
+        """
+        return self._reference_lines(
+            "coastline",
+            "coastlines",
+            resolution,
+            color=color,
+            width=width,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def borders(
+        self,
+        resolution: str = "110m",
+        *,
+        color: str = "#777777",
+        width: float = 0.6,
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Self:
+        """Overlay Natural-Earth country borders as reference lines (WB-16).
+
+        The same line path as :meth:`coastlines`, for country boundaries rather than the shoreline.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            color: Line colour.
+            width: Line width in pixels.
+            opacity: Line opacity in ``[0, 1]``.
+            visible: Whether the overlay starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``, or when
+                ``width`` or ``opacity`` is not a finite number.
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.coastlines: the shoreline counterpart.
+        """
+        return self._reference_lines(
+            "borders",
+            "borders",
+            resolution,
+            color=color,
+            width=width,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def _reference_lines(
+        self,
+        source_layer: str,
+        prefix: str,
+        resolution: str,
+        *,
+        color: str,
+        width: float,
+        opacity: float,
+        visible: bool,
+    ) -> Self:
+        """Add one Natural-Earth line layer — a coastline or a border — to the reference band.
+
+        :meth:`coastlines` and :meth:`borders` are one mechanism over two Natural-Earth datasets, so the
+        body lives here. The geometry is read from ``cleopatra.basemap.reference`` as lon/lat coordinate
+        arrays and packaged into GeoJSON; the MapLibre source and line layer are added through a queued
+        closure (the shape :meth:`~digitalearth.web.base.WebMapBase.add_reference` takes), so a figure
+        written down keeps the embedded lines even offline.
+
+        Args:
+            source_layer: The Natural-Earth dataset name cleopatra takes — ``"coastline"`` or ``"borders"``.
+            prefix: The id prefix the overlay is numbered under — ``"coastlines"`` or ``"borders"``.
+            resolution: One of ``"110m"``, ``"50m"`` or ``"10m"``.
+            color: Line colour.
+            width: Line width in pixels.
+            opacity: Line opacity in ``[0, 1]``.
+            visible: Whether the overlay starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: for an unknown resolution, or a non-finite width/opacity.
+        """
+        call = f"WebMap.{prefix}()"
+        if resolution not in _NATURAL_EARTH_RESOLUTIONS:
+            raise ValueError(
+                f"{call} resolution={resolution!r} must be one of "
+                f"{sorted(_NATURAL_EARTH_RESOLUTIONS)} — the resolutions Natural Earth publishes"
+            )
+        width = as_finite(width, "width", call)
+        opacity = as_finite(opacity, "opacity", call)
+        layer_cls, layer_types = _require_layer_api()
+        from cleopatra.basemap.reference import natural_earth
+
+        # Read the reference geometry as lon/lat arrays and package it as GeoJSON. Parts with fewer than two
+        # vertices cannot be a line, so they are dropped rather than drawn as a degenerate segment.
+        parts = natural_earth(source_layer, resolution)
+        features = [
+            {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[float(x), float(y)] for x, y in part],
+                },
+            }
+            for part in parts
+            if len(part) >= 2
+        ]
+        collection = {"type": "FeatureCollection", "features": features}
+        layer_id = self._layer_id(prefix, None)
+        source_id = f"{layer_id}-src"
+        layout = None if visible else {"visibility": "none"}
+
+        def apply(widget: Any) -> None:
+            widget.add_source(source_id, {"type": "geojson", "data": collection})
+            widget.add_layer(
+                layer_cls(
+                    id=layer_id,
+                    type=layer_types.LINE,
+                    source=source_id,
+                    paint={
+                        "line-color": color,
+                        "line-width": float(width),
+                        "line-opacity": float(opacity),
+                    },
+                    layout=layout,
+                )
+            )
+
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        return self.add_reference(apply)
 
     def navigation(
         self,
@@ -1673,6 +2038,174 @@ class DecorationMixin(_MixinBase):
         self._record_furniture("fullscreen", anchor=position)
         return self._queue(apply)
 
+    def attribution(
+        self,
+        *,
+        position: str = "bottom-right",
+        compact: bool = False,
+        custom: str | None = None,
+    ) -> Self:
+        """Add a MapLibre attribution control — the data and tile credits (WB-14).
+
+        A basemap carries its own attribution, but a map built from the caller's own sources has none until
+        one is added. This is the control that shows it, and it sits bottom-right as every MapLibre map's
+        does.
+
+        Args:
+            position: One of the four MapLibre corners.
+            compact: Collapse the credits behind an ``ⓘ`` button rather than showing them inline, for a
+                small map where the full line would crowd the frame.
+            custom: Extra attribution text to show beside whatever the sources declare; ``None`` shows only
+                the sources' own.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import AttributionControl
+
+        settings: dict = {"compact": bool(compact)}
+        if custom is not None:
+            settings["custom_attribution"] = custom
+        control = AttributionControl(**settings)
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        recorded: dict = {"compact": bool(compact)}
+        if custom is not None:
+            recorded["custom"] = custom
+        self._record_furniture("attribution", anchor=position, **recorded)
+        return self._queue(apply)
+
+    def geolocate(
+        self,
+        *,
+        position: str = "top-right",
+        track: bool = False,
+        show_accuracy_circle: bool = True,
+        show_heading: bool = False,
+    ) -> Self:
+        """Add a MapLibre geolocate control — a button that centres the map on the viewer (WB-14).
+
+        Args:
+            position: One of the four MapLibre corners.
+            track: Keep re-centring on the viewer as they move, rather than locating them once.
+            show_accuracy_circle: Draw the circle of positional uncertainty around the located point.
+            show_heading: Show which way the viewer's device is facing.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import GeolocateControl
+
+        control = GeolocateControl(
+            track_user_location=bool(track),
+            show_accuracy_circle=bool(show_accuracy_circle),
+            show_user_heading=bool(show_heading),
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture(
+            "geolocate",
+            anchor=position,
+            track=bool(track),
+            show_accuracy_circle=bool(show_accuracy_circle),
+            show_heading=bool(show_heading),
+        )
+        return self._queue(apply)
+
+    def globe_control(self, *, position: str = "top-right") -> Self:
+        """Add a MapLibre globe control — a toggle between the flat map and a 3-D globe (WB-14).
+
+        Args:
+            position: One of the four MapLibre corners.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import GlobeControl
+
+        control = GlobeControl()
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture("globe_control", anchor=position)
+        return self._queue(apply)
+
+    def terrain_control(
+        self,
+        source: str,
+        *,
+        exaggeration: float = 1.0,
+        position: str = "top-right",
+    ) -> Self:
+        """Add a MapLibre terrain control — a toggle for 3-D terrain from a DEM source (WB-14).
+
+        The control drives a raster-DEM source that is already on the map (for example the one
+        :meth:`~digitalearth.web.threed.ThreeDMixin.terrain_tiles` adds); it is named here by its MapLibre
+        source id, the way the control itself references it, so whether the source exists is the caller's
+        own responsibility — exactly as it is in MapLibre.
+
+        Args:
+            source: The MapLibre id of the raster-DEM source the terrain is built from.
+            exaggeration: The vertical exaggeration applied when terrain is switched on.
+            position: One of the four MapLibre corners.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``source`` is not a non-empty string — the control would drive nothing — when
+                ``exaggeration`` is not a finite number (NaN/inf, refused at the call because a figure holding
+                it could not be written down), or when ``position`` is not one of the four legal MapLibre
+                corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        if not isinstance(source, str) or not source:
+            raise ValueError(
+                "terrain_control() needs source= as the MapLibre id of a raster-DEM source to drive; the "
+                "control toggles that source's terrain and has nothing to toggle without one"
+            )
+        # Run `exaggeration` through `as_finite`, as every sibling builder does its numeric kwargs: a NaN/inf
+        # value is refused here, named for what the caller wrote, rather than recorded and left to fail late
+        # as a figure-serializer `TypeError` when the furniture is written down (L2).
+        exaggeration = as_finite(
+            exaggeration, "exaggeration", "WebMap.terrain_control()"
+        )
+        from maplibre.controls import TerrainControl
+
+        control = TerrainControl(source=source, exaggeration=exaggeration)
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture(
+            "terrain_control",
+            anchor=position,
+            source=source,
+            exaggeration=exaggeration,
+        )
+        return self._queue(apply)
+
     def controls(
         self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
     ) -> Self:
@@ -1738,6 +2271,86 @@ class DecorationMixin(_MixinBase):
             widget.add_mapbox_draw(options, position)
 
         self._record_furniture("measure", anchor=position, distance=distance, area=area)
+        return self._queue(apply)
+
+    def geocoder(
+        self,
+        api_key: str,
+        *,
+        position: str = "top-left",
+        placeholder: str | None = None,
+        language: str | None = None,
+        country: str | None = None,
+        limit: int | None = None,
+        fly_to: bool = True,
+    ) -> Self:
+        """Add a place-search box backed by MapTiler's geocoding service (WB-15).
+
+        py-maplibregl ships ``MapTilerGeocodingControl`` but the tier exposed no way to add it. The service
+        is keyed, and **Digital-Earth ships no key**: the caller supplies their own MapTiler key here, which
+        is held only on the live control and is deliberately **not** recorded in the figure's description —
+        the same rule ST-24 follows for a basemap credential, so a saved page cannot leak the key. A figure
+        read back carries the geocoder as furniture without a key, and so draws its map without the search
+        box, rather than embedding the secret.
+
+        Args:
+            api_key: The caller's MapTiler API key. Pass your own, for example from the environment
+                (``geocoder(os.environ["MAPTILER_KEY"])``); it is never hardcoded or defaulted here.
+            position: One of the four MapLibre corners for the search box.
+            placeholder: The box's placeholder text; ``None`` leaves py-maplibregl's own.
+            language: A language code for the result labels; ``None`` leaves the service default.
+            country: An ISO country code to bias results toward; ``None`` searches everywhere.
+            limit: The maximum number of suggestions to list; ``None`` leaves the service default.
+            fly_to: Whether picking a result flies the map to it.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``api_key`` is not a non-empty string — the service could not authenticate
+                without one, so an empty or non-string key is refused at the call rather than failing in a
+                browser — or when ``position`` is not one of the four legal MapLibre corners.
+
+        Examples:
+            - Add a search box in the top-left corner (needs the ``web`` extra, so the block is skipped
+              without it):
+                ```python
+                >>> from digitalearth.web import WebMap                     # doctest: +SKIP
+                >>> WebMap().basemap().geocoder("YOUR-MAPTILER-KEY")        # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.navigation: the control-wiring pattern this follows.
+        """
+        _require_maplibre()
+        _check_position(position)
+        if not isinstance(api_key, str) or not api_key:
+            raise ValueError(
+                "geocoder() needs api_key as a non-empty MapTiler API key; the service is keyed and "
+                "Digital-Earth ships none — pass your own, e.g. geocoder(os.environ['MAPTILER_KEY'])"
+            )
+        from maplibre.controls import MapTilerGeocodingControl
+
+        # The description half: non-secret layout options only. The key is left out on purpose so that
+        # `figure_spec` — which a saved page serialises — never carries it (ST-24's rule for a credential).
+        recorded: dict = {"fly_to": bool(fly_to)}
+        if placeholder is not None:
+            recorded["placeholder"] = placeholder
+        if language is not None:
+            recorded["language"] = language
+        if country is not None:
+            recorded["country"] = country
+        if limit is not None:
+            recorded["limit"] = int(limit)
+        # The live half: the real control, carrying the key, added through a queued closure so the secret
+        # stays out of the serialisable figure and only ever reaches the widget the caller renders.
+        control = MapTilerGeocodingControl(api_key=api_key, **recorded)
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        self._record_furniture("geocoder", anchor=position, **recorded)
         return self._queue(apply)
 
     def drawn_features(self, widget: Any = None) -> Any:
@@ -1928,7 +2541,7 @@ class DecorationMixin(_MixinBase):
         return properties
 
     @staticmethod
-    def _attribute_template(fields: Optional[List[str]]) -> dict:
+    def _attribute_template(fields: list[str] | None) -> dict:
         """Build the ``add_popup``/``add_tooltip`` kwargs for ``fields``.
 
         Args:
@@ -1946,69 +2559,158 @@ class DecorationMixin(_MixinBase):
         return {"template": template}
 
     def popup(
-        self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
+        self,
+        fields: list[str] | None = None,
+        *,
+        layer: str | list[str] | None = None,
     ) -> Self:
-        """Show an attribute popup on **click** for a layer's features (recipe W2).
+        """Show an attribute popup on **click** for one or several layers' features (recipe W2, WB-11).
 
         Args:
             fields: Attribute columns to display (one → that property; several → an HTML table). ``None``
                 shows the feature's raw properties.
-            layer: Target layer id; defaults to the most recently added data layer.
+            layer: Which layer(s) to bind. A single id binds that layer; a **list of ids** binds each one,
+                so a map with several queryable layers is inspected in one call (``layer=map.layer_ids``
+                binds them all). ``None`` defaults to the most recently added data layer, as before.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).
+            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet), or when
+                ``layer`` is an empty list, which names nothing to inspect.
+            KeyError: when a named id — alone or in the list — is not a layer on this map.
+        """
+        return self._bind_attribute(fields, layer, trigger="click", add="add_popup")
+
+    def tooltip(
+        self,
+        fields: list[str] | None = None,
+        *,
+        layer: str | list[str] | None = None,
+    ) -> Self:
+        """Show an attribute tooltip on **hover** for one or several layers' features (recipe W2, WB-11).
+
+        Args:
+            fields: Attribute columns to display (one → that property; several → an HTML table). ``None``
+                shows the feature's raw properties.
+            layer: Which layer(s) to bind. A single id binds that layer; a **list of ids** binds each one
+                (``layer=map.layer_ids`` binds them all). ``None`` defaults to the most recently added data
+                layer, as before.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet), or when
+                ``layer`` is an empty list, which names nothing to inspect.
+            KeyError: when a named id — alone or in the list — is not a layer on this map.
+        """
+        return self._bind_attribute(fields, layer, trigger="hover", add="add_tooltip")
+
+    def _bind_attribute(
+        self,
+        fields: list[str] | None,
+        layer: str | list[str] | None,
+        *,
+        trigger: str,
+        add: str,
+    ) -> Self:
+        """Bind a click popup or a hover tooltip across the resolved target layers.
+
+        :meth:`popup` and :meth:`tooltip` are one mechanism under two names — click versus hover — so the
+        body lives here and each name passes its trigger and the ``add_*`` method the widget wires it with.
+        A target list is bound layer by layer: each gets its own recorded interaction and its own queued
+        closure, tagged with its id so :meth:`~digitalearth.web.base.WebMapBase.remove_layer` takes the
+        right popup off.
+
+        Args:
+            fields: The attribute columns to show, as :meth:`popup` documents.
+            layer: The caller's target — ``None`` for the last layer, one id, or a list of ids.
+            trigger: ``"click"`` for a popup, ``"hover"`` for a tooltip.
+            add: The widget method each closure calls — ``"add_popup"`` or ``"add_tooltip"``.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: as :meth:`popup` documents.
+            KeyError: as :meth:`popup` documents.
         """
         _require_layer_api()
-        layer_id = layer or self._last_layer_id
-        if layer_id is None:
-            raise ValueError(
-                "popup() needs a layer — draw a data layer first or pass layer=..."
-            )
+        targets = self._inspector_targets(layer)
+        explicit = layer is not None
+        if explicit:
+            # Validate the whole caller-named list up front — mirror `layer_control`'s `named`/`unknown`
+            # pre-check (see `layer_control`) — so a bad id in the list leaves the map untouched rather than
+            # binding and queuing every valid id before it, which a catch-and-retry would then double-bind
+            # (M2). An id the tier chose — a cluster's loose points — is not caller-named, so it is not
+            # pre-checked here; it falls through to `_record_tooltip`, which records it undescribed.
+            unknown = [
+                layer_id for layer_id in targets if layer_id not in self._layer_tree.ids
+            ]
+            if unknown:
+                raise KeyError(
+                    f"no layer {unknown[0]!r} on this map; its layers are {self.layer_ids}"
+                )
         kwargs = self._attribute_template(fields)
+        for layer_id in targets:
+            # Nothing below refuses an id now: a caller-named list was validated above, and a tier-chosen id
+            # is recorded as the undescribed layer it is. The record then the queue stay paired per layer.
+            self._record_tooltip(layer_id, fields, trigger=trigger, explicit=explicit)
+            self._queue(self._attribute_closure(layer_id, add, kwargs))
+        return self
+
+    def _inspector_targets(self, layer: str | list[str] | None) -> list[str]:
+        """Resolve a ``popup``/``tooltip`` ``layer=`` into the list of layer ids to bind.
+
+        Args:
+            layer: ``None`` for the most recent data layer, one id, or a list of ids.
+
+        Returns:
+            The ids to bind, in the order the caller gave them.
+
+        Raises:
+            ValueError: when ``layer`` is ``None`` and nothing has been drawn, or when it is an empty list.
+        """
+        if layer is None:
+            last = self._last_layer_id
+            if last is None:
+                raise ValueError(
+                    "popup()/tooltip() needs a layer — draw a data layer first or pass layer=..."
+                )
+            return [last]
+        if isinstance(layer, str):
+            return [layer]
+        targets = list(layer)
+        if not targets:
+            raise ValueError(
+                "popup()/tooltip() was given layer=[], which names no layer to inspect; pass one id, a "
+                "list of ids, or leave it to bind the most recent layer"
+            )
+        return targets
+
+    @staticmethod
+    def _attribute_closure(layer_id: str, add: str, kwargs: dict) -> Any:
+        """Build the queued ``apply(widget)`` closure that wires one layer's popup or tooltip.
+
+        Built in its own frame rather than in :meth:`_bind_attribute`'s loop so that ``layer_id`` is a
+        fresh closure cell per target — a loop-local would late-bind every closure to the last id — and so
+        it reads back as a nonlocal, which is how ``remove_layer`` finds a closure's layer.
+
+        Args:
+            layer_id: The layer this closure binds.
+            add: The widget method to call — ``"add_popup"`` or ``"add_tooltip"``.
+            kwargs: The ``prop``/``template`` kwargs that method takes.
+
+        Returns:
+            The ``apply(widget)`` callable, tagged with its layer id for removal.
+        """
 
         def apply(widget: Any) -> None:
-            widget.add_popup(layer_id, **kwargs)
+            getattr(widget, add)(layer_id, **kwargs)
 
         # Tagged with the layer it belongs to, so `remove_layer` takes the popup off with it rather than
         # leaving a page that pops up over a layer nobody can see.
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._record_tooltip(
-            layer_id, fields, trigger="click", explicit=layer is not None
-        )
-        return self._queue(apply)
-
-    def tooltip(
-        self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
-    ) -> Self:
-        """Show an attribute tooltip on **hover** for a layer's features (recipe W2).
-
-        Args:
-            fields: Attribute columns to display (one → that property; several → an HTML table). ``None``
-                shows the feature's raw properties.
-            layer: Target layer id; defaults to the most recently added data layer.
-
-        Returns:
-            The same map instance, so builder calls chain.
-
-        Raises:
-            ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).
-        """
-        _require_layer_api()
-        layer_id = layer or self._last_layer_id
-        if layer_id is None:
-            raise ValueError(
-                "tooltip() needs a layer — draw a data layer first or pass layer=..."
-            )
-        kwargs = self._attribute_template(fields)
-
-        def apply(widget: Any) -> None:
-            widget.add_tooltip(layer_id, **kwargs)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._record_tooltip(
-            layer_id, fields, trigger="hover", explicit=layer is not None
-        )
-        return self._queue(apply)
+        return apply

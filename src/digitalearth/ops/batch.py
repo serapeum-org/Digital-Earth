@@ -8,8 +8,9 @@ orchestration over the existing visualization API (no new GIS or matplotlib mach
 """
 
 import logging
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterable, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from pyramids.dataset import Dataset
 
@@ -159,9 +160,9 @@ class Batch:
         items: Iterable[Any],
         outdir: Any,
         *,
-        namer: Optional[Callable[[Any, int], str]] = None,
+        namer: Callable[[Any, int], str] | None = None,
         **overrides: Any,
-    ) -> List[Path]:
+    ) -> list[Path]:
         """Render every input and save one image per input into ``outdir``.
 
         The output directory is created if needed. Each scene is closed immediately after saving (through its
@@ -199,8 +200,8 @@ class Batch:
         namer = namer or _default_namer
         out = Path(outdir)
         out.mkdir(parents=True, exist_ok=True)
-        written: List[Path] = []
-        used: Set[str] = set()
+        written: list[Path] = []
+        used: set[str] = set()
         for index, item in enumerate(items):
             scene = self.render_one(item, **overrides)
             stem = namer(item, index)

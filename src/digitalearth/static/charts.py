@@ -6,7 +6,8 @@ numpy arrays (or a pyramids ``Dataset`` band, with nodata dropped) into the inpu
 Parallel to :mod:`digitalearth.static.series` (the ensemble/statistical series plots).
 """
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
@@ -29,7 +30,7 @@ __all__ = ["line", "bar", "bar_by", "line_by", "histogram", "scatter", "statisti
 def statistics(
     data: Any,
     *,
-    column: Optional[str] = None,
+    column: str | None = None,
     quantiles: Sequence[float] = (0.25, 0.5, 0.75),
 ) -> dict:
     """Summarise a field — count/min/max/mean/std plus the requested quantiles (DC.5).
@@ -112,7 +113,7 @@ def line(
     x: Any,
     y: Any,
     *,
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     label: Any = None,
     color: Any = None,
     **kwargs,
@@ -160,7 +161,7 @@ def line(
 
 
 def bar(
-    x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, **kwargs
+    x: Any, heights: Any, *, ax: Axes | None = None, color: Any = None, **kwargs
 ) -> Axes:
     """Draw a bar chart of a single series (cleopatra ``LineGlyph.bar``); returns the Axes.
 
@@ -204,9 +205,9 @@ def bar(
 def histogram(
     values: Any,
     *,
-    column: Optional[str] = None,
+    column: str | None = None,
     bins: int = 15,
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     **kwargs,
 ):
     """Draw a histogram of array, raster, or field values (cleopatra ``HistogramGlyph.histogram``).
@@ -289,7 +290,7 @@ def scatter(
     data: Any = None,
     color_by: Any = None,
     size_by: Any = None,
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     **kwargs,
 ) -> Axes:
     """Draw a field-vs-field scatter (cleopatra ``ScatterGlyph``); returns the Axes (DC.3).
@@ -357,10 +358,10 @@ def scatter(
 def bar_by(
     data: Any,
     by: str,
-    column: Optional[str] = None,
+    column: str | None = None,
     *,
     agg: str = "sum",
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     **kwargs,
 ) -> Axes:
     """Bar chart of an aggregate per category (DC.4).
@@ -426,10 +427,10 @@ def bar_by(
 def line_by(
     data: Any,
     by: str,
-    column: Optional[str] = None,
+    column: str | None = None,
     *,
     agg: str = "sum",
-    ax: Optional[Axes] = None,
+    ax: Axes | None = None,
     **kwargs,
 ) -> Axes:
     """Line chart of an aggregate per ordered key — e.g. a value summed by year (DC.4).

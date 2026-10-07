@@ -23,10 +23,11 @@ worth the import, because the error then lands on the line that wrote the bad ro
 """
 
 import dataclasses
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Iterator, Mapping
+from typing import Any
 
 __all__ = [
     "NAMED_VIEWS",

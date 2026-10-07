@@ -13,7 +13,7 @@ Three modes, chosen on the pytest command line (see the options in `tests/confte
 """
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pytest
@@ -53,10 +53,10 @@ def render(scene: Any) -> np.ndarray:
 
 
 def _keep(
-    results: Optional[str],
+    results: str | None,
     name: str,
     image: np.ndarray,
-    baseline: Optional[Path] = None,
+    baseline: Path | None = None,
 ) -> None:
     """Write the render, and the baseline it was compared with, where CI uploads them from.
 

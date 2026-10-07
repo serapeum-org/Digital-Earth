@@ -33,7 +33,7 @@ from digitalearth.base.spec import Scale
 
 pytest.importorskip("maplibre", reason="the web tier needs the web environment")
 
-from digitalearth.web import WebMap  # noqa: E402
+from digitalearth.web import VectorTileSource, WebMap  # noqa: E402
 from digitalearth.web.capabilities import CAPABILITIES  # noqa: E402
 from digitalearth.web.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
 
@@ -120,6 +120,10 @@ DESCRIBED_AND_DRAWN = {
     "contours": lambda m: m.contours(_dem(), interval=CONTOUR_INTERVAL),
     "filled_contours": lambda m: m.contours(
         _dem(), interval=CONTOUR_INTERVAL, filled=True
+    ),
+    "vector_tiles": lambda m: m.vector_tiles(
+        VectorTileSource(tiles="https://tiles.example.org/{z}/{x}/{y}.pbf"),
+        source_layer="roads",
     ),
     # The four that used to be drawn straight onto the widget with no layer recorded, and so could not be
     # addressed by id at all. They are described now, each through a drawer of its own: a basemap is a raster

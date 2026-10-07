@@ -43,8 +43,9 @@ structured sheet, are both counted arithmetically rather than by triangulating t
 """
 
 import logging
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 

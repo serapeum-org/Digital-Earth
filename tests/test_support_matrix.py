@@ -15,7 +15,6 @@ run ``python -m tests.test_support_matrix`` to rewrite the page, and commit it.
 
 import textwrap
 from pathlib import Path
-from typing import Dict, List
 
 from tests.capability_surface import tier_capabilities
 from tests.ratchet import assert_matches_committed
@@ -30,7 +29,7 @@ SUPPORT_MATRIX_PATH = (
 
 #: The backends as columns, left to right. The default tier first, then the three extras. Guarded against the
 #: package's discovered tier set by ``tests/test_api_snapshot.py::test_the_snapshot_and_matrix_cover_every_tier``.
-BACKENDS: List[str] = ["matplotlib", "web", "interactive", "3d"]
+BACKENDS: list[str] = ["matplotlib", "web", "interactive", "3d"]
 
 #: The set-valued capability dimensions to tabulate, as (heading, capability key).
 _DIMENSIONS = (
@@ -51,7 +50,7 @@ _PREAMBLE = (
 )
 
 
-def _dimension_table(heading: str, key: str, caps: Dict[str, dict]) -> str:
+def _dimension_table(heading: str, key: str, caps: dict[str, dict]) -> str:
     """Render one capability dimension as a markdown table, backends across the columns.
 
     Args:
@@ -78,7 +77,7 @@ def _dimension_table(heading: str, key: str, caps: Dict[str, dict]) -> str:
     return "\n".join([f"## {heading}", "", header, rule, *rows])
 
 
-def _absent_section(caps: Dict[str, dict]) -> str:
+def _absent_section(caps: dict[str, dict]) -> str:
     """Render the per-backend "what it omits, and why" section from each tier's ``absent`` reasons.
 
     Args:

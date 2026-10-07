@@ -21,9 +21,9 @@ north)` on the next — under a first parameter named `bbox` on one and `bounds`
 """
 
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import FrozenSet, Iterable, Mapping, Optional, Tuple
 
 __all__ = [
     "CORE",
@@ -106,11 +106,11 @@ class Method:
 
     name: str
     doc: str
-    keywords: FrozenSet[str] = field(default_factory=frozenset)
+    keywords: frozenset[str] = field(default_factory=frozenset)
     returns: str = "self"
-    builds_in: Optional[str] = None
-    first_argument: Optional[str] = None
-    sequence_order: Optional[Tuple[str, ...]] = None
+    builds_in: str | None = None
+    first_argument: str | None = None
+    sequence_order: tuple[str, ...] | None = None
 
 
 # `_LAYER_MANAGEMENT_ORDER`, and the three reasons interpolated into it — `_PENDING_LAYERS`,
@@ -188,7 +188,7 @@ ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
 #: a 3-D scene has no extent to frame — declares that in its `Capabilities` (#294) rather than growing a method
 #: that raises.
-CORE: Tuple[Method, ...] = (
+CORE: tuple[Method, ...] = (
     Method(
         "field",
         "Draw a raster band as a coloured field.",
@@ -311,7 +311,7 @@ CORE: Tuple[Method, ...] = (
 #: The names that are not Core — not every tier has them — but that must mean one thing wherever they appear.
 #: Each was a live collision until this contract: `tiles` took a URL on one tier and a provider name on
 #: another, `contours` filled on one and not on another, `text` took a CRS on two tiers and not on the third.
-TIER2: Tuple[Method, ...] = (
+TIER2: tuple[Method, ...] = (
     Method(
         "text",
         "Place a string at a coordinate.",
@@ -503,7 +503,7 @@ def pending_for(backend: str) -> Mapping[str, str]:
     return PENDING.get(backend, MappingProxyType({}))
 
 
-def orders_named_in(reason: str) -> Tuple[str, ...]:
+def orders_named_in(reason: str) -> tuple[str, ...]:
     """Return every roadmap order a reason points at, in the order it names them.
 
     This is the one reading of "an order reference", so a guard over a reason and the reason itself cannot
@@ -540,7 +540,7 @@ def orders_named_in(reason: str) -> Tuple[str, ...]:
     return tuple(_ORDER_REFERENCE.findall(reason))
 
 
-def _counted_order(order: str) -> Tuple[int, str]:
+def _counted_order(order: str) -> tuple[int, str]:
     """Return the key an order sorts by, so a list of them reads as the roadmap counts them.
 
     The spelling is read from the right rather than matched, because the pattern that used to match it —

@@ -1,6 +1,7 @@
 """Climatology — group a time series by a periodic label and plot the group means + spread plume."""
 
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
@@ -56,7 +57,7 @@ class Climatology:
                 "labels length must match the number of collection members"
             )
 
-    def climatology(self) -> Tuple[List, np.ndarray, np.ndarray, np.ndarray]:
+    def climatology(self) -> tuple[list, np.ndarray, np.ndarray, np.ndarray]:
         """Aggregate the series by group label.
 
         Returns:
@@ -71,7 +72,7 @@ class Climatology:
         high = np.array([np.nanmax(values[labels == g]) for g in groups])
         return groups, mean, low, high
 
-    def plot(self, ax: Optional[Axes] = None, **kwargs) -> Any:
+    def plot(self, ax: Axes | None = None, **kwargs) -> Any:
         """Plot the climatology mean line with a min/max spread plume.
 
         Args:

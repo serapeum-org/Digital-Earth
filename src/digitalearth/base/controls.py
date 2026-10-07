@@ -19,7 +19,7 @@ Pure standard library, so it sits in ``base/`` without threatening the engine-ne
 (``tests/test_base_is_engine_neutral.py``).
 """
 
-from typing import Sequence, Tuple
+from collections.abc import Sequence
 
 __all__ = [
     "CONTROL_POSITIONS",
@@ -31,7 +31,7 @@ __all__ = [
 
 #: The corners a control may be anchored to. MapLibre's four, which the web tier has always used and which
 #: the interactive tier now reads as "which side of the map the widget column sits on, and which end of it".
-CONTROL_POSITIONS: Tuple[str, ...] = (
+CONTROL_POSITIONS: tuple[str, ...] = (
     "top-left",
     "top-right",
     "bottom-left",
@@ -44,7 +44,7 @@ CONTROL_POSITIONS: Tuple[str, ...] = (
 #: layer switcher would need to expose it — so listing it would advertise a control every tier would then have
 #: to refuse. It stays the interactive tier's own ``reorder=`` flag, which says ``NotImplementedError`` in
 #: those words.
-LAYER_CONTROLS: Tuple[str, ...] = ("visibility", "opacity", "basemap")
+LAYER_CONTROLS: tuple[str, ...] = ("visibility", "opacity", "basemap")
 
 #: The one control that is not optional. A layer control whose per-layer toggle was dropped is a box in the
 #: corner with nothing to switch — which is the thing ``layer_control`` exists to add.
@@ -87,7 +87,7 @@ def check_control_position(position: str) -> None:
 
 def resolved_controls(
     controls: Sequence[str], *, offered: Sequence[str], caller: str
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
     """Return the controls to build, refusing a name no tier has and one *this* tier cannot draw.
 
     Args:

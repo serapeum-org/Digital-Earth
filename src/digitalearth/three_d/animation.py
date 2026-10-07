@@ -16,7 +16,7 @@ from pyramids upstream.
 """
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -30,7 +30,7 @@ from digitalearth.base.animation import DEFAULT_FPS
 
 #: An up vector: three floats, as a sequence or a numpy array. numpy is the natural way to spell one and
 #: is not a ``typing.Sequence``, so both are accepted rather than adding to the mypy arg-type baseline.
-UpVector = Union[Sequence[float], np.ndarray]
+UpVector = Sequence[float] | np.ndarray
 
 #: File suffixes routed to ``open_movie`` (everything else → ``open_gif``).
 _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")

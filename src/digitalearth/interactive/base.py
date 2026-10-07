@@ -17,10 +17,11 @@ Unlike the 3-D tier, the engine import is **lazy**: ``import digitalearth.intera
 ``interactive`` extra installed; only calling a builder/render method raises an actionable ``ImportError``.
 """
 
+from collections.abc import Callable, Mapping
 from functools import reduce, wraps
 from operator import mul
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Self
+from typing import Any, Self
 
 from loguru import logger
 
@@ -181,7 +182,7 @@ def _skips_off_limb(builder: Callable) -> Callable:
     return guarded
 
 
-def cmap_name(cmap: Any) -> Optional[str]:
+def cmap_name(cmap: Any) -> str | None:
     """Return the name a colormap object can be written down as, or `None` for one that cannot.
 
     A colormap that matplotlib's registry knows — `colormaps["viridis"]`, or any name a figure read on
@@ -212,7 +213,7 @@ STYLE_KEY = "common"
 OPTS_KEY = "opts"
 
 
-def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, Any]:
+def describe_opts(held: dict[str, Any], opts: Mapping[str, Any]) -> dict[str, Any]:
     """Describe a builder's `**opts` bag, keeping what a figure can carry and holding the rest.
 
     The bag that goes round the rule. :func:`describe` asks
@@ -243,8 +244,8 @@ def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, An
     Returns:
         The keywords to record in `Symbology.props` under :data:`OPTS_KEY`.
     """
-    bucket: Dict[str, Any] = {}
-    described: Dict[str, Any] = {}
+    bucket: dict[str, Any] = {}
+    described: dict[str, Any] = {}
     for key, value in dict(opts or {}).items():
         spelling = cmap_name(value) if key == "cmap" else None
         recorded = describe(bucket, key, value, spelling)
@@ -260,7 +261,7 @@ def describe_opts(held: Dict[str, Any], opts: Mapping[str, Any]) -> Dict[str, An
 
 
 def style_value(
-    held: Dict[str, Any], name: str, value: Any, spelling: Any = None
+    held: dict[str, Any], name: str, value: Any, spelling: Any = None
 ) -> Any:
     """Describe one value that belongs inside a layer's recorded style.
 
@@ -281,7 +282,7 @@ def style_value(
     return describe(held.setdefault(STYLE_KEY, {}), name, value, spelling)
 
 
-def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any]:
+def describe_style(held: dict[str, Any], style: dict[str, Any]) -> dict[str, Any]:
     """Describe a whole resolved style dict, spelling a colormap by its name.
 
     The builders that name each property one by one pass `cmap_name(cmap)` to :func:`describe`, so a
@@ -310,7 +311,7 @@ def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any
     }
 
 
-def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
+def describe(held: dict[str, Any], name: str, value: Any, spelling: Any = None) -> Any:
     """Record a builder argument if a figure can travel with it; otherwise hold it beside the layer.
 
     The tier's answer to engine values in a description (review R-C1/R-H2/R-H3/R-M9): a figure is written to JSON
@@ -343,7 +344,7 @@ def describe(held: Dict[str, Any], name: str, value: Any, spelling: Any = None) 
     return spelling
 
 
-def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
+def held_props(interactive_map: Any, layer: Any) -> dict[str, Any]:
     """Return a layer's recorded properties with the values held beside it merged back in.
 
     What every drawer reads instead of `layer.symbology.props`: the description carries the half that
@@ -462,7 +463,7 @@ class InteractiveMapBase:
         crs: int = 3857,
         width: int = 700,
         height: int = 500,
-        tiles: Optional[str] = None,
+        tiles: str | None = None,
         title: str = "",
         strict: bool = False,
         big_data_threshold: int = DEFAULT_BIG_DATA_THRESHOLD,
@@ -508,16 +509,16 @@ class InteractiveMapBase:
         self._draw_stream: Any = None
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
         # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
-        self._built_mesh: Optional[tuple] = None
+        self._built_mesh: tuple | None = None
         # Class breaks / categories from the most recent choropleth, for building a legend out-of-band
         # (web-tier parity). None until a categorical choropleth runs; the continuous ramp resets it to None.
-        self.last_breaks: Optional[List[Any]] = None
-        self.layers: List[Any] = []
+        self.last_breaks: list[Any] | None = None
+        self.layers: list[Any] = []
         # Style record written by `_styled`, keyed by `id()` of the element it returned (the object the
         # builders register, so the key stays alive for as long as the layer does). Read back through the
         # public `style_of` / `layer_styles` accessors — the tier owns its styling state instead of
         # delegating it to HoloViews' global option Store.
-        self._styles: Dict[int, dict] = {}
+        self._styles: dict[int, dict] = {}
         # What the map draws, as data. `self.layers` holds the built HoloViews elements — the drawing —
         # and this holds the description each was built from, which is what a figure can be written to and
         # read back from (#300).
@@ -525,24 +526,24 @@ class InteractiveMapBase:
         # Created once and kept: what it holds is what a converted kind composes into, so a layer drawn
         # when its builder ran is still there at render time.
         self._renderer = _new_renderer(self)
-        self._sources: Dict[str, DataRef] = {}
+        self._sources: dict[str, DataRef] = {}
         self._objects_ns: str = object_namespace()
         #: The highest number issued for each generated-id prefix, so an unnamed layer is numbered
         #: within its kind rather than within the figure (review R2-M10).
-        self._id_counters: Dict[str, int] = {}
+        self._id_counters: dict[str, int] = {}
         self._issued_ids: set = set()
         # A keyed basemap's credential, by the id of the layer that needs it. Deliberately not in the
         # symbology: a figure is written to JSON and read back, and a key written into one leaks with it.
-        self._layer_keys: Dict[str, Any] = {}
+        self._layer_keys: dict[str, Any] = {}
         # The engine values a layer's drawer needs that a description cannot carry, by layer id: the
         # caller's raw HoloViews keywords, a colormap object, a tile provider, a Datashader reduction
         # (review R-C1/R-H2/R-H3/R-M9). Held here for the same reason the credentials are — a figure written to
         # JSON holds plain values — and let go with the layer and on `close()`.
-        self._layer_held: Dict[str, Dict[str, Any]] = {}
+        self._layer_held: dict[str, dict[str, Any]] = {}
         # The layer the caller added last — what `colorbar`, `legend`, `hover` and `on_tap` act on by
         # default. Tracked by id because `layers` is in draw order, so its last entry is whatever sits in the
         # highest band, not the layer the caller just added (review H5). The web tier's `_last_layer_id`.
-        self._last_layer_id: Optional[str] = None
+        self._last_layer_id: str | None = None
 
     def _raster_element(
         self, x: Any, y: Any, arr: Any, name: str, bounds: Any = None
@@ -642,11 +643,11 @@ class InteractiveMapBase:
     def _index_layer(
         self,
         layer_id: str,
-        label: Optional[str],
+        label: str | None,
         *,
         kind: str,
         visible: bool = True,
-        band: Optional[str] = None,
+        band: str | None = None,
         source: Any = None,
         symbology: Any = None,
     ) -> None:
@@ -697,7 +698,7 @@ class InteractiveMapBase:
         )
 
     @property
-    def layer_ids(self) -> List[str]:
+    def layer_ids(self) -> list[str]:
         """The ids of the layers this map draws, in draw order, bottom first.
 
         Returns:
@@ -908,7 +909,7 @@ class InteractiveMapBase:
             replays need the HoloViz stack, so no doctest runs it here).
         """
         view = figure.panels[0].view
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         crs = getattr(view, "crs", None)
         if crs is not None:
             kwargs["crs"] = crs
@@ -1192,14 +1193,14 @@ class InteractiveMapBase:
         self,
         element: Any,
         *,
-        kind: Optional[str] = None,
-        name: Optional[str] = None,
+        kind: str | None = None,
+        name: str | None = None,
         visible: bool = True,
-        band: Optional[str] = None,
+        band: str | None = None,
         source: Any = None,
         symbology: Any = None,
         key: Any = None,
-        held: Optional[Mapping[str, Any]] = None,
+        held: Mapping[str, Any] | None = None,
     ) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
 
@@ -1438,7 +1439,7 @@ class InteractiveMapBase:
             remaining = self._layer_tree.ids
             self._last_layer_id = remaining[-1] if remaining else None
 
-    def _held_for(self, layer_id: str) -> Dict[str, Any]:
+    def _held_for(self, layer_id: str) -> dict[str, Any]:
         """Return the engine values held beside one layer.
 
         Args:
@@ -1533,7 +1534,7 @@ class InteractiveMapBase:
 
     def _resolve_big_data_threshold(
         self,
-        big_data_threshold: Optional[int] = None,
+        big_data_threshold: int | None = None,
         *,
         caller: str,
     ) -> int:
@@ -1557,7 +1558,7 @@ class InteractiveMapBase:
             return int(self.big_data_threshold)
         return validate_big_data_threshold(big_data_threshold, caller=caller)
 
-    def _auto_style(self, source: Source) -> Dict[str, Any]:
+    def _auto_style(self, source: Source) -> dict[str, Any]:
         """Return the :func:`~digitalearth.base.autostyle.auto_style` record for ``source``.
 
         The tier's single autostyle lookup — the same variable→style table (incl. the ECMWF-Magics match)
@@ -1589,7 +1590,7 @@ class InteractiveMapBase:
             return levels
         return self._auto_style(source).get("levels")
 
-    def _auto_clabel(self, source: Source, clabel: Optional[str]) -> Optional[str]:
+    def _auto_clabel(self, source: Source, clabel: str | None) -> str | None:
         """Resolve the colorbar label: the caller's ``clabel`` if given, else the autostyle units (#230).
 
         Never guesses: an unrecognised variable carries no units, and the colorbar is then left unlabelled
@@ -1606,7 +1607,7 @@ class InteractiveMapBase:
             return clabel
         return self._auto_style(source).get("units")
 
-    def _auto_cmap(self, source: Source, cmap: Optional[str]) -> str:
+    def _auto_cmap(self, source: Source, cmap: str | None) -> str:
         """Resolve a colormap: the caller's ``cmap`` if given, else the autostyle default (DI.12).
 
         Defers to :func:`digitalearth.base.autostyle.auto_style` (the same variable→style lookup the static
@@ -1625,7 +1626,7 @@ class InteractiveMapBase:
         """
         return auto_cmap(source, cmap, lookup=self._auto_style)
 
-    def _auto_cmap_for_band(self, dataset: Any, band: int, cmap: Optional[str]) -> str:
+    def _auto_cmap_for_band(self, dataset: Any, band: int, cmap: str | None) -> str:
         """Resolve a colormap from a raster band's **name**, without reading the band (#249).
 
         The windowed reader (:meth:`~digitalearth.interactive.raster.RasterMixin.large_image`) must not
@@ -1670,8 +1671,8 @@ class InteractiveMapBase:
     def _styled(
         self,
         element: Any,
-        common: Optional[dict] = None,
-        bokeh: Optional[dict] = None,
+        common: dict | None = None,
+        bokeh: dict | None = None,
         owner: Any = None,
     ) -> Any:
         """Apply backend-agnostic style opts plus Bokeh-only frame opts to ``element``.
@@ -1703,7 +1704,7 @@ class InteractiveMapBase:
         return element
 
     def _style_record(
-        self, common: Optional[dict] = None, bokeh: Optional[dict] = None
+        self, common: dict | None = None, bokeh: dict | None = None
     ) -> dict:
         """Return the style :meth:`_styled` applies for these options, without an element to apply it to.
 
@@ -1797,7 +1798,7 @@ class InteractiveMapBase:
         return {"common": dict(recorded["common"]), "bokeh": dict(recorded["bokeh"])}
 
     @property
-    def layer_styles(self) -> List[dict]:
+    def layer_styles(self) -> list[dict]:
         """The recorded style of every registered layer, in draw order.
 
         The whole-map view of :meth:`style_of`: one entry per layer, positionally aligned with

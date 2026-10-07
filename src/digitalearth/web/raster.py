@@ -34,19 +34,13 @@ inside the methods, so importing the tier needs neither the ``web`` extra nor ma
 
 import math
 import pathlib
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
     Self,
-    Sequence,
-    Tuple,
 )
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
@@ -131,8 +125,8 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 def _colour_limits(
-    limits: Optional[Sequence[float]], vmin: Any, vmax: Any, *, caller: str
-) -> Tuple[Any, Any]:
+    limits: Sequence[float] | None, vmin: Any, vmax: Any, *, caller: str
+) -> tuple[Any, Any]:
     """Resolve the contract's `limits=` against this tier's own `vmin`/`vmax`.
 
     `limits` is the one spelling every tier answers to (#299); `vmin`/`vmax` are what this tier took before
@@ -175,7 +169,7 @@ def _colour_limits(
         ) from None
 
 
-def _grid_pixels(data: Any) -> Optional[int]:
+def _grid_pixels(data: Any) -> int | None:
     """Return how many cells a raster's grid holds, or ``None`` when it does not report one.
 
     Read from the grid rather than from a band's values: the composite builder holds the warped dataset and
@@ -194,7 +188,7 @@ def _grid_pixels(data: Any) -> Optional[int]:
     return None
 
 
-def _refuse_if_large(caller: str, noun: str, pixels: Optional[int]) -> None:
+def _refuse_if_large(caller: str, noun: str, pixels: int | None) -> None:
     """Refuse, at the call, a raster too large to inline as a ``data:`` image source.
 
     Both raster builders embed their pixels in the page as a base64 PNG, so both have the same ceiling and
@@ -261,10 +255,10 @@ class TileRoute:
 
     kind: str
     path: Any
-    zooms: Optional[Tuple[int, int]] = None
+    zooms: tuple[int, int] | None = None
 
 
-def _route_parts(tiles: Any, caller: str) -> Tuple[Any, Any, Any]:
+def _route_parts(tiles: Any, caller: str) -> tuple[Any, Any, Any]:
     """Unpack a builder's ``tiles=`` into the route name, the destination and the zoom range.
 
     Args:
@@ -309,7 +303,7 @@ def _route_parts(tiles: Any, caller: str) -> Tuple[Any, Any, Any]:
     )
 
 
-def _tile_route(tiles: Any, caller: str) -> Optional[str]:
+def _tile_route(tiles: Any, caller: str) -> str | None:
     """Resolve the caller's ``tiles=`` to one of the routes this tier writes.
 
     Args:
@@ -356,7 +350,7 @@ def _lonlat_bounds(dataset: Any) -> Bounds:
     return Bounds.from_bbox(list(dataset.bbox), dataset.epsg).to_crs(4326)
 
 
-def _tile_index(lon: float, lat: float, zoom: int) -> Tuple[int, int]:
+def _tile_index(lon: float, lat: float, zoom: int) -> tuple[int, int]:
     """Return the slippy-map tile ``(x, y)`` a lon/lat falls in at ``zoom``.
 
     This is MapLibre's tile scheme, which is why it is here rather than asked of pyramids: a ``{z}/{x}/{y}``
@@ -410,7 +404,7 @@ def _native_zoom(bounds: Bounds, columns: Any) -> int:
 
 def _zoom_range(
     bounds: Bounds, dataset: Any, zooms: Any, caller: str
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Resolve which zoom levels a pyramid is written for.
 
     Args:
@@ -448,7 +442,7 @@ def _zoom_range(
     return lowest, highest
 
 
-def _tile_addresses(bounds: Bounds, zoom: int) -> Iterator[Tuple[int, int]]:
+def _tile_addresses(bounds: Bounds, zoom: int) -> Iterator[tuple[int, int]]:
     """Yield every tile ``(x, y)`` at ``zoom`` that the extent touches.
 
     Args:
@@ -542,7 +536,7 @@ def _band_name(data: Any, band: int) -> str:
 
 def _colour_domain(
     values: Any, *, vmin: Any, vmax: Any, nodata: Any = None
-) -> Optional[Tuple[Any, Any, Tuple[float, float]]]:
+) -> tuple[Any, Any, tuple[float, float]] | None:
     """Return which of a band's cells have a value, and the span its colours are stretched across.
 
     The one place this tier decides what a band's colours *mean*, so the image and the key that explains
@@ -586,10 +580,10 @@ def _coloured_png(
     values: Any,
     cmap: Any,
     *,
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
     nodata: Any = None,
-) -> Optional[bytes]:
+) -> bytes | None:
     """Colour-map a 2-D array to an RGBA PNG, drawing what it has no value for transparent.
 
     The one encoder behind both the inlined image and every written tile, so a tile is coloured by exactly
@@ -629,7 +623,7 @@ def _coloured_png(
     return _png_bytes(rgba)
 
 
-def _classed_png(values: Any, classes: BandClasses) -> Optional[bytes]:
+def _classed_png(values: Any, classes: BandClasses) -> bytes | None:
     """Colour a 2-D array class by class to an RGBA PNG, drawing what it has no value for transparent.
 
     The classed counterpart of :func:`_coloured_png`: each cell takes its class's colour — binned by
@@ -669,10 +663,10 @@ def _classed_png(values: Any, classes: BandClasses) -> Optional[bytes]:
 
 def _written_pyramid(
     directory: pathlib.Path,
-    encode: Callable[[int, int, int], Optional[bytes]],
+    encode: Callable[[int, int, int], bytes | None],
     *,
     bounds: Bounds,
-    zooms: Tuple[int, int],
+    zooms: tuple[int, int],
     caller: str,
 ) -> int:
     """Write a ``{z}/{x}/{y}.png`` pyramid over an extent and return how many tiles it holds.
@@ -718,7 +712,7 @@ def _tile_props(
     destination: pathlib.Path,
     *,
     bounds: Bounds,
-    zooms: Optional[Tuple[int, int]],
+    zooms: tuple[int, int] | None,
 ) -> dict:
     """Return the props a tiled layer is described by, all of them writable as JSON.
 
@@ -825,7 +819,7 @@ def _tiled_reference(
     *,
     tiles_path: Any,
     zooms: Any,
-    encode: Callable[[int, int, int], Optional[bytes]],
+    encode: Callable[[int, int, int], bytes | None],
     caller: str,
 ) -> dict:
     """Write a raster's pixels beside the page and return the props that address them.
@@ -853,7 +847,7 @@ def _tiled_reference(
     """
     destination = _destination(tiles_path, route, caller)
     bounds = _lonlat_bounds(dataset)
-    levels: Optional[Tuple[int, int]] = None
+    levels: tuple[int, int] | None = None
     if route == "xyz":
         levels = _zoom_range(bounds, dataset, zooms, caller)
         _written_pyramid(
@@ -928,8 +922,8 @@ def _decimated(dataset: Any, band: int) -> Any:
 
 
 def _scan_limits(
-    dataset: Any, band: int, *, vmin: Optional[float], vmax: Optional[float]
-) -> Tuple[float, float]:
+    dataset: Any, band: int, *, vmin: float | None, vmax: float | None
+) -> tuple[float, float]:
     """Resolve the colour limits every tile of a pyramid is coloured on.
 
     Args:
@@ -1047,7 +1041,7 @@ def _composite_limits(dataset: Any, bands: Sequence[int]) -> Any:
     return channel_limits(np.stack(scans, axis=-1))
 
 
-def _composite_png(unit_stack: Any) -> Optional[bytes]:
+def _composite_png(unit_stack: Any) -> bytes | None:
     """Encode a stretched ``(rows, cols, 3)`` stack as PNG bytes.
 
     Args:
@@ -1070,7 +1064,7 @@ def _composite_png(unit_stack: Any) -> Optional[bytes]:
     return _png_bytes(rgba)
 
 
-def _limit_pairs(limits: Any) -> Optional[List[Tuple[Any, ...]]]:
+def _limit_pairs(limits: Any) -> list[tuple[Any, ...]] | None:
     """Return per-channel limits as a list of pairs, or `None` when they are not shaped like any.
 
     The one guard both limit translators need, and the one each had its own copy of. Neither of them is the
@@ -1478,8 +1472,8 @@ class RasterMixin(_MixinBase):
         *,
         band: int,
         cmap: str,
-        limits: Optional[Tuple[float, float]],
-        classes: Optional[BandClasses] = None,
+        limits: tuple[float, float] | None,
+        classes: BandClasses | None = None,
     ) -> dict:
         """Describe what a band's colour varies with, and record the key that would explain it.
 
@@ -1535,7 +1529,7 @@ class RasterMixin(_MixinBase):
         return {"color": Encoding.by_field("color", column, scale=scale)}
 
     def _band_key(
-        self, column: str, scale: Scale, cmap: Any, classes: Optional[BandClasses]
+        self, column: str, scale: Scale, cmap: Any, classes: BandClasses | None
     ) -> dict:
         """Build the key a coloured band is explained by — a ramp, one swatch per class, or one per code.
 
@@ -1620,16 +1614,16 @@ class RasterMixin(_MixinBase):
         *,
         band: int = DEFAULT_BAND,
         cmap: Any = None,
-        units: Optional[str] = None,
+        units: str | None = None,
         opacity: Maybe[float] = UNSET,
-        limits: Optional[Sequence[float]] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-        scheme: Optional[Any] = None,
-        k: Optional[int] = None,
+        limits: Sequence[float] | None = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        scheme: Any | None = None,
+        k: int | None = None,
         visible: bool = True,
-        name: Optional[str] = None,
-        tiles: Optional[TileRoute] = None,
+        name: str | None = None,
+        tiles: TileRoute | None = None,
     ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
@@ -1838,7 +1832,7 @@ class RasterMixin(_MixinBase):
         # resolution of an unset `vmin`/`vmax` is its business — the tiled route records its pair only
         # because one span has to hold a whole pyramid together.
         domain = _colour_domain(source.z.values, vmin=vmin, vmax=vmax)
-        classes: Optional[BandClasses] = None
+        classes: BandClasses | None = None
         if scheme is not None:
             # Codes take the categorical palette unless the caller names one; graduated classes the colormap
             # the band resolved, the one a ramp would have used.
@@ -1890,12 +1884,12 @@ class RasterMixin(_MixinBase):
         *,
         band: int,
         cmap: Any,
-        units: Optional[str],
+        units: str | None,
         opacity: float,
-        vmin: Optional[float],
-        vmax: Optional[float],
+        vmin: float | None,
+        vmax: float | None,
         visible: bool,
-        name: Optional[str],
+        name: str | None,
         tiles_path: Any,
         zooms: Any,
         asked: Sequence[str] = (),
@@ -1938,7 +1932,7 @@ class RasterMixin(_MixinBase):
         low, high = _scan_limits(dataset, band, vmin=vmin, vmax=vmax)
         nodata = _band_nodata(dataset, band)
 
-        def encode(zoom: int, x: int, y: int) -> Optional[bytes]:
+        def encode(zoom: int, x: int, y: int) -> bytes | None:
             """Colour one tile of the band.
 
             Args:
@@ -2010,11 +2004,11 @@ class RasterMixin(_MixinBase):
         bands: Any = DEFAULT_COMPOSITE_BANDS,
         *,
         mask_nodata: bool = True,
-        limits: Optional[Any] = None,
+        limits: Any | None = None,
         opacity: Maybe[float] = UNSET,
         visible: bool = True,
-        name: Optional[str] = None,
-        tiles: Optional[TileRoute] = None,
+        name: str | None = None,
+        tiles: TileRoute | None = None,
     ) -> Self:
         """Overlay three bands as a true- or false-colour image (recipe W1).
 
@@ -2093,11 +2087,11 @@ class RasterMixin(_MixinBase):
         bands: Any = DEFAULT_COMPOSITE_BANDS,
         *,
         mask_nodata: bool = True,
-        limits: Optional[Any] = None,
+        limits: Any | None = None,
         opacity: Maybe[float] = UNSET,
         visible: bool = True,
-        name: Optional[str] = None,
-        tiles: Optional[TileRoute] = None,
+        name: str | None = None,
+        tiles: TileRoute | None = None,
     ) -> Self:
         """Overlay three bands as an HSV composite — hue, saturation and value → RGB (#266).
 
@@ -2183,11 +2177,11 @@ class RasterMixin(_MixinBase):
         bands: Any,
         *,
         mask_nodata: bool,
-        limits: Optional[Any],
+        limits: Any | None,
         opacity: Maybe[float],
         visible: bool,
-        name: Optional[str],
-        tiles: Optional[TileRoute] = None,
+        name: str | None,
+        tiles: TileRoute | None = None,
     ) -> Self:
         """Record a three-band composite and draw it, in whichever colour space ``via`` names.
 
@@ -2284,10 +2278,10 @@ class RasterMixin(_MixinBase):
         bands: Any,
         *,
         mask_nodata: bool,
-        limits: Optional[Any],
+        limits: Any | None,
         opacity: float,
         visible: bool,
-        name: Optional[str],
+        name: str | None,
         tiles_path: Any,
         zooms: Any,
         asked: Sequence[str] = (),
@@ -2331,7 +2325,7 @@ class RasterMixin(_MixinBase):
         channels = [int(band) for band in bands]
         frozen = _composite_limits(opened, channels) if limits is None else limits
 
-        def encode(zoom: int, x: int, y: int) -> Optional[bytes]:
+        def encode(zoom: int, x: int, y: int) -> bytes | None:
             """Stretch and compose one tile of the three bands.
 
             Args:
@@ -2407,7 +2401,7 @@ class RasterMixin(_MixinBase):
             )
         return "data:image/png;base64," + base64.b64encode(payload).decode()
 
-    def _lonlat_corners(self, source: Any) -> Optional[list]:
+    def _lonlat_corners(self, source: Any) -> list | None:
         """Return a raster's corner coordinates as the lon/lat an image source is placed by.
 
         MapLibre positions an ``image`` source with ``[[lng, lat], …]``, so a display CRS that is not
@@ -2430,7 +2424,7 @@ class RasterMixin(_MixinBase):
         return [[west, north], [east, north], [east, south], [west, south]]
 
     @staticmethod
-    def _image_coordinates(x: Any, y: Any) -> List[List[float]]:
+    def _image_coordinates(x: Any, y: Any) -> list[list[float]]:
         """Return the image-source corner coordinates ``[TL, TR, BR, BL]`` in ``[lng, lat]``.
 
         The corners are the cell *edges* — half the outermost spacing beyond the centres on each side
@@ -2454,9 +2448,9 @@ class RasterMixin(_MixinBase):
         values: Any,
         cmap: Any,
         *,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-        classes: Optional[BandClasses] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        classes: BandClasses | None = None,
     ) -> str:
         """Colour-map a 2-D array to an RGBA PNG and return it as a ``data:image/png;base64,`` URI.
 

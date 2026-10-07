@@ -6,13 +6,11 @@ the static backend. Keeping it out of :mod:`digitalearth.base` is what lets that
 renderer import. Only :mod:`digitalearth.static.charts` and :mod:`digitalearth.static.series` use it.
 """
 
-from typing import Optional
-
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 
-def fig_of(ax: Optional[Axes]) -> Optional[Figure]:
+def fig_of(ax: Axes | None) -> Figure | None:
     """Return the figure that owns ``ax``, or ``None`` when ``ax`` is ``None``.
 
     Args:

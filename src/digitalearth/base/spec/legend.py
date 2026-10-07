@@ -18,8 +18,9 @@ colorbar and a Bokeh panel have nothing in common below this line.
 """
 
 import numbers
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 from digitalearth.base.spec.scale import Scale
 
@@ -62,7 +63,7 @@ __all__ = ["DEFAULT_RAMP_STOPS", "LEGEND_KINDS", "LegendEntry", "LegendSpec"]
 #: became the 7th constructor parameter, so a caller could hand the type its own allow-list and defeat the
 #: check `__post_init__` exists for — and it leaked into `dataclasses.asdict()`. `Scale` and `Selection` keep
 #: their constants at module level for the same reason.
-LEGEND_KINDS: Tuple[str, ...] = ("categorical", "graduated", "continuous")
+LEGEND_KINDS: tuple[str, ...] = ("categorical", "graduated", "continuous")
 
 #: How many stops a continuous ramp is described with. Five is what the web tier already used; sharing the
 #: number is what stops a sixth appearing when another tier grows a ramp legend.
@@ -91,7 +92,7 @@ class LegendEntry:
     """
 
     label: str
-    color: Optional[str]
+    color: str | None
     value: Any = None
 
 
@@ -129,11 +130,11 @@ class LegendSpec:
             ```
     """
 
-    entries: Tuple[LegendEntry, ...] = ()
+    entries: tuple[LegendEntry, ...] = ()
     kind: str = "continuous"
-    title: Optional[str] = None
-    units: Optional[str] = None
-    format: Optional[str] = None
+    title: str | None = None
+    units: str | None = None
+    format: str | None = None
     orientation: str = "vertical"
 
     def __post_init__(self) -> None:
@@ -158,13 +159,13 @@ class LegendSpec:
         cls,
         scale: Scale,
         *,
-        colors: Optional[Sequence[str]] = None,
-        title: Optional[str] = None,
-        units: Optional[str] = None,
-        format: Optional[str] = None,
+        colors: Sequence[str] | None = None,
+        title: str | None = None,
+        units: str | None = None,
+        format: str | None = None,
         orientation: str = "vertical",
         stops: int = DEFAULT_RAMP_STOPS,
-        values: Optional[Sequence[float]] = None,
+        values: Sequence[float] | None = None,
     ) -> "LegendSpec":
         """Build a legend from the scale a layer was drawn with.
 
@@ -276,8 +277,8 @@ class LegendSpec:
 
     @staticmethod
     def _checked(
-        colors: Optional[Sequence[str]], wanted: int, kind: str, noun: str
-    ) -> List[str]:
+        colors: Sequence[str] | None, wanted: int, kind: str, noun: str
+    ) -> list[str]:
         """Return `colors` as a list, refusing a count that would misdescribe the picture.
 
         Args:
@@ -307,7 +308,7 @@ class LegendSpec:
         return listed
 
     @staticmethod
-    def _number(value: Any, spec: Optional[str]) -> str:
+    def _number(value: Any, spec: str | None) -> str:
         """Format one number for a label, trimming float noise and nothing else.
 
         With a `spec` the number is formatted as asked. Without one it reads as `str` gives it, with one
@@ -349,7 +350,7 @@ class LegendSpec:
         return str(value)
 
     @classmethod
-    def _texts(cls, values: Sequence[Any], spec: Optional[str]) -> Dict[Any, str]:
+    def _texts(cls, values: Sequence[Any], spec: str | None) -> dict[Any, str]:
         """Return the label text of each value a legend shows, distinct values always reading distinctly.
 
         Args:
@@ -383,7 +384,7 @@ class LegendSpec:
             texts = {value: str(value) for value in distinct}
         return texts
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a tier stores or serialises.
 
         Every field is included, so the result is complete rather than the subset a particular tier happens

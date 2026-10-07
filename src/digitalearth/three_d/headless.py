@@ -27,8 +27,8 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from math import isfinite
-from typing import Optional, Sequence
 
 __all__ = ["start_xvfb"]
 
@@ -48,7 +48,7 @@ def start_xvfb(
     *,
     window_size: Sequence[int] = (1024, 768),
     wait: float = 0.5,
-) -> Optional[subprocess.Popen]:
+) -> subprocess.Popen | None:
     """Start a virtual X server and point ``DISPLAY`` at it, so the 3-D tier can render with no screen.
 
     Call it once, before the first scene is drawn. It does nothing — and returns ``None`` — when there is

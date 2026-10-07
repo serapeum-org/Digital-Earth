@@ -18,10 +18,11 @@ marks the parent's extent — the one call.
 """
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import isfinite
 from numbers import Real
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self
 
 import numpy as np
 from matplotlib.patches import Polygon
@@ -43,7 +44,7 @@ logger = logging.getLogger(__name__)
 _EDGE_SAMPLES = 21
 
 #: The named corners, as ``(right, upper)`` flags — 0 for the near edge of the axes, 1 for the far one.
-_CORNERS: Dict[str, Tuple[int, int]] = {
+_CORNERS: dict[str, tuple[int, int]] = {
     "upper right": (1, 1),
     "upper left": (0, 1),
     "lower right": (1, 0),
@@ -68,12 +69,12 @@ _DEFAULT_SIZE = 0.28
 _PRECISION = 3
 
 #: The reference geography a locator draws by default: filled land under a coastline.
-_DEFAULT_REFERENCE: Tuple[str, ...] = ("land", "coastlines")
+_DEFAULT_REFERENCE: tuple[str, ...] = ("land", "coastlines")
 
 #: The Natural-Earth layers ``inset(reference=)`` may name. A whitelist rather than a plain attribute
 #: lookup: the names are resolved to methods on the locator, so an unchecked one would reach *any*
 #: attribute — ``reference=("close",)`` would close the figure instead of drawing on it.
-_REFERENCE_LAYERS: Tuple[str, ...] = (
+_REFERENCE_LAYERS: tuple[str, ...] = (
     "land",
     "ocean",
     "coastlines",
@@ -84,7 +85,7 @@ _REFERENCE_LAYERS: Tuple[str, ...] = (
 
 #: How the extent box is drawn unless the caller says otherwise: a hollow outline, over the geography.
 #: Hollow because a filled box would cover exactly the part of the world the reader is being pointed at.
-_BOX_STYLE: Dict[str, Any] = {
+_BOX_STYLE: dict[str, Any] = {
     "facecolor": "none",
     "edgecolor": "red",
     "linewidth": 1.2,
@@ -258,7 +259,7 @@ class _ExtentBox:
         ring = np.column_stack([xs, ys])
         return np.vstack([ring, ring[:1]])
 
-    def placed_in(self, crs: Any) -> Optional[np.ndarray]:
+    def placed_in(self, crs: Any) -> np.ndarray | None:
         """Return the outline in ``crs``, or ``None`` when that CRS cannot place the whole box.
 
         Args:
@@ -510,7 +511,7 @@ class _InsetFrame:
             )
         return cls(x0=x0, y0=y0, width=width, height=height)
 
-    def as_bounds(self) -> Tuple[float, float, float, float]:
+    def as_bounds(self) -> tuple[float, float, float, float]:
         """Return the rectangle as ``ax.inset_axes`` reads it.
 
         Returns:
@@ -598,8 +599,8 @@ class InsetMixin(_MixinBase):
         return self._locator
 
     def _mark(
-        self, box: _ExtentBox, name: Optional[str] = None, **style: Any
-    ) -> Optional[Polygon]:
+        self, box: _ExtentBox, name: str | None = None, **style: Any
+    ) -> Polygon | None:
         """Draw an already-read extent box on this map, in **this** map's CRS.
 
         Args:
@@ -633,9 +634,7 @@ class InsetMixin(_MixinBase):
         self.add_layer(patch, name=name, band="overlay")
         return patch
 
-    def mark_extent(
-        self, other: Any, *, name: Optional[str] = None, **style: Any
-    ) -> Self:
+    def mark_extent(self, other: Any, *, name: str | None = None, **style: Any) -> Self:
         """Draw the extent ``other`` is looking at as an outline on **this** map.
 
         The outline is placed in **this** map's display CRS, by reprojecting the extent's four *edges*
@@ -730,10 +729,10 @@ class InsetMixin(_MixinBase):
         self,
         *,
         crs: Any = None,
-        globe: Optional[bool] = None,
+        globe: bool | None = None,
         position: Any = "upper right",
         size: Any = _DEFAULT_SIZE,
-        extent: Optional[Sequence[float]] = None,
+        extent: Sequence[float] | None = None,
         reference: Sequence[str] = _DEFAULT_REFERENCE,
     ) -> Self:
         """Add a locator map: a small inset showing where this map's extent sits on a wider area.
@@ -979,7 +978,7 @@ class InsetMixin(_MixinBase):
         self._locator = locator
         return self
 
-    def _checked_extent(self, extent: Sequence[float]) -> List[float]:
+    def _checked_extent(self, extent: Sequence[float]) -> list[float]:
         """Read a caller's locator extent into four display-CRS numbers, refusing the ones that frame nothing.
 
         :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` honours a flipped pair as an
@@ -1025,7 +1024,7 @@ class InsetMixin(_MixinBase):
             )
         return values
 
-    def _locator_globe(self, globe: Optional[bool], extent: Any) -> bool:
+    def _locator_globe(self, globe: bool | None, extent: Any) -> bool:
         """Settle whether the locator is drawn on a globe frame, refusing the pair that cannot be.
 
         Args:

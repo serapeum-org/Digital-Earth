@@ -21,8 +21,9 @@ and web tiers can all build on it.
 """
 
 import numbers
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -94,8 +95,8 @@ class BandClasses:
     """
 
     scale: Scale
-    edges: Tuple[float, ...]
-    colors: Tuple[str, ...]
+    edges: tuple[float, ...]
+    colors: tuple[str, ...]
 
     @property
     def is_categorical(self) -> bool:
@@ -140,7 +141,7 @@ def asks_categorical(scheme: Any) -> bool:
     return isinstance(scheme, str) and scheme.lower() == "categorical"
 
 
-def raster_categories(values: Any) -> List[int]:
+def raster_categories(values: Any) -> list[int]:
     """Return a raster band's distinct integer class codes, refusing a band that is not nominal.
 
     Args:
@@ -212,7 +213,7 @@ def raster_categories(values: Any) -> List[int]:
     return [int(code) for code in codes]
 
 
-def code_edges(codes: Sequence[int]) -> List[float]:
+def code_edges(codes: Sequence[int]) -> list[float]:
     """Return class edges that put each integer code in a class of its own.
 
     Half a step below the first code, midway between each pair of neighbours, and half a step above the last
@@ -344,7 +345,7 @@ def classify_band(values: Any, scheme: Any, k: Any, cmap: Any) -> BandClasses:
     return BandClasses(scale, edges, tuple(colors))
 
 
-def classes_of(scale: Optional[Scale], cmap: Any) -> Optional[BandClasses]:
+def classes_of(scale: Scale | None, cmap: Any) -> BandClasses | None:
     """Recover a band's classes from the colour scale a figure recorded, without reading the band again.
 
     This is how a classified raster one tier described draws on another: the classes travel in the layer's

@@ -30,7 +30,7 @@ so the 3-D tier records draw order and does not apply it — returns `None` and 
 """
 
 from dataclasses import replace as with_fields
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import pytest
 
@@ -84,7 +84,7 @@ class LayerManagementContract:
         """
         raise NotImplementedError
 
-    def draw_two(self, tier: Any) -> Tuple[str, str]:
+    def draw_two(self, tier: Any) -> tuple[str, str]:
         """Draw two layers of one kind, bottom first, named :data:`BOTTOM` and :data:`TOP`.
 
         One kind, so both sit in one band: a move between them is a move a layer switcher can make, and a
@@ -101,7 +101,7 @@ class LayerManagementContract:
         """
         raise NotImplementedError
 
-    def engine_order(self, tier: Any) -> Optional[Tuple[str, ...]]:
+    def engine_order(self, tier: Any) -> tuple[str, ...] | None:
         """Return the layer ids in the order the tier's **engine** will draw them.
 
         Read from the engine's own structure — the axes' artist list, the queue the widget is built from,
@@ -131,7 +131,7 @@ class LayerManagementContract:
         """
         return tier._renderer.drawn.get(layer_id)
 
-    def engine_objects(self, tier: Any) -> Tuple[Any, ...]:
+    def engine_objects(self, tier: Any) -> tuple[Any, ...]:
         """Return everything the engine currently draws, as the objects themselves.
 
         The counterpart to :meth:`engine_holds`, and what the removal probe asks: a record cleared beside an
@@ -205,7 +205,7 @@ class LayerManagementConformance:
         except Exception:  # pragma: no cover - a closed tier may refuse a second close
             pass
 
-    def _engine_order(self, tier) -> Tuple[str, ...]:
+    def _engine_order(self, tier) -> tuple[str, ...]:
         """Return the engine's draw order, skipping when the tier has none.
 
         Args:

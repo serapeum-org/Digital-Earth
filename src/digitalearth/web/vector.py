@@ -14,8 +14,9 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 """
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger
 
@@ -95,6 +96,100 @@ class ContourInterval:
             )
 
 
+@dataclass(frozen=True)
+class VectorTileSource:
+    """A MapLibre ``vector`` source — the tile set a :meth:`VectorMixin.vector_tiles` layer draws from.
+
+    The five fields that name the source — the tile template, the TileJSON URL and the service's coverage —
+    are born together, travel together into one source dict and die together, so they are one value rather
+    than five parameters threaded through the builder. The tiles-xor-url rule is theirs too: a vector source
+    is reached by **exactly one** of ``tiles`` or ``url``, and MapLibre reads a template and a TileJSON as the
+    same thing said twice — so the pairing is refused at construction, before a builder is ever called.
+
+    Attributes:
+        tiles: An MVT tile URL template carrying ``{z}/{x}/{y}``, or a sequence of them, or ``None`` when the
+            set is named by `url` instead.
+        url: A TileJSON URL the service publishes, or ``None`` when `tiles` names the set instead.
+        min_zoom: The shallowest zoom the service serves, or ``None`` to leave the source unbounded.
+        max_zoom: The deepest zoom the service serves — past it MapLibre over-zooms the last real tiles rather
+            than requesting levels that do not exist — or ``None``.
+        attribution: Attribution text shown in the map's attribution control; empty adds none.
+
+    Raises:
+        ValueError: when neither `tiles` nor `url` is given, or both are — a vector source is reached by
+            exactly one of them.
+
+    Examples:
+        - A ``{z}/{x}/{y}`` template becomes a ``vector`` source listing that one template:
+            ```python
+            >>> from digitalearth.web.vector import VectorTileSource
+            >>> VectorTileSource(tiles="https://tiles.example.org/{z}/{x}/{y}.pbf").to_source()
+            {'type': 'vector', 'tiles': ['https://tiles.example.org/{z}/{x}/{y}.pbf']}
+
+            ```
+        - A TileJSON ``url`` and a zoom range fold into the same dict:
+            ```python
+            >>> from digitalearth.web.vector import VectorTileSource
+            >>> VectorTileSource(url="https://tiles.example.org/roads.json", max_zoom=14).to_source()
+            {'type': 'vector', 'url': 'https://tiles.example.org/roads.json', 'maxzoom': 14}
+
+            ```
+        - Naming neither tile set is refused, at construction rather than at the builder:
+            ```python
+            >>> from digitalearth.web.vector import VectorTileSource
+            >>> VectorTileSource()
+            Traceback (most recent call last):
+                ...
+            ValueError: vector_tiles() takes exactly one of tiles= (a {z}/{x}/{y} template)...
+
+            ```
+    """
+
+    tiles: Any = None
+    url: str | None = None
+    min_zoom: int | None = None
+    max_zoom: int | None = None
+    attribution: str = ""
+
+    def __post_init__(self) -> None:
+        """Refuse a source named by neither tile set or by both.
+
+        Raises:
+            ValueError: when neither `tiles` nor `url` is given, or both are — a vector source is reached by
+                exactly one of them, and MapLibre reads a template and a TileJSON as the same thing said
+                twice.
+        """
+        if (self.tiles is None) == (self.url is None):
+            raise ValueError(
+                "vector_tiles() takes exactly one of tiles= (a {z}/{x}/{y} template) or url= (a TileJSON "
+                f"URL); got tiles={self.tiles!r} and url={self.url!r}"
+            )
+
+    def to_source(self) -> dict:
+        """Build the MapLibre ``vector`` source dict, naming the tile set exactly one way.
+
+        Returns:
+            The source dict :func:`draw_vector_tiles` builds the MapLibre source from — plain JSON, so it is
+            written straight into a saved figure.
+        """
+        source: dict = {"type": "vector"}
+        if self.url is not None:
+            source["url"] = self.url
+        else:
+            source["tiles"] = (
+                [self.tiles]
+                if isinstance(self.tiles, str)
+                else [str(tile) for tile in self.tiles]
+            )
+        if self.min_zoom is not None:
+            source["minzoom"] = int(self.min_zoom)
+        if self.max_zoom is not None:
+            source["maxzoom"] = int(self.max_zoom)
+        if self.attribution:
+            source["attribution"] = self.attribution
+        return source
+
+
 #: How many levels `contours` traces when the caller names none and the band's variable carries none. Ten,
 #: which is what the interactive tier has always fallen back to and what matplotlib's own `levels=10` means,
 #: so the same call describes the same number of levels on either tier (#262).
@@ -135,7 +230,7 @@ def _even_levels(source: Any, count: int) -> list:
 
 def _as_interval(
     interval: float | ContourInterval | None,
-) -> Optional[ContourInterval]:
+) -> ContourInterval | None:
     """Read the `interval=` argument in either spelling, so a plain number keeps meaning "every N".
 
     Args:
@@ -178,8 +273,8 @@ class _ContourLevels:
             `interval=100` as it was written, not as the :class:`ContourInterval` it normalises to.
     """
 
-    spacing: Optional[ContourInterval]
-    fixed: Optional[Any]
+    spacing: ContourInterval | None
+    fixed: Any | None
     asked: float | ContourInterval | None = None
 
     @property
@@ -301,6 +396,55 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     )
 
 
+def draw_vector_tiles(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre vector source and the typed layer for an MVT tile layer (WB-6).
+
+    A vector-tile layer draws from no data in the figure: its source is the tile URL the caller passed, and
+    the one named layer to read out of the pyramid, its geometry's MapLibre type and the paint are all values
+    recorded on its symbology — which is why `_data` is unused. They are plain JSON, so a map whose layer is
+    a tile set describes itself in a figure that can be written down and read back, exactly as a raster
+    basemap does.
+
+    Args:
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
+        _data: Unused — a tile layer has no feature source in the figure to place.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the ``vector`` source and the circle / line
+        / fill layer reading one of its source-layers. It is an ordinary style layer, so it takes the
+        ordinary route.
+
+    Raises:
+        ValueError: when the description carries none of the MapLibre source, the source-layer, the layer
+            type or the paint the drawer reads — naming the layer, its kind and what is missing.
+    """
+    from digitalearth.web.renderer import DrawnLayer, required_props
+
+    layer_cls, _ = _require_layer_api()
+    props = required_props(layer, "source", "source_layer", "maplibre_type", "paint")
+    spec_layout = dict(props.get("layout") or {})
+    if not layer.visible:
+        spec_layout["visibility"] = "none"
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=dict(props["source"]),
+        layer=layer_cls(
+            id=layer.id,
+            type=props[
+                "maplibre_type"
+            ],  # MapLibre coerces the string back to its own enum
+            source=source_id,
+            # The vector source holds many named layers; this is the one to draw. MapLibre takes it under
+            # `source-layer`, which the `maplibre` Layer serialises `source_layer` to.
+            source_layer=props["source_layer"],
+            paint=dict(props["paint"]),
+            layout=spec_layout or None,
+        ),
+    )
+
+
 class VectorMixin(_MixinBase):
     """Point / line / polygon / choropleth builders for :class:`~digitalearth.web.map.WebMap`.
 
@@ -322,10 +466,10 @@ class VectorMixin(_MixinBase):
         self,
         values: Any,
         column: str,
-        scheme: Optional[Any],
+        scheme: Any | None,
         k: int,
         cmap: str,
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre data-driven colour expression for ``column`` and record the breaks.
 
         Args:
@@ -368,7 +512,7 @@ class VectorMixin(_MixinBase):
 
     def _categorical_color_expr(
         self, values: Any, column: str, cmap: str
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre ``match`` expression over the column's distinct values (DC.8).
 
         Args:
@@ -434,7 +578,7 @@ class VectorMixin(_MixinBase):
 
     def _graduated_color_expr(
         self, values: Any, column: str, scheme: Any, k: int, cmap: str
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre ``step`` expression over class edges.
 
         Args:
@@ -498,7 +642,7 @@ class VectorMixin(_MixinBase):
 
     def _ramp_color_expr(
         self, values: Any, column: str, cmap: str
-    ) -> Tuple[list, Encoding]:
+    ) -> tuple[list, Encoding]:
         """Compile a MapLibre ``interpolate`` expression over a continuous ramp.
 
         Args:
@@ -559,9 +703,9 @@ class VectorMixin(_MixinBase):
         color: Maybe[str] = UNSET,
         halo_color: str = DEFAULT_LABEL_HALO_COLOR,
         halo_width: float = DEFAULT_LABEL_HALO_WIDTH,
-        offset: Optional[Any] = None,
+        offset: Any | None = None,
         allow_overlap: bool = False,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Label features with the text in ``column`` (recipe W2).
@@ -653,8 +797,8 @@ class VectorMixin(_MixinBase):
         )
 
     def _contour_levels(
-        self, source: Any, *, interval: Optional[ContourInterval], levels: Optional[Any]
-    ) -> Optional[Any]:
+        self, source: Any, *, interval: ContourInterval | None, levels: Any | None
+    ) -> Any | None:
         """Settle which iso-values `contours` traces, refusing the two ways of asking that cannot combine.
 
         Args:
@@ -690,12 +834,12 @@ class VectorMixin(_MixinBase):
         features: Any,
         *,
         filled: bool,
-        column: Optional[str],
+        column: str | None,
         cmap: str,
-        color: Optional[str],
+        color: str | None,
         width: float,
         opacity: float,
-        name: Optional[str],
+        name: str | None,
         visible: bool,
         asked: Sequence[str] = (),
     ) -> None:
@@ -735,7 +879,7 @@ class VectorMixin(_MixinBase):
         # a caller's `color=` pins every contour to one colour instead — and a flat colour drives nothing, so
         # there is no field-driven encoding to publish and no colour key to be asked for on it.
         colour: Any = color or VECTOR_COLOR
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is not None:
             colour, color_encoding = self._ramp_color_expr(
                 self._require_column(gdf, column), column, cmap
@@ -799,16 +943,16 @@ class VectorMixin(_MixinBase):
         dataset: Any,
         *,
         interval: float | ContourInterval | None = None,
-        levels: Optional[Any] = None,
+        levels: Any | None = None,
         band: int = DEFAULT_BAND,
         filled: bool = False,
-        cmap: Optional[str] = None,
-        units: Optional[str] = None,
-        color: Optional[str] = None,
+        cmap: str | None = None,
+        units: str | None = None,
+        color: str | None = None,
         width: Maybe[float] = UNSET,
         opacity: Maybe[float] = UNSET,
         labels: bool = False,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Trace iso-value contours from a raster band and draw them as vectors.
@@ -961,12 +1105,12 @@ class VectorMixin(_MixinBase):
         paint: dict,
         *,
         kind: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
-        layout: Optional[dict] = None,
+        layout: dict | None = None,
         source: Any = None,
         asked: Sequence[str] = (),
-        color_encoding: Optional[Encoding] = None,
+        color_encoding: Encoding | None = None,
     ) -> Self:
         """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
 
@@ -1065,16 +1209,16 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         size: Maybe[float] = UNSET,
         color: Maybe[str] = UNSET,
         opacity: Maybe[float] = UNSET,
-        big: Optional[bool] = None,
-        big_data_threshold: Optional[int] = None,
-        name: Optional[str] = None,
+        big: bool | None = None,
+        big_data_threshold: int | None = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
@@ -1199,7 +1343,7 @@ class VectorMixin(_MixinBase):
                 )
             return self.deck_scatter(gdf, size=size)
         paint: dict = {"circle-radius": float(size), "circle-opacity": float(opacity)}
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is not None:
             paint["circle-color"], color_encoding = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -1223,14 +1367,14 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         width: Maybe[float] = UNSET,
         color: Maybe[str] = UNSET,
         opacity: Maybe[float] = UNSET,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a line ``FeatureCollection`` as a MapLibre line layer (recipe W2).
@@ -1310,7 +1454,7 @@ class VectorMixin(_MixinBase):
         )
         gdf = self._display_gdf(features, method="lines")
         colour: Any
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is None:
             # Only on this arm, as before: `ask` *records* the key as named, so reaching it on the
             # classified arm too would add `line-color` to what the caller is said to have asked for.
@@ -1336,16 +1480,16 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         color: Maybe[str] = UNSET,
         opacity: Maybe[float] = UNSET,
         outline_color: str = "#ffffff",
-        big: Optional[bool] = None,
-        big_data_threshold: Optional[int] = None,
-        name: Optional[str] = None,
+        big: bool | None = None,
+        big_data_threshold: int | None = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a polygon ``FeatureCollection`` as a MapLibre fill layer (recipe W2).
@@ -1464,7 +1608,7 @@ class VectorMixin(_MixinBase):
                 )
             return self.deck_polygons(gdf)
         colour: Any
-        color_encoding: Optional[Encoding] = None
+        color_encoding: Encoding | None = None
         if column is None:
             # Only on this arm, as before: `ask` *records* the key as named, so reaching it on the
             # classified arm too would add `fill-color` to what the caller is said to have asked for.
@@ -1491,12 +1635,12 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        scheme: Optional[Any] = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         opacity: Maybe[float] = UNSET,
         outline_color: str = "#ffffff",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
@@ -1615,3 +1759,138 @@ class VectorMixin(_MixinBase):
             asked=ask.named,
             color_encoding=color_encoding,
         )
+
+    def vector_tiles(
+        self,
+        source: VectorTileSource,
+        *,
+        source_layer: str,
+        geometry: str = "line",
+        color: str = VECTOR_COLOR,
+        width: Maybe[float] = UNSET,
+        size: Maybe[float] = UNSET,
+        opacity: Maybe[float] = UNSET,
+        outline_color: str = "#ffffff",
+        name: str | None = None,
+        visible: bool = True,
+    ) -> Self:
+        """Draw a Mapbox Vector Tile (MVT) set as a circle / line / fill layer (WB-6).
+
+        MapLibre serves a vector tile pyramid — an ``.mvt``/``.pbf`` tile set, or a TileJSON describing one —
+        as a ``vector`` source, and draws one of its named layers with an ordinary style layer. This is the
+        vector counterpart of :meth:`~digitalearth.web.decoration.DecorationMixin.tiles`, which drapes a
+        *raster* pyramid under the data: the features here are drawn **among** the data from the tile URL,
+        never read into memory, so a continent of roads costs the page a URL rather than a GeoJSON blob.
+
+        The source is the tile URL, not a :class:`~pyramids.feature.FeatureCollection`, so there is no
+        reprojection and no pyramids involvement — a vector tile set is already Web-Mercator tiles. The tile
+        set and its coverage travel as one :class:`VectorTileSource`, which names the set exactly one way — a
+        ``{z}/{x}/{y}`` template as ``tiles`` or a TileJSON ``url`` — and refuses an ambiguous pairing when it
+        is constructed, before this builder is reached.
+
+        Args:
+            source: The tile set to draw, as a :class:`VectorTileSource` carrying its template-or-``url`` and
+                the service's zoom range and attribution.
+            source_layer: The name of the layer to draw *inside* the tile set — a vector tile holds many
+                named layers (``roads``, ``buildings``, ``water``, …), and MapLibre draws one at a time.
+            geometry: How to draw the features — ``"line"`` (the default, for roads and boundaries),
+                ``"fill"`` (for buildings and land use) or ``"circle"`` (for points of interest). Each maps
+                to the MapLibre layer type of the same shape.
+            color: The colour the features are drawn in; the line colour, the fill colour or the circle
+                colour, by ``geometry``. Not passed leaves :data:`VECTOR_COLOR`.
+            width: Line width in pixels, used by ``geometry="line"``; not passed leaves :data:`LINE_WIDTH`.
+            size: Circle radius in pixels, used by ``geometry="circle"``; not passed leaves
+                :data:`POINT_SIZE`.
+            opacity: Layer opacity in ``[0, 1]``; not passed leaves the geometry's own default
+                (:data:`LINE_OPACITY`, :data:`FILL_OPACITY` or :data:`POINT_OPACITY`).
+            outline_color: Polygon outline colour, used by ``geometry="fill"``.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``geometry`` is not ``"line"``, ``"fill"`` or ``"circle"``; or when ``width``,
+                ``size`` or ``opacity`` is not a finite number, refused at this call because a figure holding
+                NaN or infinity could not be written down. The tiles-xor-``url`` rule is refused earlier, when
+                the :class:`VectorTileSource` is constructed.
+            ImportError: when the ``web`` extra is not installed, so there is no MapLibre layer API.
+
+        Examples:
+            - Draw a roads tile set as lines, addressable by the name it was given (needs the ``web``
+              extra, so the block is skipped without it):
+                ```python
+                >>> from digitalearth.web import VectorTileSource, WebMap      # doctest: +SKIP
+                >>> m = WebMap().basemap().vector_tiles(                       # doctest: +SKIP
+                ...     VectorTileSource(tiles="https://tiles.example.org/{z}/{x}/{y}.pbf"),
+                ...     source_layer="roads", name="roads",
+                ... )
+                >>> m.layer_ids                                              # doctest: +SKIP
+                ['tiles-1', 'roads']
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.tiles: the raster-pyramid counterpart, drawn under
+                the data.
+            digitalearth.web.vector.VectorMixin.lines: the same line layer drawn from an in-memory
+                collection instead of a tile set.
+        """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.vector_tiles()"
+        _, layer_types = _require_layer_api()
+        source_spec = source.to_source()
+        ask = Ask()
+        if geometry == "line":
+            width = as_finite(ask("line-width", width, LINE_WIDTH), "width", call)
+            opacity = as_finite(
+                ask("line-opacity", opacity, LINE_OPACITY), "opacity", call
+            )
+            prefix, layer_type = "line", layer_types.LINE
+            paint = self._line_paint(width, opacity, color)
+        elif geometry == "fill":
+            opacity = as_finite(
+                ask("fill-opacity", opacity, FILL_OPACITY), "opacity", call
+            )
+            prefix, layer_type = "fill", layer_types.FILL
+            paint = self._fill_paint(opacity, outline_color, color)
+        elif geometry == "circle":
+            size = as_finite(ask("circle-radius", size, POINT_SIZE), "size", call)
+            opacity = as_finite(
+                ask("circle-opacity", opacity, POINT_OPACITY), "opacity", call
+            )
+            prefix, layer_type = "circle", layer_types.CIRCLE
+            paint = {
+                "circle-radius": float(size),
+                "circle-opacity": float(opacity),
+                "circle-color": color,
+            }
+        else:
+            raise ValueError(
+                f"vector_tiles() takes geometry= as 'line', 'fill' or 'circle'; got {geometry!r}"
+            )
+        layer_id = self._layer_id(prefix, name)
+        # Recorded as values — the source dict, the source-layer, the MapLibre type and the paint — never a
+        # closure: :func:`draw_vector_tiles` rebuilds the layer from exactly this, and no feature source is
+        # recorded (there is none of), so the layer draws from its description alone, as a raster basemap does.
+        self._index_layer(
+            layer_id,
+            name,
+            kind="vector_tiles",
+            visible=visible,
+            symbology=Symbology(
+                props={
+                    "source": source_spec,
+                    "source_layer": str(source_layer),
+                    # The enum's value, not the member: a description holds plain values a saved figure can
+                    # carry, and the spec refuses the member.
+                    "maplibre_type": getattr(layer_type, "value", layer_type),
+                    "paint": dict(paint),
+                    "layout": {},
+                    **asked_record(ask.named),
+                }
+            ),
+        )
+        self._last_layer_id = layer_id
+        return self

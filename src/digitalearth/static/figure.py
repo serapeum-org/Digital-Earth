@@ -16,10 +16,10 @@ one area, and it titles each panel by what that panel is.
 import logging
 import math
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["facet", "grid", "shared_colorbar"]
 
 #: The render each ``facet(kind=)`` names, as ``(Map method, keywords it is called with)``.
-_FACET_KINDS: Dict[str, Tuple[str, Dict[str, Any]]] = {
+_FACET_KINDS: dict[str, tuple[str, dict[str, Any]]] = {
     "field": ("field", {}),
     "pcolormesh": ("pcolormesh", {}),
     "contourf": ("contours", {"filled": True}),
@@ -64,12 +64,12 @@ def grid(
     *,
     crs: Any = 3857,
     globe: bool = False,
-    figsize: Optional[Tuple[float, float]] = None,
+    figsize: tuple[float, float] | None = None,
     sharex: bool | Literal["all", "row", "col", "none"] = False,
     sharey: bool | Literal["all", "row", "col", "none"] = False,
-    suptitle: Optional[str] = None,
+    suptitle: str | None = None,
     **kwargs,
-) -> Tuple[Figure, List[Map]]:
+) -> tuple[Figure, list[Map]]:
     """Create an ``nrows`` × ``ncols`` grid of :class:`Map` panels sharing one figure.
 
     Each cell of a ``matplotlib`` subplot grid is wrapped in a ``Map`` (all the same ``crs``/``globe``), so
@@ -241,9 +241,9 @@ def grid(
 def shared_colorbar(
     fig: Figure,
     mappable: Any,
-    maps: Optional[List[Map]] = None,
+    maps: list[Map] | None = None,
     *,
-    label: Optional[str] = None,
+    label: str | None = None,
     **kwargs,
 ) -> Any:
     """Add one colorbar to ``fig`` spanning the given panels (or every axes when ``maps`` is ``None``).
@@ -310,7 +310,7 @@ def shared_colorbar(
     return cbar
 
 
-def _frames_of(stack: Any) -> List[Any]:
+def _frames_of(stack: Any) -> list[Any]:
     """Return the frames of a stack that is not a single multi-band dataset, refusing anything else by name.
 
     Every other input is refused *here*, before an axes exists, because each of the shapes a caller gets
@@ -356,7 +356,7 @@ def _frames_of(stack: Any) -> List[Any]:
     return frames
 
 
-def _panels_of(stack: Any, band: int) -> Tuple[List[Any], List[int], str]:
+def _panels_of(stack: Any, band: int) -> tuple[list[Any], list[int], str]:
     """Return what each panel of a facet draws: its frame, the band it reads, and the facet's default name.
 
     Args:
@@ -437,9 +437,9 @@ class _PanelPlan:
             ```
     """
 
-    frames: List[Any]
-    bands: List[int]
-    labels: List[Any]
+    frames: list[Any]
+    bands: list[int]
+    labels: list[Any]
     name: str
     nrows: int
     ncols: int
@@ -459,9 +459,9 @@ class _PanelPlan:
         stack: Any,
         band: int,
         *,
-        col: Optional[str],
-        col_wrap: Optional[int],
-        labels: Optional[Sequence[Any]],
+        col: str | None,
+        col_wrap: int | None,
+        labels: Sequence[Any] | None,
     ) -> "_PanelPlan":
         """Read a caller's panel arguments into one plan, refusing what cannot be laid out.
 
@@ -563,7 +563,7 @@ class _PanelPlan:
             ncols=ncols,
         )
 
-    def titles(self) -> List[str]:
+    def titles(self) -> list[str]:
         """Return the title of each panel, in panel order.
 
         Returns:
@@ -571,7 +571,7 @@ class _PanelPlan:
         """
         return [f"{self.name} = {label}" for label in self.labels]
 
-    def panels(self, maps: Sequence[Any]) -> Iterator[Tuple[Any, Any, int, str]]:
+    def panels(self, maps: Sequence[Any]) -> Iterator[tuple[Any, Any, int, str]]:
         """Pair each panel's ``Map`` with what it draws.
 
         Args:
@@ -603,7 +603,7 @@ class _PanelPlan:
 
 def _stack_values(
     panel: Map, frames: Sequence[Any], bands: Sequence[int]
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Read every panel's values as they will be drawn: warped into the display CRS, nodata as ``NaN``.
 
     **Each frame is warped once, not once per panel.** A multi-band dataset is one panel per band, and
@@ -623,7 +623,7 @@ def _stack_values(
     """
     values = []
     # frame identity -> its warp, or None when the display CRS places none of it
-    warps: Dict[int, Any] = {}
+    warps: dict[int, Any] = {}
     for frame, frame_band in zip(frames, bands):
         key = id(frame)
         if key not in warps:
@@ -649,7 +649,7 @@ def _pooled_values(values: Sequence[np.ndarray]) -> np.ndarray:
     return np.concatenate(finite) if finite else np.array([], dtype=float)
 
 
-def _pooled_codes(pooled: np.ndarray, cmap: Any) -> Dict[str, Any]:
+def _pooled_codes(pooled: np.ndarray, cmap: Any) -> dict[str, Any]:
     """Cut one categorical scale over the whole stack: every code the frames hold, each with its own colour.
 
     ``scheme="categorical"`` classifies a band by the codes *that band* holds, so forwarding the word to each
@@ -726,7 +726,7 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> Dict[str, Any]:
 _DEFAULT_CLASSES = 5
 
 
-def _checked_classes(style: Dict[str, Any]) -> Dict[str, Any]:
+def _checked_classes(style: dict[str, Any]) -> dict[str, Any]:
     """Return the caller's styling with ``k`` given one meaning: the classes a named scheme cuts.
 
     ``k`` is forwarded to a render that ignores it, so every spelling it cannot apply to has to be refused
@@ -823,10 +823,10 @@ def _checked_classes(style: Dict[str, Any]) -> Dict[str, Any]:
 
 def _shared_style(
     values: Sequence[np.ndarray],
-    style: Dict[str, Any],
+    style: dict[str, Any],
     kind: str,
-    measured: Optional[Tuple[float, float]],
-) -> Dict[str, Any]:
+    measured: tuple[float, float] | None,
+) -> dict[str, Any]:
     """Resolve the colour scale every panel shares, once, over the whole stack.
 
     Args:
@@ -883,18 +883,18 @@ def _shared_style(
 def facet(
     stack: Any,
     *,
-    col: Optional[str] = None,
-    col_wrap: Optional[int] = None,
-    labels: Optional[Sequence[Any]] = None,
+    col: str | None = None,
+    col_wrap: int | None = None,
+    labels: Sequence[Any] | None = None,
     kind: str = "field",
     band: int = DEFAULT_BAND,
     crs: Any = 3857,
     globe: bool = False,
-    figsize: Optional[Tuple[float, float]] = None,
+    figsize: tuple[float, float] | None = None,
     colorbar: bool = True,
-    cbar_label: Optional[str] = None,
+    cbar_label: str | None = None,
     **style: Any,
-) -> Tuple[Figure, List[Map]]:
+) -> tuple[Figure, list[Map]]:
     """Draw a raster stack as small multiples — one panel per frame — on one shared colour scale.
 
     Small multiples are read against each other, so the scale is resolved **once over the whole stack**

@@ -32,9 +32,10 @@ The policy stays here — the default class count, the error that names the sche
 into classes — and only the arithmetic is injected.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from math import inf, isfinite, nextafter
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -58,7 +59,7 @@ DEFAULT_CLASS_COUNT: int = 5
 #: :meth:`Scale.without_extremes` clears when it is named none. Private because the three *names* are the
 #: public vocabulary (they are keywords on `with_extremes` and keys of `extremes()`); this tuple only keeps
 #: the validation and the clear-them-all default reading off one list.
-_EXTREME_NAMES: Tuple[str, str, str] = ("missing", "over", "under")
+_EXTREME_NAMES: tuple[str, str, str] = ("missing", "over", "under")
 
 
 @dataclass(frozen=True)
@@ -114,13 +115,13 @@ class Scale:
 
     vmin: float
     vmax: float
-    scheme: str | Tuple[float, ...] | None = None
-    breaks: Tuple[float, ...] = ()
-    categories: Tuple[Any, ...] = ()
-    missing: Optional[str] = None
-    over: Optional[str] = None
-    under: Optional[str] = None
-    _colors: Tuple[str, ...] = field(default=(), repr=False)
+    scheme: str | tuple[float, ...] | None = None
+    breaks: tuple[float, ...] = ()
+    categories: tuple[Any, ...] = ()
+    missing: str | None = None
+    over: str | None = None
+    under: str | None = None
+    _colors: tuple[str, ...] = field(default=(), repr=False)
 
     def __post_init__(self) -> None:
         """Refuse a domain nothing can be normalised against.
@@ -174,11 +175,11 @@ class Scale:
         cls,
         values: Any,
         *,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-        scheme: Optional[str] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        scheme: str | None = None,
         k: int = DEFAULT_CLASS_COUNT,
-        missing: Optional[str] = None,
+        missing: str | None = None,
     ) -> "Scale":
         """Derive a scale from data, applying the one widening rule every tier used to write out.
 
@@ -214,7 +215,7 @@ class Scale:
                 ```
         """
         lo, hi = cls._limits(values, vmin, vmax)
-        breaks: Tuple[float, ...] = ()
+        breaks: tuple[float, ...] = ()
         if scheme is not None:
             breaks = cls._breaks(values, scheme, k)
         return cls(lo, hi, scheme=scheme, breaks=breaks, missing=missing)
@@ -224,9 +225,9 @@ class Scale:
         cls,
         values: Any,
         *,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-        missing: Optional[str] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        missing: str | None = None,
     ) -> "Scale":
         """Derive a scale from values the caller has already filtered to finite ones.
 
@@ -271,7 +272,7 @@ class Scale:
     @classmethod
     def breaks_of(
         cls, values: Any, scheme: str, k: int = DEFAULT_CLASS_COUNT
-    ) -> Tuple[float, ...]:
+    ) -> tuple[float, ...]:
         """Cut class edges without deriving a domain, for a caller that only wants the classes.
 
         The three classification sites read ``.breaks`` and nothing else, so measuring the domain for them —
@@ -303,7 +304,7 @@ class Scale:
 
     @classmethod
     def from_limits(
-        cls, vmin: float, vmax: float, *, missing: Optional[str] = None
+        cls, vmin: float, vmax: float, *, missing: str | None = None
     ) -> "Scale":
         """Build from limits that were derived elsewhere — a frozen stack range, or a caller's `clim=`.
 
@@ -352,7 +353,7 @@ class Scale:
         categories: Sequence[Any],
         colors: Sequence[str],
         *,
-        missing: Optional[str] = None,
+        missing: str | None = None,
     ) -> "Scale":
         """Build a scale over unordered categories rather than a numeric range.
 
@@ -399,8 +400,8 @@ class Scale:
 
     @staticmethod
     def _limits(
-        values: Any, vmin: Optional[float], vmax: Optional[float]
-    ) -> Tuple[float, float]:
+        values: Any, vmin: float | None, vmax: float | None
+    ) -> tuple[float, float]:
         """Measure the domain, honouring explicit limits and widening a constant one.
 
         Args:
@@ -421,8 +422,8 @@ class Scale:
 
     @staticmethod
     def _apply_limits(
-        measured: Any, vmin: Optional[float], vmax: Optional[float]
-    ) -> Tuple[float, float]:
+        measured: Any, vmin: float | None, vmax: float | None
+    ) -> tuple[float, float]:
         """Turn an already-finite array plus any explicit limits into a usable domain.
 
         Args:
@@ -471,7 +472,7 @@ class Scale:
         return lo, hi
 
     @staticmethod
-    def _widen(value: float) -> Tuple[float, float]:
+    def _widen(value: float) -> tuple[float, float]:
         """Return a domain of non-zero width around a constant ``value``.
 
         Args:
@@ -506,7 +507,7 @@ class Scale:
         return nextafter(value, -inf), value
 
     @staticmethod
-    def _breaks(values: Any, scheme: str, k: int) -> Tuple[float, ...]:
+    def _breaks(values: Any, scheme: str, k: int) -> tuple[float, ...]:
         """Cut class edges with the registered classifier, blaming the caller's arguments when it refuses.
 
         Args:
@@ -654,7 +655,7 @@ class Scale:
             return False
         return self.vmin < center < self.vmax
 
-    def as_limits(self) -> Tuple[float, float]:
+    def as_limits(self) -> tuple[float, float]:
         """Return the ``(vmin, vmax)`` pair a renderer's normaliser takes.
 
         Returns:
@@ -684,9 +685,9 @@ class Scale:
     def with_extremes(
         self,
         *,
-        missing: Optional[str] = None,
-        over: Optional[str] = None,
-        under: Optional[str] = None,
+        missing: str | None = None,
+        over: str | None = None,
+        under: str | None = None,
     ) -> "Scale":
         """Return this scale with the extreme colours a caller stated, leaving the rest as they were.
 
@@ -860,7 +861,7 @@ class Scale:
             under=None if "under" in cleared else self.under,
         )
 
-    def extremes(self) -> Dict[str, str]:
+    def extremes(self) -> dict[str, str]:
         """Return only the extreme colours this scale states, keyed by which extreme they colour.
 
         The keys absent from the mapping are exactly the extremes a renderer must **not** overwrite, which is
@@ -903,7 +904,7 @@ class Scale:
         stated = {"missing": self.missing, "over": self.over, "under": self.under}
         return {name: color for name, color in stated.items() if color is not None}
 
-    def color_for(self, category: Any) -> Optional[str]:
+    def color_for(self, category: Any) -> str | None:
         """Return the colour assigned to one category.
 
         Args:
@@ -947,7 +948,7 @@ class Scale:
                 return self._colors[index]
         return self.missing
 
-    def class_of(self, value: float) -> Optional[int]:
+    def class_of(self, value: float) -> int | None:
         """Return the 0-based class a value falls in, for a classified scale.
 
         Args:
@@ -976,7 +977,7 @@ class Scale:
                 return index
         return len(upper) - 1
 
-    def class_ranges(self) -> List[Tuple[float, float]]:
+    def class_ranges(self) -> list[tuple[float, float]]:
         """Return each class as a ``(low, high)`` pair, which is what a legend row shows.
 
         Returns:
@@ -1017,7 +1018,7 @@ class Scale:
 
     # ------------------------------------------------------------------ serialisation
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -1064,7 +1065,7 @@ class Scale:
         """
         # Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is
         # finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "vmin": to_json_value(self.vmin, "Scale.vmin"),
             "vmax": to_json_value(self.vmax, "Scale.vmax"),
         }

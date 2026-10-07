@@ -15,8 +15,9 @@ layers it shows. Two decisions:
   reader that meets a version it does not know refuses by name instead of guessing.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any
 
 from digitalearth.base.registry import OBJECT_SCHEME
 from digitalearth.base.spec._serial import (
@@ -79,7 +80,7 @@ def _identifier(owner: str, value: Any) -> None:
         )
 
 
-def _optional_title(owner: str, title: Any) -> Optional[str]:
+def _optional_title(owner: str, title: Any) -> str | None:
     """Return a title normalised to ``None`` or a non-blank string.
 
     Args:
@@ -162,10 +163,10 @@ class PanelSpec:
     """
 
     id: str
-    view: Union[Viewport, Camera] = field(default_factory=Viewport)
-    layers: Tuple[str, ...] = ()
-    title: Optional[str] = None
-    furniture: Tuple[Furniture, ...] = ()
+    view: Viewport | Camera = field(default_factory=Viewport)
+    layers: tuple[str, ...] = ()
+    title: str | None = None
+    furniture: tuple[Furniture, ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse a panel that could not be drawn or addressed.
@@ -218,10 +219,10 @@ class PanelSpec:
 
     def bounds_of(
         self,
-        extents: Mapping[str, Optional[Bounds]],
+        extents: Mapping[str, Bounds | None],
         *,
         padding: float = 0.0,
-    ) -> Optional[Bounds]:
+    ) -> Bounds | None:
         """Return the region this panel's own layers cover, in the CRS the panel draws in.
 
         What a tier needs to frame a figure on its data, composed where both halves of the question are
@@ -298,7 +299,7 @@ class PanelSpec:
         # error on a figure with data and a silent `None` on one without (review L2).
         check_padding(padding)
         target = self.view.crs
-        total: Optional[Bounds] = None
+        total: Bounds | None = None
         for layer_id in self.layers:
             covered = extents.get(layer_id)
             if covered is None:
@@ -316,7 +317,7 @@ class PanelSpec:
             return total
         return total.padded(padding)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -340,7 +341,7 @@ class PanelSpec:
 
                 ```
         """
-        out: Dict[str, Any] = {"id": plain_text(self.id)}
+        out: dict[str, Any] = {"id": plain_text(self.id)}
         if isinstance(self.view, Camera):
             out["camera"] = self.view.to_dict()
         else:
@@ -398,7 +399,7 @@ class PanelSpec:
                 "PanelSpec.from_dict needs exactly one of 'viewport' (a flat map) or 'camera' (a 3-D scene); "
                 f"got keys {sorted(data)}"
             )
-        view: Union[Viewport, Camera] = (
+        view: Viewport | Camera = (
             read_entry("PanelSpec", "camera", Camera.from_dict, data["camera"])
             if "camera" in data
             else read_entry(
@@ -468,15 +469,15 @@ class FigureDiff:
             ```
     """
 
-    added: Tuple[str, ...] = ()
-    removed: Tuple[str, ...] = ()
-    rebuilt: Tuple[str, ...] = ()
-    restyled: Tuple[str, ...] = ()
-    shown: Tuple[str, ...] = ()
-    hidden: Tuple[str, ...] = ()
-    order: Optional[Tuple[str, ...]] = None
-    sources: Tuple[str, ...] = ()
-    panels: Tuple[str, ...] = ()
+    added: tuple[str, ...] = ()
+    removed: tuple[str, ...] = ()
+    rebuilt: tuple[str, ...] = ()
+    restyled: tuple[str, ...] = ()
+    shown: tuple[str, ...] = ()
+    hidden: tuple[str, ...] = ()
+    order: tuple[str, ...] | None = None
+    sources: tuple[str, ...] = ()
+    panels: tuple[str, ...] = ()
     figure: bool = False
 
     def __bool__(self) -> bool:
@@ -552,11 +553,11 @@ class FigureSpec:
             ```
     """
 
-    panels: Tuple[PanelSpec, ...]
+    panels: tuple[PanelSpec, ...]
     sources: Mapping[str, DataRef] = field(default_factory=dict)
     layers: LayerTree = field(default_factory=LayerTree)
-    size: Optional[Tuple[float, float]] = None
-    title: Optional[str] = None
+    size: tuple[float, float] | None = None
+    title: str | None = None
     schema_version: int = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -584,7 +585,7 @@ class FigureSpec:
         object.__setattr__(self, "size", self._checked_size(self.size))
         object.__setattr__(self, "title", _optional_title("FigureSpec", self.title))
 
-    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+    def __reduce__(self) -> tuple[Any, tuple[Any, ...]]:
         """Pickle and copy by rebuilding through the constructor.
 
         Returns:
@@ -650,7 +651,7 @@ class FigureSpec:
         )
 
     @staticmethod
-    def _checked_panels(panels: Any) -> Tuple[PanelSpec, ...]:
+    def _checked_panels(panels: Any) -> tuple[PanelSpec, ...]:
         """Return the panels as a tuple, refusing none, a non-panel, or two panels sharing an id.
 
         Args:
@@ -679,7 +680,7 @@ class FigureSpec:
         return checked
 
     @staticmethod
-    def _checked_sources(sources: Mapping[str, Any]) -> Dict[str, DataRef]:
+    def _checked_sources(sources: Mapping[str, Any]) -> dict[str, DataRef]:
         """Return the sources as a dict, refusing an id that addresses nothing or a value that is not a `DataRef`.
 
         Args:
@@ -731,7 +732,7 @@ class FigureSpec:
                     )
 
     @staticmethod
-    def _checked_size(size: Any) -> Optional[Tuple[float, float]]:
+    def _checked_size(size: Any) -> tuple[float, float] | None:
         """Return the figure size as two floats, or ``None``.
 
         Args:
@@ -816,7 +817,7 @@ class FigureSpec:
             f"no panel {panel_id!r} in this figure; panels are {[panel.id for panel in self.panels]}"
         )
 
-    def layers_of(self, panel_id: str) -> Tuple[LayerSpec, ...]:
+    def layers_of(self, panel_id: str) -> tuple[LayerSpec, ...]:
         """Return the layers a panel shows, in draw order.
 
         Args:
@@ -922,7 +923,7 @@ class FigureSpec:
             figure=(self.size, self.title) != (other.size, other.title),
         )
 
-    def _changed_panels(self, other: "FigureSpec") -> Tuple[str, ...]:
+    def _changed_panels(self, other: "FigureSpec") -> tuple[str, ...]:
         """Return the ids of panels that differ between this figure and `other`.
 
         Args:
@@ -937,7 +938,7 @@ class FigureSpec:
         gone = [panel.id for panel in self.panels if panel.id not in new_ids]
         return tuple(changed + gone)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form of the whole figure.
 
         Returns:
@@ -979,7 +980,7 @@ class FigureSpec:
 
                 ```
         """
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "schema_version": self.schema_version,
             "panels": [panel.to_dict() for panel in self.panels],
         }
@@ -1091,9 +1092,9 @@ class FigureSpec:
 def _kept_layer_changes(
     old_tree: LayerTree,
     new_tree: LayerTree,
-    kept: Tuple[str, ...],
-    changed_sources: Set[str],
-) -> Tuple[Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Tuple[str, ...]]:
+    kept: tuple[str, ...],
+    changed_sources: set[str],
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     """Sort the layers two figures share into rebuilt, restyled, shown and hidden.
 
     Args:
@@ -1107,10 +1108,10 @@ def _kept_layer_changes(
     """
     old_layers = {layer.id: layer for layer in old_tree}
     new_layers = {layer.id: layer for layer in new_tree}
-    rebuilt: List[str] = []
-    restyled: List[str] = []
-    shown: List[str] = []
-    hidden: List[str] = []
+    rebuilt: list[str] = []
+    restyled: list[str] = []
+    shown: list[str] = []
+    hidden: list[str] = []
     for layer_id in kept:
         old, new = old_layers[layer_id], new_layers[layer_id]
         if _draws_other_data(old, new, changed_sources):
@@ -1124,7 +1125,7 @@ def _kept_layer_changes(
 
 
 def _draws_other_data(
-    old: LayerSpec, new: LayerSpec, changed_sources: Set[str]
+    old: LayerSpec, new: LayerSpec, changed_sources: set[str]
 ) -> bool:
     """Whether a layer kept across two figures now draws something a renderer has to read or build again.
 

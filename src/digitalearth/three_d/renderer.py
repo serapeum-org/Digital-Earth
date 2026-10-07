@@ -19,8 +19,9 @@ recorded but not applied: VTK composites by depth, not by the order actors were 
 """
 
 import logging
+from collections.abc import Mapping
 from dataclasses import replace as with_fields
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.spec import FigureSpec, LayerSpec
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 #: tier's own capability test — without importing every builder module behind them. `drawer_for` resolves
 #: them to functions and is checked against this tuple, which is what keeps the two from drifting: the hole
 #: this closes was a kind with a drawer and no declaration (review M6).
-DRAWN_KINDS: Tuple[str, ...] = (
+DRAWN_KINDS: tuple[str, ...] = (
     "terrain",
     "point_cloud",
     "volume",
@@ -132,7 +133,7 @@ def drawer_for(kind: str) -> Any:
     return drawers[kind]
 
 
-def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional[Tuple[Any, Any]]:
+def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
     """Draw an object the caller built themselves and handed to the scene.
 
     Args:
@@ -195,10 +196,10 @@ class Renderer3D:
             scene: The `Scene3DBase` (or subclass) that owns the plotter and the figure.
         """
         self.scene = scene
-        self._drawn: Dict[str, Tuple[Any, Any]] = {}
+        self._drawn: dict[str, tuple[Any, Any]] = {}
 
     @property
-    def drawn(self) -> Mapping[str, Tuple[Any, Any]]:
+    def drawn(self) -> Mapping[str, tuple[Any, Any]]:
         """The `(mesh, actor)` pair drawn for each layer, keyed by layer id.
 
         Returns:
@@ -396,7 +397,7 @@ class Renderer3D:
         return _is_visible(drawn[1])
 
 
-def _mesh_style(layer: LayerSpec) -> Tuple[Any, Any]:
+def _mesh_style(layer: LayerSpec) -> tuple[Any, Any]:
     """Return the part of a layer's symbology a drawer reads, with its guides taken out.
 
     Args:

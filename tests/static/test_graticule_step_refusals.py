@@ -55,7 +55,7 @@ milliseconds where the unbounded call ran for minutes.
 
 import math
 import threading
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import pytest
 
@@ -105,7 +105,7 @@ OVER_BUDGET_STEP = 0.1
 
 def _raises_within(
     call: Callable[[], object], timeout: float
-) -> tuple[bool, Optional[BaseException]]:
+) -> tuple[bool, BaseException | None]:
     """Run ``call`` in a daemon thread and report whether it finished, and with what.
 
     The refusal this guards must land *before* any line is projected, so a regression that drops the

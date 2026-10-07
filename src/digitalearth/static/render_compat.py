@@ -37,8 +37,9 @@ including the ``size`` -> ``point_size`` fold, is decided here.
 """
 
 import inspect
-from functools import lru_cache
-from typing import Any, Dict, Mapping, Optional, Set, Tuple
+from collections.abc import Mapping
+from functools import cache
+from typing import Any
 
 from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
@@ -169,7 +170,7 @@ NORM_KEY = "norm"
 #: matplotlib's own, minus `bad`: a nodata cell is `missing` everywhere else in this package
 #: (`Scale.missing`, `digitalearth.base.symbology.MISSING_COLOR`, measured as `'#cccccc'`), and that is the
 #: name the four tiers share.
-EXTREME_KEYS: Tuple[str, ...] = ("missing", "over", "under")
+EXTREME_KEYS: tuple[str, ...] = ("missing", "over", "under")
 
 #: Percentile colour limits, xarray's spelling. cleopatra reads it from its own keyword list and clips the
 #: limits to the 2nd/98th percentile of the band, so one outlier stops flattening the rest of the field. It
@@ -306,12 +307,12 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
 )
 
 #: Channel -> the flat keyword that carries it, derived from the declaration so the two cannot disagree.
-_CHANNEL_KEYS: Dict[str, str] = {
+_CHANNEL_KEYS: dict[str, str] = {
     key.channel: key.name for key in STATIC_STYLE_SCHEMA.keys.values() if key.channel
 }
 
 
-def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]]:
+def route_flat_style(flat: Mapping[str, Any]) -> tuple[Symbology, dict[str, Any]]:
     """Route flat public kwargs to the channels and properties that own them.
 
     The half :func:`prepare_plot_kwargs` cannot do: it can only *reject* a keyword it has no home for, whereas
@@ -351,7 +352,7 @@ def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]
     return STATIC_STYLE_SCHEMA.route(flat)
 
 
-def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]]:
+def fold_symbology(symbology: Symbology) -> tuple[dict[str, Any], dict[str, str]]:
     """Fold a declared symbology into the flat kwargs the cleopatra glyphs take.
 
     The inverse of :func:`route_flat_style`, and the single point where a declared style becomes this
@@ -388,8 +389,8 @@ def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]
 
             ```
     """
-    flat: Dict[str, Any] = dict(symbology.props)
-    unsupported: Dict[str, str] = {}
+    flat: dict[str, Any] = dict(symbology.props)
+    unsupported: dict[str, str] = {}
     for channel, encoding in symbology.encodings.items():
         keyword = _CHANNEL_KEYS.get(channel)
         if keyword is None:
@@ -413,7 +414,7 @@ def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]
     return flat, unsupported
 
 
-def _fold_marker_size(opts: Dict[str, Any]) -> None:
+def _fold_marker_size(opts: dict[str, Any]) -> None:
     """Fold the ``size`` channel onto the ``point_size`` a cleopatra point glyph takes (in place).
 
     ``size`` is what a marker's visual size is called on every backend, so it is the spelling the static tier
@@ -429,8 +430,8 @@ def _fold_marker_size(opts: Dict[str, Any]) -> None:
 
 
 def relocate_flat_style(
-    opts: Dict[str, Any], *, folds_marker_size: bool = False
-) -> Dict[str, Any]:
+    opts: dict[str, Any], *, folds_marker_size: bool = False
+) -> dict[str, Any]:
     """Pop cleopatra-regrouped style keys out of a constructor kwargs dict, returning them.
 
     The glyph constructors reject these keys now — both the flat members (``levels``/``scheme``/``style``/…) and
@@ -489,7 +490,7 @@ _GROUP_MEMBERS = {
 _POINT_OVERLAY_KEYS = frozenset({"points", *_POINT_FIELDS})
 
 
-def _marker_respellings(overlay: Dict[str, Any]) -> str:
+def _marker_respellings(overlay: dict[str, Any]) -> str:
     """Return the clause that re-spells a point overlay's keys as a point layer's own marker styling.
 
     Args:
@@ -513,7 +514,7 @@ def _marker_respellings(overlay: Dict[str, Any]) -> str:
     )
 
 
-def _fold_points(out: Dict[str, Any]) -> None:
+def _fold_points(out: dict[str, Any]) -> None:
     """Wrap a bare ``points`` array plus any ``point_*`` styling into a ``PointOverlay`` (in place).
 
     Args:
@@ -553,7 +554,7 @@ def _fold_points(out: Dict[str, Any]) -> None:
 
 
 def _fold_group(
-    out: Dict[str, Any], param: str, cls: type, field_map: Dict[str, str]
+    out: dict[str, Any], param: str, cls: type, field_map: dict[str, str]
 ) -> None:
     """Fold one group's flat members in ``out`` into a ``param`` group object (in place).
 
@@ -579,8 +580,8 @@ def _fold_group(
 
 
 def group_render_kwargs(
-    kwargs: Dict[str, Any], accepted: Optional[Set[str]] = None
-) -> Dict[str, Any]:
+    kwargs: dict[str, Any], accepted: set[str] | None = None
+) -> dict[str, Any]:
     """Fold cleopatra's flat render keywords in ``kwargs`` into typed group objects.
 
     A bare ``points`` array (with any ``point_*`` styling) becomes a ``PointOverlay``; ``levels``/``labels``
@@ -616,7 +617,7 @@ def group_render_kwargs(
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def _plot_params(glyph_cls: type) -> frozenset:
     """The parameter names of a glyph class's ``plot`` method (cached per class).
 
@@ -666,8 +667,8 @@ def plot_takes(glyph: Any, param: str) -> bool:
 
 
 def prepare_plot_kwargs(
-    glyph: Any, kwargs: Dict[str, Any]
-) -> Tuple[Dict[str, Any], Optional[Any]]:
+    glyph: Any, kwargs: dict[str, Any]
+) -> tuple[dict[str, Any], Any | None]:
     """Fold flat styling into the groups ``glyph`` supports, returning ``(plot_kwargs, deferred_alpha)``.
 
     Only the groups the glyph's ``plot`` accepts are built (the vector glyphs take ``color``/``contour``/

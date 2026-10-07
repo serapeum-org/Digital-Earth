@@ -8,7 +8,7 @@ Two small operations from earthkit-plots' pipeline that prepare global gridded d
   antimeridian. This is pure array bookkeeping (numpy), so it lives in the digitalearth wiring.
 """
 
-from typing import Any, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -25,7 +25,7 @@ def wrap_longitude(dataset: Any) -> Any:
     return dataset.wrap_longitude()
 
 
-def add_cyclic_column(z: np.ndarray, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def add_cyclic_column(z: np.ndarray, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Append the first column of a global field to close the antimeridian seam.
 
     Args:

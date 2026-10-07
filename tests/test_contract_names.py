@@ -24,8 +24,8 @@ declares about them.
 
 import inspect
 import re
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Mapping, Optional, Tuple
 
 import pytest
 
@@ -59,7 +59,7 @@ SEAMED = ("web", "3d")
 #: interactive, and nobody widened the tuple — so the two tiers with the most divergence were the two the
 #: check skipped, and it passed. A scope read off the facades cannot drift that way: a tier is in it the
 #: moment it has a facade, and leaving it out means deleting the facade.
-EVERY_TIER: Tuple[str, ...] = tuple(sorted(FACADES))
+EVERY_TIER: tuple[str, ...] = tuple(sorted(FACADES))
 
 #: What a tier's methods are still short of, as `{(backend, method): (missing keywords, who owns the gap)}`.
 #:
@@ -73,7 +73,7 @@ EVERY_TIER: Tuple[str, ...] = tuple(sorted(FACADES))
 #: compares both ways: a tier that gains one of these, or loses another, fails until the row is corrected.
 #: That is what stops the list outliving what it excuses, the same shape as `CANNOT_HIDE_AT_BUILD` and
 #: `UNDRAWN_KINDS` elsewhere in the suite.
-KEYWORD_SHORTFALLS: Mapping[Tuple[str, str], Tuple[Tuple[str, ...], str]] = (
+KEYWORD_SHORTFALLS: Mapping[tuple[str, str], tuple[tuple[str, ...], str]] = (
     MappingProxyType(
         {
             # The five rows the Core renames surfaced. Each of these methods answered to the tier's own
@@ -160,7 +160,7 @@ OWNER_PATTERN = re.compile(r"#\d+|order \d+|unscheduled")
 COMPONENT_SEPARATOR = re.compile(r"\s*,\s*")
 
 
-def _every_user_facing_reason() -> Tuple[str, ...]:
+def _every_user_facing_reason() -> tuple[str, ...]:
     """Return every reason the suite shows a *user*, from both tables that carry one.
 
     `PENDING` answers "when does this tier get the method"; :data:`KEYWORD_SHORTFALLS` answers "why does this
@@ -299,7 +299,7 @@ def _answered_by(facade, backend: str, method):
     return bound if callable(bound) else None
 
 
-def _keyword_shortfall(facade, backend: str, method) -> Tuple[str, ...]:
+def _keyword_shortfall(facade, backend: str, method) -> tuple[str, ...]:
     """Return the keywords one tier's method does not take but the contract declares.
 
     Args:
@@ -318,7 +318,7 @@ def _keyword_shortfall(facade, backend: str, method) -> Tuple[str, ...]:
     return tuple(sorted(method.keywords - taken))
 
 
-def _first_argument(bound) -> Optional[str]:
+def _first_argument(bound) -> str | None:
     """Return the name of a function's first positional parameter.
 
     Args:
@@ -342,8 +342,8 @@ def _first_argument(bound) -> Optional[str]:
 
 
 def _orderings_stated_in(
-    text: str, components: Tuple[str, ...]
-) -> Tuple[Tuple[str, ...], ...]:
+    text: str, components: tuple[str, ...]
+) -> tuple[tuple[str, ...], ...]:
     """Return every ordering of these components the text states, in the order it states them.
 
     An ordering is not in a signature: four bare numbers have the same signature whichever rectangle they

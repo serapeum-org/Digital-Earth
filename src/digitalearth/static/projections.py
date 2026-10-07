@@ -12,7 +12,8 @@ The boundary/graticule geometry is assembled here from pyramids' existing coordi
 digitalearth, no new pyramids code. cleopatra then *draws* this geometry via ``apply_projection_frame``.
 """
 
-from typing import Any, Callable, Dict, List, Tuple
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 from pyramids.base.crs import reproject_coordinates
@@ -69,7 +70,7 @@ def mollweide(lon: float = 0.0) -> str:
 
 
 #: Registry of projection-name → factory. ``get(name, **kw)`` resolves a CRS spec.
-PROJECTIONS: Dict[str, Callable[..., Any]] = {
+PROJECTIONS: dict[str, Callable[..., Any]] = {
     "web_mercator": web_mercator,
     "polar_north": polar_north,
     "polar_south": polar_south,
@@ -162,7 +163,7 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
         return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 
     def half(chain_pts):
-        hull: List[np.ndarray] = []
+        hull: list[np.ndarray] = []
         for p in chain_pts:
             while len(hull) >= 2 and cross2d(hull[-2], hull[-1], p) <= 0:
                 hull.pop()
@@ -175,7 +176,7 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
     return np.vstack([ring, ring[:1]])
 
 
-def _split_finite(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:
+def _split_finite(x: np.ndarray, y: np.ndarray) -> list[np.ndarray]:
     """Split parallel x/y into contiguous finite-run polylines (drops off-domain / antimeridian gaps).
 
     A line crossing the projection limb (or the antimeridian) reprojects to runs of finite points separated
@@ -214,8 +215,8 @@ def _split_finite(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:
             ```
     """
     finite = np.isfinite(x) & np.isfinite(y)
-    out: List[np.ndarray] = []
-    run: List[Tuple[float, float]] = []
+    out: list[np.ndarray] = []
+    run: list[tuple[float, float]] = []
     for xi, yi, ok in zip(x, y, finite):
         if ok:
             run.append((xi, yi))
@@ -255,7 +256,7 @@ def densify_lonlat(xy: np.ndarray, step_deg: float = 1.0) -> np.ndarray:
     xy = np.asarray(xy, dtype=float)
     if len(xy) < 2:
         return xy
-    out: List[np.ndarray] = []
+    out: list[np.ndarray] = []
     for a, b in zip(xy[:-1], xy[1:]):
         seg = max(int(np.ceil(np.hypot(*(b - a)) / max(step_deg, 1e-9))), 1)
         ts = np.linspace(0.0, 1.0, seg, endpoint=False)
@@ -284,7 +285,7 @@ def _boundary_arc(boundary_open: np.ndarray, i: int, j: int) -> np.ndarray:
 
 def close_visible_runs(
     x: np.ndarray, y: np.ndarray, boundary: np.ndarray
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Turn a reprojected polygon ring into finite, closed, limb-clipped fill rings.
 
     The far hemisphere of a global polygon reprojects to ``inf``/``nan``; the visible part is one or more
@@ -361,7 +362,7 @@ def close_visible_runs(
         points, seen = points[:-1], seen[:-1]
     fully = bool(seen.all())
     boundary_open = np.asarray(boundary)[:-1]
-    out: List[np.ndarray] = []
+    out: list[np.ndarray] = []
     for index in ring_runs(seen):
         if index.size < 2:
             continue  # a lone visible vertex encloses nothing
@@ -381,7 +382,7 @@ def close_visible_runs(
 
 def projection_frame(
     crs: Any, n: int = 720
-) -> Tuple[np.ndarray, Tuple[float, float], Tuple[float, float]]:
+) -> tuple[np.ndarray, tuple[float, float], tuple[float, float]]:
     """Return the boundary polygon and projected limits of a CRS's valid domain.
 
     Samples the whole sphere on a lon/lat grid, projects it via pyramids, keeps the finite points, and takes
@@ -432,7 +433,7 @@ def projection_frame(
 
 def graticule(
     crs: Any, lon_step: float = 30.0, lat_step: float = 30.0, dens: int = 200
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Return projected lon/lat grid polylines (meridians + parallels) for a CRS.
 
     Each meridian/parallel is densified in lon/lat, projected via pyramids, and split at non-finite points
@@ -459,7 +460,7 @@ def graticule(
 
             ```
     """
-    lines: List[np.ndarray] = []
+    lines: list[np.ndarray] = []
     for lon in np.arange(-180, 180 + lon_step, lon_step):
         lat = np.linspace(-89.5, 89.5, dens)
         x, y = reproject_coordinates(

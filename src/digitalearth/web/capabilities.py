@@ -38,6 +38,7 @@ CAPABILITIES = Capabilities(
             "polygons",
             "choropleth",
             "labels",
+            "vector_tiles",
             "heatmap",
             "clusters",
             "point_cloud",
@@ -78,7 +79,15 @@ CAPABILITIES = Capabilities(
             "layer_switcher",
             "time_slider",
             "measure",
+            # WB-15: a MapTiler-backed place-search box (`DecorationMixin.geocoder`). The control ships in
+            # py-maplibregl 0.3.6 but was never exposed; it is keyed, and the caller supplies the key.
+            "geocoder",
             "attribution",
+            # WB-14: the remaining py-maplibregl controls the tier never exposed — the viewer-locate button,
+            # the flat/globe toggle, and the 3-D-terrain toggle over a DEM source.
+            "geolocate",
+            "globe_control",
+            "terrain_control",
             # The tier's colour key: `colorbar()` selects a layer's classification and `legend()` draws it.
             # It was listed as absent, on the grounds that the key is a builder rather than a toggle — but
             # the method exists and `quickmap(colorbar=...)` reaches it, so "not here" was untrue (M19).
@@ -92,8 +101,9 @@ CAPABILITIES = Capabilities(
             "renderer to make on top of one"
         ),
         "coastline_overlay": (
-            "coastlines come with the basemap style a caller picks, rather than as a Natural Earth layer the "
-            "tier draws"
+            "the tier draws coastlines and borders as Natural-Earth overlay layers through coastlines() and "
+            "borders(); what is absent is the quickmap(coastlines=True) overlay kwarg, whose cross-tier wiring "
+            "is tracked in #398"
         ),
         "vectors": "MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier",
         "streamlines": "there is no streamline primitive to trace a field with in a browser",

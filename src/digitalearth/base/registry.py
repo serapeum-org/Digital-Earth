@@ -25,9 +25,10 @@ to keep importing this module cheap — not to make `base/` pyramids-free, which
 import os
 import re
 import uuid
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
@@ -71,9 +72,9 @@ SOURCES_GROUP: str = "digitalearth.sources"
 #: URI scheme for an object held in this process rather than on disk.
 OBJECT_SCHEME: str = "object"
 
-_RESOLVERS: Dict[str, Callable[[str], Any]] = {}
-_CLASSIFIER: Optional[Callable[..., Any]] = None
-_OBJECTS: Dict[str, Any] = {}
+_RESOLVERS: dict[str, Callable[[str], Any]] = {}
+_CLASSIFIER: Callable[..., Any] | None = None
+_OBJECTS: dict[str, Any] = {}
 
 
 def register_resolver(scheme: str, resolver: Callable[[str], Any]) -> None:
@@ -106,7 +107,7 @@ def register_resolver(scheme: str, resolver: Callable[[str], Any]) -> None:
     _RESOLVERS[scheme] = resolver
 
 
-def resolvers() -> Dict[str, Callable[[str], Any]]:
+def resolvers() -> dict[str, Callable[[str], Any]]:
     """Return the registered resolvers, keyed by scheme.
 
     Returns:
@@ -561,7 +562,7 @@ KIND_PATTERN = re.compile(r"(?:[a-z][a-z0-9_-]*:)?[a-z][a-z0-9_-]*")
 #: The data a kind draws. A renderer reads it to know which extractor a layer's source goes through.
 KIND_TAKES = ("raster", "points", "lines", "polygons", "mesh", "volume", "none")
 
-_KINDS: Dict[str, "KindInfo"] = {}
+_KINDS: dict[str, "KindInfo"] = {}
 
 
 def is_kind_name(value: Any) -> bool:
@@ -604,7 +605,7 @@ def is_kind_name(value: Any) -> bool:
 #: * `data` — what the figure is about. The default for a kind that does not say, and for an unregistered one.
 #: * `overlay` — drawn over the data: text and labels, and the line geography (coastlines, borders, rivers) the
 #:   static and interactive tiers draw above the field so it stays visible over an opaque raster.
-KIND_BANDS: Tuple[str, ...] = ("underlay", "reference", "data", "overlay")
+KIND_BANDS: tuple[str, ...] = ("underlay", "reference", "data", "overlay")
 
 
 @dataclass(frozen=True)
@@ -753,7 +754,7 @@ def kind_info(name: str) -> KindInfo:
         ) from None
 
 
-def kinds() -> Tuple[str, ...]:
+def kinds() -> tuple[str, ...]:
     """Return the registered layer kinds, sorted.
 
     Returns:
@@ -865,14 +866,14 @@ def temporary_kind(info: KindInfo) -> Iterator[None]:
 #: Where an anchored item sits in the panel frame. The four corners are what every tier can place: matplotlib's
 #: `loc`, MapLibre's control positions and PyVista's corner widgets all name them, so a figure that asks for one
 #: is drawable everywhere rather than on the tier it was written for.
-FURNITURE_ANCHORS: Tuple[str, ...] = (
+FURNITURE_ANCHORS: tuple[str, ...] = (
     "top-left",
     "top-right",
     "bottom-left",
     "bottom-right",
 )
 
-_FURNITURE: Dict[str, "FurnitureInfo"] = {}
+_FURNITURE: dict[str, "FurnitureInfo"] = {}
 
 
 @dataclass(frozen=True)
@@ -1016,7 +1017,7 @@ def furniture_info(name: str) -> FurnitureInfo:
         ) from None
 
 
-def furniture_kinds() -> Tuple[str, ...]:
+def furniture_kinds() -> tuple[str, ...]:
     """Return the registered furniture names, sorted.
 
     Returns:
@@ -1110,6 +1111,18 @@ _BUILT_IN_FURNITURE = (
         "a slider over the time steps — web timeslider, interactive player",
     ),
     ("measure", "top-left", "a tool that measures distances — web measure"),
+    ("geocoder", "top-left", "a place-search box — web geocoder (MapTiler)"),
+    ("geolocate", "top-right", "a button that centres on the viewer — web geolocate"),
+    (
+        "globe_control",
+        "top-right",
+        "a toggle between a flat map and a globe — web globe_control",
+    ),
+    (
+        "terrain_control",
+        "top-right",
+        "a toggle for 3-D terrain from a DEM source — web terrain_control",
+    ),
 )
 
 for _name, _anchor, _doc in _BUILT_IN_FURNITURE:
@@ -1302,6 +1315,12 @@ _BUILT_IN_KINDS = (
         "model",
         "none",
         "a 3-D model placed on the map — web gltf",
+        "data",
+    ),
+    (
+        "vector_tiles",
+        "none",
+        "features served as an MVT tile pyramid, drawn from a tile URL — web vector_tiles",
         "data",
     ),
     (

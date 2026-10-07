@@ -16,9 +16,10 @@ Reprojection is pyramids' job, not this package's: :meth:`Bounds.to_crs` delegat
 """
 
 import warnings
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -405,7 +406,7 @@ class Bounds:
         return cls(west, south, east, north, crs)
 
     @staticmethod
-    def _checked_step(step: Any) -> Tuple[Any, Any]:
+    def _checked_step(step: Any) -> tuple[Any, Any]:
         """Return the `(dx, dy)` a caller named, refusing anything that is not one.
 
         Args:
@@ -460,7 +461,7 @@ class Bounds:
             ) from None
 
     @staticmethod
-    def _spacing(axis: Any) -> Optional[float]:
+    def _spacing(axis: Any) -> float | None:
         """Return the spacing between an axis' outermost cells, or `None` when it has only one.
 
         Args:
@@ -475,7 +476,7 @@ class Bounds:
         return abs(float(ordered[1] - ordered[0]))
 
     @staticmethod
-    def _edges(axis: Any, step: Any) -> Tuple[float, float]:
+    def _edges(axis: Any, step: Any) -> tuple[float, float]:
         """Return where one axis' cells start and end.
 
         Args:
@@ -500,7 +501,7 @@ class Bounds:
         return low - half, high + half
 
     @staticmethod
-    def _four(values: Sequence[float], label: str) -> Tuple[float, float, float, float]:
+    def _four(values: Sequence[float], label: str) -> tuple[float, float, float, float]:
         """Return exactly four floats, or say which argument was the wrong length.
 
         Args:
@@ -520,7 +521,7 @@ class Bounds:
 
     # ------------------------------------------------------------------ readers
 
-    def as_bbox(self) -> List[float]:
+    def as_bbox(self) -> list[float]:
         """Return ``[xmin, ymin, xmax, ymax]`` — the order cleopatra and pyramids take.
 
         Returns:
@@ -545,7 +546,7 @@ class Bounds:
         """
         return [self.xmin, self.ymin, self.xmax, self.ymax]
 
-    def as_mpl(self) -> List[float]:
+    def as_mpl(self) -> list[float]:
         """Return ``[xmin, xmax, ymin, ymax]`` — the order matplotlib's axes take.
 
         Returns:
@@ -704,7 +705,7 @@ class Bounds:
 
     # ------------------------------------------------------------------ serialisation
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:

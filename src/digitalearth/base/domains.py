@@ -11,7 +11,7 @@ table has no matplotlib in it and no reason to belong to one tier; every tier re
 same box from here. ``digitalearth.static.domains`` re-exports it, so the old import path still works.
 """
 
-from typing import Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
 
 #: Built-in named regions as ``(west, south, east, north)`` in EPSG:4326 (lon/lat degrees).
 DOMAINS = {
@@ -25,12 +25,12 @@ DOMAINS = {
     "north-atlantic": (-80.0, 20.0, 10.0, 70.0),
 }
 
-DomainLike = Union[str, Sequence[float]]
+DomainLike = str | Sequence[float]
 
 
 def resolve_domain(
-    domain: Optional[DomainLike],
-) -> Optional[Tuple[float, float, float, float]]:
+    domain: DomainLike | None,
+) -> tuple[float, float, float, float] | None:
     """Resolve a domain name or explicit bbox to a ``(west, south, east, north)`` tuple in EPSG:4326.
 
     Args:

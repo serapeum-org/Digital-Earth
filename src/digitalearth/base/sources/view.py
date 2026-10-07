@@ -18,7 +18,7 @@ touching every reader in the package to gain a capability none of them uses yet.
 """
 
 from dataclasses import replace
-from typing import Any, Optional, Tuple, cast
+from typing import Any, cast
 
 import numpy as np
 
@@ -105,17 +105,17 @@ class SourceView(Source):
 
     def __init__(
         self,
-        z: Optional[DimensionInfo],
+        z: DimensionInfo | None,
         x: DimensionInfo,
         y: DimensionInfo,
         crs: Any = None,
-        metadata: Optional[dict] = None,
-        units: Optional[str] = None,
+        metadata: dict | None = None,
+        units: str | None = None,
         *,
-        ref: Optional[DataRef] = None,
-        selection: Optional[Selection] = None,
-        request: Optional[ViewRequest] = None,
-        window: Optional[Bounds] = None,
+        ref: DataRef | None = None,
+        selection: Selection | None = None,
+        request: ViewRequest | None = None,
+        window: Bounds | None = None,
     ):
         super().__init__(z, x, y, crs, metadata, units)
         self._ref = ref
@@ -124,7 +124,7 @@ class SourceView(Source):
         self._window = window
 
     @property
-    def window(self) -> Optional[Bounds]:
+    def window(self) -> Bounds | None:
         """The rectangle this view's cells cover, for a windowed read.
 
         Returns:
@@ -146,7 +146,7 @@ class SourceView(Source):
         return self._window
 
     @property
-    def ref(self) -> Optional[DataRef]:
+    def ref(self) -> DataRef | None:
         """Where this view's data came from, or ``None`` when it was built from a held object.
 
         Returns:
@@ -191,7 +191,7 @@ class SourceView(Source):
         return self._selection
 
     @property
-    def request(self) -> Optional[ViewRequest]:
+    def request(self) -> ViewRequest | None:
         """The request this view answered, or ``None`` when it was not read against one.
 
         Returns:
@@ -380,9 +380,9 @@ class SourceView(Source):
         cls,
         data: Any,
         *,
-        ref: Optional[DataRef] = None,
-        selection: Optional[Selection] = None,
-        request: Optional[ViewRequest] = None,
+        ref: DataRef | None = None,
+        selection: Selection | None = None,
+        request: ViewRequest | None = None,
         crs: Any = None,
     ) -> "SourceView":
         """Materialise a view from an opened object, honouring the request where the reader supports it.
@@ -510,8 +510,8 @@ class SourceView(Source):
 
     @staticmethod
     def _budgeted(
-        request: Optional[ViewRequest], budget: Optional[int]
-    ) -> Optional[ViewRequest]:
+        request: ViewRequest | None, budget: int | None
+    ) -> ViewRequest | None:
         """Fold a selection's cell budget into the request, so it is applied rather than only stored.
 
         Args:
@@ -538,7 +538,7 @@ class SourceView(Source):
         return cast(ViewRequest, replace(request, budget=budget))
 
     @classmethod
-    def _shape(cls, request: ViewRequest) -> Tuple[int, int]:
+    def _shape(cls, request: ViewRequest) -> tuple[int, int]:
         """Return the ``(width, height)`` in cells a windowed read should produce.
 
         Args:
@@ -584,7 +584,7 @@ class SourceView(Source):
         return cls._fitted(columns, rows, request.budget)  # type: ignore[arg-type]
 
     @staticmethod
-    def _fitted(width: int, height: int, budget: int) -> Tuple[int, int]:
+    def _fitted(width: int, height: int, budget: int) -> tuple[int, int]:
         """Shrink a canvas until it fits `budget` cells, keeping its shape as nearly as whole cells allow.
 
         Args:
@@ -615,7 +615,7 @@ class SourceView(Source):
         return 1, max(1, min(height, budget))
 
     @staticmethod
-    def _window_for(data: Any, request: ViewRequest) -> Optional[Bounds]:
+    def _window_for(data: Any, request: ViewRequest) -> Bounds | None:
         """Return the rectangle to read, in the CRS the data's own cells are measured in.
 
         Two questions in one, kept apart from the reading: *which* rectangle, and *whose* CRS it is
@@ -651,8 +651,8 @@ class SourceView(Source):
 
     @classmethod
     def _windowed(
-        cls, data: Any, selection: Selection, request: Optional[ViewRequest]
-    ) -> Tuple[Any, Optional[Any], Optional[Any], Optional[Any], Optional[Bounds]]:
+        cls, data: Any, selection: Selection, request: ViewRequest | None
+    ) -> tuple[Any, Any | None, Any | None, Any | None, Bounds | None]:
         """Narrow `data` to the requested window, and say where the window's cells are.
 
         Args:
@@ -704,7 +704,7 @@ class SourceView(Source):
         return array, xs, ys, window.crs, window
 
     @staticmethod
-    def _missing(data: Any, band: int) -> Optional[float]:
+    def _missing(data: Any, band: int) -> float | None:
         """Return the value a windowed read of this band uses for "no data", in the units it returns.
 
         Args:
@@ -797,7 +797,7 @@ class SourceView(Source):
         )
 
     @staticmethod
-    def _native(window: Bounds, data: Any, width: int, height: int) -> Tuple[int, int]:
+    def _native(window: Bounds, data: Any, width: int, height: int) -> tuple[int, int]:
         """Return the canvas, never asking for more cells than the window holds at full resolution.
 
         Args:
@@ -817,7 +817,7 @@ class SourceView(Source):
         return min(width, cells[0]), min(height, cells[1])
 
     @staticmethod
-    def _native_cells(window: Bounds, data: Any) -> Optional[Tuple[int, int]]:
+    def _native_cells(window: Bounds, data: Any) -> tuple[int, int] | None:
         """Return how many source cells a window spans, across and down.
 
         Args:
@@ -843,7 +843,7 @@ class SourceView(Source):
         return across, down
 
     @staticmethod
-    def _spacing(data: Any) -> Tuple[Optional[float], Optional[float]]:
+    def _spacing(data: Any) -> tuple[float | None, float | None]:
         """Return what one cell of `data` measures, across and down.
 
         Args:
@@ -922,7 +922,7 @@ class SourceView(Source):
             )
 
     @staticmethod
-    def _grid(data: Any) -> Optional[Tuple[float, float, float, float]]:
+    def _grid(data: Any) -> tuple[float, float, float, float] | None:
         """Return the source's ``(origin_x, step_x, origin_y, step_y)``, or ``None`` if it has no grid.
 
         Args:
@@ -946,7 +946,7 @@ class SourceView(Source):
     @staticmethod
     def _snapped(
         low: float, high: float, origin: float, step: float
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Widen one axis of a window out to the cell edges that enclose it.
 
         Args:
@@ -974,7 +974,7 @@ class SourceView(Source):
     @classmethod
     def _axes(
         cls, window: Bounds, rows: int, columns: int, data: Any
-    ) -> Tuple[Any, Any]:
+    ) -> tuple[Any, Any]:
         """Return the cell-centre coordinates of a windowed read, in the order its rows and columns come.
 
         Args:

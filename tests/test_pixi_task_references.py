@@ -39,7 +39,7 @@ INVOCATION = re.compile(
 )
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _pyproject() -> dict:
     """Return the parsed pyproject.toml (cached — every helper here reads from it)."""
     with (ROOT / "pyproject.toml").open("rb") as handle:
@@ -317,10 +317,10 @@ class TestRuffPinsAgree:
         )
 
 
-#: The checks the composite `lint` task must keep fanning out to. Splitting it into three (#171) is what put
-#: the formatter and the import sorter behind a gate; dropping one from `depends-on` would un-gate it in
-#: silence, because `pixi run -e dev lint` would still exit 0.
-LINT_GATES = ["lint-names", "lint-format", "lint-imports"]
+#: The checks the composite `lint` task must keep fanning out to. Splitting it (#171) is what put the formatter
+#: and the import sorter behind a gate; lint-modernize (the UP category) joined them in #397. Dropping one from
+#: `depends-on` would un-gate it in silence, because `pixi run -e dev lint` would still exit 0.
+LINT_GATES = ["lint-names", "lint-format", "lint-imports", "lint-modernize"]
 
 #: `(task, tokens its command must contain)` for the gates that only work if they are pointed at the right
 #: trees in the right mode. `--check` is what makes the formatter a gate rather than a rewrite.
@@ -328,6 +328,7 @@ GATE_ARGUMENTS = [
     ("lint-format", ["ruff", "format", "--check", "src", "tests"]),
     ("lint-imports", ["ruff", "check", "--select", "I", "src", "tests"]),
     ("lint-names", ["ruff", "check", "--select", "F821", "src", "tests", "docs"]),
+    ("lint-modernize", ["ruff", "check", "--select", "UP", "src", "tests"]),
 ]
 
 #: Number of modules in the mypy baseline when it was recorded at #172. The table documents itself as a
@@ -346,10 +347,10 @@ def _mypy_overrides() -> list:
 
 
 class TestLintGateFansOut:
-    """Tests that the composite `lint` task still runs all three of the checks it aggregates."""
+    """Tests that the composite `lint` task still runs all of the checks it aggregates."""
 
     def test_lint_depends_on_every_gate(self):
-        """`lint` fans out to the name check, the formatter and the import sorter.
+        """`lint` fans out to the name check, the formatter, the import sorter and the UP gate.
 
         Test scenario:
             CI and the pre-commit hook both invoke `lint`, never the three parts. It carries no `cmd` of its

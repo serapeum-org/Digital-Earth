@@ -20,9 +20,10 @@ HoloViews is imported inside the functions that need it: a dispatcher reads this
 the tier accepts, and that must not cost a backend import.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Tuple
+from typing import Any
 
 from digitalearth.base.ask import asked_style
 from digitalearth.base.spec import Encoding, Scale, StyleKey, StyleSchema, Symbology
@@ -115,7 +116,7 @@ class ChannelOption:
     channel: str
     option: str
     group: str
-    elements: FrozenSet[str]
+    elements: frozenset[str]
     reason: str
 
 
@@ -123,7 +124,7 @@ class ChannelOption:
 #: options of every element the builders emit — a test walks this table against `hv.Store` so it cannot drift
 #: from the engine. Two channels are in it nowhere: `height` has no HoloViews option at all, and `text` is a
 #: `Labels` value dimension rather than a style keyword, so both are reported as unsupported with that reason.
-CHANNEL_OPTIONS: Tuple[ChannelOption, ...] = (
+CHANNEL_OPTIONS: tuple[ChannelOption, ...] = (
     ChannelOption(
         "color",
         "color",
@@ -230,7 +231,7 @@ UNEXPRESSIBLE: Mapping[str, str] = {
 #: The option groups HoloViews sorts an element's keywords into, in the order a key is looked for. `style` is
 #: first because that is where a colour or a width lives; `norm` holds `framewise`/`axiswise`, and `output`
 #: the renderer's own settings.
-OPTION_GROUPS: Tuple[str, ...] = ("style", "plot", "norm", "output")
+OPTION_GROUPS: tuple[str, ...] = ("style", "plot", "norm", "output")
 
 
 #: The property the kind of colour key a layer's guide asks for is recorded under — one of
@@ -244,7 +245,7 @@ OPTION_GROUPS: Tuple[str, ...] = ("style", "plot", "norm", "output")
 GUIDE_KIND_KEY: str = "guide_kind"
 
 #: The two kinds of colour key this tier draws: a continuous bar beside the plot, or a keyed box in it.
-GUIDE_KINDS: Tuple[str, ...] = ("colorbar", "legend")
+GUIDE_KINDS: tuple[str, ...] = ("colorbar", "legend")
 
 #: The property a caller's own row labels for one layer's key are recorded under.
 #:
@@ -306,7 +307,7 @@ def guide_kind(symbology: Symbology) -> str:
     return "legend" if scale is not None and scale.is_categorical else "colorbar"
 
 
-def fold_guide(symbology: Symbology, label: Optional[str] = None) -> Dict[str, Any]:
+def fold_guide(symbology: Symbology, label: str | None = None) -> dict[str, Any]:
     """Fold a recorded colour guide into the HoloViews options that draw it.
 
     The one translation from :class:`~digitalearth.base.spec.encoding.Guide` to Bokeh's spelling, so the key
@@ -356,7 +357,7 @@ def fold_guide(symbology: Symbology, label: Optional[str] = None) -> Dict[str, A
     if guide is None:
         return {}
     if guide_kind(symbology) == "legend":
-        opts: Dict[str, Any] = {"show_legend": guide.show}
+        opts: dict[str, Any] = {"show_legend": guide.show}
         if guide.title is not None:
             # Bokeh's own slot for a legend heading, reached through the option HoloViews forwards to the
             # `Legend` model — there is no `legend_title` of its own.
@@ -373,7 +374,7 @@ def fold_guide(symbology: Symbology, label: Optional[str] = None) -> Dict[str, A
 
 def split_guide_options(
     element: Any, opts: Mapping[str, Any]
-) -> Tuple[Dict[str, Any], List[str]]:
+) -> tuple[dict[str, Any], list[str]]:
     """Split a folded guide into the options one element takes and the ones it does not.
 
     Both halves are real. An ``hv.Image`` takes ``colorbar``, ``clabel`` and ``show_legend`` but **not**
@@ -401,7 +402,7 @@ def split_guide_options(
     return taken, sorted(key for key in opts if key not in accepted)
 
 
-def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]]:
+def route_flat_style(flat: Mapping[str, Any]) -> tuple[Symbology, dict[str, Any]]:
     """Split a builder's flat keywords into a `Symbology` and the engine options left over.
 
     Args:
@@ -497,10 +498,10 @@ TIER_BUCKET: str = "tier"
 #: every drawer merges the second over the first — so an explicit keyword outranks a derived one, and the
 #: lift below must read them in the same order. ``field`` (which records ``via="image"``) and ``rgb`` write
 #: their flat style at the top level of ``props`` instead, which is why the mapping itself is read first.
-STYLE_BUCKETS: Tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
+STYLE_BUCKETS: tuple[str, ...] = (DERIVED_BUCKET, ASKED_BUCKET)
 
 
-def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
+def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
     """Return the declared channels an interactive layer's recorded options say the **caller** asked for.
 
     Additive by construction: the resolved HoloViews options stay exactly where every drawer reads them, and
@@ -604,7 +605,7 @@ def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
     return lifted
 
 
-def limits_scale(limits: Any) -> Optional[Scale]:
+def limits_scale(limits: Any) -> Scale | None:
     """Return the :class:`~digitalearth.base.spec.scale.Scale` a recorded ``(low, high)`` pair states.
 
     The domain half of what a colour key needs, and the only half this tier ever holds when a layer is
@@ -658,7 +659,7 @@ def limits_scale(limits: Any) -> Optional[Scale]:
 
 def allowed_options(
     element: str, backend: str = "bokeh"
-) -> Mapping[str, FrozenSet[str]]:
+) -> Mapping[str, frozenset[str]]:
     """Return the options HoloViews accepts for one element type, by group.
 
     Args:
@@ -711,7 +712,7 @@ def allowed_options(
 
 def fold_symbology(
     symbology: Symbology, element: str, *, backend: str = "bokeh"
-) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
     """Fold a declared symbology into the options one HoloViews element takes.
 
     This is the single point where a declared style becomes this renderer's own form — which is what keeps the
@@ -766,8 +767,8 @@ def fold_symbology(
     # Every group `_group_of` can name, so a standard option that belongs to one of the other two — HoloViews
     # puts `framewise` and `axiswise` under `norm` — lands in it instead of raising a bare `KeyError('norm')`
     # where the did-you-mean belonged (review M16). Empty groups are dropped before this returns.
-    grouped: Dict[str, Dict[str, Any]] = {name: {} for name in OPTION_GROUPS}
-    unsupported: Dict[str, str] = {}
+    grouped: dict[str, dict[str, Any]] = {name: {} for name in OPTION_GROUPS}
+    unsupported: dict[str, str] = {}
     for channel, encoding in dict(symbology.encodings).items():
         if channel in UNEXPRESSIBLE:
             unsupported[channel] = UNEXPRESSIBLE[channel]
@@ -827,8 +828,8 @@ def _named_fields(value: Any) -> list:
 def _fold_channel(
     entry: ChannelOption,
     encoding: Encoding,
-    grouped: Dict[str, Dict[str, Any]],
-    unexpressible: Dict[str, str],
+    grouped: dict[str, dict[str, Any]],
+    unexpressible: dict[str, str],
 ) -> None:
     """Write one channel's option into the grouped result.
 
@@ -872,7 +873,7 @@ def _fold_channel(
             grouped["plot"]["color_levels"] = list(scale.breaks)
 
 
-def _group_of(key: str, allowed: Mapping[str, FrozenSet[str]], element: str) -> str:
+def _group_of(key: str, allowed: Mapping[str, frozenset[str]], element: str) -> str:
     """Return the option group a raw key belongs to.
 
     Args:

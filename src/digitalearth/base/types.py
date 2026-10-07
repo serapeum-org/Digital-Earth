@@ -10,7 +10,7 @@ Inside the plotting mixins, ``Any`` is still used deliberately for free-form ``*
 straight to cleopatra — typing those adds noise without safety.
 """
 
-from typing import Any, Protocol, Union, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -106,4 +106,4 @@ class VectorLike(Protocol):
 #: ``lon``/``lat`` rather than ``x``/``y``, so it does *not* structurally satisfy :class:`RasterLike`) and a
 #: ``DatasetCollection`` (one member is extracted). Those are matched by ``isinstance`` inside ``extract``,
 #: not by this union; the annotation is a hint, never a runtime gate.
-PlottableData = Union[RasterLike, VectorLike, np.ndarray]
+PlottableData = RasterLike | VectorLike | np.ndarray

@@ -20,20 +20,12 @@ Two decisions this module settles:
 """
 
 from collections import Counter
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
 from numbers import Integral
 from typing import (
     Any,
-    Dict,
-    FrozenSet,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
     cast,
 )
 
@@ -74,7 +66,7 @@ LAYER_REFERENCE = "layer:"
 SUFFIX_LIMIT: int = 10_000
 
 
-def layer_name(name: Any) -> Optional[str]:
+def layer_name(name: Any) -> str | None:
     """Return the id a caller's ``name=`` asks for, normalised — or ``None`` when they asked for no name.
 
     The **one** place a caller-supplied name is turned into an id, shared by all four tiers, and the reason it
@@ -332,15 +324,15 @@ class LayerSpec:
 
     id: str
     kind: str
-    source_id: Optional[str] = None
+    source_id: str | None = None
     selection: Selection = field(default_factory=Selection)
     symbology: Symbology = field(default_factory=Symbology)
-    z_source: Optional[str] = None
+    z_source: str | None = None
     visible: bool = True
-    label: Optional[str] = None
-    group: Optional[str] = None
-    band: Optional[str] = None
-    filter: Optional[str] = None
+    label: str | None = None
+    group: str | None = None
+    band: str | None = None
+    filter: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse a layer that could not be addressed, looked up or drawn.
@@ -398,7 +390,7 @@ class LayerSpec:
                 )
 
     @property
-    def z_layer(self) -> Optional[str]:
+    def z_layer(self) -> str | None:
         """The id of the layer this one takes its elevation from, if it takes it from a layer.
 
         Returns:
@@ -435,7 +427,7 @@ class LayerSpec:
         """
         return self.label if self.label is not None else self.id
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -461,7 +453,7 @@ class LayerSpec:
 
                 ```
         """
-        out: Dict[str, Any] = {"id": plain_text(self.id), "kind": plain_text(self.kind)}
+        out: dict[str, Any] = {"id": plain_text(self.id), "kind": plain_text(self.kind)}
         if self.source_id is not None:
             out["source_id"] = plain_text(self.source_id)
         if self.selection != Selection():
@@ -645,7 +637,7 @@ def _layer_band(layer: LayerSpec) -> str:
     return band_of(layer.kind) if layer.band is None else layer.band
 
 
-def _band_bounds(layers: Sequence[LayerSpec], band: str) -> Tuple[int, int]:
+def _band_bounds(layers: Sequence[LayerSpec], band: str) -> tuple[int, int]:
     """Return the lowest and highest positions a layer of one band may take.
 
     Args:
@@ -730,8 +722,8 @@ class LayerTree:
             ```
     """
 
-    layers: Tuple[LayerSpec, ...] = ()
-    hidden_groups: FrozenSet[str] = frozenset()
+    layers: tuple[LayerSpec, ...] = ()
+    hidden_groups: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         """Refuse a tree whose ids, references or hidden groups do not hold together.
@@ -768,7 +760,7 @@ class LayerTree:
             )
 
     @staticmethod
-    def _checked_hidden_groups(hidden_groups: Any) -> FrozenSet[str]:
+    def _checked_hidden_groups(hidden_groups: Any) -> frozenset[str]:
         """Return the hidden groups as a frozenset of names, refusing anything that is not one.
 
         Args:
@@ -796,7 +788,7 @@ class LayerTree:
                 )
         return frozenset(hidden)
 
-    def _check_drapes(self, ids: List[str]) -> None:
+    def _check_drapes(self, ids: list[str]) -> None:
         """Refuse a drape over a layer the tree does not hold, or a chain of drapes that loops.
 
         Args:
@@ -813,7 +805,7 @@ class LayerTree:
                     f"layers are {ids}"
                 )
         # A layer whose chain of drapes is already known to end on a surface is not walked again.
-        grounded: Set[str] = set()
+        grounded: set[str] = set()
         for layer in self.layers:
             chain = [layer.id]
             on_chain = {layer.id}
@@ -832,7 +824,7 @@ class LayerTree:
     # ------------------------------------------------------------------ reading
 
     @property
-    def ids(self) -> Tuple[str, ...]:
+    def ids(self) -> tuple[str, ...]:
         """The layer ids, bottom first.
 
         Returns:
@@ -850,7 +842,7 @@ class LayerTree:
         return tuple(layer.id for layer in self.layers)
 
     @property
-    def groups(self) -> Tuple[str, ...]:
+    def groups(self) -> tuple[str, ...]:
         """The groups the layers belong to, in the order each first appears.
 
         Returns:
@@ -964,7 +956,7 @@ class LayerTree:
 
     # ------------------------------------------------------------------ changes (each returns a new tree)
 
-    def add(self, layer: LayerSpec, *, index: Optional[int] = None) -> "LayerTree":
+    def add(self, layer: LayerSpec, *, index: int | None = None) -> "LayerTree":
         """Return a tree with `layer` added.
 
         Args:
@@ -1303,7 +1295,7 @@ class LayerTree:
 
     # ------------------------------------------------------------------ serialisation
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -1329,7 +1321,7 @@ class LayerTree:
 
                 ```
         """
-        out: Dict[str, Any] = {"layers": [layer.to_dict() for layer in self.layers]}
+        out: dict[str, Any] = {"layers": [layer.to_dict() for layer in self.layers]}
         if self.hidden_groups:
             out["hidden_groups"] = sorted(
                 plain_text(group) for group in self.hidden_groups
@@ -1381,7 +1373,7 @@ class LayerTree:
             # The constructor checks each entry is a group name and freezes them; a frozenset here would raise a bare
             # "unhashable type" for a nested list before that check could name it.
             cast(
-                FrozenSet[str],
+                frozenset[str],
                 as_list("LayerTree", "hidden_groups", data.get("hidden_groups", ())),
             ),
         )

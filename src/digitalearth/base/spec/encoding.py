@@ -19,10 +19,11 @@ channel with an `output_range` resolves to real units, because ``(4, 20)`` pixel
 everywhere.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Optional
 
 from digitalearth.base.registry import FURNITURE_ANCHORS
 from digitalearth.base.spec._serial import (
@@ -153,8 +154,8 @@ class Guide:
     """
 
     show: bool = True
-    title: Optional[str] = None
-    anchor: Optional[str] = None
+    title: str | None = None
+    anchor: str | None = None
 
     def __post_init__(self) -> None:
         """Refuse a guide that could not be drawn.
@@ -175,7 +176,7 @@ class Guide:
                 f"Guide anchor must be one of {list(FURNITURE_ANCHORS)}; got {self.anchor!r}"
             )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -198,7 +199,7 @@ class Guide:
 
                 ```
         """
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         if not self.show:
             out["show"] = False
         if self.title is not None:
@@ -315,9 +316,9 @@ class Encoding:
 
     channel: str
     value: Any = None
-    field: Optional[str] = None
-    scale: Optional[Scale] = None
-    output_range: Optional[Tuple[float, float]] = None
+    field: str | None = None
+    scale: Scale | None = None
+    output_range: tuple[float, float] | None = None
     guide: Optional["Guide"] = None
 
     def __post_init__(self) -> None:
@@ -476,8 +477,8 @@ class Encoding:
         channel: str,
         field: str,
         *,
-        scale: Optional[Scale] = None,
-        output_range: Optional[Tuple[float, float]] = None,
+        scale: Scale | None = None,
+        output_range: tuple[float, float] | None = None,
         guide: Optional["Guide"] = None,
     ) -> "Encoding":
         """Bind a channel to a data field.
@@ -610,7 +611,7 @@ class Encoding:
             return [self.scale.color_for(item) for item in items]
         return [self._position(self.scale, item) for item in items]
 
-    def _position(self, scale: Scale, value: Any) -> Optional[float]:
+    def _position(self, scale: Scale, value: Any) -> float | None:
         """Place one numeric value on the channel, in ``[0, 1]`` or in `output_range`.
 
         Args:
@@ -644,7 +645,7 @@ class Encoding:
 
     # ------------------------------------------------------------------ serialisation
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the plain-dict form a figure stores.
 
         Returns:
@@ -672,7 +673,7 @@ class Encoding:
 
                 ```
         """
-        out: Dict[str, Any] = {"channel": plain_text(self.channel)}
+        out: dict[str, Any] = {"channel": plain_text(self.channel)}
         if self.value is not None:
             out["value"] = to_json_value(
                 self.value, f"Encoding[{self.channel!r}].value"

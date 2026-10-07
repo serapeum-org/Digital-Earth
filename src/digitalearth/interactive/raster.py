@@ -18,7 +18,8 @@ feature-parity matrix.
 """
 
 import os
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Self, Sequence, Tuple
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.crs import reproject
@@ -139,7 +140,7 @@ def coloured_by(data: Any, band: int = DEFAULT_BAND) -> str:
     return UNNAMED_VALUE
 
 
-def _one_spacing_only(caller: str, levels: Any, interval: Optional[float]) -> None:
+def _one_spacing_only(caller: str, levels: Any, interval: float | None) -> None:
     """Refuse a contour call that asks for its levels two ways at once.
 
     Written once for the tier's two contour spellings, so neither could answer the pair differently from
@@ -184,7 +185,7 @@ def _engine_pair(pair: Any) -> Any:
 _CLASS_KEYWORDS = frozenset({"scheme", "k"})
 
 
-def _class_options(classes: BandClasses) -> Dict[str, Any]:
+def _class_options(classes: BandClasses) -> dict[str, Any]:
     """Return the HoloViews options that draw a band class by class.
 
     One colour per class (``cmap``) and the edges between them (``color_levels``) — the same pair this tier
@@ -221,7 +222,7 @@ def _class_options(classes: BandClasses) -> Dict[str, Any]:
             ```
     """
     edges = list(classes.edges)
-    options: Dict[str, Any] = {
+    options: dict[str, Any] = {
         "cmap": list(classes.colors),
         "color_levels": edges,
         "clim": (edges[0], edges[-1]),
@@ -235,7 +236,7 @@ def _class_options(classes: BandClasses) -> Dict[str, Any]:
 
 
 def _band_classes(
-    interactive_map: Any, data: Any, band: int, scheme: Any, k: Optional[int], cmap: Any
+    interactive_map: Any, data: Any, band: int, scheme: Any, k: int | None, cmap: Any
 ) -> BandClasses:
     """Classify a band at build time, so the layer's description carries its classes.
 
@@ -499,7 +500,7 @@ def draw_large_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 class RasterMixin(_MixinBase):
     """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti."""
 
-    def _image_from_source(self, src: Any, *, vname: Optional[str] = None) -> Any:
+    def _image_from_source(self, src: Any, *, vname: str | None = None) -> Any:
         """Build the I1 image from an already display-CRS :class:`Source`.
 
         Takes an already-reprojected source rather than the raw data, so a builder that also needs the
@@ -537,14 +538,14 @@ class RasterMixin(_MixinBase):
         data: Any,
         *,
         band: int = DEFAULT_BAND,
-        cmap: Optional[str] = None,
-        clim: Optional[Tuple[float, float]] = None,
-        scheme: Optional[Any] = None,
-        k: Optional[int] = None,
+        cmap: str | None = None,
+        clim: tuple[float, float] | None = None,
+        scheme: Any | None = None,
+        k: int | None = None,
         alpha: Maybe[float] = UNSET,
         colorbar: bool = True,
-        clabel: Optional[str] = None,
-        name: Optional[str] = None,
+        clabel: str | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -640,7 +641,7 @@ class RasterMixin(_MixinBase):
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
         # into the description, and what has no JSON form — a colormap object, a callable — is held beside
         # the layer, because a figure is saved as JSON.
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         ask = Ask()
         return self.add_layer(
@@ -684,8 +685,8 @@ class RasterMixin(_MixinBase):
         data: Any,
         *,
         bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
-        limits: Optional[ChannelLimits] = None,
-        name: Optional[str] = None,
+        limits: ChannelLimits | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -726,7 +727,7 @@ class RasterMixin(_MixinBase):
         _require_holoviz()
         # Refused here rather than in the drawer, because the message names the argument the caller wrote.
         require_three_bands("rgb", bands)
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -754,9 +755,9 @@ class RasterMixin(_MixinBase):
         data: Any,
         *,
         band: int = DEFAULT_BAND,
-        cmap: Optional[str] = None,
-        clabel: Optional[str] = None,
-        name: Optional[str] = None,
+        cmap: str | None = None,
+        clabel: str | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -795,7 +796,7 @@ class RasterMixin(_MixinBase):
             This map (chainable).
         """
         _require_holoviz()
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -827,9 +828,9 @@ class RasterMixin(_MixinBase):
         *,
         band: int = DEFAULT_BAND,
         levels: Any = None,
-        interval: Optional[float] = None,
+        interval: float | None = None,
         filled: bool = False,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -916,11 +917,11 @@ class RasterMixin(_MixinBase):
         band: int,
         levels: Any,
         filled: bool,
-        interval: Optional[float] = None,
-        name: Optional[str] = None,
+        interval: float | None = None,
+        name: str | None = None,
         visible: bool = True,
-        derived: Optional[Mapping[str, Any]] = None,
-        opts: Optional[Mapping[str, Any]] = None,
+        derived: Mapping[str, Any] | None = None,
+        opts: Mapping[str, Any] | None = None,
         coloured_by_value: bool = True,
     ) -> Self:
         """Record the shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
@@ -964,11 +965,11 @@ class RasterMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, dict(opts or {}))
         # The tier's own half is described into its own bucket, and anything that cannot travel is held
         # under the same key — which is how `held_props` merges the two back together for the drawer.
-        tier_held: Dict[str, Any] = {}
+        tier_held: dict[str, Any] = {}
         described_tier = {
             key: describe(tier_held, key, value)
             for key, value in dict(derived or {}).items()
@@ -1023,7 +1024,7 @@ class RasterMixin(_MixinBase):
         collection: Any,
         *,
         band: int = DEFAULT_BAND,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1096,8 +1097,8 @@ class RasterMixin(_MixinBase):
         band: int = DEFAULT_BAND,
         max_pixels: int = 4_000_000,
         dynamic: bool = True,
-        cmap: Optional[str] = None,
-        name: Optional[str] = None,
+        cmap: str | None = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -1187,7 +1188,7 @@ class RasterMixin(_MixinBase):
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
                 ".preview); upgrade pyramids or use field() for a small raster"
             )
-        held: Dict[str, Any] = {}
+        held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
         return self.add_layer(
             None,
@@ -1214,7 +1215,7 @@ class RasterMixin(_MixinBase):
             ),
         )
 
-    def _draw_large_image(self, dataset: Any, props: dict) -> Tuple[Any, dict]:
+    def _draw_large_image(self, dataset: Any, props: dict) -> tuple[Any, dict]:
         """Build the windowed-read layer a `large_image` description asks for.
 
         Args:
@@ -1243,8 +1244,8 @@ class RasterMixin(_MixinBase):
         # against the layer a caller holds rather than against whichever layer happened to register last
         # (review H3). It stays `None` for the static path, where the frame *is* the layer. `held` carries
         # the view between frames: the first read makes it, every later one re-reads through it.
-        owner: Dict[str, Any] = {}
-        held: Dict[str, Any] = {}
+        owner: dict[str, Any] = {}
+        held: dict[str, Any] = {}
 
         def _read(request: Any) -> Any:
             """Answer one read request, making the layer's view the first time it is asked.

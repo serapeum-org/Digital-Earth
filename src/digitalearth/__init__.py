@@ -2,9 +2,9 @@
 # `importlib_metadata` backport this used to fall back to can never be reached: read the version straight
 # from the installed distribution's metadata.
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 try:
     __version__ = version(__name__)
@@ -38,7 +38,7 @@ for dependency in hard_dependencies:
         print(e)
 
 if missing_dependencies:
-    raise ImportError("Missing required dependencies {0}".format(missing_dependencies))
+    raise ImportError(f"Missing required dependencies {missing_dependencies}")
 
 
 # Assigned rather than written as a module docstring at the top of the file: the imports above have to run

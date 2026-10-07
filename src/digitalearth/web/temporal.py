@@ -14,7 +14,8 @@ The slider is wired at :meth:`render` time via :meth:`_wrap_temporal` (returning
 imported lazily.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger
 
@@ -44,7 +45,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def _check_slider_labels(labels: Optional[Sequence], count: int) -> None:
+def _check_slider_labels(labels: Sequence | None, count: int) -> None:
     """Refuse a label sequence the slider could not map back to its frames.
 
     Args:
@@ -77,7 +78,7 @@ def _check_slider_labels(labels: Optional[Sequence], count: int) -> None:
 class TemporalMixin(_MixinBase):
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
-    def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
+    def _global_clim(self, collection: Any, band: int) -> tuple[float, float]:
         """Compute one ``(vmin, vmax)`` for the whole series so the colour range never jumps between frames.
 
         Note: this pass is **eager** — it reprojects and reads each scanned member once at ``timeslider``
@@ -108,14 +109,14 @@ class TemporalMixin(_MixinBase):
         features: Any,
         *,
         kdim: str = "time",
-        labels: Optional[Sequence] = None,
+        labels: Sequence | None = None,
         band: int = DEFAULT_BAND,
-        column: Optional[str] = None,
-        scheme: Optional[Any] = None,
+        column: str | None = None,
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         opacity: float = 0.85,
-        clim: Optional[Tuple[float, float]] = None,
+        clim: tuple[float, float] | None = None,
     ) -> Self:
         """Render a time-stepped layer with a slider over its time steps (recipe W6).
 
@@ -254,11 +255,11 @@ class TemporalMixin(_MixinBase):
         collection: Any,
         *,
         kdim: str,
-        labels: Optional[Sequence],
+        labels: Sequence | None,
         band: int,
         cmap: str,
         opacity: float,
-        clim: Optional[Tuple[float, float]],
+        clim: tuple[float, float] | None,
     ) -> Self:
         """Build the raster half of :meth:`timeslider`: one image layer per member, swapped by the slider.
 
@@ -314,7 +315,7 @@ class TemporalMixin(_MixinBase):
             list(self._data_bounds) if self._data_bounds is not None else None
         )
         units_before = self.last_units
-        layer_ids: List[str] = []
+        layer_ids: list[str] = []
         for index, member in enumerate(members):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
             # without a slider then shows one frame rather than the whole stack piled up.
@@ -405,7 +406,7 @@ class TemporalMixin(_MixinBase):
                 total_pixels,
             )
 
-    def _temporal_switcher(self) -> Optional[dict]:
+    def _temporal_switcher(self) -> dict | None:
         """Return the step picker a saved page needs, or ``None`` when this map is not a series.
 
         ``render`` wraps the map in an ``ipywidgets`` slider, which exists only in a live kernel:
@@ -504,7 +505,7 @@ class TemporalMixin(_MixinBase):
 
         return show_vector
 
-    def _temporal_times(self) -> List[Any]:
+    def _temporal_times(self) -> list[Any]:
         """Return the distinct time steps of the active time-slider (empty when none is set).
 
         Returns:

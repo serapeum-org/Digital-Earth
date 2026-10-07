@@ -25,7 +25,7 @@ import os
 import pathlib
 from dataclasses import dataclass
 from dataclasses import replace as replace_fields
-from typing import Any, Dict, List, Optional, Self
+from typing import Any, Self
 
 from loguru import logger
 from pyramids.base.crs import reproject_coordinates
@@ -363,7 +363,7 @@ class _DeckOverlay:
     """
 
 
-def _layer_id_of(layer: Any) -> Optional[str]:
+def _layer_id_of(layer: Any) -> str | None:
     """Return the id one MapLibre layer carries, in whichever shape it was built.
 
     Args:
@@ -377,7 +377,7 @@ def _layer_id_of(layer: Any) -> Optional[str]:
     return str(value) if value is not None else None
 
 
-def _anchored(layer: Any, anchor: Optional[str]) -> Any:
+def _anchored(layer: Any, anchor: str | None) -> Any:
     """Return one deck.gl JSON layer carrying the MapLibre style layer it draws beneath.
 
     Args:
@@ -661,11 +661,11 @@ class WebMapBase:
     def __init__(
         self,
         *,
-        center: Optional[Any] = None,
+        center: Any | None = None,
         zoom: Any = UNSET,
         style: Any = "dark",
         crs: Any = DISPLAY_CRS,
-        height: Optional[int] = 500,
+        height: int | None = 500,
         strict: bool = False,
     ):
         """Record the display configuration and open the empty layer / decoration registries.
@@ -695,18 +695,18 @@ class WebMapBase:
         self.height = height
         #: Whether an unplaceable layer raises (``True``) or is skipped with a warning (``False``).
         self.strict = bool(strict)
-        self._queued: List[Any] = []
+        self._queued: list[Any] = []
         # Created once and kept: what it holds is what `layers` reports and what `_build_map_widget`
         # adds, so a layer drawn when its builder ran is still there at render time.
         self._renderer = _new_renderer(self)
         #: The highest number issued for each generated-id prefix, so an unnamed layer is numbered
         #: within its kind rather than within the figure (see :meth:`_uid`; review R2-M10).
-        self._id_counters: Dict[str, int] = {}
+        self._id_counters: dict[str, int] = {}
         #: Every id this map has minted, named or generated. Both allocators reserve from it, so a caller
         #: name shaped like a generated id (``"circle-5"``) cannot later be handed out a second time.
         self._issued_ids: set = set()
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
-        self._last_layer_id: Optional[str] = None
+        self._last_layer_id: str | None = None
         #: Every data layer added, in draw order — bottom first, as a :class:`~digitalearth.base.spec.layer.LayerTree`
         #: lists them — so a graticule, which joins the reference band beneath the data, sits beneath data added
         #: before it here too. The id addresses the layer in MapLibre; the label is what a layer switcher shows a
@@ -734,12 +734,12 @@ class WebMapBase:
         #: existed, so the annotation named a type this attribute does not hold. `Any` is the honest answer
         #: — the element type is the classified column's, which the tier does not constrain — where
         #: ``List[float]`` was a claim a caller could have written code against.
-        self.last_breaks: Optional[List[Any]] = None
+        self.last_breaks: list[Any] | None = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
         #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
         #: :attr:`last_breaks`, which stays the bare-``values`` accessor it has always been.
-        self.last_legend: Optional[dict] = None
+        self.last_legend: dict | None = None
         #: The classification each layer was drawn with, keyed by layer id, so a colour key asked for by id
         #: describes *that* layer. `last_legend` alone answers only "the most recent one", which made
         #: `colorbar("A")` draw layer B's ramp under A's label (review H4).
@@ -749,13 +749,13 @@ class WebMapBase:
         #: docstring: "nothing here holds entries or colours"). Whether a key is drawn at all, what it is
         #: called and which corner it sits in moved onto the layer's ``color`` encoding with order 24; the
         #: rows stay here, computed from the data by the builder that drew them.
-        self._legends: Dict[str, dict] = {}
+        self._legends: dict[str, dict] = {}
         #: The legend dict most recently filed above. A classifying builder always writes a *fresh* dict, so
         #: identity is what tells a new classification from the one still sitting in `last_legend` when an
         #: unclassified layer is indexed after it.
-        self._filed_legend: Optional[dict] = None
+        self._filed_legend: dict | None = None
         #: Accumulated deck.gl JSON layers, applied in one ``add_deck_layers`` call at render (DW.3).
-        self._deck_layers: Optional[List[dict]] = None
+        self._deck_layers: list[dict] | None = None
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never
         #: silent). Set it once and every subsequent layer on this map honours it; a single builder call
         #: can override it with its own ``big_data_threshold=`` without changing the map's setting.
@@ -764,30 +764,30 @@ class WebMapBase:
         #: ``field(units=)`` / ``contours(units=)`` when they named one, else the
         #: :func:`~digitalearth.base.autostyle.auto_style` hint. Carried so a key built from that raster's
         #: values can say what they are measured in (see :meth:`_auto_units`).
-        self.last_units: Optional[str] = None
+        self.last_units: str | None = None
         #: Lon/lat extent of everything added so far, unioned as layers arrive (see :meth:`_note_bounds`).
         #: Used to frame the map when the caller gave neither ``center`` nor ``zoom``.
-        self._data_bounds: Optional[List[float]] = None
+        self._data_bounds: list[float] | None = None
         #: An explicit :meth:`set_bounds` request, which always wins over the accumulated extent.
-        self._fit: Optional[dict] = None
+        self._fit: dict | None = None
         #: The projection MapLibre draws in, as `projection()` sets it; recorded so the view can say so.
         self._projection: str = "mercator"
         #: Where each layer's data came from, keyed by layer id — the figure's sources (#296).
-        self._sources: Dict[str, DataRef] = {}
+        self._sources: dict[str, DataRef] = {}
         #: This map's prefix in the process-global object registry. Every map restarts its layer numbering,
         #: so without one two maps in a session both wrote `circle-2` and the second won (review H2).
         self._objects_ns: str = object_namespace()
         #: The controls the map draws, as furniture on its panel (#292).
-        self._furniture: List[Furniture] = []
+        self._furniture: list[Furniture] = []
         #: The panel's title, as `set_title()` set it.
-        self._title: Optional[str] = None
+        self._title: str | None = None
         #: How many layers sit in the basemap band, so :meth:`add_reference` can insert just above them.
         self._underlay_count = 0
         #: How many sit in the reference band, so two of them keep the order they were added in.
         self._reference_count = 0
         #: The engine objects a caller handed to :meth:`add_layer`, keyed by layer id. Held here rather than
         #: in the tree, which describes layers and stores no objects (see :mod:`digitalearth.base.custom`).
-        self._custom: Dict[str, Any] = {}
+        self._custom: dict[str, Any] = {}
         #: How many sit in the overlay band — text and labels, drawn above the data — so :meth:`add_layer` can
         #: insert beneath them instead of appending on top.
         self._overlay_count = 0
@@ -797,11 +797,11 @@ class WebMapBase:
         #: The caller's ``layer_control`` request, resolved against the live layers when the widget is
         #: built. Held as state rather than appended to :attr:`layers` so that removing a layer cannot
         #: strand a dead row in a saved page, and so an export can leave the control out entirely.
-        self._switcher: Optional[dict] = None
+        self._switcher: dict | None = None
         #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
         #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
         #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
-        self._temporal: Optional[dict] = None
+        self._temporal: dict | None = None
         #: The bare ``MapWidget`` :meth:`render` built last — the one on screen after ``show()`` or a notebook
         #: repr — kept so :meth:`~digitalearth.web.decoration.DecorationMixin.drawn_features` can read what the
         #: user drew on it. ``None`` until the map is first rendered; :meth:`save` builds its own and leaves this.
@@ -835,9 +835,7 @@ class WebMapBase:
             f"pyramids, or use the static tier, which renders any projection."
         )
 
-    def _skipped(
-        self, layer: str, reason: str, error: Optional[Exception] = None
-    ) -> None:
+    def _skipped(self, layer: str, reason: str, error: Exception | None = None) -> None:
         """Skip a layer that cannot be placed — warn and carry on, or re-raise under ``strict``.
 
         The tier's one answer to "there is nothing renderable here": data behind the limb of the display
@@ -868,7 +866,7 @@ class WebMapBase:
 
     def _display_source_or_skip(
         self, data: Any, *, layer: str, band: int = DEFAULT_BAND
-    ) -> Optional[Source]:
+    ) -> Source | None:
         """Return :meth:`_to_display_source`'s result, or ``None`` when the data cannot be placed.
 
         Args:
@@ -892,7 +890,7 @@ class WebMapBase:
             self._skipped(layer, str(error), error)
             return None
 
-    def _display_raster_or_skip(self, dataset: Any, *, layer: str) -> Optional[Any]:
+    def _display_raster_or_skip(self, dataset: Any, *, layer: str) -> Any | None:
         """Return :meth:`_to_display_raster`'s result, or ``None`` when the data cannot be placed.
 
         Args:
@@ -978,7 +976,7 @@ class WebMapBase:
 
     def _as_lonlat(
         self, west: float, south: float, east: float, north: float
-    ) -> Optional[tuple]:
+    ) -> tuple | None:
         """Convert a display-CRS extent to the lon/lat degrees ``fitBounds`` expects.
 
         Args:
@@ -1005,7 +1003,7 @@ class WebMapBase:
 
     def set_bounds(
         self,
-        bounds: Optional[Any] = None,
+        bounds: Any | None = None,
         *,
         padding: Any = 20,
         animate: bool = False,
@@ -1060,7 +1058,7 @@ class WebMapBase:
         }
         return self
 
-    def _switcher_request(self) -> Optional[dict]:
+    def _switcher_request(self) -> dict | None:
         """Return the layer switcher to add to the widget being built, or ``None`` for no switcher.
 
         Resolved here rather than when ``layer_control()`` was called, because the set of layers can change
@@ -1080,7 +1078,7 @@ class WebMapBase:
             return None
         return {**request, "layer_ids": live}
 
-    def _temporal_switcher(self) -> Optional[dict]:
+    def _temporal_switcher(self) -> dict | None:
         """Return the automatic step picker for a temporal map, if this map is one.
 
         Overridden in :mod:`digitalearth.web.temporal`; the base map has no time dimension.
@@ -1090,7 +1088,7 @@ class WebMapBase:
         """
         return None
 
-    def _map_view(self) -> Optional[dict]:
+    def _map_view(self) -> dict | None:
         """Return the framing to apply to the built widget, or ``None`` to leave the view alone.
 
         An explicit :meth:`set_bounds` always wins. Otherwise the accumulated data extent is used, but only
@@ -1110,7 +1108,7 @@ class WebMapBase:
         return {"bounds": list(self._data_bounds), "padding": 20, "animate": False}
 
     @property
-    def layer_ids(self) -> List[str]:
+    def layer_ids(self) -> list[str]:
         """The MapLibre ids of the data layers added so far, in draw order.
 
         The registry used to be write-only: builders minted ids internally and nothing surfaced them, so a
@@ -1151,7 +1149,7 @@ class WebMapBase:
         return list(self._layer_tree.ids)
 
     @property
-    def layers(self) -> List[Any]:
+    def layers(self) -> list[Any]:
         """What the map draws, in draw order — the view this tier has always exposed.
 
         Returns:
@@ -1376,7 +1374,7 @@ class WebMapBase:
         # every layer through pyramids itself, so a figure another tier described in its own projected CRS
         # (32618, 3857, …) draws here correctly without carrying that CRS across — which `WebMap(crs=)` would
         # otherwise refuse. Only the pan-and-zoom view the figure holds is carried.
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         center = getattr(view, "center", None)
         if center is not None:
             kwargs["center"] = center
@@ -1803,11 +1801,11 @@ class WebMapBase:
     def _index_layer(
         self,
         layer_id: str,
-        label: Optional[str],
+        label: str | None,
         *,
         kind: str,
         visible: bool = True,
-        band: Optional[str] = None,
+        band: str | None = None,
         source: Any = None,
         symbology: Any = None,
         placed: Any = None,
@@ -2047,9 +2045,9 @@ class WebMapBase:
 
     def colorbar(
         self,
-        layer_id: Optional[str] = None,
+        layer_id: str | None = None,
         *,
-        label: Optional[str] = None,
+        label: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Show the continuous colour key of a layer.
@@ -2295,7 +2293,7 @@ class WebMapBase:
             self._temporal = None  # one step is not a series
 
     def _layer_id(
-        self, prefix: str, name: Any = None, *, kind: Optional[str] = None
+        self, prefix: str, name: Any = None, *, kind: str | None = None
     ) -> str:
         """Return the id a new layer should take, preferring the caller's own name.
 
@@ -2333,7 +2331,7 @@ class WebMapBase:
             asked, lambda candidate: not self._reserve(candidate, kind)
         )
 
-    def _uid(self, prefix: str, *, kind: Optional[str] = None) -> str:
+    def _uid(self, prefix: str, *, kind: str | None = None) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
 
         One counter per prefix, not one per map (review R2-M10). A single map-wide counter numbered the
@@ -2359,7 +2357,7 @@ class WebMapBase:
                 self._id_counters[prefix] = number
                 return f"{prefix}-{number}"
 
-    def _reserve(self, candidate: str, kind: Optional[str]) -> bool:
+    def _reserve(self, candidate: str, kind: str | None) -> bool:
         """Reserve an id and every id its drawer derives from it, when none of them is taken.
 
         Args:
@@ -2378,7 +2376,7 @@ class WebMapBase:
         return True
 
     def add_layer(
-        self, layer: Any, *, name: Optional[str] = None, band: str = "data"
+        self, layer: Any, *, name: str | None = None, band: str = "data"
     ) -> Self:
         """Register a layer **you built yourself** and return ``self`` (chainable).
 
@@ -3014,7 +3012,7 @@ class WebMapBase:
         return self
 
     @staticmethod
-    def _style_for(source: Any) -> Dict[str, Any]:
+    def _style_for(source: Any) -> dict[str, Any]:
         """Return the autostyle parameters for ``source`` (``cmap``, and sometimes ``levels``/``units``).
 
         The tier's single entry into :func:`digitalearth.base.autostyle.auto_style` — the same
@@ -3033,7 +3031,7 @@ class WebMapBase:
 
         return auto_style(source)
 
-    def _auto_cmap(self, source: Any, cmap: Optional[str]) -> str:
+    def _auto_cmap(self, source: Any, cmap: str | None) -> str:
         """Resolve a colormap name: the caller's ``cmap`` if given, else the autostyle default.
 
         Mirrors the interactive tier's ``_auto_cmap`` so a variable looks the same across tiers (the same
@@ -3058,7 +3056,7 @@ class WebMapBase:
         """
         return auto_cmap(source, cmap, lookup=self._style_for)
 
-    def _auto_levels(self, source: Any, levels: Optional[Any]) -> Optional[Any]:
+    def _auto_levels(self, source: Any, levels: Any | None) -> Any | None:
         """Resolve contour levels: the caller's ``levels`` if given, else the autostyle ones.
 
         A recognised operational field (mean sea-level pressure, 2-m temperature, …) carries the contour
@@ -3078,7 +3076,7 @@ class WebMapBase:
         resolved = self._style_for(source).get("levels")
         return list(resolved) if resolved else None
 
-    def _auto_units(self, source: Any, units: Optional[str]) -> Optional[str]:
+    def _auto_units(self, source: Any, units: str | None) -> str | None:
         """Resolve the units a key labels values with: the caller's if given, else the autostyle hint.
 
         The same three-way contract as :meth:`_auto_cmap` and :meth:`_auto_levels`, and like theirs the
@@ -3129,7 +3127,7 @@ class WebMapBase:
         }
 
     @staticmethod
-    def _cmap_hex(cmap: str, n: int) -> List[str]:
+    def _cmap_hex(cmap: str, n: int) -> list[str]:
         """Sample ``cmap`` at ``n`` evenly spaced stops and return hex colour strings.
 
         Delegates to :func:`~digitalearth.base.symbology.sample_cmap`, the one sampler every tier uses, so a
@@ -3161,8 +3159,8 @@ class WebMapBase:
         self,
         widget: Any,
         layer: Any,
-        deck: Optional[List[Any]] = None,
-        anchor: Optional[str] = None,
+        deck: list[Any] | None = None,
+        anchor: str | None = None,
     ) -> None:
         """Apply one queued ``layer`` onto the MapLibre ``widget``.
 
@@ -3208,8 +3206,8 @@ class WebMapBase:
         self,
         widget: Any,
         built: Any,
-        deck: Optional[List[Any]],
-        anchor: Optional[str] = None,
+        deck: list[Any] | None,
+        anchor: str | None = None,
     ) -> None:
         """Apply what one drawer produced, by the route it built for.
 
@@ -3240,9 +3238,9 @@ class WebMapBase:
     @staticmethod
     def _collect_deck(
         widget: Any,
-        layers: List[Any],
-        deck: Optional[List[Any]],
-        anchor: Optional[str] = None,
+        layers: list[Any],
+        deck: list[Any] | None,
+        anchor: str | None = None,
     ) -> None:
         """Add deck.gl layers to the page's one overlay, or apply them on their own.
 
@@ -3259,7 +3257,7 @@ class WebMapBase:
         elif placed:
             widget.add_deck_layers(placed)
 
-    def _deck_anchors(self) -> List[Optional[str]]:
+    def _deck_anchors(self) -> list[str | None]:
         """Return, per queue entry, the MapLibre style layer a deck layer queued there draws beneath.
 
         The overlay is handed to the widget after the whole queue, so a deck layer's slot in the queue says
@@ -3283,8 +3281,8 @@ class WebMapBase:
             deck.gl puts a layer naming no ``beforeId``: on top. Ordering them would mean giving each its own
             queue slot, which is not what one shared marker can say.
         """
-        anchors: List[Optional[str]] = [None] * len(self._queued)
-        above: Optional[str] = None
+        anchors: list[str | None] = [None] * len(self._queued)
+        above: str | None = None
         for index in range(len(self._queued) - 1, -1, -1):
             entry = self._queued[index]
             if not isinstance(entry, _DeckOverlay):
@@ -3294,7 +3292,7 @@ class WebMapBase:
                 above = added
         return anchors
 
-    def _style_layer_added_by(self, entry: Any) -> Optional[str]:
+    def _style_layer_added_by(self, entry: Any) -> str | None:
         """Return the id of the first MapLibre style layer one queue entry adds, if it adds one.
 
         Args:
@@ -3346,7 +3344,7 @@ class WebMapBase:
         # adding to it, so a call per builder would leave only the last builder's layers on the page. One
         # call is not one z-position, though: the overlay is interleaved, and each layer carries the style
         # layer it draws beneath, which `_deck_anchors` reads off the queue before the build walks it.
-        deck: List[Any] = []
+        deck: list[Any] = []
         for layer, anchor in zip(self._queued, self._deck_anchors()):
             self._apply_layer(widget, layer, deck, anchor)
         if deck:
@@ -3407,7 +3405,7 @@ class WebMapBase:
         self,
         path: str,
         *,
-        fmt: Optional[str] = None,
+        fmt: str | None = None,
         title: str = DEFAULT_TITLE,
         offline: bool = False,
         **kwargs: Any,
@@ -3415,8 +3413,9 @@ class WebMapBase:
         """Save the map — a standalone HTML page or a PNG snapshot — and return its path (DW.6).
 
         The output kind is ``fmt`` if given, else inferred from the suffix: ``.png`` renders a snapshot,
-        ``.gif`` runs the animation export (:meth:`~digitalearth.web.export.ExportMixin.save_animation`, which
-        needs a temporal map and a headless browser), anything else writes the HTML page.
+        ``.gif`` or ``.mp4`` runs the animation export
+        (:meth:`~digitalearth.web.export.ExportMixin.save_animation`, which needs a temporal map and a headless
+        browser), anything else writes the HTML page.
         HTML is serialised via ``MapWidget.to_html`` and written as UTF-8 ourselves — sidestepping maplibre's
         cp1252-on-Windows writer bug (see :func:`_patch_maplibre_html_encoding`). By default the page embeds
         the map state and widget JS but references ``maplibre-gl`` from a CDN; ``offline=True`` inlines the
@@ -3425,7 +3424,7 @@ class WebMapBase:
 
         Args:
             path: Output file (``*.html`` or ``*.png``).
-            fmt: Force the format (``"html"`` / ``"png"`` / ``"gif"``); ``None`` infers it from ``path``.
+            fmt: Force the format (``"html"`` / ``"png"`` / ``"gif"`` / ``"mp4"``); ``None`` infers it from ``path``.
             title: HTML document title.
             offline: When True (HTML only), inline the ``maplibre-gl`` JS/CSS so the page opens offline.
             **kwargs: Forwarded to ``MapWidget.to_html`` (HTML) or the PNG renderer.
@@ -3437,7 +3436,7 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
             ValueError: propagated from :meth:`~digitalearth.web.export.ExportMixin.save_animation` for a
-                ``.gif`` destination on a map that carries no renderable time series.
+                ``.gif`` or ``.mp4`` destination on a map that carries no renderable time series.
 
         Examples:
             - Write a standalone page and carry straight on from the path that comes back, instead
@@ -3461,8 +3460,8 @@ class WebMapBase:
 
                 ```
             - The suffix, not a flag, picks the branch: ``.gif`` hands the call to
-              :meth:`~digitalearth.web.export.ExportMixin.save_animation`, which says so when the map has
-              nothing to animate. That dispatch needs no engine, so it runs here:
+              :meth:`~digitalearth.web.export.ExportMixin.save_animation` (as does ``.mp4``), which says so
+              when the map has nothing to animate. That dispatch needs no engine, so it runs here:
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> try:
@@ -3474,14 +3473,15 @@ class WebMapBase:
                 ```
 
         See Also:
-            digitalearth.web.export.ExportMixin.animate: the ``.gif`` branch.
+            digitalearth.web.export.ExportMixin.save_animation: the ``.gif``/``.mp4`` branch.
             render: the in-notebook counterpart — the same widget, without writing a file.
         """
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
-        kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()
-        if kind == "gif":
+        kind = (fmt or (suffix if suffix in {"png", "gif", "mp4"} else "html")).lower()
+        if kind in {"gif", "mp4"}:
             # The contract's name: calling the alias told a caller who wrote `save()` to write
-            # `save_animation()`, from a line inside the library (review M14).
+            # `save_animation()`, from a line inside the library (review M14). `save_animation`
+            # reads the suffix to pick the encoder, so `.gif` and `.mp4` both land here.
             return self.save_animation(path, title=title, **kwargs)
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)

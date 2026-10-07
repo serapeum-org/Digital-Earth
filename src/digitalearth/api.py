@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator, Mapping
-from typing import TYPE_CHECKING, Any, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -237,8 +237,10 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #:   ``colorbar`` toggle reaches the tier's own `colorbar`/`legend` through :func:`_add_3d_key` (order 24):
 #:   PyVista's scalar bar for a layer coloured by a ramp, its keyed legend for one coloured by classes, and
 #:   nothing at all — without an error — for a layer whose colour is flat.
-#: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
-#:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
+#: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It draws
+#:   coastlines and borders as Natural-Earth overlay layers through ``WebMap.coastlines``/``WebMap.borders``;
+#:   what it does not yet take is the ``quickmap(coastlines=True)`` overlay kwarg, whose cross-tier wiring is
+#:   deferred to #398. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
 #:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
 #:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
@@ -891,7 +893,7 @@ def quickmap(
 
 
 def to_backend(
-    figure: "FigureSpec", backend: str = "matplotlib", **scene_kwargs: Any
+    figure: FigureSpec, backend: str = "matplotlib", **scene_kwargs: Any
 ) -> Any:
     """Render an engine-neutral :class:`~digitalearth.base.spec.FigureSpec` on a chosen ``backend`` (U-6).
 
@@ -1569,7 +1571,7 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
     return scene
 
 
-def _method(name: str, kind: Optional[str] = None):
+def _method(name: str, kind: str | None = None):
     """Build a module-level function that quick-draws via the ``Map`` method ``name``.
 
     The wrapper *is* the ``kind``: it injects one on the caller's behalf. So when the chosen

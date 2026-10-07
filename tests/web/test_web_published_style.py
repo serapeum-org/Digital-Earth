@@ -15,8 +15,9 @@ which is how a bare `basemap()` published `{'opacity': 1.0}`. Both are checks he
 table needed — which kind a row is found by, what keys it lists, what values it lists — went with it.
 """
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Mapping, Tuple
+from typing import Any
 
 import pytest
 
@@ -131,7 +132,7 @@ class Probe:
 #: Still keyed by kind, though nothing looks a row up by it any more: the kind is what tells `polygons` from
 #: `choropleth` from filled `contours`, which write the same three paint keys, so it is the only name under
 #: which these probes read as three different builders rather than one repeated.
-PROBES: Dict[str, Probe] = {
+PROBES: dict[str, Probe] = {
     "points": Probe(
         "points",
         lambda m: m.points(_points()),
@@ -239,7 +240,7 @@ PROBES: Dict[str, Probe] = {
 #: `choropleth(opacity=0.6)` as polygons', and `lines(width=1.5)` as contours' (review R2-H2). Nothing is
 #: compared any more, so all eight are now the same question as any other ask; they stay because a
 #: regression here is the one that cost two review rounds.
-BORROWED_DEFAULT: Tuple[Tuple[str, str, Any, str, Any], ...] = (
+BORROWED_DEFAULT: tuple[tuple[str, str, Any, str, Any], ...] = (
     ("points", "size", 6.0, "size", 6.0),
     ("heatmap", "opacity", 0.9, "opacity", 0.9),
     ("raster", "opacity", 0.6, "opacity", 0.6),
@@ -256,7 +257,7 @@ BORROWED_DEFAULT: Tuple[Tuple[str, str, Any, str, Any], ...] = (
 #: for nothing, because the figure recorded the resolved value and never the fact that a keyword was passed.
 #: Every one of these published `{}` before the builders recorded the ask; each publishes the channel it
 #: names now. `extrusion` is not here because its `height=` was always an ask and always published.
-OWN_DEFAULT_ASKED_FOR: Tuple[Tuple[str, dict, str, Any], ...] = (
+OWN_DEFAULT_ASKED_FOR: tuple[tuple[str, dict, str, Any], ...] = (
     ("points", {"size": 5.0}, "size", 5.0),
     ("points", {"color": "#3388ff"}, "color", "#3388ff"),
     ("points", {"opacity": 0.9}, "opacity", 0.9),
@@ -287,7 +288,7 @@ def _last(drawn) -> Any:
     return figure.layers.get(figure.layers.ids[-1]).symbology
 
 
-def _published(drawn) -> Dict[str, Any]:
+def _published(drawn) -> dict[str, Any]:
     """Return the **constant** channels the last layer publishes as the caller's own style.
 
     Constants only, which is the question this module asks: whether a value the builder resolved for itself
@@ -348,7 +349,7 @@ def _resolved(drawn, where: str) -> Mapping[str, Any]:
 #: is the field even though there is no `column=` to name it. The rest bind a constant colour or none, and
 #: must stay that way: a flat colour has nothing to vary with, which is what makes a colour key on those
 #: layers refusable.
-COLOUR_BY_FIELD: Tuple[Tuple[str, Any], ...] = (
+COLOUR_BY_FIELD: tuple[tuple[str, Any], ...] = (
     ("choropleth", "pop"),
     ("contours", "level"),
     # The bands between levels carry `level_min`, not `level` — the lower bound of the band a fill covers.
@@ -386,7 +387,7 @@ COLOUR_BY_FIELD: Tuple[Tuple[str, Any], ...] = (
 #: were broken reads as a bug list rather than as the contract. `field` is the row that property bought:
 #: the raster builder published no colour encoding **at all**, so a `quickmap` raster came back unkeyable
 #: on this tier and on no other, and the table had no row to say so.
-CLASSIFIED: Tuple[Tuple[str, Callable[[Any], Any], str], ...] = (
+CLASSIFIED: tuple[tuple[str, Callable[[Any], Any], str], ...] = (
     ("field", lambda m: m.field(_dem()), DEM_BAND),
     ("points", lambda m: m.points(_points(), column="pop"), "pop"),
     ("lines", lambda m: m.lines(_lines(), column="pop"), "pop"),

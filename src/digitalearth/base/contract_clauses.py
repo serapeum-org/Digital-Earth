@@ -52,7 +52,6 @@ and reading a clause costs no engine import.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import List
 
 __all__ = ["CLAUSES", "Clause", "cite", "clause"]
 
@@ -288,7 +287,7 @@ def _stated_numbers(numbers: Sequence[int]) -> str:
 
             ```
     """
-    runs: List[List[int]] = []
+    runs: list[list[int]] = []
     for number in numbers:
         if runs and number == runs[-1][-1] + 1:
             runs[-1].append(number)

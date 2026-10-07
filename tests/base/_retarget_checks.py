@@ -7,8 +7,9 @@ test module itself (no ``test_`` names) and engine-free — it only manipulates 
 both the matplotlib-env and HoloViz-env suites import it.
 """
 
+from collections.abc import Callable, Mapping
 from dataclasses import replace
-from typing import Any, Callable, FrozenSet, Mapping
+from typing import Any
 
 
 def forge_via(figure: Any, layer_id: str, via: Any) -> Any:
@@ -52,7 +53,7 @@ def assert_table_only_covers_multi_recipe(
 def assert_every_multi_recipe_kind_is_covered(
     recipes: Mapping[str, Mapping[str, Any]],
     canonical: Mapping[str, str],
-    allowed: FrozenSet[str] = frozenset(),
+    allowed: frozenset[str] = frozenset(),
 ) -> None:
     """Every kind drawn more than one way is in ``canonical`` or in the deliberate-exclusion ``allowed`` set.
 

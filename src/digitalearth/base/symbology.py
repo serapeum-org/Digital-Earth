@@ -31,7 +31,7 @@ This module has four distinct jobs, with **different scopes** — do not conflat
    not in ``__all__``; ``digitalearth.web.raster`` imports it by name.
 """
 
-from typing import Any, List, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -227,7 +227,7 @@ def nulls_to_none(values: Any) -> np.ndarray:
     return array
 
 
-def _categories(values: Any) -> List[Any]:
+def _categories(values: Any) -> list[Any]:
     """Return the distinct, non-null values of ``values`` in a stable order (sorted when sortable).
 
     Args:
@@ -237,7 +237,7 @@ def _categories(values: Any) -> List[Any]:
     Returns:
         The unique categories, sorted ascending when they are mutually comparable, else in first-seen order.
     """
-    seen: List[Any] = []
+    seen: list[Any] = []
     seen_set: set = (
         set()
     )  # O(1) membership so dedup stays O(n), not O(n·k), for large columns
@@ -299,7 +299,7 @@ def as_colormap(cmap: Any) -> Any:
 
 def categorical_colors(
     values: Any, cmap: Any = _DEFAULT_CATEGORICAL_CMAP
-) -> Tuple[List[Any], List[str]]:
+) -> tuple[list[Any], list[str]]:
     """Map the distinct values of a field to colours from a colormap, or from a palette given outright (DC.8).
 
     The categorical analog of ``cleopatra.styling.styles.classify``: instead of binning a continuous range, it assigns
@@ -373,7 +373,7 @@ def categorical_colors(
     return categories, colors
 
 
-def _palette(cmap: Any, n: int) -> List[Any]:
+def _palette(cmap: Any, n: int) -> list[Any]:
     """Return the colours `cmap` offers `n` categories, in the order they are handed out.
 
     Args:
@@ -413,7 +413,7 @@ def _palette(cmap: Any, n: int) -> List[Any]:
     return list(base_colors)
 
 
-def sample_cmap(cmap: Any, n: int) -> List[str]:
+def sample_cmap(cmap: Any, n: int) -> list[str]:
     """Sample ``cmap`` at ``n`` evenly-spaced stops and return them as hex colour strings.
 
     The colour side of graduated symbology, shared by every tier that has to hand its renderer literal

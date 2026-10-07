@@ -23,7 +23,8 @@ clause's other half: ``drawer_for`` refuses it by name before anything reaches t
 error, and a silent one costs more than it saves — the figure claims a layer, nothing appears, nothing says why.
 """
 
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.registry import KIND_PATTERN
@@ -161,7 +162,7 @@ def is_custom(kind: Any) -> bool:
     return isinstance(kind, str) and kind.startswith(CUSTOM_PREFIX)
 
 
-def custom_engine(kind: Any) -> Optional[str]:
+def custom_engine(kind: Any) -> str | None:
     """Return the engine a custom layer's object was built with.
 
     Args:

@@ -12,7 +12,7 @@ something a figure can actually carry. The tier-level questions — that a real 
 real `points()` does not — are asked of the builders in `tests/web` and `tests/interactive`.
 """
 
-from typing import Union, get_args
+from typing import get_args
 
 from digitalearth.base.ask import (
     ASKED_PROP,
@@ -97,7 +97,7 @@ class TestTheSentinelIsNotAValue:
             of reading the alias — so an alias that had collapsed to `Unset` alone, or to `Any`, fails here
             rather than passing both.
         """
-        assert Maybe[str] == Union[str, Unset], (
+        assert Maybe[str] == (str | Unset), (
             f"Maybe[str] is {Maybe[str]}, which is not the str-or-absent a keyword needs"
         )
 

@@ -16,7 +16,8 @@ rather than as a few hundred thousand numbers: :func:`ref` puts it in the proces
 than a copy of the data.
 """
 
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 
@@ -84,7 +85,7 @@ def next_layer_id(tree: LayerTree, kind: str, name: Any = None) -> str:
     return f"{stem}-{number}"
 
 
-def ref(obj: Any) -> Dict[str, str]:
+def ref(obj: Any) -> dict[str, str]:
     """Return a property value that points at `obj` instead of copying it.
 
     Args:
@@ -148,7 +149,7 @@ def resolved(value: Any) -> Any:
     return value
 
 
-def drawing_props(props: Mapping[str, Any]) -> Dict[str, Any]:
+def drawing_props(props: Mapping[str, Any]) -> dict[str, Any]:
     """Return a layer's stored properties as the keywords its builder was given.
 
     Args:
@@ -172,7 +173,7 @@ def drawing_props(props: Mapping[str, Any]) -> Dict[str, Any]:
     return {key: resolved(value) for key, value in dict(props).items()}
 
 
-def stored_props(**kwargs: Any) -> Dict[str, Any]:
+def stored_props(**kwargs: Any) -> dict[str, Any]:
     """Return keywords in the form a layer stores them, referencing arrays rather than copying them.
 
     Args:

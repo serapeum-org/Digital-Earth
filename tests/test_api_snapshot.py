@@ -20,7 +20,7 @@ diff inline.
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from digitalearth import __all__ as TOP_LEVEL_EXPORTS
 from digitalearth.api import BACKEND_CAPABILITIES
@@ -34,7 +34,7 @@ from tests.test_support_matrix import BACKENDS as MATRIX_BACKENDS
 SNAPSHOT_PATH = Path(__file__).with_name("api_snapshot.json")
 
 
-def _method(method: contract.Method) -> Dict[str, Any]:
+def _method(method: contract.Method) -> dict[str, Any]:
     """Reduce one contract :class:`~digitalearth.base.contract.Method` to its snapshot form.
 
     Args:
@@ -55,7 +55,7 @@ def _method(method: contract.Method) -> Dict[str, Any]:
     }
 
 
-def _capability_shape(caps: Dict[str, Any]) -> Dict[str, Any]:
+def _capability_shape(caps: dict[str, Any]) -> dict[str, Any]:
     """Return a tier's capabilities as API *shape* — its ``absent`` prose reasons reduced to sorted names.
 
     The snapshot tracks what the API is, not the justification for what a backend omits. A tier's ``absent``
@@ -73,7 +73,7 @@ def _capability_shape(caps: Dict[str, Any]) -> Dict[str, Any]:
     return {**caps, "absent": sorted(caps["absent"])}
 
 
-def public_api_surface() -> Dict[str, Any]:
+def public_api_surface() -> dict[str, Any]:
     """Build the engine-free public API surface as plain, sorted, JSON-able data.
 
     Returns:
@@ -105,7 +105,7 @@ def public_api_surface() -> Dict[str, Any]:
     }
 
 
-def _serialise(surface: Dict[str, Any]) -> str:
+def _serialise(surface: dict[str, Any]) -> str:
     """Serialise the surface deterministically (sorted keys, trailing newline), so a diff is stable."""
     return json.dumps(surface, indent=2, sort_keys=True) + "\n"
 

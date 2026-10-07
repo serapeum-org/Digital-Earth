@@ -18,7 +18,7 @@ returned, which is also what the web tier's pyramids-side walk produces for the 
 """
 
 from math import isfinite
-from typing import Any, List
+from typing import Any
 
 import numpy as np
 
@@ -36,7 +36,7 @@ __all__ = ["MAX_LEVELS", "levels_every"]
 MAX_LEVELS: int = 10_000
 
 
-def levels_every(values: Any, interval: float) -> List[float]:
+def levels_every(values: Any, interval: float) -> list[float]:
     """Return the multiples of ``interval`` that fall strictly inside a band's finite range.
 
     Args:

@@ -17,7 +17,7 @@ nothing exercised. The same line is untested on the 3-D tier for the same reason
 """
 
 from math import inf, nan
-from typing import Any, List, Optional
+from typing import Any
 
 import pytest
 from matplotlib.colors import BoundaryNorm, Normalize
@@ -41,7 +41,7 @@ class _Handle:
     matplotlib into producing one would say only that it can be coaxed.
     """
 
-    def __init__(self, face: Optional[str]) -> None:
+    def __init__(self, face: str | None) -> None:
         """Store the face colour this handle reports, or `None` to report none at all.
 
         Args:
@@ -59,14 +59,14 @@ class _Legend:
         handles: The handles it holds, one per swatch.
     """
 
-    def __init__(self, texts: List[str], handles: List[Any]) -> None:
+    def __init__(self, texts: list[str], handles: list[Any]) -> None:
         """Store the texts and handles this stand-in reports."""
         self._texts = [
             type("T", (), {"get_text": staticmethod(lambda t=t: t)})() for t in texts
         ]
         self.legend_handles = handles
 
-    def get_texts(self) -> List[Any]:
+    def get_texts(self) -> list[Any]:
         """Return the label objects, as matplotlib's `Legend.get_texts` does.
 
         Returns:

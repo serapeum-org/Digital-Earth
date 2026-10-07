@@ -10,8 +10,9 @@ deterministic arrays. Reprojection still happens upstream in pyramids; Datashade
 projected planar coordinates.
 """
 
+from collections.abc import Mapping
 from pathlib import PurePath
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger
 
@@ -30,7 +31,7 @@ from digitalearth.interactive.base import (
 _AGGREGATORS = ("count", "any", "sum", "mean", "min", "max", "std", "var", "count_cat")
 
 
-def _resolve_aggregator(aggregator: Any, column: Optional[str]) -> Any:
+def _resolve_aggregator(aggregator: Any, column: str | None) -> Any:
     """Turn an ``aggregator`` name (+ optional ``column``) into a Datashader reduction.
 
     Args:
@@ -87,9 +88,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def _track_path(
-    hv: Any, gdf: Any, track_column: Optional[str], by: Optional[str]
-) -> Any:
+def _track_path(hv: Any, gdf: Any, track_column: str | None, by: str | None) -> Any:
     """Connect ordered point rows into one NaN-separated path per track.
 
     Datashader aggregates a path with `Canvas.line`, which needs every track in one table separated by a
@@ -263,7 +262,7 @@ class BigDataMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
-    def _as_element(self, layer: Any, *, vdims: Optional[list] = None) -> Any:
+    def _as_element(self, layer: Any, *, vdims: list | None = None) -> Any:
         """Return ``layer`` as a HoloViews element (GeoDataFrames become point layers).
 
         Args:
@@ -285,10 +284,10 @@ class BigDataMixin(_MixinBase):
         layer: Any,
         *,
         aggregator: Any = "count",
-        column: Optional[str] = None,
+        column: str | None = None,
         dynamic: bool = True,
         cmap: str = "viridis",
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -350,11 +349,11 @@ class BigDataMixin(_MixinBase):
         layer: Any,
         *,
         cmap: str = "viridis",
-        color_key: Optional[Any] = None,
+        color_key: Any | None = None,
         aggregator: Any = "count",
-        column: Optional[str] = None,
+        column: str | None = None,
         dynamic: bool = True,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
@@ -423,13 +422,13 @@ class BigDataMixin(_MixinBase):
         self,
         features: Any,
         *,
-        track_column: Optional[str] = None,
-        by: Optional[str] = None,
+        track_column: str | None = None,
+        by: str | None = None,
         dynspread: bool = True,
         cmap: str = "viridis",
-        color_key: Optional[Any] = None,
+        color_key: Any | None = None,
         dynamic: bool = True,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:

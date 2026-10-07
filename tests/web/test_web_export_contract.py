@@ -40,7 +40,9 @@ def two_step_map(monkeypatch, tmp_path):
 
     monkeypatch.setattr(web_export, "_write_gif", fake_write)
     monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
-    monkeypatch.setattr(WebMap, "_frame_png", lambda self, path, visible, title: path)
+    monkeypatch.setattr(
+        WebMap, "_frame_png", lambda self, path, visible, title, *, kind="GIF": path
+    )
     return WebMap(), tmp_path / "series.gif", recorded
 
 

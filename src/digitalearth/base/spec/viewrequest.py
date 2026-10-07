@@ -18,7 +18,7 @@ decides *which* request a given output wants, stays there.
 from dataclasses import dataclass
 from math import sqrt
 from numbers import Integral
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from digitalearth.base.spec._serial import positive_number
 from digitalearth.base.spec.bounds import Bounds
@@ -64,11 +64,11 @@ class ViewRequest:
             ```
     """
 
-    bounds: Optional[Bounds] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
+    bounds: Bounds | None = None
+    width: int | None = None
+    height: int | None = None
     pixel_ratio: float = 1.0
-    budget: Optional[int] = None
+    budget: int | None = None
 
     def __post_init__(self) -> None:
         """Refuse a request that asks for nothing, or for a negative amount of something.
@@ -102,7 +102,7 @@ class ViewRequest:
         object.__setattr__(self, "pixel_ratio", ratio)
 
     @property
-    def pixels(self) -> Optional[int]:
+    def pixels(self) -> int | None:
         """How many device pixels the request covers, or ``None`` when it names no canvas.
 
         Returns:
@@ -187,7 +187,7 @@ class ViewRequest:
         """
         return self.budget is None or cells <= self.budget
 
-    def as_bbox(self) -> Optional[Tuple[float, float, float, float]]:
+    def as_bbox(self) -> tuple[float, float, float, float] | None:
         """Return the requested region as the bbox tuple a pyramids reader takes.
 
         Returns:

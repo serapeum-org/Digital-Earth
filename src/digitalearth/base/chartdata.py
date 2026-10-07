@@ -17,7 +17,7 @@ They lost their leading underscore when they moved here: as module-private helpe
 already being imported by a second backend, so the shared surface is now spelled as public.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -26,7 +26,7 @@ from digitalearth.base.arrays import finite, read_masked_band
 __all__ = ["as_finite_array", "column_or_array", "field_values", "grouped_series"]
 
 
-def column_or_array(data: Any, value: Any) -> Optional[np.ndarray]:
+def column_or_array(data: Any, value: Any) -> np.ndarray | None:
     """Resolve ``value`` to an array — a column of ``data`` when it names one, else array-like as-is.
 
     The field-vs-field plumbing: with a (Geo)DataFrame ``data`` and a string ``value`` naming a column, the
@@ -102,7 +102,7 @@ def column_or_array(data: Any, value: Any) -> Optional[np.ndarray]:
     return np.asarray(value)
 
 
-def field_values(data: Any, column: Optional[str] = None) -> np.ndarray:
+def field_values(data: Any, column: str | None = None) -> np.ndarray:
     """Return the finite, flattened 1-D values of a *field*.
 
     The single field-extraction recipe the column-aware chart helpers share: a GeoDataFrame/DataFrame column
@@ -172,7 +172,7 @@ def field_values(data: Any, column: Optional[str] = None) -> np.ndarray:
     return finite(as_finite_array(data))
 
 
-def grouped_series(data: Any, by: str, column: Optional[str], agg: str):
+def grouped_series(data: Any, by: str, column: str | None, agg: str):
     """Group ``data`` by ``by`` and aggregate ``column`` (or count rows) — the bar/line-by recipe.
 
     Args:

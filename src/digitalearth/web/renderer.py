@@ -37,9 +37,10 @@ one the map describes. What `_arrange` does **not** move is a queue entry no lay
 overlay marker, and whatever a caller queued through `add_layer` as a callable, keep their slots.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
+from typing import Any
 
 from digitalearth.base.ask import asked_style
 from digitalearth.base.registry import band_of
@@ -117,10 +118,10 @@ class DrawnLayer:
             ```
     """
 
-    source_id: Optional[str]
+    source_id: str | None
     source_spec: Any
     layer: Any
-    extra_layers: Tuple[Any, ...] = field(default=())
+    extra_layers: tuple[Any, ...] = field(default=())
     route: str = STYLE_ROUTE
 
 
@@ -139,7 +140,7 @@ class DrawnLayer:
 #: none. They are not MapLibre style layers, so each says how the widget takes it through
 #: :attr:`DrawnLayer.route`: a basemap is a raster style layer after all, terrain turns terrain on, and the
 #: two deck.gl kinds are composed into the page's one deck overlay.
-DRAWN_KINDS: Tuple[str, ...] = (
+DRAWN_KINDS: tuple[str, ...] = (
     "graticule",
     "text",
     "raster",
@@ -151,6 +152,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "labels",
     "contours",
     "filled_contours",
+    "vector_tiles",
     "heatmap",
     "clusters",
     "extrusion",
@@ -170,7 +172,7 @@ DRAWN_KINDS: Tuple[str, ...] = (
 #: the tile-URL template its description carries. There is no figure source for a replacement to name, which
 #: is why :func:`draws_from_description` — the question
 #: :meth:`~digitalearth.web.base.WebMapBase.replace_layer` actually asks — starts here.
-DESCRIPTION_ONLY_KINDS: FrozenSet[str] = frozenset({"terrain"})
+DESCRIPTION_ONLY_KINDS: frozenset[str] = frozenset({"terrain"})
 
 
 #: The prop a layer whose pixels were written beside the page records the template under. A kind is not the
@@ -226,7 +228,7 @@ def draws_from_description(layer: LayerSpec) -> bool:
 #: degree labels, a cluster's counts and its loose points. MapLibre keeps one layer per id and drops the rest
 #: with only a console error, so these ids are as taken as the layer's own: the map reserves them when it
 #: allocates the id (review M5), and the drawers read their names from here rather than spelling them again.
-DERIVED_SUFFIXES: Mapping[str, Tuple[str, ...]] = MappingProxyType(
+DERIVED_SUFFIXES: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         "graticule": ("-label",),
         "clusters": ("-count", "-unclustered"),
@@ -234,7 +236,7 @@ DERIVED_SUFFIXES: Mapping[str, Tuple[str, ...]] = MappingProxyType(
 )
 
 
-def derived_ids(kind: str, layer_id: str) -> Tuple[str, ...]:
+def derived_ids(kind: str, layer_id: str) -> tuple[str, ...]:
     """Return the ids of the extra MapLibre layers a kind's drawer adds for one layer.
 
     Args:
@@ -314,7 +316,7 @@ PAINT_CHANNELS: Mapping[str, str] = MappingProxyType(
 FLAT_CHANNELS: Mapping[str, str] = MappingProxyType({"opacity": "opacity"})
 
 
-def portable_encodings(symbology: Symbology) -> Dict[str, Encoding]:
+def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
     """Return the declared channels a web layer's recorded style says the **caller** asked for.
 
     Additive by construction: it reads what the builders already record and writes nothing back, so every
@@ -659,6 +661,9 @@ def drawer_for(kind: str) -> Any:
         # the vector kinds above, so the same drawer rebuilds it.
         "contours": vector.draw_vector,
         "filled_contours": vector.draw_vector,
+        # An MVT tile set: a `vector` source and one typed style layer, built from its description like a
+        # basemap, since the source is the tile URL rather than a feature collection in the figure.
+        "vector_tiles": vector.draw_vector_tiles,
         "heatmap": bigdata.draw_heatmap,
         "clusters": bigdata.draw_clusters,
         "extrusion": threed.draw_extruded_polygons,
@@ -993,7 +998,7 @@ class Renderer:
             self._set_band_counts(bands)
             raise
 
-    def _band_counts(self) -> Tuple[int, int, int]:
+    def _band_counts(self) -> tuple[int, int, int]:
         """Return how many queue entries the map counts in each end-addressed band.
 
         The queue is addressed by counts rather than by markers: the underlay and reference bands are counted
@@ -1009,7 +1014,7 @@ class Renderer:
             self._map._overlay_count,
         )
 
-    def _set_band_counts(self, counts: Tuple[int, int, int]) -> None:
+    def _set_band_counts(self, counts: tuple[int, int, int]) -> None:
         """Set the map's band counts.
 
         Args:
@@ -1056,7 +1061,7 @@ class Renderer:
         markers = {
             entry.layer_id: entry for entry in queued if isinstance(entry, _Described)
         }
-        arranged: Dict[str, list] = {}
+        arranged: dict[str, list] = {}
         for band, segment in segments.items():
             wanted = [
                 layer_id

@@ -26,23 +26,15 @@ import numbers
 import threading
 import warnings
 from collections import OrderedDict
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import MISSING
 from dataclasses import fields as dataclass_fields
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
-    FrozenSet,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
     Self,
-    Sequence,
-    Set,
-    Tuple,
 )
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
@@ -86,7 +78,7 @@ logger = logging.getLogger(__name__)
 #: How each Natural-Earth layer looks when the caller asks for nothing else — this package's own defaults, in
 #: the singular matplotlib keys. The drawer lays whatever the caller passed over them, so a layer drawn on a
 #: scene that holds none of the caller's keywords (a figure read back from JSON) still looks like itself.
-_NATURAL_EARTH_STYLE: Dict[str, Dict[str, Any]] = {
+_NATURAL_EARTH_STYLE: dict[str, dict[str, Any]] = {
     "coastline": {"color": "black", "linewidth": 0.5},
     "borders": {"color": "gray", "linewidth": 0.4},
     "land": {"color": "#efefdb", "edgecolor": "none"},
@@ -106,7 +98,7 @@ _NATURAL_EARTH_STYLE: Dict[str, Dict[str, Any]] = {
 _FONT_FAMILY_PROPERTIES = frozenset({"fontfamily", "fontname", "fontproperties"})
 
 
-def _a_font_is_already_chosen(opts: Dict[str, Any]) -> bool:
+def _a_font_is_already_chosen(opts: dict[str, Any]) -> bool:
     """Say whether a text call's own keywords name a font family, under any spelling matplotlib takes.
 
     This decides **priority**, and only priority: a layer's name is read as a font solely when the call
@@ -153,7 +145,7 @@ def _a_font_is_already_chosen(opts: Dict[str, Any]) -> bool:
 
 
 @lru_cache(maxsize=4)
-def _families_matplotlib_has(_registered: int) -> FrozenSet[str]:
+def _families_matplotlib_has(_registered: int) -> frozenset[str]:
     """Return the case-folded name of every font family matplotlib has registered.
 
     Args:
@@ -218,8 +210,8 @@ def _names_a_font_family(name: str) -> bool:
 
 
 def _font_family_a_name_still_stands_for(
-    name: Optional[str], opts: Dict[str, Any]
-) -> Dict[str, Any]:
+    name: str | None, opts: dict[str, Any]
+) -> dict[str, Any]:
     """Return the font keyword a text layer's ``name`` also means, or an empty mapping.
 
     ``matplotlib.axes.Axes.text`` and ``.annotate`` document ``name=`` as an alias of the font family, and
@@ -402,7 +394,7 @@ _DROP_DEBUG = _DropDebug()
 
 def _edge_samples(
     west: float, south: float, east: float, north: float, count: int = 21
-) -> Tuple[list, list]:
+) -> tuple[list, list]:
     """Return points along all four edges of a box, for reprojecting it as a shape rather than a corner.
 
     Args:
@@ -451,7 +443,7 @@ def _quiet_tile_urls() -> Iterator[None]:
         logger_obj.removeFilter(_DROP_DEBUG)
 
 
-def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> Any:
+def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: str | None) -> Any:
     """Build the ``xyzservices.TileProvider`` cleopatra renders from a keyed source definition.
 
     This is the one place a tile-library object is constructed: :mod:`digitalearth.base.basemaps` stays
@@ -477,12 +469,12 @@ def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> An
 
 #: cleopatra's OGC provider classes, under the ``"ogc"`` tag a figure records each one by. The tag is what
 #: a figure carries, so it is spelled here and not derived from the class name, which is free to change.
-_OGC_PROVIDERS: Dict[str, type] = {"wms": WMSProvider, "wmts": WMTSProvider}
+_OGC_PROVIDERS: dict[str, type] = {"wms": WMSProvider, "wmts": WMTSProvider}
 
 #: The OGC provider field a figure never records. ``extra_params`` is documented as where a service's token
 #: goes, so it is held beside the layer with the object itself — the same rule that keeps an ``xyzservices``
 #: ``apikey`` out of a figure.
-_OGC_SECRET_FIELDS: FrozenSet[str] = frozenset({"extra_params"})
+_OGC_SECRET_FIELDS: frozenset[str] = frozenset({"extra_params"})
 
 #: The OGC provider field a figure records only the *base* of. A query string is the other ordinary way an
 #: OGC service is authenticated (``?token=``, ``?api_key=``, ``?SERVICE_KEY=``), and nothing here can tell
@@ -549,7 +541,7 @@ def _service_base_url(url: Any) -> str:
     return base
 
 
-def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
+def _describe_ogc_provider(source: Any) -> dict[str, Any] | None:
     """Describe a cleopatra OGC provider as the plain values a figure can carry, minus every credential path.
 
     An OGC provider is the one source kind with no ``name`` to record, so recording it by name wrote
@@ -617,7 +609,7 @@ def _describe_ogc_provider(source: Any) -> Optional[Dict[str, Any]]:
     )
     if tag is None:
         return None
-    described: Dict[str, Any] = {"ogc": tag}
+    described: dict[str, Any] = {"ogc": tag}
     for spec in dataclass_fields(source):
         if spec.name in _OGC_SECRET_FIELDS:
             continue
@@ -733,7 +725,7 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
     return provider(**recorded)
 
 
-def _described_tile_source(source: Any) -> Tuple[Any, Any]:
+def _described_tile_source(source: Any) -> tuple[Any, Any]:
     """Split a basemap source into what a description records and the object held beside the layer.
 
     An ``xyzservices.TileProvider`` is a ``dict`` subclass whose fields include the caller's ``apikey``, so
@@ -819,7 +811,7 @@ def _resolve_tile_source(source: Any) -> Any:
     return name
 
 
-def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Place the text label a described layer asks for, at the lon/lat it recorded.
 
     The label's font is read from its **name** here, which is where that belongs: matplotlib documents
@@ -848,7 +840,7 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
     return DrawnLayer(artist=drawn, artists=(drawn,))
 
 
-def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Annotate the lon/lat a described layer recorded, optionally with an arrow.
 
     An ``Annotation`` is a ``Text``, so its name reads as a font family here exactly as in
@@ -925,7 +917,7 @@ class _BatchedLonLat:
     """
 
     def __init__(
-        self, crs: Any, parts: List[np.ndarray], step_deg: Optional[float] = None
+        self, crs: Any, parts: list[np.ndarray], step_deg: float | None = None
     ) -> None:
         """Project every part of a reference layer into a display CRS.
 
@@ -937,7 +929,7 @@ class _BatchedLonLat:
                 fill path needs so a straight lon/lat edge bends with the projection. ``None`` leaves the
                 vertices as they came, which is what the line path does.
         """
-        self.kept: List[np.ndarray] = []
+        self.kept: list[np.ndarray] = []
         for part in parts:
             xy = np.asarray(part, dtype=float)
             if xy.size == 0:
@@ -947,7 +939,7 @@ class _BatchedLonLat:
             )
         self._x, self._y = self._projected(crs)
 
-    def _projected(self, crs: Any) -> Tuple[np.ndarray, np.ndarray]:
+    def _projected(self, crs: Any) -> tuple[np.ndarray, np.ndarray]:
         """Return every kept vertex's projected x and y, stacked in part order.
 
         Args:
@@ -965,7 +957,7 @@ class _BatchedLonLat:
         )
         return np.asarray(x, dtype=float), np.asarray(y, dtype=float)
 
-    def parts(self) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
+    def parts(self) -> Iterator[tuple[np.ndarray, np.ndarray]]:
         """Yield each part's projected coordinates, in the order the parts were given.
 
         Yields:
@@ -1132,9 +1124,7 @@ class _ProjectedReference:
             keep: How many projected layers to hold at once.
         """
         self.keep = keep
-        self._held: "OrderedDict[Tuple[Any, ...], Tuple[np.ndarray, ...]]" = (
-            OrderedDict()
-        )
+        self._held: OrderedDict[tuple[Any, ...], tuple[np.ndarray, ...]] = OrderedDict()
         # Reentrant rather than plain, only as a guard: nothing under the lock reads the cache again
         # today — `natural_earth` and the two projectors do not — and a plain `Lock` would turn a future
         # one into a deadlock instead of a slow call.
@@ -1160,7 +1150,7 @@ class _ProjectedReference:
 
     def projected(
         self, scene: Any, name: str, resolution: str, polygon: bool = False
-    ) -> Tuple[np.ndarray, ...]:
+    ) -> tuple[np.ndarray, ...]:
         """Return a Natural-Earth layer projected into this map's display CRS.
 
         Args:
@@ -1194,7 +1184,7 @@ class _ProjectedReference:
                 return held
             # Annotated because both projectors are reached through an untyped `scene`, so what they
             # answer is `Any` and the declared return would be inferred away.
-            built: Tuple[np.ndarray, ...] = tuple(
+            built: tuple[np.ndarray, ...] = tuple(
                 scene._project_polygon_features(parts)
                 if polygon
                 else scene._project_line_features(parts)
@@ -1207,7 +1197,7 @@ class _ProjectedReference:
             return built
 
     @staticmethod
-    def _fingerprint(parts: Any) -> Tuple[Any, ...]:
+    def _fingerprint(parts: Any) -> tuple[Any, ...]:
         """Identify a layer's raw geometry cheaply enough to check on every draw.
 
         The part count, every part's vertex count, and the first and last vertex of the whole layer. Not a
@@ -1257,9 +1247,7 @@ class _ProjectedReference:
 PROJECTED_REFERENCE = _ProjectedReference()
 
 
-def draw_natural_earth(
-    scene: Any, _data: Any, layer: LayerSpec
-) -> Optional[DrawnLayer]:
+def draw_natural_earth(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Draw the Natural-Earth layer a description names, the way this map's projection needs it drawn.
 
     Three renders behind one recipe, because they are three ways of putting the same reference geography on
@@ -1285,14 +1273,14 @@ def draw_natural_earth(
         if name == "ocean":
             # The disc *is* the ocean: filling the whole projection boundary and letting land overlay it
             # is exact and far cheaper than clipping the global ocean polygon.
-            disc: Optional[DrawnLayer] = scene._fill_globe_polygons(
+            disc: DrawnLayer | None = scene._fill_globe_polygons(
                 [np.asarray(scene._frame()[0])],
                 zorder=zorder,
                 **_to_feature_style("polygon", style),
             )
             return disc
         if props["polygon"]:
-            filled: Optional[DrawnLayer] = scene._fill_globe_polygons(
+            filled: DrawnLayer | None = scene._fill_globe_polygons(
                 PROJECTED_REFERENCE.projected(
                     scene, name, props["resolution"], polygon=True
                 ),
@@ -1336,10 +1324,10 @@ def draw_natural_earth(
 
 #: The axes limits matplotlib starts an unused axes at. cleopatra reads the same pair as "nothing has been
 #: drawn here yet" and refuses to tile it, which is the state a replayed basemap meets (round 2, H2).
-_UNFRAMED_LIMITS: Tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
+_UNFRAMED_LIMITS: tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
 
 
-def _axes_extent(axes: Any) -> Optional[Tuple[float, float, float, float]]:
+def _axes_extent(axes: Any) -> tuple[float, float, float, float] | None:
     """Return what an axes is looking at as ``(xmin, xmax, ymin, ymax)``, or ``None`` when it is unframed.
 
     The ordering is matplotlib's own, because the axes are what it is read off and written back to; it is
@@ -1360,7 +1348,7 @@ def _axes_extent(axes: Any) -> Optional[Tuple[float, float, float, float]]:
     return None if limits == _UNFRAMED_LIMITS else limits
 
 
-def _frame_from(scene: Any, extent: Optional[Sequence[float]]) -> None:
+def _frame_from(scene: Any, extent: Sequence[float] | None) -> None:
     """Frame an unframed axes on the extent a stored layer recorded, so its drawer has a view to work in.
 
     Args:
@@ -1451,15 +1439,15 @@ _NIGHT_POLE_LATITUDE = 89.9
 #: The centres ``tissot()`` draws when it is given none: every 30 degrees of longitude, offset from the
 #: antimeridian, and every 30 degrees of latitude from 60 S to 60 N — enough to read the distortion anywhere a
 #: world map is read, and clear of the poles, where every projection's indicatrix degenerates.
-_TISSOT_LONS: Tuple[float, ...] = tuple(float(lon) for lon in range(-165, 180, 30))
-_TISSOT_LATS: Tuple[float, ...] = (-60.0, -30.0, 0.0, 30.0, 60.0)
+_TISSOT_LONS: tuple[float, ...] = tuple(float(lon) for lon in range(-165, 180, 30))
+_TISSOT_LATS: tuple[float, ...] = (-60.0, -30.0, 0.0, 30.0, 60.0)
 
 #: The ground radius of a Tissot circle when none is given, in metres.
 DEFAULT_TISSOT_RADIUS_M = 500_000.0
 
 #: How a night shade looks when the caller asks for nothing else — cleopatra's own ``add_nightshade``
 #: defaults, spelled out for the globe path, which fills the limb-clipped rings itself.
-_NIGHT_STYLE: Dict[str, Any] = {
+_NIGHT_STYLE: dict[str, Any] = {
     "facecolor": "black",
     "edgecolor": "none",
     "alpha": 0.35,
@@ -1470,7 +1458,7 @@ _NIGHT_STYLE: Dict[str, Any] = {
 #: :data:`_NIGHT_STYLE`. Passing it through instead resolved to matplotlib's first *cycle* colour on a
 #: flat map, drawing a night shade in blue, and raised ``Invalid RGBA argument: None`` on a globe
 #: (round 4, L8).
-_NIGHT_FILL_KEYWORDS: FrozenSet[str] = frozenset({"color", "facecolor"})
+_NIGHT_FILL_KEYWORDS: frozenset[str] = frozenset({"color", "facecolor"})
 
 
 def _utc_moment(when: Any) -> datetime:
@@ -1493,8 +1481,8 @@ def _utc_moment(when: Any) -> datetime:
             f"nightshade(when=) takes a datetime or ISO 8601 text; got {type(when).__name__}"
         )
     if when.tzinfo is None:
-        return when.replace(tzinfo=timezone.utc)
-    return when.astimezone(timezone.utc)
+        return when.replace(tzinfo=UTC)
+    return when.astimezone(UTC)
 
 
 def _lonlat_to_display(scene: Any, ring: np.ndarray) -> np.ndarray:
@@ -1543,7 +1531,7 @@ def _night_ring_projector(scene: Any) -> Any:
     return project
 
 
-def _crs_display_extent(crs: Any) -> Optional[Tuple[float, float, float, float]]:
+def _crs_display_extent(crs: Any) -> tuple[float, float, float, float] | None:
     """Measure a display CRS's own extent, in its own coordinates, from the area of use it declares.
 
     The lon/lat area of use is pyproj's, read from the CRS definition; it is projected here rather than
@@ -1842,8 +1830,8 @@ def _globe_night_grid(samples: int) -> int:
 
 
 def _globe_nightshade(
-    scene: Any, when: datetime, refraction: float, samples: int, style: Dict[str, Any]
-) -> Optional[DrawnLayer]:
+    scene: Any, when: datetime, refraction: float, samples: int, style: dict[str, Any]
+) -> DrawnLayer | None:
     """Shade a globe's visible night side by filling where the sun stands below the terminator altitude.
 
     A globe cannot take the night *polygon*: half of it is on the far side, where the projection has no
@@ -1922,7 +1910,7 @@ def _globe_nightshade(
     return DrawnLayer(artist=shade, artists=(shade,))
 
 
-def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Shade the night side of the terminator at the instant a described layer recorded.
 
     cleopatra computes the night region (``cleopatra.basemap.solar.night_polygon``) and leaves its projection
@@ -2225,7 +2213,7 @@ def _projected_rings(
     circles: Sequence[np.ndarray],
     lons: Sequence[float],
     lats: Sequence[float],
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Project lon/lat circles into the display CRS, keeping each one whole across the antimeridian.
 
     Args:
@@ -2254,7 +2242,7 @@ def _projected_rings(
     ]
 
 
-def draw_tissot(scene: Any, _data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+def draw_tissot(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Draw the Tissot indicatrices a described layer recorded, through the display projection.
 
     cleopatra builds the geodesic circles (``tissot_circles``) and draws rings it is handed (``add_tissot``);
@@ -2313,7 +2301,7 @@ class DecorationMixin(_MixinBase):
 
     def _reproject_point(
         self, lon: float, lat: float, crs: Any
-    ) -> Optional[Tuple[float, float]]:
+    ) -> tuple[float, float] | None:
         """Reproject one ``(lon, lat)`` in ``crs`` to the display CRS; ``None`` if it lands off the globe.
 
         A point on the far side of a clipped/globe display CRS reprojects to non-finite coordinates, which
@@ -2339,7 +2327,7 @@ class DecorationMixin(_MixinBase):
         s: str,
         *,
         crs: Any = 4326,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -2442,7 +2430,7 @@ class DecorationMixin(_MixinBase):
         *,
         xytext: Any = None,
         crs: Any = 4326,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -2538,8 +2526,8 @@ class DecorationMixin(_MixinBase):
         dataset: Any = None,
         *,
         zorder: float = -3.0,
-        cmap: Optional[str] = None,
-        name: Optional[str] = None,
+        cmap: str | None = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Any:
@@ -2646,7 +2634,7 @@ class DecorationMixin(_MixinBase):
             )
         return self._artist_that_appeared(before)
 
-    def _artist_that_appeared(self, before: Set[str]) -> Any:
+    def _artist_that_appeared(self, before: set[str]) -> Any:
         """Return the artist of the layer that appeared since ``before``, or ``None`` if none did.
 
         The builders hand back the map (ST-20 for the data builders, round-1 L6 for the decoration ones),
@@ -2665,7 +2653,7 @@ class DecorationMixin(_MixinBase):
         added = [layer_id for layer_id in self.layer_ids if layer_id not in before]
         return self.artist(added[-1]) if added else None
 
-    def _project_line_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
+    def _project_line_features(self, parts: list[np.ndarray]) -> list[np.ndarray]:
         """Project lon/lat line parts to the display CRS, split at the projection limb.
 
         Reprojecting a global line to a clipped projection (e.g. orthographic) sends the far side to
@@ -2684,12 +2672,12 @@ class DecorationMixin(_MixinBase):
         Returns:
             A list of finite ``(M, 2)`` projected polyline segments.
         """
-        segments: List[np.ndarray] = []
+        segments: list[np.ndarray] = []
         for x, y in _BatchedLonLat(self.crs, parts).parts():
             segments += projections._split_finite(x, y)
         return segments
 
-    def _project_polygon_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
+    def _project_polygon_features(self, parts: list[np.ndarray]) -> list[np.ndarray]:
         """Project lon/lat polygon rings to the display CRS as finite, limb-clipped fill rings.
 
         The fill analogue of :meth:`_project_line_features`: each exterior ring is densified, reprojected, and
@@ -2711,7 +2699,7 @@ class DecorationMixin(_MixinBase):
             A list of closed ``(M, 2)`` projected fill rings (empty when nothing is on the near side).
         """
         boundary = self._frame()[0]
-        rings: List[np.ndarray] = []
+        rings: list[np.ndarray] = []
         for x, y in _BatchedLonLat(self.crs, parts, step_deg=1.0).parts():
             rings += projections.close_visible_runs(x, y, boundary)
         return rings
@@ -2722,7 +2710,7 @@ class DecorationMixin(_MixinBase):
         *,
         zorder: float,
         **style: Any,
-    ) -> Optional[DrawnLayer]:
+    ) -> DrawnLayer | None:
         """Fill projected rings with a solid colour on a globe (map-specific overlay; clipped at frame time).
 
         cleopatra ``PolygonGlyph`` only fills when given per-polygon *values*, so a uniform land/ocean fill is
@@ -2760,7 +2748,7 @@ class DecorationMixin(_MixinBase):
         *,
         polygon: bool = False,
         zorder: float = 0.5,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Self:
@@ -2822,7 +2810,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -2891,7 +2879,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Self:
@@ -2953,7 +2941,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Self:
@@ -3029,7 +3017,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Self:
@@ -3111,7 +3099,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Self:
@@ -3182,7 +3170,7 @@ class DecorationMixin(_MixinBase):
         self,
         resolution: str = "110m",
         *,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs,
     ) -> Self:
@@ -3248,7 +3236,7 @@ class DecorationMixin(_MixinBase):
         *,
         refraction: float = DEFAULT_REFRACTION,
         n: int = DEFAULT_TERMINATOR_SAMPLES,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **style: Any,
     ) -> Self:
@@ -3403,12 +3391,12 @@ class DecorationMixin(_MixinBase):
 
     def tissot(
         self,
-        lons: Optional[Sequence[float]] = None,
-        lats: Optional[Sequence[float]] = None,
+        lons: Sequence[float] | None = None,
+        lats: Sequence[float] | None = None,
         *,
         radius_m: float = DEFAULT_TISSOT_RADIUS_M,
         n: int = DEFAULT_TISSOT_SAMPLES,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
         **style: Any,
     ) -> Self:
@@ -3610,9 +3598,9 @@ class DecorationMixin(_MixinBase):
         self,
         source: Any = None,
         *,
-        api_key: Optional[str] = None,
-        preset: Optional[dict] = None,
-        name: Optional[str] = None,
+        api_key: str | None = None,
+        preset: dict | None = None,
+        name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
@@ -3744,10 +3732,10 @@ class DecorationMixin(_MixinBase):
     def _describe_basemap(
         self,
         source: Any,
-        preset: Optional[dict],
-        api_key: Optional[str],
+        preset: dict | None,
+        api_key: str | None,
         options: dict,
-        name: Optional[str] = None,
+        name: str | None = None,
         visible: bool = True,
     ) -> Self:
         """Record the basemap this map should draw and let :func:`draw_basemap` fetch it.
@@ -3818,7 +3806,7 @@ class DecorationMixin(_MixinBase):
         )
         return self
 
-    def _coverage_extent(self) -> Optional[Tuple[float, float, float, float]]:
+    def _coverage_extent(self) -> tuple[float, float, float, float] | None:
         """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.
 
         A declared ``domain`` is preferred. Without one the axes limits are used instead — reprojected to
@@ -3842,7 +3830,7 @@ class DecorationMixin(_MixinBase):
         west, south, east, north = (float(value) for value in resolved)
         return west, south, east, north
 
-    def _axes_lonlat_extent(self) -> Optional[Tuple[float, float, float, float]]:
+    def _axes_lonlat_extent(self) -> tuple[float, float, float, float] | None:
         """Return the current axes limits as lon/lat, reprojecting from the display CRS when needed.
 
         The edges are sampled rather than just the two corners: outside the cylindrical projections a

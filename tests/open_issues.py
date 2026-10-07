@@ -19,8 +19,8 @@ the preferred form: orders outlive the issues that implement them.
 """
 
 import re
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import List, Mapping
 
 __all__ = ["ISSUE_REFERENCE", "KNOWN_OPEN_ISSUES", "issues_named_in"]
 
@@ -58,7 +58,7 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
 )
 
 
-def issues_named_in(reason: str) -> List[int]:
+def issues_named_in(reason: str) -> list[int]:
     """Return every issue number a reason names, in the order it names them.
 
     Args:

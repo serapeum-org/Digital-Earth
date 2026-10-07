@@ -28,8 +28,9 @@ layer/colorbar lifecycle, none of which applies to a textured sphere.
 import inspect
 import os
 import warnings
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -77,7 +78,7 @@ _DEFAULT_N_FRAMES = _GLYPH_ANIMATE["n_frames"].default
 _DEFAULT_REVOLUTIONS = _GLYPH_ANIMATE["revolutions"].default
 
 
-def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
+def _texture_axes(n_lat: int, n_lon: int) -> tuple[np.ndarray, np.ndarray]:
     """Return the ``(lat, lon)`` degree vectors of a texture of shape ``(n_lat, n_lon)``.
 
     Endpoint-inclusive, matching the glyph's documented layout: row 0 is +90 and the last row -90; column 0
@@ -94,8 +95,8 @@ def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def _mesh_sample_indices(
-    texture_shape: Tuple[int, int], n_lon: int, n_lat: int
-) -> Tuple[np.ndarray, np.ndarray]:
+    texture_shape: tuple[int, int], n_lon: int, n_lat: int
+) -> tuple[np.ndarray, np.ndarray]:
     """Return the texture rows and columns the glyph will actually sample for its face colours.
 
     This mirrors ``TexturedGlobeGlyph``'s own sampling, and mirroring it exactly is the whole point: the glyph
@@ -487,7 +488,7 @@ def _interior_is_left(lonlat: np.ndarray) -> bool:
 
 def _clip_ring(
     world: np.ndarray, view: np.ndarray, interior_left: bool = True
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Clip one closed ring to the hemisphere facing the camera, re-closing it along the limb.
 
     A closed ring repeats its first vertex, so the repeat is dropped first, and the visible runs are found
@@ -560,12 +561,12 @@ def _clip_ring(
     # region is on its left is closed by following the horizon forwards from each exit, and one wound the
     # other way round by following it backwards. That is the whole of the pairing rule.
     direction = 1.0 if interior_left else -1.0
-    faces: List[np.ndarray] = []
+    faces: list[np.ndarray] = []
     unused = set(range(len(runs)))
     while unused:
         first = min(unused)
         current = first
-        pieces: List[np.ndarray] = []
+        pieces: list[np.ndarray] = []
         while True:
             unused.discard(current)
             reach = (direction * (entry_angles - exit_angles[current])) % (2.0 * np.pi)
@@ -771,7 +772,7 @@ class _SphereLines(_GlobeOverlay, Line3DCollection):
     _part: np.ndarray
 
     def _adopt_parts(
-        self, place: Callable[..., np.ndarray], parts: List[np.ndarray], spin: float
+        self, place: Callable[..., np.ndarray], parts: list[np.ndarray], spin: float
     ) -> None:
         """Hold the layer's parts as one array, tagged by part, so a frame places them in one transform.
 
@@ -784,7 +785,7 @@ class _SphereLines(_GlobeOverlay, Line3DCollection):
         self._body = np.concatenate(parts) if parts else np.empty((0, 3))
         self._part = np.repeat(np.arange(len(parts)), [len(part) for part in parts])
 
-    def _near_side_segments(self) -> List[np.ndarray]:
+    def _near_side_segments(self) -> list[np.ndarray]:
         """Split every part into the arcs facing the camera, carried out to the limb at each end.
 
         A run of visible vertices ends one vertex short of the horizon; the crossing point is added at each
@@ -804,7 +805,7 @@ class _SphereLines(_GlobeOverlay, Line3DCollection):
             np.flatnonzero((np.diff(keep) != 1) | (np.diff(self._part[keep]) != 0)) + 1
         )
         final = len(world) - 1
-        segments: List[np.ndarray] = []
+        segments: list[np.ndarray] = []
         for run in np.split(keep, breaks):
             first, last = int(run[0]), int(run[-1])
             pieces = [world[run]]
@@ -842,14 +843,14 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
 
     _body: np.ndarray
     _starts: np.ndarray
-    _windings: List[bool]
+    _windings: list[bool]
 
     def _adopt_rings(
         self,
         place: Callable[..., np.ndarray],
-        rings: List[np.ndarray],
+        rings: list[np.ndarray],
         spin: float,
-        windings: List[bool],
+        windings: list[bool],
     ) -> None:
         """Hold the layer's rings as one array plus offsets, so a frame places them in one transform.
 
@@ -870,7 +871,7 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
             [[0], np.cumsum([len(ring) for ring in rings])]
         ).astype(int)
 
-    def _near_side_faces(self) -> List[np.ndarray]:
+    def _near_side_faces(self) -> list[np.ndarray]:
         """Clip every ring to the hemisphere facing the camera.
 
         Visibility is decided for every vertex in one pass, so a ring wholly on the far side — about half
@@ -885,7 +886,7 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
         view = self._view()
         starts, stops = self._starts[:-1], self._starts[1:]
         in_view = np.logical_or.reduceat(world @ view > 0.0, starts)
-        faces: List[np.ndarray] = []
+        faces: list[np.ndarray] = []
         for index in np.flatnonzero(in_view):
             faces += _clip_ring(
                 world[starts[index] : stops[index]], view, self._windings[index]
@@ -995,8 +996,8 @@ class TexturedGlobe(WatermarkMixin):
         self.ax: Any = None
         # Declared up front rather than sprung into existence by animate(), so every reader can see the
         # instance's full state and the accessors need no getattr() guards.
-        self._animation: Optional[FuncAnimation] = None
-        self._animation_fps: Optional[float] = None
+        self._animation: FuncAnimation | None = None
+        self._animation_fps: float | None = None
         #: A fig/ax handed to the constructor is the caller's too — the glyph stores it and draws on it even
         #: when no later call passes one, so ownership has to be settled here, not only at draw time.
         self._caller_supplied_axes: bool = (
@@ -1006,7 +1007,7 @@ class TexturedGlobe(WatermarkMixin):
         self._spin: float = 0.0
         #: The overlays that follow the globe, each still on the axes it was drawn on. A draw or animation
         #: frame turns the ones on its own axes (see :meth:`_turn_overlays`).
-        self._overlays: List[Any] = []
+        self._overlays: list[Any] = []
         #: Whether :attr:`fig` is ours to close. A caller-supplied axes belongs to the caller.
         self._owns_fig: bool = False
         #: The axes the constructor was given, if any. animate() falls back to it so a globe built around a
@@ -1106,9 +1107,9 @@ class TexturedGlobe(WatermarkMixin):
         *,
         band: int = DEFAULT_BAND,
         cmap: Any = "viridis",
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-        shape: Tuple[int, int] = DEFAULT_TEXTURE_SHAPE,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        shape: tuple[int, int] = DEFAULT_TEXTURE_SHAPE,
         resampling: str = "nearest",
         **kwargs: Any,
     ) -> "TexturedGlobe":
@@ -1332,7 +1333,7 @@ class TexturedGlobe(WatermarkMixin):
 
     @staticmethod
     def _validate_colour_bounds(
-        good: np.ndarray, vmin: Optional[float], vmax: Optional[float]
+        good: np.ndarray, vmin: float | None, vmax: float | None
     ) -> None:
         """Reject bound combinations that leave nothing to colour.
 
@@ -1371,8 +1372,8 @@ class TexturedGlobe(WatermarkMixin):
 
     @classmethod
     def _resolve_colour_bounds(
-        cls, good: np.ndarray, vmin: Optional[float], vmax: Optional[float]
-    ) -> Tuple[float, float]:
+        cls, good: np.ndarray, vmin: float | None, vmax: float | None
+    ) -> tuple[float, float]:
         """Settle the colour scale's ``(lo, hi)`` from the caller's bounds and the band's finite values.
 
         A bound the caller gives always wins; a bound they leave out comes from the data, or from a unit
@@ -1400,8 +1401,8 @@ class TexturedGlobe(WatermarkMixin):
         values: np.ndarray,
         *,
         cmap: Any,
-        vmin: Optional[float],
-        vmax: Optional[float],
+        vmin: float | None,
+        vmax: float | None,
     ) -> np.ndarray:
         """Colour-map a NaN-masked 2-D band to an ``(H, W, 4)`` float RGBA array, NaN cells transparent.
 
@@ -1479,7 +1480,7 @@ class TexturedGlobe(WatermarkMixin):
     # ------------------------------------------------------------------ geometry
 
     def project(
-        self, lon: Any, lat: Any, *, spin: Optional[float] = None, altitude: float = 0.0
+        self, lon: Any, lat: Any, *, spin: float | None = None, altitude: float = 0.0
     ) -> np.ndarray:
         """Map lon/lat degrees onto the drawn sphere, returning world-space ``(N, 3)`` coordinates.
 
@@ -1625,7 +1626,7 @@ class TexturedGlobe(WatermarkMixin):
 
     def draw(
         self, ax: Any = None, *, spin: float = 0.0, **kwargs: Any
-    ) -> Tuple[Any, Any]:
+    ) -> tuple[Any, Any]:
         """Draw the globe, returning the matplotlib ``(fig, ax)`` and recording them on the instance.
 
         A globe keeps drawing where it already is: called without an ``ax``, this reuses the axes it owns, so
@@ -1690,7 +1691,7 @@ class TexturedGlobe(WatermarkMixin):
         data: Any,
         *,
         lat: Any = None,
-        spin: Optional[float] = None,
+        spin: float | None = None,
         altitude: float = 0.01,
         hide_far_side: bool = True,
         **kwargs: Any,
@@ -1808,7 +1809,7 @@ class TexturedGlobe(WatermarkMixin):
         resolution: str,
         defaults: dict,
         *,
-        spin: Optional[float],
+        spin: float | None,
         altitude: float,
         fill: bool,
         **kwargs: Any,
@@ -1866,7 +1867,7 @@ class TexturedGlobe(WatermarkMixin):
         self,
         resolution: str = "110m",
         *,
-        spin: Optional[float] = None,
+        spin: float | None = None,
         altitude: float = 0.002,
         **kwargs: Any,
     ) -> Any:
@@ -1951,7 +1952,7 @@ class TexturedGlobe(WatermarkMixin):
         self,
         resolution: str = "110m",
         *,
-        spin: Optional[float] = None,
+        spin: float | None = None,
         altitude: float = 0.002,
         **kwargs: Any,
     ) -> Any:
@@ -2026,7 +2027,7 @@ class TexturedGlobe(WatermarkMixin):
         self,
         resolution: str = "110m",
         *,
-        spin: Optional[float] = None,
+        spin: float | None = None,
         altitude: float = 0.001,
         **kwargs: Any,
     ) -> Any:
@@ -2109,7 +2110,7 @@ class TexturedGlobe(WatermarkMixin):
         )
 
     @staticmethod
-    def _as_lonlat(data: Any, lat: Any) -> Tuple[np.ndarray, np.ndarray]:
+    def _as_lonlat(data: Any, lat: Any) -> tuple[np.ndarray, np.ndarray]:
         """Resolve ``points``' input into lon/lat degree arrays, reprojecting a feature collection if needed.
 
         Args:
@@ -2245,7 +2246,7 @@ class TexturedGlobe(WatermarkMixin):
         self._spin = float(spins[0])
         self._turn_overlays(ax, self._spin)
 
-        def _frame(index: int) -> Tuple[Any, ...]:
+        def _frame(index: int) -> tuple[Any, ...]:
             spin = float(spins[index])
             self.glyph.draw(ax, spin=spin, **kwargs)
             self._spin = spin
@@ -2317,8 +2318,8 @@ class TexturedGlobe(WatermarkMixin):
         self,
         path: str,
         *,
-        fps: Optional[float] = None,
-        gif: Optional[str] = None,
+        fps: float | None = None,
+        gif: str | None = None,
         **kwargs: Any,
     ) -> Any:
         """Save the rotation built by :meth:`animate`, optionally also deriving a GIF from it.
@@ -2493,4 +2494,4 @@ class TexturedGlobe(WatermarkMixin):
 
 #: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported from this module (not from
 #: ``digitalearth.static``) so a caller adjusting ``tilt_deg`` can reach it without importing from the glyph.
-__all__: List[str] = ["TexturedGlobe", "DEFAULT_TEXTURE_SHAPE", "EARTH_TILT_DEG"]
+__all__: list[str] = ["TexturedGlobe", "DEFAULT_TEXTURE_SHAPE", "EARTH_TILT_DEG"]

@@ -25,8 +25,9 @@ wrong type first.
 """
 
 import os
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any
 
 import numpy as np
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
@@ -216,10 +217,10 @@ def extract(
     data: PlottableData,
     *,
     band: int = DEFAULT_BAND,
-    variable: Optional[str] = None,
-    x: Optional[np.ndarray] = None,
-    y: Optional[np.ndarray] = None,
-    metadata: Optional[dict] = None,
+    variable: str | None = None,
+    x: np.ndarray | None = None,
+    y: np.ndarray | None = None,
+    metadata: dict | None = None,
     crs: Any = None,
 ) -> Source:
     """Build a :class:`Source` from any supported input.
@@ -317,7 +318,7 @@ def extract(
     raise TypeError(f"cannot build a Source from {type(data).__name__}")
 
 
-def _axis(values: Any, name: str, units: Optional[str] = None) -> DimensionInfo:
+def _axis(values: Any, name: str, units: str | None = None) -> DimensionInfo:
     """Wrap a coordinate/value array in a :class:`DimensionInfo`."""
     return DimensionInfo(np.asarray(values), name, units)
 
@@ -332,7 +333,7 @@ def _band_item(seq: Any, index: int, default: Any = None) -> Any:
         return default
 
 
-def _attr(metadata: Any, key: str) -> Optional[str]:
+def _attr(metadata: Any, key: str) -> str | None:
     """Read a CF identity item (``standard_name``, ``units``, ...) from an attribute mapping.
 
     Case-insensitive, because the same attribute reaches us as ``standard_name`` from a CF file and as
@@ -392,7 +393,7 @@ def _features_crs(fc: Any) -> Any:
 
 
 def _from_raster(
-    ds: Dataset, band: int, metadata: Optional[dict], *, crs: Any = None
+    ds: Dataset, band: int, metadata: dict | None, *, crs: Any = None
 ) -> Source:
     """Build a raster :class:`Source` from a pyramids ``Dataset`` (1-based ``band``).
 
@@ -465,7 +466,7 @@ def _variable_attributes(nc: Any, variable: str) -> dict:
 
 
 def _from_netcdf(
-    nc: Any, variable: Optional[str], metadata: Optional[dict], *, crs: Any = None
+    nc: Any, variable: str | None, metadata: dict | None, *, crs: Any = None
 ) -> Source:
     """Build a raster :class:`Source` from a pyramids ``NetCDF`` variable (defaults to the first).
 
@@ -512,7 +513,7 @@ def _from_netcdf(
 
 
 def _from_collection(
-    dc: Any, band: int, metadata: Optional[dict], member: int = 0, *, crs: Any = None
+    dc: Any, band: int, metadata: dict | None, member: int = 0, *, crs: Any = None
 ) -> Source:
     """Build a raster :class:`Source` from one member of a pyramids ``DatasetCollection``.
 
@@ -550,7 +551,7 @@ def _from_collection(
     )
 
 
-def _from_feature(fc: Any, metadata: Optional[dict], *, crs: Any = None) -> Source:
+def _from_feature(fc: Any, metadata: dict | None, *, crs: Any = None) -> Source:
     """Build a vector (point) :class:`Source` from a pyramids ``FeatureCollection``.
 
     ``FeatureCollection`` is a GeoDataFrame subclass, so we read its geometry/CRS directly. ``z`` is the
@@ -594,9 +595,9 @@ def _from_feature(fc: Any, metadata: Optional[dict], *, crs: Any = None) -> Sour
 
 def _from_numpy(
     arr: np.ndarray,
-    x: Optional[np.ndarray],
-    y: Optional[np.ndarray],
-    metadata: Optional[dict],
+    x: np.ndarray | None,
+    y: np.ndarray | None,
+    metadata: dict | None,
     *,
     crs: Any = None,
 ) -> Source:

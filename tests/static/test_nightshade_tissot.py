@@ -10,7 +10,7 @@ radius), never through the code under test.
 """
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 import pytest
@@ -23,13 +23,13 @@ from digitalearth.static import Map, projections
 from digitalearth.static.maps import decoration
 
 #: The equinox at noon UTC: the sun stands over (about) lon 0, so lon 180 is at midnight.
-EQUINOX_NOON = datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc)
+EQUINOX_NOON = datetime(2026, 3, 20, 12, 0, tzinfo=UTC)
 
 #: The June solstice at noon UTC: the south pole is in polar night.
-JUNE_NOON = datetime(2026, 6, 21, 12, 0, tzinfo=timezone.utc)
+JUNE_NOON = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)
 
 #: The December solstice at noon UTC: the *north* pole is in polar night.
-DECEMBER_NOON = datetime(2026, 12, 21, 12, 0, tzinfo=timezone.utc)
+DECEMBER_NOON = datetime(2026, 12, 21, 12, 0, tzinfo=UTC)
 
 #: Web Mercator's sphere radius, in metres (EPSG:3857).
 MERCATOR_R = 6378137.0

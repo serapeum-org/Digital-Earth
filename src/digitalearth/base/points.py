@@ -17,7 +17,7 @@ their own way; and because point clouds (#206) will need the same shape carrying
 """
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -278,7 +278,7 @@ class PointArrays:
 
     def finite(
         self, *aligned: Any, dims: str = "xy"
-    ) -> Tuple["PointArrays", Tuple[Optional[np.ndarray], ...]]:
+    ) -> tuple["PointArrays", tuple[np.ndarray | None, ...]]:
         """Drop points whose coordinates are not finite, taking aligned arrays with them.
 
         The far side of a clipped or globe display CRS reprojects to ``inf``/``nan``. Passing those on does
@@ -374,7 +374,7 @@ class PointArrays:
         """
         return np.column_stack([self.x, self.y, self.z])
 
-    def as_xy(self) -> List[np.ndarray]:
+    def as_xy(self) -> list[np.ndarray]:
         """Return ``[x, y]`` for the many 2-D consumers that want exactly that.
 
         Returns:
