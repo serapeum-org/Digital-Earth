@@ -37,8 +37,9 @@ class TestTheme:
 
     def test_an_unknown_name_is_refused(self):
         """A typo'd theme name is refused, naming the built-ins."""
+        m = InteractiveMap()
         with pytest.raises(ValueError, match="unknown Bokeh theme"):
-            InteractiveMap().theme("darkmode")
+            m.theme("darkmode")
 
     def test_theme_none_clears_a_previously_set_theme(self):
         """M1 — ``theme(None)`` restores the default; it does not leave the last theme in force."""

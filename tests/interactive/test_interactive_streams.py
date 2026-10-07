@@ -15,6 +15,18 @@ from holoviews import streams  # noqa: E402
 from digitalearth.interactive import InteractiveMap  # noqa: E402
 
 
+def _blank(**kwargs):
+    """Return an empty overlay — a stand-in stream/selection callback.
+
+    Args:
+        **kwargs: The stream's keyword payload, ignored.
+
+    Returns:
+        An empty ``hv.Overlay``.
+    """
+    return hv.Overlay([])
+
+
 @pytest.fixture
 def m(dataset) -> InteractiveMap:
     """Return a Web-Mercator map carrying one raster layer.
@@ -59,7 +71,7 @@ class TestSelectionStreams:
             kind: The selection kind asked for.
             stream_type: The stream class it must bind.
         """
-        dmap = m.on_select(lambda **kw: hv.Overlay([]), kind=kind)
+        dmap = m.on_select(_blank, kind=kind)
         assert isinstance(dmap, hv.DynamicMap)
         assert any(isinstance(s, stream_type) for s in dmap.streams)
 
@@ -70,7 +82,7 @@ class TestSelectionStreams:
             m: The map fixture.
         """
         with pytest.raises(ValueError, match="unknown selection kind"):
-            m.on_select(lambda **kw: hv.Overlay([]), kind="rectangle")
+            m.on_select(_blank, kind="rectangle")
 
     def test_on_reset_binds_plotreset(self, m):
         """``on_reset`` attaches a ``PlotReset`` stream.
@@ -78,13 +90,14 @@ class TestSelectionStreams:
         Args:
             m: The map fixture.
         """
-        dmap = m.on_reset(lambda **kw: hv.Overlay([]))
+        dmap = m.on_reset(_blank)
         assert any(isinstance(s, streams.PlotReset) for s in dmap.streams)
 
     def test_on_select_without_a_layer_raises(self):
         """With no layer and no explicit source there is nothing to listen on."""
+        empty = InteractiveMap()
         with pytest.raises(ValueError, match="needs a source layer"):
-            InteractiveMap().on_select(lambda **kw: hv.Overlay([]))
+            empty.on_select(_blank)
 
 
 class TestSeveralDrawTools:
@@ -194,7 +207,7 @@ class TestStreamSourceResolution:
         Args:
             m: The map fixture.
         """
-        dmap = m.on_select(lambda **kw: hv.Overlay([]), source=m.layers[0])
+        dmap = m.on_select(_blank, source=m.layers[0])
         assert any(isinstance(s, streams.BoundsXY) for s in dmap.streams)
 
 
