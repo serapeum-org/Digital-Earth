@@ -25,6 +25,7 @@ from digitalearth.interactive.base import (
     held_props,
     style_value,
 )
+from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 
 #: Datashader reduction names accepted as ``aggregator=`` strings. ``count`` needs no column; the rest
 #: aggregate the ``column=`` argument; ``count_cat`` blends per-category counts (DI.2a).
@@ -156,6 +157,12 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     # The builder's own style, then the caller's keywords over it. Both halves are read off the
     # description here; what the map holds beside the layer is merged in earlier, by `held_props`.
     common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
+    # A frozen colour scale (IN-4): `clim` + `cnorm` reach Bokeh's colour mapper here. For `eq_hist` this is
+    # the X-4 workaround — datashader refuses `span` under eq-hist, so the equalisation is handed to Bokeh's
+    # `EqHistColorMapper`, which does take explicit `low`/`high`. The recorded list is restored to the
+    # `(low, high)` tuple HoloViews declares `clim` with, exactly as `field`/`timecube` do.
+    if "clim" in common:
+        common["clim"] = _engine_pair(common["clim"])
     rasterized = interactive_map._styled(
         rasterized, common=common, bokeh={"tools": ["hover"]}
     )
@@ -275,6 +282,9 @@ class BigDataMixin(_MixinBase):
         """
         _, hv = _require_holoviz()
         if isinstance(layer, hv.core.Dimensioned):
+            # A pre-built element handed straight to rasterize/datashade is not reprojected through pyramids
+            # like a (Feature)GeoDataFrame is, so its CRS is guarded here too (IN-16).
+            self._guard_element_crs(layer, caller="rasterize/datashade")
             return layer
         gdf = self._display_gdf(layer)
         return self._vector_element("Points", gdf, vdims=vdims)
@@ -287,6 +297,8 @@ class BigDataMixin(_MixinBase):
         column: str | None = None,
         dynamic: bool = True,
         cmap: str = "viridis",
+        clim: tuple[float, float] | None = None,
+        cnorm: str | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
@@ -304,6 +316,15 @@ class BigDataMixin(_MixinBase):
             dynamic: Re-rasterize on every viewport change (needs a live kernel/server); ``False``
                 bakes a single static image (deterministic — what the tests assert on).
             cmap: Colormap for the rasterized image.
+            clim: Frozen ``(vmin, vmax)`` colour limits (IN-4). ``None`` (default) lets Bokeh auto-range
+                the rasterized image, which re-ranges per viewport; a pair pins the colour scale so a
+                rasterized layer can share one range with a neighbouring ``field``. The limits reach Bokeh's
+                colour mapper rather than Datashader, so a frozen scale works even under ``cnorm="eq_hist"``,
+                which Datashader itself refuses to combine with a span (the X-4 workaround).
+            cnorm: Colour normalisation Bokeh applies — ``"linear"`` (the default when limits are pinned),
+                ``"log"`` or ``"eq_hist"``. ``None`` leaves Bokeh's default. With ``clim`` and
+                ``cnorm="eq_hist"`` the equalisation is Bokeh's ``EqHistColorMapper``, which takes explicit
+                limits.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -319,6 +340,16 @@ class BigDataMixin(_MixinBase):
         canvas = {key: opts.pop(key) for key in ("width", "height") if key in opts}
         held: dict = {}
         described_opts = describe_opts(held, opts)
+        common: dict[str, Any] = {
+            "cmap": style_value(held, "cmap", cmap, cmap_name(cmap)),
+            "colorbar": True,
+        }
+        # A frozen colour scale rides in `common` so the drawer hands it to Bokeh's colour mapper (IN-4). The
+        # pair is recorded in the travelling (list) spelling, as `field`/`timecube` record theirs.
+        if clim is not None:
+            common["clim"] = style_value(held, "clim", _travelling_pair(clim))
+        if cnorm is not None:
+            common["cnorm"] = cnorm
         return self.add_layer(
             None,
             name=name,
@@ -335,10 +366,7 @@ class BigDataMixin(_MixinBase):
                     "column": column,
                     "dynamic": dynamic,
                     "canvas": canvas,
-                    "common": {
-                        "cmap": style_value(held, "cmap", cmap, cmap_name(cmap)),
-                        "colorbar": True,
-                    },
+                    "common": common,
                     "opts": described_opts,
                 }
             ),

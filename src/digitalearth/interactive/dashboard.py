@@ -14,8 +14,10 @@ live app must be *served*, not converted. ``save_app`` is the offline path (pre-
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from functools import reduce
 from importlib.util import find_spec
+from math import prod
 from operator import mul as _mul
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
@@ -115,6 +117,106 @@ _ALPHA_ONLY_TYPES = ("RGB",)
 #: The subset of :data:`_OVERRIDABLE_STYLE` an :data:`_ALPHA_ONLY_TYPES` element can take.
 _ALPHA_ONLY_STYLE = ("alpha",)
 
+#: The dashboard's declared widget vocabulary (IN-9): the names `dashboard(widgets=...)` accepts, in the
+#: order they read. Held as data so a name outside it is refused with a did-you-mean rather than silently
+#: dropped, and a new widget is one builder in `_dashboard_widget_builders`, not another `elif`.
+_DASHBOARD_WIDGETS: tuple[str, ...] = ("cmap", "alpha", "basemap")
+
+#: The widget set `dashboard`/`export_plan`/`save_app` default to when the caller names none. One constant so
+#: the export-size pre-check in `save_app` cannot disagree with what `dashboard` actually builds (F6).
+_DEFAULT_DASHBOARD_WIDGETS: tuple[str, ...] = ("cmap", "alpha")
+
+#: The entry-point name quoted in the Web-Mercator refusal for the dashboard's basemap widget — one spelling
+#: shared by the widget builder, `_with_basemap` and `_reconcile_view` so the message cannot drift.
+_DASHBOARD_BASEMAP_CONTEXT = "dashboard basemap"
+
+#: The Panel templates `dashboard(template=...)` can host the app in (IN-9): the short name → the class on
+#: `panel.template`. Held as data for the same reason the widgets are.
+_DASHBOARD_TEMPLATES: dict[str, str] = {
+    "fast": "FastListTemplate",
+    "bootstrap": "BootstrapTemplate",
+    "material": "MaterialTemplate",
+    "vanilla": "VanillaTemplate",
+}
+
+
+@dataclass(frozen=True)
+class ExportPlan:
+    """What a ``save_app(embed=True)`` export will contain, modelled before it is written (IN-10).
+
+    Panel's ``embed`` bakes a pre-rendered page for the cartesian product of the widgets' discrete states —
+    a Select contributes one state per option, a continuous slider is *sampled* down to a few. The product
+    grows fast, and past Panel's cap the export silently drops states. This states the shape up front: the
+    per-widget state counts, their product, the cap, and whether the product is within it — so a caller finds
+    out their app survives the trip *before* exporting rather than from a truncated file.
+
+    Attributes:
+        widgets: ``(name, state_count)`` per embedded widget, in order.
+        total_states: The product of the state counts — the number of pages ``embed`` would bake.
+        max_states: The cap the product is judged against (Panel warns and truncates past its own).
+
+    Examples:
+        - A colormap Select (8 options) and a sampled opacity slider (3) make 24 pre-rendered states:
+            ```python
+            >>> from digitalearth.interactive.dashboard import ExportPlan
+            >>> plan = ExportPlan(widgets=(("cmap", 8), ("alpha", 3)), total_states=24, max_states=1000)
+            >>> plan.total_states, plan.embeddable
+            (24, True)
+
+            ```
+    """
+
+    widgets: tuple[tuple[str, int], ...]
+    total_states: int
+    max_states: int
+
+    @property
+    def embeddable(self) -> bool:
+        """Whether the export's state count is within the cap.
+
+        Returns:
+            ``True`` when :attr:`total_states` does not exceed :attr:`max_states`.
+        """
+        return self.total_states <= self.max_states
+
+    @property
+    def warning(self) -> str | None:
+        """A one-line caution when the export would exceed the cap, else ``None``.
+
+        Returns:
+            The warning naming the counts and the cap, or ``None`` when the export is within it.
+        """
+        if self.embeddable:
+            return None
+        breakdown = " × ".join(f"{name}:{count}" for name, count in self.widgets)
+        return (
+            f"save_app(embed=True) would bake {self.total_states} states ({breakdown}), over the "
+            f"{self.max_states} cap — Panel will truncate it. Drop a widget, or serve() the app instead."
+        )
+
+
+def _did_you_mean(kind: str, name: str, known: Sequence[str]) -> str:
+    """Return a refusal message for an unknown name, with a difflib suggestion (IN-13).
+
+    The interactive tier's own did-you-mean: hvPlot and HoloViews suggest the nearest option for an unknown
+    key, and the tier's declared vocabularies — the dashboard widgets and templates — answer the same way
+    rather than listing the choices and leaving the caller to spot their typo.
+
+    Args:
+        kind: What the name is (``"dashboard widget"``, ``"dashboard template"``), quoted in the message.
+        name: The name the caller passed.
+        known: The names that are valid, which the message lists and suggests from.
+
+    Returns:
+        A message naming the unknown value, the nearest match where there is one, and the valid set.
+    """
+    from difflib import get_close_matches
+
+    match = get_close_matches(str(name), [str(k) for k in known], n=1)
+    suggestion = f" (did you mean {match[0]!r}?)" if match else ""
+    return f"unknown {kind} {name!r}{suggestion}; choose from {list(known)}"
+
+
 #: Built-in colormaps offered by the dashboard cmap selector.
 _CMAP_CHOICES = [
     "viridis",
@@ -170,28 +272,35 @@ class DashboardMixin(_MixinBase):
     def dashboard(
         self,
         *,
-        widgets: Sequence[str] = ("cmap", "alpha"),
+        widgets: Sequence[str] = _DEFAULT_DASHBOARD_WIDGETS,
         sidebar: bool = True,
         title: str = "",
+        template: str | None = None,
     ) -> Any:
         """Wrap the map and reactive widgets into a Panel layout.
 
         The returned object is a ``panel.viewable.Viewable``: a sidebar (or inline row) of widgets
-        bound to the map's style, beside the live map. Supported widgets: ``"cmap"`` (colormap
-        selector), ``"alpha"`` (opacity slider), ``"basemap"`` (tile-provider selector, which swaps the
-        tile layer under the map and is available on a Web-Mercator map only).
+        bound to the map's style, beside the live map. The widget set is a **declared vocabulary** (IN-9),
+        :data:`_DASHBOARD_WIDGETS` — ``"cmap"`` (colormap selector), ``"alpha"`` (opacity slider),
+        ``"basemap"`` (tile-provider selector, Web-Mercator-only) — so a name outside it is refused with a
+        did-you-mean rather than silently dropped, and a new widget is one entry, not another ``elif``.
 
         Args:
             widgets: Which widgets to expose, in order.
-            sidebar: Lay widgets out in a left sidebar (``True``) or a top row (``False``).
+            sidebar: Lay widgets out in a left sidebar (``True``) or a top row (``False``). Ignored when
+                ``template`` is given — a template has its own sidebar.
             title: Dashboard title (falls back to the map's ``title``).
+            template: A Panel template to host the app in (IN-9) — ``"fast"``, ``"bootstrap"``,
+                ``"material"`` or ``"vanilla"``. ``None`` (default) returns the plain row/column layout.
 
         Returns:
-            A ``panel.viewable.Viewable`` hosting the map + widgets.
+            A ``panel.viewable.Viewable`` hosting the map + widgets — a template instance when ``template``
+            is given, else the row/column layout.
 
         Raises:
-            ValueError: for an unknown widget name, or when ``"basemap"`` is requested on a map whose
-                display CRS is not EPSG:3857 (Bokeh renders tiles in Web Mercator only).
+            ValueError: for an unknown widget name (with a did-you-mean), an unknown ``template`` name, or
+                when ``"basemap"`` is requested on a map whose display CRS is not EPSG:3857 (Bokeh renders
+                tiles in Web Mercator only).
 
         Examples:
             - Build a dashboard with colormap + opacity controls:
@@ -213,6 +322,8 @@ class DashboardMixin(_MixinBase):
 
         view = pn.bind(_view, **bindings)
         panel_map = pn.panel(view)
+        if template is not None:
+            return self._templated(pn, template, controls, panel_map, title)
         heading = (
             pn.pane.Markdown(f"## {title or self.title}")
             if (title or self.title)
@@ -231,8 +342,44 @@ class DashboardMixin(_MixinBase):
             )
         return pn.Column(heading, body) if heading else body
 
+    def _templated(
+        self, pn: Any, template: str, controls: list, panel_map: Any, title: str
+    ) -> Any:
+        """Host the map and widgets in a named Panel template (IN-9).
+
+        Args:
+            pn: The imported panel module.
+            template: A key of :data:`_DASHBOARD_TEMPLATES`.
+            controls: The widget objects for the sidebar.
+            panel_map: The reactive map pane for the main area.
+            title: The template title (falls back to the map's ``title``).
+
+        Returns:
+            The instantiated Panel template.
+
+        Raises:
+            ValueError: for a template name outside the vocabulary, with a did-you-mean.
+        """
+        class_name = _DASHBOARD_TEMPLATES.get(template)
+        if class_name is None:
+            raise ValueError(
+                _did_you_mean(
+                    "dashboard template", template, sorted(_DASHBOARD_TEMPLATES)
+                )
+            )
+        template_class = getattr(pn.template, class_name)
+        return template_class(
+            title=title or self.title or "Digital-Earth",
+            sidebar=list(controls),
+            main=[panel_map],
+        )
+
     def _build_widgets(self, pn: Any, widgets: Sequence[str]) -> tuple:
-        """Construct the requested widgets and the ``pn.bind`` keyword map.
+        """Construct the requested widgets and the ``pn.bind`` keyword map from the declared vocabulary.
+
+        The vocabulary (:data:`_DASHBOARD_WIDGETS`) is consulted as data rather than branched on (IN-9), so
+        a name outside it is refused with a did-you-mean (IN-13) and adding a widget is adding a builder, not
+        another ``elif``.
 
         Args:
             pn: The imported panel module.
@@ -243,29 +390,52 @@ class DashboardMixin(_MixinBase):
             map passed to ``pn.bind``.
 
         Raises:
-            ValueError: for an unknown widget name, or when ``"basemap"`` is requested on a
-                non-Web-Mercator map (Bokeh renders tiles in EPSG:3857 only).
+            ValueError: for an unknown widget name (with a did-you-mean), or when ``"basemap"`` is requested
+                on a non-Web-Mercator map (Bokeh renders tiles in EPSG:3857 only).
         """
+        builders = self._dashboard_widget_builders(pn)
         controls, bindings = [], {}
         for name in widgets:
-            if name == "cmap":
-                widget = pn.widgets.Select(label="Colormap", options=_CMAP_CHOICES)
-            elif name == "alpha":
-                widget = pn.widgets.FloatSlider(
-                    label="Opacity", start=0.0, end=1.0, value=1.0
-                )
-            elif name == "basemap":
-                # Refuse rather than draw a misaligned basemap: the widget swaps in a Bokeh tile layer,
-                # which only registers with the data on a Web-Mercator map.
-                self._require_web_mercator("dashboard basemap")
-                widget = pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
-            else:
+            # The vocabulary consulted is the declared :data:`_DASHBOARD_WIDGETS` tuple, in its own order, so
+            # the "choose from" list and the did-you-mean read the data rather than the builder dict's keys
+            # (F3). The builders cover exactly that tuple — pinned by a test — so the lookup below is total.
+            if name not in _DASHBOARD_WIDGETS:
                 raise ValueError(
-                    f"unknown dashboard widget {name!r}; choose from 'cmap'/'alpha'/'basemap'"
+                    _did_you_mean("dashboard widget", name, _DASHBOARD_WIDGETS)
                 )
+            widget = builders[name]()
             controls.append(widget)
             bindings[name] = widget
         return controls, bindings
+
+    def _dashboard_widget_builders(self, pn: Any) -> dict:
+        """Return the builder for each name in the declared vocabulary :data:`_DASHBOARD_WIDGETS` (IN-9).
+
+        Keyed by exactly the names in :data:`_DASHBOARD_WIDGETS` (pinned by
+        ``test_the_widget_vocabulary_is_declared_data``), so the constant is the single source of truth the
+        validation and did-you-mean read, and this just says how each declared name is built.
+
+        Args:
+            pn: The imported panel module.
+
+        Returns:
+            A ``{name: () -> widget}`` mapping over :data:`_DASHBOARD_WIDGETS`. ``"basemap"`` carries the
+            Web-Mercator guard in its builder, so it refuses rather than draws a misaligned tile layer.
+        """
+
+        def _basemap() -> Any:
+            # Refuse rather than draw a misaligned basemap: the widget swaps in a Bokeh tile layer, which
+            # only registers with the data on a Web-Mercator map.
+            self._require_web_mercator(_DASHBOARD_BASEMAP_CONTEXT)
+            return pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
+
+        return {
+            "cmap": lambda: pn.widgets.Select(label="Colormap", options=_CMAP_CHOICES),
+            "alpha": lambda: pn.widgets.FloatSlider(
+                label="Opacity", start=0.0, end=1.0, value=1.0
+            ),
+            "basemap": _basemap,
+        }
 
     def _restyled_layers(
         self, overrides: dict, layers: Sequence[Any] | None = None
@@ -309,7 +479,7 @@ class DashboardMixin(_MixinBase):
         return styled
 
     def _with_basemap(
-        self, obj: Any, provider: str, *, context: str = "dashboard basemap"
+        self, obj: Any, provider: str, *, context: str = _DASHBOARD_BASEMAP_CONTEXT
     ) -> Any:
         """Compose ``obj`` over the ``provider`` tile layer, replacing any basemap already in it.
 
@@ -342,37 +512,147 @@ class DashboardMixin(_MixinBase):
         ]
         return reduce(_mul, [tile, *data])
 
+    def _reconcile_view(
+        self,
+        layers: Sequence[Any],
+        overrides: dict,
+        basemap: Any = None,
+        *,
+        basemap_context: str = _DASHBOARD_BASEMAP_CONTEXT,
+    ) -> Any:
+        """Recompose ``layers`` with ``overrides`` applied, reusing every untouched element (IN-2).
+
+        **The one composition path every widget event takes.** The dashboard's cmap/alpha/basemap widgets and
+        the layer switcher's visibility/opacity/basemap widgets used to each rebuild the overlay their own
+        way — ``_render_with_overrides`` and ``_compose_visible_layers`` grew a reduce apiece beside
+        ``render``'s, so a style fix had to be made in three places and a divergence between them was a bug
+        waiting (detail doc gap 2). They route through here now, so there is one recipe: flush the deferred
+        basemap, restyle only the layers a widget actually claims, compose, project, and drop the chosen
+        basemap underneath.
+
+        This is a reconcile rather than a rebuild: :meth:`_restyled_layers` re-``.opts()``s only the
+        colour-mapped (and alpha-only) layers a widget value reaches and hands **the same element object**
+        back for every other layer, so a slider tick on a two-layer map re-styles the one raster and leaves
+        the points layer's element — and the hover tools and colorbar filed against it — untouched. When no
+        override is in play the layers pass through with their identity intact, so a basemap switch alone
+        never re-styles a thing.
+
+        Args:
+            layers: The elements to compose, bottom first — every layer for the dashboard, the chosen subset
+                for the switcher.
+            overrides: The widget values to apply over each layer's own recorded style (``cmap``/``alpha``);
+                empty leaves every element exactly as it was.
+            basemap: Provider name from a basemap ``Select``, or ``None`` to leave the basemap as built.
+            basemap_context: The entry point quoted in the Web-Mercator refusal, so a basemap switch names
+                the widget the caller actually touched.
+
+        Returns:
+            The composed, projected HoloViews object, over the chosen basemap when one is selected.
+        """
+        # Before the layers are read: a deferred basemap is one of them, so composing without flushing drew a
+        # map that never had one (review H9). The theme is set on the renderer here too, so a dashboard draws
+        # under the same theme a bare render would (IN-18).
+        self._flush_deferred_tiles()
+        self._apply_theme()
+        # Restyle only when a widget value is in play; otherwise the elements pass through untouched, which is
+        # what makes a basemap-only change a reconcile rather than a rebuild. `.opts()` on an overlay applies
+        # per element *type*, so the restyle happens per layer before the compose, not after it (#300).
+        restyled = (
+            self._restyled_layers(overrides, layers) if overrides else list(layers)
+        )
+        obj = self._projected(self._compose(restyled))
+        if basemap:
+            obj = self._with_basemap(obj, basemap, context=basemap_context)
+        return obj
+
     def _render_with_overrides(self, values: dict) -> Any:
-        """Re-render the composed map, applying widget values as style overrides.
+        """Re-render the whole map, applying the dashboard widgets' values as style overrides.
+
+        A thin reading of the widget values into the one :meth:`_reconcile_view` path (IN-2).
 
         Args:
             values: Widget values keyed by widget name (``cmap``/``alpha``/``basemap``).
 
         Returns:
-            The composed HoloViews object with the overrides applied — each layer redrawn with the widget
-            values over **its own** recorded style, over the chosen tile basemap.
-
-            Whether a widget moved decides how the layers are styled, and nothing else: both branches flush
-            the deferred basemap and apply the map's projection, which is what `render()` does besides
-            composing. Skipping them left a map built with `tiles=` without one, permanently — both default
-            widgets carry a value, so the override branch is taken on the very first render.
+            The composed HoloViews object with the overrides applied — each colour-mapped layer redrawn with
+            the widget values over **its own** recorded style, every other element reused, over the chosen
+            tile basemap.
         """
         overrides: dict = {}
         if values.get("cmap"):
             overrides["cmap"] = values["cmap"]
         if values.get("alpha") is not None:
             overrides["alpha"] = values["alpha"]
-        # Before the layers are read: a deferred basemap is one of them.
-        self._flush_deferred_tiles()
-        if not overrides:
-            obj = self._projected(self._compose(self.layers))
-        else:
-            # Composed from the restyled layers rather than restyled after composing: `.opts()` on an overlay
-            # applies per element *type*, so one spec cannot give two rasters different colormaps (#300).
-            obj = self._projected(self._compose(self._restyled_layers(overrides)))
-        if values.get("basemap"):
-            obj = self._with_basemap(obj, values["basemap"])
-        return obj
+        return self._reconcile_view(self.layers, overrides, values.get("basemap"))
+
+    def export_plan(
+        self,
+        *,
+        widgets: Sequence[str] = _DEFAULT_DASHBOARD_WIDGETS,
+        max_states: int = 1000,
+        max_opts: int = 3,
+    ) -> ExportPlan:
+        """Model what a ``save_app(embed=True)`` of these widgets would bake, before writing it (IN-10).
+
+        Each widget's discrete state count is read the way Panel's ``embed`` reads it — a Select contributes
+        one state per option, a continuous slider is sampled to ``max_opts`` — and their product is the
+        number of pages the export would pre-render. :class:`ExportPlan` says whether that product is within
+        ``max_states``, so a caller can decide between an offline export and a served app *before* the file
+        is written rather than after it is truncated.
+
+        Args:
+            widgets: The widgets the export would carry (as :meth:`dashboard` takes them).
+            max_states: The cap the baked-state count is judged against.
+            max_opts: How many samples a continuous slider contributes under ``embed`` (Panel's own default
+                is 3).
+
+        Returns:
+            The :class:`ExportPlan` for this widget set.
+
+        Raises:
+            ValueError: for an unknown widget name (with a did-you-mean), or ``"basemap"`` on a
+                non-Web-Mercator map — the same vocabulary :meth:`dashboard` enforces.
+
+        Examples:
+            - A colormap selector (8 options) and a sampled opacity slider (3) bake 24 pre-rendered states,
+              well within the default cap:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> plan = InteractiveMap().field(dem).export_plan(           # doctest: +SKIP
+                ...     widgets=("cmap", "alpha")
+                ... )
+                >>> plan.total_states                                        # doctest: +SKIP
+                24
+                >>> plan.embeddable                                          # doctest: +SKIP
+                True
+
+                ```
+            - Past the cap the plan is not embeddable and its ``warning`` names the breakdown, so the caller
+              serves the app instead of baking a truncated file:
+                ```python
+                >>> plan = InteractiveMap().field(dem).export_plan(           # doctest: +SKIP
+                ...     widgets=("cmap",), max_states=5
+                ... )
+                >>> plan.embeddable                                          # doctest: +SKIP
+                False
+                >>> "over the 5 cap" in plan.warning                         # doctest: +SKIP
+                True
+
+                ```
+        """
+        pn = _require_panel()
+        controls, _ = self._build_widgets(pn, widgets)
+        counts: list[tuple[str, int]] = []
+        for name, widget in zip(widgets, controls):
+            options = getattr(widget, "options", None)
+            # A Select carries its discrete options; a continuous slider has none, so embed samples it.
+            counts.append((name, len(options) if options is not None else max_opts))
+        total = prod(count for _, count in counts) if counts else 1
+        return ExportPlan(
+            widgets=tuple(counts), total_states=total, max_states=max_states
+        )
 
     def serve(self, **kwargs: Any) -> Any:
         """Mark the dashboard servable for ``panel serve`` and return it.
@@ -395,6 +675,10 @@ class DashboardMixin(_MixinBase):
         sliders are sampled). A live, unrestricted app must be served, not exported — and a
         pyramids-backed app cannot run in WASM/Pyodide (no GDAL in the browser).
 
+        Before writing, the export is modelled with :meth:`export_plan` (IN-10): if ``embed`` would bake more
+        states than the cap, the oversize is logged with the per-widget breakdown — so a truncated file is
+        explained rather than discovered. :meth:`export_plan` lets a caller check this before calling here.
+
         Args:
             path: Destination ``.html`` file (``str`` or ``pathlib.Path``).
             embed: Bake widget states for offline interactivity (``True``) or export a static
@@ -415,6 +699,13 @@ class DashboardMixin(_MixinBase):
 
                 ```
         """
+        if embed:
+            widgets = kwargs.get("widgets", _DEFAULT_DASHBOARD_WIDGETS)
+            plan = self.export_plan(widgets=widgets)
+            if plan.warning is not None:
+                from loguru import logger
+
+                logger.warning(plan.warning)
         app = self.dashboard(**kwargs)
         app.save(path, embed=embed)
         return Path(path)
@@ -482,10 +773,11 @@ class DashboardMixin(_MixinBase):
     def _control_layer_indices(self, layers: Sequence[str] | None) -> tuple[int, ...]:
         """Return the positions of the layers a control offers, in draw order.
 
-        Positions rather than ids, because the toggle labels are indexed (``"0: Image"``) and
-        :meth:`_compose_visible_layers` reads the index back out of the label it was handed.
-        ``self.layers`` and :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` are built in
-        step — each element is inserted at the position its id holds in the tree — so one indexes the other.
+        Positions, because the human-readable toggle label still shows the build-time index (``"0: Image"``);
+        the control's *value*, though, is the layer id the position maps to (IN-1), so
+        :meth:`_compose_visible_layers` reads ids, never a parsed position. ``self.layers`` and
+        :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` are built in step — each element
+        is inserted at the position its id holds in the tree — so one indexes the other.
 
         Args:
             layers: The ids the caller wants offered, or ``None`` for every layer on the map.
@@ -510,14 +802,17 @@ class DashboardMixin(_MixinBase):
         return tuple(sorted(available.index(layer_id) for layer_id in wanted))
 
     def _layer_control_widgets(
-        self, pn: Any, wanted: Sequence[str], *, labels: list, requested: bool
+        self, pn: Any, wanted: Sequence[str], *, label_to_id: dict, requested: bool
     ) -> dict:
         """Build the widgets a layer control exposes, keyed by the control each answers to.
 
         Args:
             pn: The imported panel module.
             wanted: The controls to build, from :data:`~digitalearth.base.controls.LAYER_CONTROLS`.
-            labels: The ``"i: Type"`` label per offered layer, which the toggle group lists.
+            label_to_id: The ``"i: Type"`` label → layer **id** mapping for each offered layer, in draw
+                order. The toggle group lists the labels but carries the ids as its values, so toggling,
+                reordering and removal stay keyed to the layer rather than to the position it held when the
+                control was built (IN-1).
             requested: Whether the controls were named outright, which decides how a basemap switch on a
                 non-Web-Mercator map is answered — see :meth:`_basemap_select`.
 
@@ -525,7 +820,14 @@ class DashboardMixin(_MixinBase):
             ``{control: widget}`` in build order, so the layout lays them out in it. ``"basemap"`` is absent
             when the switch was offered unprompted and the display CRS cannot take it.
         """
-        built = {"visibility": pn.widgets.CheckBoxGroup(value=labels, options=labels)}
+        # Options are a `{label: id}` mapping, so the group's *value* is the list of layer ids rather than
+        # the list of labels — the toggle carries the id, and `_compose_visible_layers` never has to parse a
+        # position back out of a label that a later reorder or removal would have invalidated (IN-1).
+        built = {
+            "visibility": pn.widgets.CheckBoxGroup(
+                value=list(label_to_id.values()), options=dict(label_to_id)
+            )
+        }
         if "opacity" in wanted:
             built["opacity"] = pn.widgets.FloatSlider(
                 label="Opacity", start=0.0, end=1.0, value=1.0
@@ -553,11 +855,15 @@ class DashboardMixin(_MixinBase):
 
         The toggle order follows **draw** order — the order `layers` is in, which is the band each layer's
         kind declares and then the order they were built in within that band, so a basemap added last is
-        still the first toggle. Drag-reorder is **not implemented**, and the reason is the **widget**, not
-        the operation: reordering a layer is ``move_layer(layer_id, index)``, which this tier has, but no tier
-        builds the drag control a switcher would need to expose it — so ``reorder=True`` is refused outright
-        rather than accepted and ignored. That is also why ``reorder`` is not one of the ``controls``: it would
-        advertise a control every tier would then have to refuse.
+        still the first toggle. ``reorder=True`` adds a ``▲``/``▼`` button per offered layer that moves it
+        within its band (``move_layer(layer_id, index)``) and re-stacks the overlay live (IN-1); it is **off
+        by default** because the buttons are furniture most maps do not need. It is still not one of the
+        ``controls``: those are the vocabulary the two tiers share, and only this tier builds the reorder
+        buttons, so advertising it there would make the web tier refuse a name this one honours.
+
+        The control is keyed by layer **id**, not by the position a layer held when it was built: toggling,
+        reordering and removing all address the layer, so the switch keeps working after the overlay is
+        re-stacked or a layer is taken off the map.
 
         Bokeh renders tiles in EPSG:3857 only, so the basemap switch is Web-Mercator-only — and which
         way that lands depends on whether it was *asked for*. Left at the default ``controls`` the switch
@@ -581,7 +887,8 @@ class DashboardMixin(_MixinBase):
                 :data:`~digitalearth.base.controls.LAYER_CONTROLS`; ``None`` (default) offers all three, and
                 ``"visibility"`` cannot be dropped. Naming a control is an explicit request — see the
                 basemap policy above.
-            reorder: Must stay ``False``; ``True`` raises ``NotImplementedError``.
+            reorder: Add a ``▲``/``▼`` reorder button per offered layer (IN-1). ``False`` (default) builds
+                visibility/opacity/basemap only.
 
         Returns:
             The same map instance, so builder calls chain. The panel is :attr:`layer_control_panel`.
@@ -592,13 +899,11 @@ class DashboardMixin(_MixinBase):
                 build; when there are no layers to control; when a ``layers`` id is not on this map; or when
                 ``"basemap"`` is named on a map whose display CRS is not EPSG:3857 (Bokeh renders tiles in
                 Web Mercator only).
-            NotImplementedError: when ``reorder=True`` is passed — reordering is not implemented,
-                and the flag is refused rather than accepted and ignored (roadmap IN-1; the static
-                twin is #216).
 
         Examples:
-            - One toggle per registered layer, labelled by index and element type, in draw order — and the
-              map comes back, so the control is part of the chain rather than the end of it:
+            - One toggle per registered layer, labelled by index and element type, in draw order, carrying
+              each layer's id as its value — and the map comes back, so the control is part of the chain
+              rather than the end of it:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
@@ -606,20 +911,16 @@ class DashboardMixin(_MixinBase):
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
                 >>> m = InteractiveMap().field(dem).points(fc).layer_control()  # doctest: +SKIP
-                >>> m.layer_control_panel[1][0].options                        # doctest: +SKIP
+                >>> list(m.layer_control_panel[1][0].options)                  # doctest: +SKIP
                 ['0: Image', '1: Points']
 
                 ```
-            - ``reorder=True`` is refused outright: the operation exists as ``move_layer``, but no tier
-              builds the drag control, and silently ignoring the flag was how the control looked inert:
+            - ``reorder=True`` adds the move buttons, so the overlay can be re-stacked from the control:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem)                            # doctest: +SKIP
-                >>> try:                                                       # doctest: +SKIP
-                ...     m.layer_control(reorder=True)
-                ... except NotImplementedError as error:
-                ...     print(str(error).split(" — ")[0])
-                layer_control(reorder=True) is not implemented
+                >>> m = InteractiveMap().field(dem).points(fc).layer_control(reorder=True)  # doctest: +SKIP
+                >>> bool(m.layer_control_panel.select(type(m.layer_control_panel[1][-1][0])))  # doctest: +SKIP
+                True
 
                 ```
             - Unprompted, the switch is furniture: on a Web-Mercator map the controls are toggles +
@@ -655,14 +956,6 @@ class DashboardMixin(_MixinBase):
         # and the flush inserts it at index 0 — so labels frozen beforehand named the layer one place to
         # their left, and the control drew the basemap where the data should be (review H10).
         self._flush_deferred_tiles()
-        if reorder:
-            raise NotImplementedError(
-                "layer_control(reorder=True) is not implemented — the operation is move_layer(layer_id, "
-                "index), which this tier has, but no tier builds the drag control a switcher would need to "
-                "expose it. Pass reorder=False "
-                "(the default); the toggles follow draw order — each layer's band, then the order you "
-                "built in within that band."
-            )
         check_control_position(position)
         wanted, requested = _controls_named(
             controls, caller="InteractiveMap.layer_control()"
@@ -672,17 +965,26 @@ class DashboardMixin(_MixinBase):
                 "layer_control() needs at least one layer — add a builder call first"
             )
         offered = self._control_layer_indices(layers)
-        labels = [f"{index}: {type(self.layers[index]).__name__}" for index in offered]
+        # Label → id, in draw order. The label still shows the build-time position for a human to read, but
+        # the control carries the **id**: a toggle, a reorder or a removal addresses the layer, not the
+        # position it happened to hold when the control was built (IN-1).
+        offered_ids = [self.layer_ids[index] for index in offered]
+        label_to_id = {
+            f"{index}: {type(self.layers[index]).__name__}": layer_id
+            for index, layer_id in zip(offered, offered_ids)
+        }
         widgets = self._layer_control_widgets(
-            pn, wanted, labels=labels, requested=requested
+            pn, wanted, label_to_id=label_to_id, requested=requested
         )
         # A layer nobody offered is not a layer the viewer chose to hide, so it is composed in whatever the
         # toggles say — the same thing `layers=` means on the web tier, where the switch lists a subset of a
-        # map that still draws all of it.
+        # map that still draws all of it. Named by id, so a reorder cannot turn "always on" into a different
+        # layer than the one the caller left off the switch.
+        offered_set = set(offered_ids)
         bound: dict = {
             "shown": widgets["visibility"],
             "always": tuple(
-                index for index in range(len(self.layers)) if index not in offered
+                layer_id for layer_id in self.layer_ids if layer_id not in offered_set
             ),
         }
         if "opacity" in widgets:
@@ -690,16 +992,91 @@ class DashboardMixin(_MixinBase):
         if "basemap" in widgets:
             bound["basemap"] = widgets["basemap"]
         view = pn.bind(self._compose_visible_layers, **bound)
+        controls_built = list(widgets.values())
+        if reorder:
+            # Reordering is `move_layer(layer_id, index)`, which this tier has; what no tier had was a
+            # widget to drive it (#242). A pair of up/down buttons per offered layer is that widget: each
+            # click moves the layer within its band and re-triggers the composed view, so the overlay
+            # re-stacks live. The toggles keep working across the move because they carry ids, not positions.
+            controls_built.append(
+                self._reorder_controls(pn, offered_ids, widgets["visibility"])
+            )
         # The corner, as far as a row of two cells can honour one: the side is the order of the cells, and
         # the top/bottom half is the column's own alignment across the row.
         column = pn.Column(
-            *widgets.values(), align="start" if position.startswith("top") else "end"
+            *controls_built, align="start" if position.startswith("top") else "end"
         )
         body = pn.panel(view)
         self._layer_control_panel = (
             pn.Row(column, body) if position.endswith("left") else pn.Row(body, column)
         )
         return self
+
+    def _reorder_controls(
+        self, pn: Any, offered_ids: Sequence[str], trigger: Any
+    ) -> Any:
+        """Build the per-layer up/down reorder buttons for ``layer_control(reorder=True)`` (IN-1).
+
+        Each offered layer gets a ``▲``/``▼`` pair whose click moves it one place within its band
+        (:meth:`~digitalearth.interactive.base.InteractiveMapBase.move_layer`) and then re-triggers the
+        composed view by poking ``trigger`` — the visibility group the bound compose function reads — so the
+        overlay re-stacks without rebuilding the control. A move past either end is a no-op: the top end
+        overshoots the list and ``move_layer`` raises ``IndexError``, which is caught; the bottom end would
+        reach index ``-1``, which ``move_layer`` instead *wraps* to the top, so a sub-zero target is refused
+        explicitly before the call (F1) rather than left to a guard that never fires for it.
+
+        Args:
+            pn: The imported panel module.
+            offered_ids: The ids the control offers, in draw order.
+            trigger: The widget whose ``value`` the composed view is bound to; poked after each move so the
+                view recomposes in the new order.
+
+        Returns:
+            A ``panel.Column`` of one ``▲``/``▼`` button row per offered layer, labelled by id.
+        """
+
+        def _mover(layer_id: str, delta: int) -> Any:
+            """Return the click handler that nudges ``layer_id`` by ``delta`` places in draw order.
+
+            Args:
+                layer_id: The layer the button moves.
+                delta: ``-1`` to move down the overlay (drawn earlier), ``+1`` to move up (drawn later).
+
+            Returns:
+                A ``callback(event)`` for ``Button.on_click``.
+            """
+
+            def _move(_event: Any) -> None:
+                """Move the layer and re-trigger the composed view, ignoring a move out of its band.
+
+                Args:
+                    _event: The Panel button event, unused — the layer and direction are captured above.
+                """
+                order = self.layer_ids
+                if layer_id not in order:  # removed since the control was built
+                    return
+                target = order.index(layer_id) + delta
+                # Refuse a sub-zero target explicitly: `move_layer` accepts a negative index and wraps it
+                # (`index % count`) to the top of the band, so `-1` on the bottom layer would invert the
+                # overlay instead of doing nothing (F1). The top end raises IndexError and is caught below.
+                if target < 0:
+                    return
+                try:
+                    self.move_layer(layer_id, target)
+                except IndexError:  # already at the top of its band — nothing to do
+                    return
+                trigger.param.trigger("value")
+
+            return _move
+
+        rows = []
+        for layer_id in offered_ids:
+            up = pn.widgets.Button(label=f"▲ {layer_id}", width=110)
+            down = pn.widgets.Button(label=f"▼ {layer_id}", width=110)
+            up.on_click(_mover(layer_id, 1))
+            down.on_click(_mover(layer_id, -1))
+            rows.append(pn.Row(up, down))
+        return pn.Column(*rows)
 
     def _basemap_select(self, pn: Any, *, requested: bool) -> Any:
         """Build the layer-control basemap ``Select``, or ``None`` on a non-Web-Mercator map.
@@ -734,10 +1111,10 @@ class DashboardMixin(_MixinBase):
 
     def _compose_visible_layers(
         self,
-        shown: list,
+        shown: Sequence[str],
         op: float = 1.0,
         basemap: Any = None,
-        always: Sequence[int] = (),
+        always: Sequence[str] = (),
     ) -> Any:
         """Compose the layers named in ``shown`` into a styled overlay (the layer-control view).
 
@@ -747,10 +1124,11 @@ class DashboardMixin(_MixinBase):
         is what merging them into one spec did (#300).
 
         Args:
-            shown: The ``"i: Type"`` labels of the visible layers (from the toggle widget).
+            shown: The **ids** of the visible layers (the toggle widget's values — IN-1). An id no longer on
+                the map (removed since the control was built) is skipped rather than raising.
             op: Opacity applied to colour-mapped layers.
             basemap: Provider name from the basemap ``Select``, or ``None`` to leave the basemap as built.
-            always: Positions of the layers the control never offered — ``layer_control(layers=...)`` lists a
+            always: Ids of the layers the control never offered — ``layer_control(layers=...)`` lists a
                 subset, and a layer nobody can toggle is not a layer anybody hid, so it is composed in
                 regardless of ``shown``. Empty when the control offered every layer.
 
@@ -759,24 +1137,21 @@ class DashboardMixin(_MixinBase):
             chosen layers in draw order at opacity ``op``, over the chosen basemap when one is selected.
         """
         gv, hv = _require_holoviz()
-        # The other widget path does this too: a deferred basemap is one of the layers, and composing
-        # without flushing drew a map that never had one (review H9). `layer_control` has already flushed,
-        # so this is a no-op there and the indices below still mean what the labels meant.
-        self._flush_deferred_tiles()
-        # Back into draw order, and de-duplicated: the toggles and the always-on set are two ways of naming
-        # positions in `self.layers`, and the overlay has to be built bottom-first either way.
+        # Ids → current positions, read fresh each call so a reorder since the control was built is honoured.
+        # De-duplicated and sorted into draw order: the toggles and the always-on set are two ways of naming
+        # layers, and the overlay has to be built bottom-first either way. The flush a stale basemap needs is
+        # inside `_reconcile_view`, the one composition path this now shares with the dashboard widgets (IN-2).
+        order = self.layer_ids
+        wanted_ids = set(shown) | set(always)
         indices = sorted(
-            {int(label.split(":")[0]) for label in shown} | {int(i) for i in always}
+            order.index(layer_id) for layer_id in wanted_ids if layer_id in order
         )
         chosen = [self.layers[index] for index in indices]
         if not chosen:
             return hv.Overlay([])
-        overlay = self._compose(self._restyled_layers({"alpha": op}, layers=chosen))
-        if basemap:
-            overlay = self._with_basemap(
-                overlay, basemap, context="layer_control basemap"
-            )
-        return overlay
+        return self._reconcile_view(
+            chosen, {"alpha": op}, basemap, basemap_context="layer_control basemap"
+        )
 
     def attribute_table(self, features: Any, *, linked: bool = False) -> Any:
         """Build a read-only ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13).
@@ -837,10 +1212,11 @@ class DashboardMixin(_MixinBase):
         """
         if linked:
             raise NotImplementedError(
-                "attribute_table(linked=True) is not implemented — two-way selection linking needs a "
-                "holoviews.link_selections shared with the map's elements (roadmap IN-5/DE-13), and the "
-                "table is disabled=True, so it cannot emit a selection. Pass linked=False (the default) "
-                "for the read-only attribute view."
+                "attribute_table(linked=True) is not implemented — this Tabulator is disabled=True, so it "
+                "cannot emit a selection. For brushing that links the map to its data use "
+                "cross_filter(...), whose link_selections instance carries selection_expr back into Python, "
+                "or annotate(...) for an editable attribute table over a drawn layer. Pass linked=False "
+                "(the default) for the read-only attribute view."
             )
         pn = _require_panel()
         pn.extension("tabulator")
@@ -871,3 +1247,53 @@ class DashboardMixin(_MixinBase):
             return tuple(params)
         location.sync(self, {name: name for name in params})
         return location
+
+    def share_url(self, base_url: str = "") -> str:
+        """Encode the **whole figure** into a shareable URL, not four hardcoded names (IN-14).
+
+        Where :meth:`share` syncs a fixed handful of view parameters into a running server's URL, this
+        serialises the entire :attr:`~digitalearth.interactive.base.InteractiveMapBase.figure_spec` — every
+        layer, its source, its symbology and the view — into a URL-safe ``?state=`` blob, so a link
+        reconstructs the map exactly through
+        :meth:`~digitalearth.interactive.base.InteractiveMapBase.from_share_url`. It needs no server, which is
+        what makes it the general answer the four-name ``share`` is not.
+
+        The figure must be one that can be *written*: a layer built from an in-memory ``FeatureCollection`` or
+        dataset has an ``object:`` source that only this process can open, and
+        :meth:`~digitalearth.base.spec.FigureSpec.to_dict` refuses it — give the builders a path or URL for a
+        figure that can be shared (the same limit :meth:`save`-to-figure has).
+
+        Args:
+            base_url: An optional base to hang the query on, e.g. ``"https://host/app"``. Empty returns the
+                query string alone (``"?state=…"``).
+
+        Returns:
+            The URL carrying the encoded figure.
+
+        Raises:
+            ValueError: when the figure holds an in-memory (``object:``) source that cannot be serialised.
+
+        Examples:
+            - A sourceless map round-trips through the URL it produces:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> url = InteractiveMap(crs=4326).share_url()
+                >>> url.startswith("?state=")
+                True
+                >>> InteractiveMap.from_share_url(url).crs
+                4326
+
+                ```
+        """
+        import base64
+        import json
+
+        state = self.figure_spec.to_dict()
+        blob = base64.urlsafe_b64encode(json.dumps(state).encode("utf-8")).decode(
+            "ascii"
+        )
+        # Strip a trailing separator first, so a base already ending in `?` or `&` does not produce `?&state=`
+        # or `&&state=` (L1); the separator is then `&` only when a real query already follows the `?`.
+        base = base_url.rstrip("?&")
+        separator = "&" if "?" in base else "?"
+        return f"{base}{separator}state={blob}"

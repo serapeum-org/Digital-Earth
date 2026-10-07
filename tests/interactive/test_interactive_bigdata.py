@@ -55,6 +55,52 @@ def big_points():
     )
 
 
+class TestRasterizeFrozenScale:
+    """``rasterize`` can pin a colour scale so it does not re-range per viewport (IN-4)."""
+
+    def test_clim_and_cnorm_reach_the_recorded_style(self, m, big_points):
+        """A frozen ``(vmin, vmax)`` and ``cnorm`` are recorded on the layer's style, as a tuple.
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.rasterize(
+            big_points,
+            dynamic=False,
+            width=60,
+            height=40,
+            clim=(0.0, 20.0),
+            cnorm="eq_hist",
+        )
+        common = m.style_of(0)["common"]
+        assert common["clim"] == (0.0, 20.0), common
+        assert common["cnorm"] == "eq_hist", common
+
+    def test_the_frozen_scale_travels_in_the_figure(self, m, big_points):
+        """The pair is recorded in the JSON-safe list spelling, so a saved figure keeps it (R2-M13).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.rasterize(big_points, dynamic=False, width=60, height=40, clim=(1.0, 9.0))
+        props = m.figure_spec.layers.get(m.layer_ids[0]).symbology.props
+        # Recorded as a plain pair of floats (the spec freezes the travelling list to a tuple to hash it),
+        # which is what round-trips through `to_dict`/`from_dict` — not held beside the layer (R2-M13).
+        assert tuple(props["common"]["clim"]) == (1.0, 9.0), props["common"]
+
+    def test_no_clim_leaves_the_scale_free(self, m, big_points):
+        """Without ``clim`` the layer records none, so Bokeh keeps auto-ranging (the default).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.rasterize(big_points, dynamic=False, width=60, height=40)
+        assert "clim" not in m.style_of(0)["common"]
+
+
 class TestRasterize:
     """``rasterize`` — numeric density images with stable canvases."""
 

@@ -127,6 +127,34 @@ def _require_holoviz() -> tuple:
     return gv, hv
 
 
+def _epsg_of(crs: Any) -> int | None:
+    """Return the EPSG code a GeoViews element's ``crs`` resolves to, or ``None`` when it does not (IN-16).
+
+    A GeoViews element carries a cartopy projection. The clear-cut case — a projection that *is* a known
+    EPSG code — resolves through its ``to_epsg()``; a bare ``PlateCarree`` or a custom projection resolves to
+    no code, and the guard that reads this stays silent for it rather than guess a mismatch (pyproj is a
+    forbidden GIS competitor here — :mod:`tests.test_no_competitor_imports` — so there is deliberately no
+    deeper resolver). GeoViews' own ``find_crs`` still refuses a genuinely incompatible overlay at render
+    time, so the unresolved case loses nothing but the early, clearer message.
+
+    Args:
+        crs: A cartopy CRS read off an element's ``crs`` attribute.
+
+    Returns:
+        The EPSG integer, or ``None`` when the CRS resolves to none.
+    """
+    to_epsg = getattr(crs, "to_epsg", None)
+    if not callable(to_epsg):
+        return None
+    try:
+        code = to_epsg()
+    except (
+        Exception
+    ):  # pragma: no cover - a CRS whose to_epsg raises is treated as unresolved
+        return None
+    return int(code) if code else None
+
+
 def _masked_to_nan(values: Any) -> Any:
     """Return ``values`` as a float array with masked/nodata cells as ``NaN``.
 
@@ -202,6 +230,13 @@ def cmap_name(cmap: Any) -> str | None:
 
     name = getattr(cmap, "name", None)
     return name if isinstance(name, str) and name in colormaps else None
+
+
+#: Sentinel + capture slot for the Bokeh renderer's original theme (IN-18 / M1). The renderer theme is
+#: process-global `hv.Store` state, not per-figure, so a themeless map restores this captured default rather
+#: than leaving another map's theme in force. Captured once, the first time any map applies a theme.
+_THEME_UNSET = object()
+_ORIGINAL_BOKEH_THEME: Any = _THEME_UNSET
 
 
 #: The property every builder records its resolved style under, and every drawer reads it back from.
@@ -505,7 +540,12 @@ class InteractiveMapBase:
         self.title = title
         # Display projection for the matplotlib-backend path (DI.9); None = Bokeh Web-Mercator.
         self._projection: Any = None
-        # Draw-tool stream (DI.8), set by the interaction mixin's draw(); None until a draw tool is added.
+        # A Bokeh theme applied to every render of this map (IN-18); None = Bokeh's default. A built-in
+        # name or a `bokeh.themes.Theme`, set through `theme()` and applied in `render()`/`_reconcile_view`.
+        self._theme: Any = None
+        # Draw-tool streams (DI.8 / IN-11). `draw()` appends each tool's stream here, so a map can carry
+        # several at once; `_draw_stream` stays the most recent for the `drawn_geometry` single-tool read.
+        self._draw_streams: list[Any] = []
         self._draw_stream: Any = None
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
         # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
@@ -917,6 +957,58 @@ class InteractiveMapBase:
         scene.draw_figure(figure)
         return scene
 
+    @classmethod
+    def from_share_url(cls, url: str, **scene_kwargs: Any) -> Self:
+        """Rebuild a map from a URL produced by ``share_url`` (IN-14).
+
+        The decode half of :meth:`~digitalearth.interactive.dashboard.DashboardMixin.share_url`: it reads the
+        ``?state=`` blob, decodes the figure and draws it through :meth:`from_figure`. A figure that carried
+        only path/URL sources reconstructs fully; one whose sources were in-memory could not be encoded in
+        the first place, so there is no half-open case here.
+
+        Args:
+            url: A URL (or bare query string) carrying a ``state=`` parameter ``share_url`` wrote.
+            **scene_kwargs: Passed to the constructor, overriding what the figure's viewport carries.
+
+        Returns:
+            The map, with every layer drawn.
+
+        Raises:
+            ValueError: when the URL carries no ``state=`` parameter.
+
+        Examples:
+            - A map encoded with ``share_url`` is rebuilt from the link, display CRS and all (needs no
+              engine for a sourceless map):
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> url = InteractiveMap(crs=4326).share_url()
+                >>> InteractiveMap.from_share_url(url).crs
+                4326
+
+                ```
+            - A URL with no ``state=`` is refused rather than silently returning an empty map:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap.from_share_url("https://host/app?tab=1")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: no shareable state in ...
+
+                ```
+        """
+        import base64
+        import json
+        from urllib.parse import parse_qs, urlparse
+
+        query = urlparse(url).query or url.lstrip("?")
+        values = parse_qs(query).get("state")
+        if not values:
+            raise ValueError(
+                f"no shareable state in {url!r}; expected a ?state= parameter from share_url()"
+            )
+        state = json.loads(base64.urlsafe_b64decode(values[0].encode("ascii")))
+        return cls.from_figure(FigureSpec.from_dict(state), **scene_kwargs)
+
     def get_layer(self, layer_id: str) -> LayerSpec:
         """Return the description of one layer, by id.
 
@@ -1293,6 +1385,7 @@ class InteractiveMapBase:
         # (:mod:`digitalearth.base.custom`).
         from digitalearth.interactive.renderer import DRAWN_KINDS
 
+        self._guard_element_crs(element, caller="add_layer")
         resolved = kind or custom_kind("holoviews")
         layer_id = self._layer_id(resolved.split(":")[-1], name)
         # Everything from here to the draw is undone together if any of it raises. The layer is described
@@ -1450,6 +1543,44 @@ class InteractiveMapBase:
             disk, or drawn on another map, gives every layer.
         """
         return dict(self._layer_held.get(layer_id) or {})
+
+    def _guard_element_crs(self, element: Any, *, caller: str) -> None:
+        """Refuse an element handed in directly whose CRS is not this map's display CRS (IN-16).
+
+        The tier pre-reprojects every builder input through pyramids, so a layer built here is always in the
+        display CRS. An element a caller builds and hands to :meth:`add_layer` (or to ``rasterize`` /
+        ``datashade``) is not covered by that, and a GeoViews element silently drawn in the wrong CRS
+        mis-registers with the rest of the map rather than failing — the mis-overlay GeoViews' own ``find_crs``
+        calls worse than a crash. Both CRSs are named in the refusal when the mismatch resolves to EPSG codes;
+        when it cannot (:func:`_epsg_of` returns ``None``), GeoViews still refuses a genuinely incompatible
+        overlay at render time.
+
+        **When it fires depends on the path.** :meth:`add_layer` calls this before it registers the element,
+        so a bad-CRS custom layer is refused at the builder call. ``rasterize`` / ``datashade`` take the
+        element as their ``source=`` and defer drawing to their drawer, so the guard runs there — at
+        ``render``/compose time — not at the builder call. Either way the layer is refused rather than drawn
+        misaligned; only the moment differs.
+
+        Args:
+            element: The object a caller handed in. ``None`` (a builder's drawn kind) and a plain HoloViews
+                element (no ``crs`` — already in display coordinates by contract) are both left alone.
+            caller: The public method quoted in the refusal.
+
+        Raises:
+            ValueError: when the element carries a CRS that resolves to a different EPSG code than the
+                display CRS.
+        """
+        crs = getattr(element, "crs", None)
+        if crs is None:
+            return
+        code = _epsg_of(crs)
+        if code is not None and not same_crs(code, self.crs):
+            raise ValueError(
+                f"{caller}() was handed an element in EPSG:{code}, but this map's display CRS is "
+                f"EPSG:{self.crs}; it would mis-register with the other layers. Reproject the data through "
+                f"pyramids to the display CRS before building the element, or build the map with "
+                f"InteractiveMap(crs={code})."
+            )
 
     def _needs_reproject(self, data: Any) -> bool:
         """Whether `data` must be reprojected (via pyramids) to the display CRS.
@@ -1886,6 +2017,86 @@ class InteractiveMapBase:
             return drawn[0]
         return reduce(mul, drawn)
 
+    #: The Bokeh built-in theme names :meth:`theme` accepts, besides a ``bokeh.themes.Theme`` instance. Held
+    #: as a constant so the refusal can list them without importing bokeh until a theme is actually asked for.
+    _BUILTIN_THEMES: tuple[str, ...] = (
+        "caliber",
+        "carbon",
+        "contrast",
+        "dark_minimal",
+        "light_minimal",
+        "night_sky",
+    )
+
+    def theme(self, theme: Any) -> Self:
+        """Set the Bokeh theme every render of this map draws under (IN-18).
+
+        A dark-mode map used to be expressible only by threading ``bgcolor`` through ``**opts`` at every
+        builder call; this records one theme on the map instead, applied to the Bokeh renderer whenever the
+        map composes (:meth:`render`, the dashboard widgets, :meth:`save`). It is a builder, so it chains with
+        the rest.
+
+        Args:
+            theme: A Bokeh built-in theme name — one of :data:`_BUILTIN_THEMES` (``"dark_minimal"``,
+                ``"night_sky"``, …) — or a ``bokeh.themes.Theme`` instance built from a YAML/JSON file or a
+                dict. ``None`` clears the theme back to Bokeh's default.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: for a string that is not one of the built-in theme names.
+
+        Examples:
+            - A built-in dark theme, set once and kept for every render:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().theme("dark_minimal")._theme
+                'dark_minimal'
+
+                ```
+            - An unknown name is refused, with the built-ins named:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().theme("darkmode")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: unknown Bokeh theme 'darkmode'; choose one of [...] or pass a bokeh.themes.Theme
+
+                ```
+        """
+        if isinstance(theme, str) and theme not in self._BUILTIN_THEMES:
+            raise ValueError(
+                f"unknown Bokeh theme {theme!r}; choose one of {list(self._BUILTIN_THEMES)} or pass a "
+                f"bokeh.themes.Theme"
+            )
+        self._theme = theme
+        return self
+
+    def _apply_theme(self) -> None:
+        """Apply this map's theme to the Bokeh renderer, so the next composition draws under it (IN-18).
+
+        HoloViews holds the theme on its Bokeh renderer rather than on the element, so the theme is set there
+        each time the map composes. The renderer's original theme is captured once — the first time any map
+        applies one, before it is ever overwritten — and a map with ``_theme is None`` **restores** that
+        captured default rather than leaving the renderer as the last themed map left it (M1). So
+        ``theme(None)`` genuinely clears, and a themeless map does not inherit another map's theme; the cost
+        is one idempotent write per render, which the global, process-wide ``hv.Store`` renderer theme makes
+        unavoidable — it is not per-figure state.
+        """
+        _require_holoviz()  # registers the bokeh renderer and gives the actionable error when absent
+        import holoviews as hv
+
+        global _ORIGINAL_BOKEH_THEME
+        renderer = hv.Store.renderers["bokeh"]
+        if _ORIGINAL_BOKEH_THEME is _THEME_UNSET:
+            # Capture whatever was in force before this process first set a theme through us — Bokeh's own
+            # default in the usual case — so a None-themed map can put it back.
+            _ORIGINAL_BOKEH_THEME = renderer.theme
+        renderer.theme = (
+            self._theme if self._theme is not None else _ORIGINAL_BOKEH_THEME
+        )
+
     def render(self) -> Any:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
 
@@ -1920,6 +2131,7 @@ class InteractiveMapBase:
                 ```
         """
         self._flush_deferred_tiles()
+        self._apply_theme()
         return self._projected(self._compose(self.layers))
 
     # Note: the dashboard's widget paths call `_flush_deferred_tiles`, `_compose` and `_projected`

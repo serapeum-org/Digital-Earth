@@ -164,6 +164,132 @@ class InteractionMixin(_MixinBase):
 
         return self.on_tap(_profile, source=source)
 
+    def _source_layer(self, source: Any, method: str) -> Any:
+        """Resolve the element a stream listens on: the caller's, else the layer added last (IN-8).
+
+        Args:
+            source: The element the caller passed, or ``None`` to default to the last layer.
+            method: The public method asking, named in the refusal.
+
+        Returns:
+            The element to bind the stream to.
+
+        Raises:
+            ValueError: when ``source`` is ``None`` and the map has no layer yet.
+        """
+        if source is not None:
+            return source
+        if self._last_layer_id is None:
+            raise ValueError(
+                f"{method}() needs a source layer — add a builder call or pass source="
+            )
+        return self.layers[self._last_layer_index(method)]
+
+    def on_select(
+        self, callback: Callable, *, kind: str = "box", source: Any = None
+    ) -> Any:
+        """Wire a selection stream to ``callback`` and return the resulting ``DynamicMap`` (DI.8 / IN-8).
+
+        The selection half of :meth:`on_tap`: a box, a lasso or an index selection on the map hands its
+        result back to Python, so brushing a region returns data rather than only highlighting it. Needs a
+        live kernel/server to round-trip — in static HTML the selection tool draws but fires no callback.
+
+        Args:
+            callback: Invoked with the stream's own keyword on each selection — ``bounds`` (a
+                ``(x0, y0, x1, y1)`` tuple) for ``"box"``, ``geometry`` (an ``(N, 2)`` array) for
+                ``"lasso"``, ``index`` (a list of selected row indices) for ``"index"``. It returns a
+                HoloViews element (e.g. a side panel of the selected rows).
+            kind: ``"box"`` (``BoundsXY``), ``"lasso"`` (``Lasso``) or ``"index"`` (``Selection1D``).
+            source: The element the stream listens on; defaults to the layer the caller added last.
+
+        Returns:
+            The ``hv.DynamicMap`` driven by the selection stream.
+
+        Raises:
+            ValueError: for an unknown ``kind``, or when there is no source layer.
+
+        Examples:
+            - A box selection wires a ``BoundsXY`` stream onto the last layer; the returned ``DynamicMap``
+              carries it, ready to fire its callback once a kernel is live:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> import holoviews as hv                                    # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> dmap = InteractiveMap().field(dem).on_select(             # doctest: +SKIP
+                ...     lambda bounds: hv.Points([]), kind="box"
+                ... )
+                >>> [type(stream).__name__ for stream in dmap.streams]        # doctest: +SKIP
+                ['BoundsXY']
+
+                ```
+            - ``kind="index"`` listens for the picked row indices instead:
+                ```python
+                >>> dmap = InteractiveMap().field(dem).on_select(             # doctest: +SKIP
+                ...     lambda index: hv.Points([]), kind="index"
+                ... )
+                >>> [type(stream).__name__ for stream in dmap.streams]        # doctest: +SKIP
+                ['Selection1D']
+
+                ```
+        """
+        _require_holoviz()
+        from holoviews import streams
+
+        src = self._source_layer(source, "on_select")
+        makers = {
+            "box": streams.BoundsXY,
+            "lasso": streams.Lasso,
+            "index": streams.Selection1D,
+        }
+        if kind not in makers:
+            raise ValueError(
+                f"unknown selection kind {kind!r}; choose 'box'/'lasso'/'index'"
+            )
+        import holoviews as hv
+
+        stream = makers[kind](source=src)
+        return hv.DynamicMap(callback, streams=[stream])
+
+    def on_reset(self, callback: Callable, *, source: Any = None) -> Any:
+        """Wire a ``PlotReset`` stream to ``callback`` and return the ``DynamicMap`` (DI.8 / IN-8).
+
+        Fires when the viewer clicks Bokeh's reset tool, which is how a map restores its own derived state
+        (a recomputed overview, a cleared selection) rather than leaving it stale. Needs a live kernel.
+
+        Args:
+            callback: Invoked with ``resetting`` (a bool) on each reset; returns a HoloViews element.
+            source: The element the stream listens on; defaults to the layer the caller added last.
+
+        Returns:
+            The ``hv.DynamicMap`` driven by the reset stream.
+
+        Raises:
+            ValueError: when there is no source layer.
+
+        Examples:
+            - A ``PlotReset`` stream is wired onto the last layer, so clicking Bokeh's reset tool re-runs the
+              callback:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> import holoviews as hv                                    # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> dmap = InteractiveMap().field(dem).on_reset(              # doctest: +SKIP
+                ...     lambda resetting: hv.Points([])
+                ... )
+                >>> [type(stream).__name__ for stream in dmap.streams]        # doctest: +SKIP
+                ['PlotReset']
+
+                ```
+        """
+        _require_holoviz()
+        import holoviews as hv
+        from holoviews import streams
+
+        src = self._source_layer(source, "on_reset")
+        return hv.DynamicMap(callback, streams=[streams.PlotReset(source=src)])
+
     def draw(
         self,
         kind: str = "box",
@@ -214,6 +340,10 @@ class InteractionMixin(_MixinBase):
             raise ValueError(
                 f"unknown draw kind {kind!r}; choose 'box'/'poly'/'point'/'freehand'"
             )
+        # Appended, not overwritten (IN-11): a map can carry several draw tools at once, and a second
+        # `draw()` no longer silently replaces the first tool's binding. `_draw_stream` tracks the most
+        # recent so the single-tool `drawn_geometry` read keeps meaning what it did.
+        self._draw_streams.append(stream)
         self._draw_stream = stream
         self.add_layer(
             layer,
@@ -244,6 +374,101 @@ class InteractionMixin(_MixinBase):
             return (data["x0"][0], data["y0"][0], data["x1"][0], data["y1"][0])
         return data
 
+    @property
+    def drawn_geometries(self) -> list:
+        """Every draw tool's captured geometry, in the order the tools were added (IN-11).
+
+        A map can carry several :meth:`draw` tools now; :attr:`drawn_geometry` reads the most recent, and
+        this reads them all. Each entry is what that one tool captured — a ``(xmin, ymin, xmax, ymax)`` bbox
+        for a box tool, the raw stream ``data`` dict otherwise — with a tool that has captured nothing
+        skipped. Empty before anything is drawn, or with no live kernel.
+
+        Returns:
+            One captured geometry per draw tool that has captured something, oldest first.
+
+        Examples:
+            - Two draw tools on one map, read back together once a kernel has captured each — the box as a
+              bbox tuple, the point tool as its raw stream dict:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> m = InteractiveMap().draw("box").draw("point")            # doctest: +SKIP
+                >>> m._draw_streams[0].event(                                 # doctest: +SKIP
+                ...     data={"x0": [1.0], "y0": [2.0], "x1": [3.0], "y1": [4.0]}
+                ... )
+                >>> m.drawn_geometries[0]                                     # doctest: +SKIP
+                (1.0, 2.0, 3.0, 4.0)
+
+                ```
+            - Nothing drawn yet reads as an empty list, not an error:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> InteractiveMap().draw("box").drawn_geometries             # doctest: +SKIP
+                []
+
+                ```
+        """
+        captured = []
+        for stream in self._draw_streams:
+            data = getattr(stream, "data", None)
+            if not data:
+                continue
+            if {"x0", "y0", "x1", "y1"} <= set(data):
+                if not data["x0"]:
+                    continue
+                captured.append(
+                    (data["x0"][0], data["y0"][0], data["x1"][0], data["y1"][0])
+                )
+            else:
+                captured.append(data)
+        return captured
+
+    def annotate(self, element: Any = None, **kwargs: Any) -> Any:
+        """Open HoloViews' annotator — a draw tool paired with an editable attribute table (DI.8 / IN-11).
+
+        Where :meth:`draw` attaches a bare draw stream, this composes GeoViews' geographic adaptation of
+        ``holoviews.annotate``: the drawn geometry gets an editable table of its vertices and any annotation
+        columns, and the edits round-trip to Python through the annotator's ``annotated``/``selected``
+        objects. Needs a live kernel/server. The annotation itself is not reprojected — build the element in
+        the display CRS (the mixed-CRS guard on :meth:`add_layer` is the check for a layer, and this is the
+        same contract).
+
+        Args:
+            element: The GeoViews element to annotate — ``gv.Points``/``gv.Path``/``gv.Polygons`` in the
+                display CRS. ``None`` annotates an empty ``gv.Points`` layer, i.e. "let me draw points and
+                edit their table".
+            **kwargs: Forwarded to ``holoviews.annotate`` — ``annotations`` (the attribute columns),
+                ``num_objects``, ``vertex_annotations``, ``table_transforms``, ….
+
+        Returns:
+            The ``holoviews.annotate`` **instance** it was applied through: ``.annotated`` is the edited
+            element and ``.selected`` the picked rows, both live, and displaying the instance shows the
+            draw-tool-plus-table layout. A fresh instance per call, so two annotators do not share state.
+
+        Examples:
+            - Open an annotator with one attribute column; its ``.annotated`` holds the edited geometry and
+              ``.selected`` the picked rows, both read back into Python once a kernel is live:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> annotator = InteractiveMap().annotate(annotations=["label"])  # doctest: +SKIP
+                >>> annotator.annotated.crs is not None                       # doctest: +SKIP
+                True
+                >>> "label" in annotator.annotated.columns                    # doctest: +SKIP
+                True
+
+                ```
+        """
+        gv, _ = _require_holoviz()
+        from holoviews import annotate as _annotate
+
+        target = (
+            element
+            if element is not None
+            else gv.Points([], crs=gv.util.process_crs(self.crs))
+        )
+        annotator = _annotate.instance()
+        annotator(target, **kwargs)
+        return annotator
+
     def aoi_crop(self, dataset: Any) -> Any:
         """Crop ``dataset`` (in pyramids) to the drawn box and return the clipped raster (DI.8).
 
@@ -266,17 +491,58 @@ class InteractionMixin(_MixinBase):
             )
         return dataset.crop(bbox=bbox, epsg=self.crs)
 
-    def cross_filter(self, *panels: Any) -> Any:
-        """Link selections across ``panels`` so brushing one cross-filters the others (DI.8).
+    def cross_filter(
+        self,
+        *panels: Any,
+        selection_mode: str = "union",
+        cross_filter_mode: str = "intersect",
+        index_cols: list | None = None,
+        selected_color: str | None = None,
+        unselected_color: str | None = None,
+        unselected_alpha: float = 0.1,
+        show_regions: bool = True,
+    ) -> Any:
+        """Link selections across ``panels`` so brushing one cross-filters the others (DI.8 / IN-5).
 
-        Wraps ``holoviews.selection.link_selections``; ``selection_expr``/``filter`` on the returned
-        object pull the selected rows back into Python. Needs a live kernel/server.
+        Wraps ``holoviews.selection.link_selections`` and — the point of IN-5 — exposes the parameters that
+        decide *how* a brush selects and lets the result be read back into Python: ``selection_expr`` on the
+        returned linker is the live predicate, and ``selection_param(element)`` hands back the filtered data.
+        So brushing an interactive map returns data, the same payoff :meth:`aoi_crop` already gives a drawn
+        box. Needs a live kernel/server.
 
         Args:
             *panels: HoloViews elements/overlays to link (defaults to this map's render when empty).
+            selection_mode: How a new box combines with the current selection *on one element* —
+                ``"union"`` (default), ``"intersect"``, ``"overwrite"`` or ``"inverse"``.
+            cross_filter_mode: How selections combine *across* elements — ``"intersect"`` (default) or
+                ``"overwrite"``.
+            index_cols: Columns that identify a row across elements, so a selection in one table highlights
+                the same records in another; ``None`` links by the geometry/position instead.
+            selected_color: Colour drawn for selected glyphs; ``None`` keeps HoloViews' default.
+            unselected_color: Colour drawn for unselected glyphs; ``None`` keeps the default.
+            unselected_alpha: Opacity of the unselected glyphs, so the selection stands out.
+            show_regions: Draw the selection geometry (the box/lasso) over the data.
 
         Returns:
-            The ``link_selections`` instance applied to the panels.
+            The ``link_selections`` instance applied to the panels. Read ``.selection_expr`` for the live
+            predicate, or ``.selection_param(element)`` for the filtered data.
+
+        Examples:
+            - Link a map to a companion panel and read the brush settings back off the linker; its
+              ``selection_expr`` is the live predicate a kernel updates as you drag:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> linker = InteractiveMap().field(dem).cross_filter(        # doctest: +SKIP
+                ...     selection_mode="intersect", unselected_alpha=0.3
+                ... )
+                >>> linker.selection_mode                                     # doctest: +SKIP
+                'intersect'
+                >>> linker.unselected_alpha                                   # doctest: +SKIP
+                0.3
+
+                ```
         """
         gv, hv = _require_holoviz()
         from holoviews.selection import link_selections
@@ -285,6 +551,18 @@ class InteractionMixin(_MixinBase):
         combined = targets[0]
         for panel in targets[1:]:
             combined = combined + panel
-        linker = link_selections.instance()
+        options: dict[str, Any] = {
+            "selection_mode": selection_mode,
+            "cross_filter_mode": cross_filter_mode,
+            "unselected_alpha": unselected_alpha,
+            "show_regions": show_regions,
+        }
+        if index_cols is not None:
+            options["index_cols"] = index_cols
+        if selected_color is not None:
+            options["selected_color"] = selected_color
+        if unselected_color is not None:
+            options["unselected_color"] = unselected_color
+        linker = link_selections.instance(**options)
         linker(combined)
         return linker

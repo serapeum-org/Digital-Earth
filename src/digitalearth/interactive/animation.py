@@ -37,22 +37,51 @@ class AnimationMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
-    def _time_dynamicmap(self) -> Any:
-        """Return the registered time-cube ``hv.DynamicMap`` layer.
+    def _animatable_layers(self) -> list:
+        """Return every temporal layer that can be animated, as ``(layer_id, element)`` (IN-12).
+
+        A temporal layer is a registered ``hv.DynamicMap`` with key dimensions — a ``timecube`` today, and
+        any other slider-driven layer a future builder registers. Listing **all** of them is what lifts the
+        old "first ``DynamicMap`` only" limit: a map with two time layers can animate either by id.
 
         Returns:
-            The first ``hv.DynamicMap`` among the layers (a ``timecube``).
-
-        Raises:
-            ValueError: when no ``timecube`` layer has been added.
+            The animatable layers in draw order, each as ``(layer_id, element)``.
         """
         gv, hv = _require_holoviz()
-        for layer in self.layers:
-            if isinstance(layer, hv.DynamicMap) and layer.kdims:
-                return layer
-        raise ValueError(
-            "no time cube to animate — call timecube(collection) before play()/save_animation()"
-        )
+        return [
+            (layer_id, element)
+            for layer_id, element in zip(self.layer_ids, self.layers)
+            if isinstance(element, hv.DynamicMap) and element.kdims
+        ]
+
+    def _time_dynamicmap(self, layer: str | None = None) -> Any:
+        """Return the temporal ``hv.DynamicMap`` to animate — a named one, or the first (IN-12).
+
+        Args:
+            layer: The id of the temporal layer to animate; ``None`` takes the first animatable layer in
+                draw order (the behaviour before a map could carry more than one).
+
+        Returns:
+            The chosen ``hv.DynamicMap``.
+
+        Raises:
+            ValueError: when no layer is animatable, or when ``layer`` names one that is not — the message
+                lists the layers that are.
+        """
+        animatable = self._animatable_layers()
+        if layer is not None:
+            for layer_id, element in animatable:
+                if layer_id == layer:
+                    return element
+            raise ValueError(
+                f"layer {layer!r} is not an animatable temporal layer; the animatable layers are "
+                f"{[layer_id for layer_id, _ in animatable]}"
+            )
+        if not animatable:
+            raise ValueError(
+                "no time cube to animate — call timecube(collection) before play()/save_animation()"
+            )
+        return animatable[0][1]
 
     def _to_holomap(self, dmap: Any) -> Any:
         """Materialise a lazy ``DynamicMap`` into a finite ``HoloMap`` (every frame evaluated).
@@ -67,7 +96,9 @@ class AnimationMixin(_MixinBase):
         keys = list(dmap.kdims[0].values)
         return hv.HoloMap({key: dmap[key] for key in keys}, kdims=dmap.kdims)
 
-    def play(self, *, fps: float = DEFAULT_FPS, loop: bool = True) -> Any:
+    def play(
+        self, *, fps: float = DEFAULT_FPS, loop: bool = True, layer: str | None = None
+    ) -> Any:
         """Wrap the time cube in a Panel layout with an auto-advancing ``Player`` widget.
 
         Args:
@@ -75,6 +106,8 @@ class AnimationMixin(_MixinBase):
                 :data:`~digitalearth.base.animation.DEFAULT_FPS`, the one rate every tier reads (#256), so
                 the same animation plays at the same speed on every backend.
             loop: Loop at the end (``True``) or stop (``False``).
+            layer: The id of the temporal layer to animate (IN-12); ``None`` animates the first one, which
+                is the only one most maps carry.
 
         Returns:
             A ``panel.viewable.Viewable`` hosting the map + a bound time ``Player``.
@@ -121,7 +154,7 @@ class AnimationMixin(_MixinBase):
         import panel as pn
 
         gv, hv = _require_holoviz()
-        dmap = self._time_dynamicmap()
+        dmap = self._time_dynamicmap(layer)
         values = list(dmap.kdims[0].values)
         # DiscretePlayer (not Player) steps through arbitrary labelled values (ints / datetimes).
         player = pn.widgets.DiscretePlayer(
@@ -134,7 +167,12 @@ class AnimationMixin(_MixinBase):
         return pn.Column(pn.panel(view), player)
 
     def save_animation(
-        self, path: Any, *, fps: float = DEFAULT_FPS, **kwargs: Any
+        self,
+        path: Any,
+        *,
+        fps: float = DEFAULT_FPS,
+        layer: str | None = None,
+        **kwargs: Any,
     ) -> Path:
         """Export the time cube as a GIF/MP4 (matplotlib backend) or a scrubber HTML.
 
@@ -146,6 +184,7 @@ class AnimationMixin(_MixinBase):
             path: Output file (``.gif`` / ``.mp4`` / ``.html``), as ``str`` or ``pathlib.Path``.
             fps: Frames per second. Defaults to :data:`~digitalearth.base.animation.DEFAULT_FPS`, the
                 one rate every tier reads (#256).
+            layer: The id of the temporal layer to export (IN-12); ``None`` exports the first one.
             **kwargs: Forwarded to :func:`holoviews.save`.
 
         Returns:
@@ -193,7 +232,7 @@ InteractiveMapBase.save` (#248).
                 ```
         """
         gv, hv = _require_holoviz()
-        holomap = self._to_holomap(self._time_dynamicmap())
+        holomap = self._to_holomap(self._time_dynamicmap(layer))
         suffix = str(path).lower().rsplit(".", 1)[-1]
         if suffix == "html":
             hv.save(holomap, path, fmt="scrubber", fps=fps, **kwargs)

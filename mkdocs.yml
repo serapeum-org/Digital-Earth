@@ -196,6 +196,7 @@ nav:
     - Backend support matrix: reference/support-matrix.md
     - Maps (matplotlib): reference/static_map.md
     - Scenes & multi-panel figures (matplotlib): reference/static_scene.md
+    - Interactive maps (HoloViz): reference/interactive_map.md
     - Web maps: reference/web_map.md
     - 3-D scenes (PyVista): reference/three_d.md
     - Keyed basemaps: reference/basemaps.md

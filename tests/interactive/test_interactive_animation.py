@@ -35,6 +35,24 @@ class TestPlay:
         assert players, "play() must include a DiscretePlayer widget"
         assert len(players[0].options) == 3, "the Player must span the three frames"
 
+    def test_play_a_named_temporal_layer(self):
+        """IN-12 — with two time cubes, ``play(layer=...)`` animates the chosen one, not just the first."""
+        from pyramids.dataset.collection import DatasetCollection
+
+        dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
+        m = InteractiveMap().timecube(dc, name="rain").timecube(dc, name="temp")
+        app = m.play(layer="temp")
+        assert isinstance(app, pn.layout.Column)
+
+    def test_play_an_unknown_layer_lists_the_animatable_ones(self):
+        """A layer id that is not an animatable temporal layer is refused, naming the ones that are."""
+        from pyramids.dataset.collection import DatasetCollection
+
+        dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
+        m = InteractiveMap().timecube(dc, name="rain")
+        with pytest.raises(ValueError, match="not an animatable temporal layer"):
+            m.play(layer="nope")
+
     def test_play_without_timecube_raises(self):
         interactiveMap = InteractiveMap()
         with pytest.raises(ValueError, match="no time cube"):
