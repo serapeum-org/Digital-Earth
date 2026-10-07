@@ -126,6 +126,10 @@ _DASHBOARD_WIDGETS: tuple[str, ...] = ("cmap", "alpha", "basemap")
 #: the export-size pre-check in `save_app` cannot disagree with what `dashboard` actually builds (F6).
 _DEFAULT_DASHBOARD_WIDGETS: tuple[str, ...] = ("cmap", "alpha")
 
+#: The entry-point name quoted in the Web-Mercator refusal for the dashboard's basemap widget — one spelling
+#: shared by the widget builder, `_with_basemap` and `_reconcile_view` so the message cannot drift.
+_DASHBOARD_BASEMAP_CONTEXT = "dashboard basemap"
+
 #: The Panel templates `dashboard(template=...)` can host the app in (IN-9): the short name → the class on
 #: `panel.template`. Held as data for the same reason the widgets are.
 _DASHBOARD_TEMPLATES: dict[str, str] = {
@@ -422,7 +426,7 @@ class DashboardMixin(_MixinBase):
         def _basemap() -> Any:
             # Refuse rather than draw a misaligned basemap: the widget swaps in a Bokeh tile layer, which
             # only registers with the data on a Web-Mercator map.
-            self._require_web_mercator("dashboard basemap")
+            self._require_web_mercator(_DASHBOARD_BASEMAP_CONTEXT)
             return pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
 
         return {
@@ -475,7 +479,7 @@ class DashboardMixin(_MixinBase):
         return styled
 
     def _with_basemap(
-        self, obj: Any, provider: str, *, context: str = "dashboard basemap"
+        self, obj: Any, provider: str, *, context: str = _DASHBOARD_BASEMAP_CONTEXT
     ) -> Any:
         """Compose ``obj`` over the ``provider`` tile layer, replacing any basemap already in it.
 
@@ -514,7 +518,7 @@ class DashboardMixin(_MixinBase):
         overrides: dict,
         basemap: Any = None,
         *,
-        basemap_context: str = "dashboard basemap",
+        basemap_context: str = _DASHBOARD_BASEMAP_CONTEXT,
     ) -> Any:
         """Recompose ``layers`` with ``overrides`` applied, reusing every untouched element (IN-2).
 
@@ -1109,9 +1113,7 @@ class DashboardMixin(_MixinBase):
         # layers, and the overlay has to be built bottom-first either way. The flush a stale basemap needs is
         # inside `_reconcile_view`, the one composition path this now shares with the dashboard widgets (IN-2).
         order = self.layer_ids
-        wanted_ids = {layer_id for layer_id in shown} | {
-            layer_id for layer_id in always
-        }
+        wanted_ids = set(shown) | set(always)
         indices = sorted(
             order.index(layer_id) for layer_id in wanted_ids if layer_id in order
         )

@@ -382,7 +382,7 @@ class InteractionMixin(_MixinBase):
             element and ``.selected`` the picked rows, both live, and displaying the instance shows the
             draw-tool-plus-table layout. A fresh instance per call, so two annotators do not share state.
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         from holoviews import annotate as _annotate
 
         target = (
