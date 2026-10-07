@@ -15,7 +15,14 @@ from shapely.geometry import MultiPolygon, Polygon
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.vector import MAGNITUDE, VALUE, _exterior_rings, _extrude_ring
+from digitalearth.three_d.vector import (
+    MAGNITUDE,
+    VALUE,
+    _exterior_rings,
+    _extrude_polygon,
+    _extrude_ring,
+    _polygon_parts,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -90,6 +97,49 @@ def test_multipolygon_yields_one_ring_per_part():
     rings = list(_exterior_rings(mp))
     assert len(rings) == 2
     assert all(r.shape[1] == 2 for r in rings)
+
+
+def test_polygon_parts_reads_interior_rings():
+    """_polygon_parts returns each part's exterior plus its hole rings (duck-typed, no shapely import)."""
+    poly = Polygon(
+        [(0, 0), (4, 0), (4, 4), (0, 4)], holes=[[(1, 1), (3, 1), (3, 3), (1, 3)]]
+    )
+    parts = list(_polygon_parts(poly))
+    assert len(parts) == 1
+    exterior, interiors = parts[0]
+    assert exterior.shape[1] == 2
+    assert len(interiors) == 1 and interiors[0].shape[1] == 2
+
+
+def test_extrude_polygon_carves_the_hole():
+    """#199: a 4x4 square with a 2x2 hole extrudes to a prism with the hole carved, not filled.
+
+    Cap area is 16 - 4 = 12, so a height-2 prism has volume 24; the old exterior-only path filled the hole and
+    would give 32.
+    """
+    exterior = np.array([[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]], dtype=float)
+    hole = np.array([[1, 1], [3, 1], [3, 3], [1, 3], [1, 1]], dtype=float)
+    prism = _extrude_polygon(exterior, [hole], 2.0)
+    assert prism.volume == pytest.approx(24.0)
+
+
+def test_extruded_polygons_public_path_carves_holes():
+    """The public builder carves a footprint's holes through the merged prism mesh."""
+    holed = gpd.GeoDataFrame(
+        {"pop": [1.0]},
+        geometry=[
+            Polygon(
+                [(0, 0), (4, 0), (4, 4), (0, 4)], holes=[[(1, 1), (3, 1), (3, 3), (1, 3)]]
+            )
+        ],
+    )
+    scene = Scene3D(off_screen=True)
+    scene.extruded_polygons(holed, height=2.0)
+    # The merged layer is a surface (2-D cells), so its enclosed volume is read off that surface — 24 with
+    # the hole carved, 32 if it were filled.
+    surface = scene.layers[0][0].extract_surface(algorithm="dataset_surface")
+    assert surface.volume == pytest.approx(24.0)
+    scene.close()
 
 
 def test_vectors_length_mismatch_raises():

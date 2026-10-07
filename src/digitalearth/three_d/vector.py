@@ -5,12 +5,13 @@ Two vector visualizations:
 - :meth:`vectors` — arrow **glyphs** oriented and scaled by a ``(u, v, w)`` field at a set of points
   (``mesh.glyph``); the classic flow/wind arrows in 3-D.
 - :meth:`extruded_polygons` — turn polygon footprints into **3-D prisms** (``triangulate().extrude(...)``), the
-  building-block of extruded-building / choropleth-relief views.
+  building-block of extruded-building / choropleth-relief views. A footprint with holes (interior rings) is
+  carved all the way through (#199), so a ring courtyard or a lake in a landmass is a shaft, not a filled column.
 
 Polygons come from the GeoDataFrame pyramids returns (a ``FeatureCollection``, which *is* a GeoDataFrame, or
-``Dataset.get_cell_polygons()``); only their coordinates are read (``geom.exterior.coords``, ``geom.geoms``), so
-this module imports neither shapely nor geopandas (the HARD RULE / ``test_no_competitor_imports`` guard). CRS work
-stays in pyramids.
+``Dataset.get_cell_polygons()``); only their coordinates are read (``geom.exterior.coords``,
+``geom.interiors``, ``geom.geoms``), so this module imports neither shapely nor geopandas (the HARD RULE /
+``test_no_competitor_imports`` guard). CRS work stays in pyramids.
 """
 
 import math
@@ -30,17 +31,20 @@ MAGNITUDE = "magnitude"
 VALUE = "value"
 
 
-def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
-    """Yield each polygon's exterior ring as an ``(M, 2)`` coordinate array (duck-typed; no shapely import).
+def _polygon_parts(geom: Any) -> Iterator[tuple[np.ndarray, list[np.ndarray]]]:
+    """Yield each polygon part as its exterior ring and its interior (hole) rings.
 
-    Handles ``Polygon`` (one ring) and ``MultiPolygon`` (one ring per part). Holes are ignored — exterior
-    footprints only.
+    Handles ``Polygon`` (one part) and ``MultiPolygon`` (one part per member), duck-typed on the public
+    ``.exterior`` / ``.interiors`` / ``.geoms`` attributes so neither shapely nor geopandas is imported (the
+    HARD RULE). This is the hole-aware reader the extrusion draws from; :func:`_exterior_rings` is the
+    exterior-only view kept for the callers (and tests) that never cared about holes.
 
     Args:
         geom: A shapely ``Polygon``/``MultiPolygon`` (read via its public attributes, never imported).
 
     Yields:
-        numpy.ndarray: the ``(M, 2)`` exterior-ring coordinates of each polygon part.
+        ``(exterior, interiors)`` per part — the ``(M, 2)`` exterior ring and a (possibly empty) list of
+        ``(K, 2)`` interior-ring arrays, one per hole.
 
     Raises:
         TypeError: if ``geom`` is not a ``Polygon`` or ``MultiPolygon`` (e.g. a ``Point``/``LineString``).
@@ -52,11 +56,37 @@ def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
         )
     parts = geom.geoms if geom_type == "MultiPolygon" else [geom]
     for part in parts:
-        yield np.asarray(part.exterior.coords, dtype="float64")
+        exterior = np.asarray(part.exterior.coords, dtype="float64")
+        interiors = [
+            np.asarray(ring.coords, dtype="float64") for ring in part.interiors
+        ]
+        yield exterior, interiors
+
+
+def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
+    """Yield each polygon part's exterior ring as an ``(M, 2)`` coordinate array (duck-typed; no shapely).
+
+    The exterior-only view over :func:`_polygon_parts`; holes are read and carved by the extrusion itself
+    (:func:`_extrude_polygon`), not here.
+
+    Args:
+        geom: A shapely ``Polygon``/``MultiPolygon`` (read via its public attributes, never imported).
+
+    Yields:
+        numpy.ndarray: the ``(M, 2)`` exterior-ring coordinates of each polygon part.
+
+    Raises:
+        TypeError: if ``geom`` is not a ``Polygon`` or ``MultiPolygon`` (e.g. a ``Point``/``LineString``).
+    """
+    for exterior, _interiors in _polygon_parts(geom):
+        yield exterior
 
 
 def _extrude_ring(ring: np.ndarray, height: float) -> "pv.PolyData":
     """Extrude a flat ``(M, 2)`` polygon ring into a capped 3-D prism of the given height.
+
+    The solid-footprint path: a part with no holes is extruded straight from its one ring, so the common case
+    keeps the exact geometry it always had. A part *with* holes goes through :func:`_extrude_polygon` instead.
 
     Args:
         ring: ``(M, 2)`` exterior-ring coordinates (the first/last point may repeat).
@@ -70,6 +100,81 @@ def _extrude_ring(ring: np.ndarray, height: float) -> "pv.PolyData":
     z = np.zeros((len(ring), 1))
     face = pv.PolyData(np.hstack([ring, z]), faces=np.r_[len(ring), range(len(ring))])
     return face.triangulate().extrude((0.0, 0.0, float(height)), capping=True)
+
+
+def _ring_loops(rings: list[np.ndarray]) -> "pv.PolyData":
+    """Build one ``PolyData`` of closed polyline loops from a list of ``(M, 2)`` rings.
+
+    The input :func:`_cap_with_holes` hands to the contour triangulator: every ring becomes a closed polyline
+    cell, so the triangulator sees the exterior and each hole as the nested contours it fills by the even-odd
+    rule.
+
+    Args:
+        rings: The rings to turn into loops — the exterior first, then each interior.
+
+    Returns:
+        pyvista.PolyData: the loops, all at ``z=0``.
+    """
+    import pyvista as pv
+
+    points: list[np.ndarray] = []
+    lines: list[int] = []
+    offset = 0
+    for ring in rings:
+        # Drop a repeated closing vertex; the loop is closed by pointing the last line segment back at the
+        # first index, so a duplicated first/last point would otherwise be a zero-length edge.
+        coords = ring[:-1] if len(ring) > 1 and np.allclose(ring[0], ring[-1]) else ring
+        count = len(coords)
+        points.append(np.column_stack([coords, np.zeros(count)]))
+        lines.extend([count + 1, *range(offset, offset + count), offset])
+        offset += count
+    return pv.PolyData(np.vstack(points), lines=np.array(lines))
+
+
+def _cap_with_holes(exterior: np.ndarray, interiors: list[np.ndarray]) -> "pv.PolyData":
+    """Triangulate a polygon-with-holes into a flat cap at ``z=0``, with each interior ring carved out.
+
+    Uses VTK's ``vtkContourTriangulator`` — the one filter that triangulates a set of nested closed contours
+    by the even-odd rule, so a hole inside the exterior is removed. ``PolyData.triangulate()`` and
+    ``delaunay_2d`` both fill the holes instead (measured), which is the #199 bug. ``vtkmodules`` is the render
+    engine PyVista is built on, not a GIS dependency, so importing this one filter is within the tier's rule.
+
+    Args:
+        exterior: The ``(M, 2)`` exterior ring.
+        interiors: The ``(K, 2)`` interior (hole) rings; never empty when this is called.
+
+    Returns:
+        pyvista.PolyData: the triangulated planar cap with the holes carved out.
+    """
+    import pyvista as pv
+    from vtkmodules.vtkFiltersGeneral import vtkContourTriangulator
+
+    triangulator = vtkContourTriangulator()
+    triangulator.SetInputData(_ring_loops([exterior, *interiors]))
+    triangulator.Update()
+    return pv.wrap(triangulator.GetOutput())
+
+
+def _extrude_polygon(
+    exterior: np.ndarray, interiors: list[np.ndarray], height: float
+) -> "pv.PolyData":
+    """Extrude a polygon **with holes** into a capped prism whose holes pass all the way through.
+
+    The cap is triangulated with its holes carved (:func:`_cap_with_holes`); extruding that surface with
+    ``capping=True`` sweeps both the exterior boundary and every hole boundary into walls, so each hole is a
+    shaft through the solid rather than a filled column (#199).
+
+    Args:
+        exterior: The ``(M, 2)`` exterior ring.
+        interiors: The ``(K, 2)`` interior (hole) rings.
+        height: Extrusion height along +z.
+
+    Returns:
+        pyvista.PolyData: the solid prism with the holes carved through it.
+    """
+    return _cap_with_holes(exterior, interiors).extrude(
+        (0.0, 0.0, float(height)), capping=True
+    )
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -468,8 +573,14 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
     prisms: list[pv.PolyData] = []
     for i, geom in enumerate(geoms):
         h = _finite_height(heights, height, i)
-        for ring in _exterior_rings(geom):
-            prism = _extrude_ring(ring, h)
+        for exterior, interiors in _polygon_parts(geom):
+            # A solid footprint keeps the exact geometry it always had; a footprint with holes is carved
+            # through (#199) rather than filled.
+            prism = (
+                _extrude_ring(exterior, h)
+                if not interiors
+                else _extrude_polygon(exterior, interiors, h)
+            )
             if scalars is not None:
                 prism.cell_data[VALUE] = np.full(prism.n_cells, scalars[i])
             prisms.append(prism)
