@@ -98,6 +98,17 @@ def _lines() -> gpd.GeoDataFrame:
     )
 
 
+def _flow_field() -> np.ndarray:
+    """Return a small rotational ``(nz, ny, nx, 3)`` vector field.
+
+    Returns:
+        The field a `streamlines` layer is built from.
+    """
+    ax = np.linspace(-1.0, 1.0, 8)
+    x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+    return np.stack([-y, x, np.zeros_like(z)], axis=-1)
+
+
 def _dem():
     """Return the committed raster.
 
@@ -124,6 +135,7 @@ BUILDERS = {
     "vectors": lambda scene: scene.vectors(np.zeros((2, 3)), np.ones((2, 3))),
     "extrusion": lambda scene: scene.extruded_polygons(_polygons(), height=10.0),
     "lines": lambda scene: scene.lines(_lines()),
+    "streamlines": lambda scene: scene.streamlines(_flow_field(), n_points=30),
     "raster": lambda scene: scene.globe(_dem()),
     "coastlines": lambda scene: scene.globe(_dem()),
     "text": lambda scene: scene.text(0.0, 0.0, "here"),

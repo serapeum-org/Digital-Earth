@@ -120,6 +120,11 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "are thinned by dropping vertices or whole features before they are drawn, which is #207's "
             "remaining ask"
         ),
+        "streamlines": (
+            "a streamline is an integrated path already bounded by its seed count and integration time; "
+            "fewer or shorter lines come from seeding fewer points (n_points) or a smaller max_time, not from "
+            "simplifying the traced geometry after the fact"
+        ),
         "extrusion": (
             "prisms are combined into an UnstructuredGrid, which PyVista gives no decimate_pro at all, and "
             "simplifying their outer surface would merge separate footprints into one building"

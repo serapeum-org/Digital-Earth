@@ -46,6 +46,7 @@ DRAWS_WITH_KWARGS = {
     "vectors": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "extruded_polygons": "`_classify_or_refuse`, which names the keyword and the scheme that derives it",
     "lines": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
+    "streamlines": "`add_mesh(mesh, scalars=_SPEED, **props)` — Python's duplicate-keyword TypeError",
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
     "isosurface": "`add_mesh(mesh, scalars=FIELD, **props)` — Python's duplicate-keyword TypeError",
     "globe": "geovista's own `add_mesh` call, reached with `scalars` already pinned",
@@ -112,6 +113,17 @@ def _squares():
     )
 
 
+def _flow_field():
+    """Return a small rotational vector field.
+
+    Returns:
+        The ``(nz, ny, nx, 3)`` field a `streamlines` layer is built from.
+    """
+    ax = np.linspace(-1.0, 1.0, 8)
+    x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+    return np.stack([-y, x, np.zeros_like(z)], axis=-1)
+
+
 def _lines():
     """Return two line features with a numeric column.
 
@@ -163,6 +175,7 @@ def _draw(scene, builder: str, extra: dict):
             _squares(), column="pop", height=2.0, **extra
         ),
         "lines": lambda: scene.lines(_lines(), column="flow", **extra),
+        "streamlines": lambda: scene.streamlines(_flow_field(), n_points=30, **extra),
         "volume": lambda: scene.volume(_cube(), **extra),
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),

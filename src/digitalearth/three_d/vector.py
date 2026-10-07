@@ -486,6 +486,77 @@ class VectorMixin(_MixinBase):
             **kwargs,
         )
 
+    def streamlines(
+        self,
+        field: np.ndarray,
+        *,
+        name: Any = None,
+        n_points: int = 100,
+        source_center: tuple[float, float, float] | None = None,
+        source_radius: float | None = None,
+        max_time: float | None = None,
+        tube_radius: float | None = None,
+        cmap: str = "viridis",
+        **kwargs: Any,
+    ) -> Any:
+        """Trace streamlines through a 3-D vector field and register them as one layer.
+
+        Flow visualization: seed a sphere of points in the field and integrate the paths a massless particle
+        would follow, coloured by speed. This is the 3-D counterpart of a 2-D streamplot — the scientific half
+        of the tier, distinct from :meth:`vectors`, which draws a fixed arrow at each sample rather than
+        following the flow.
+
+        Args:
+            field: A ``(nz, ny, nx, 3)`` array of ``(u, v, w)`` vectors on a regular grid — the same
+                ``(level, y, x)`` axis order the volume builders use, with the three components last.
+            n_points: How many seed points to integrate from (placed on the source sphere).
+            source_center: World ``(x, y, z)`` centre of the seed sphere; ``None`` uses the grid's centre.
+            source_radius: Radius of the seed sphere; ``None`` uses a quarter of the grid's diagonal, which
+                seeds the interior rather than a single point.
+            max_time: Maximum integration time per streamline; ``None`` lets VTK choose from the grid size.
+            tube_radius: If given, render each streamline as a tube of this radius (world units) so it reads
+                against the scene; ``None`` draws one-pixel polylines.
+            cmap: Colormap for the speed (vector magnitude) the streamlines are coloured by.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
+
+        Returns:
+            The registered :class:`pyvista.Actor` for the streamline mesh, or ``None`` when the field seeded
+            no streamlines (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+
+        Raises:
+            ValueError: if ``field`` is not a ``(nz, ny, nx, 3)`` array. Also — only under ``strict=True`` —
+                :class:`~digitalearth.base.crs.OffLimbError` when nothing integrated, otherwise skipped with a
+                warning.
+
+        Examples:
+            - Trace a simple rotational field:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.three_d import Scene3D
+                >>> ax = np.linspace(-1, 1, 10)
+                >>> x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+                >>> field = np.stack([-y, x, np.zeros_like(z)], axis=-1)
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.streamlines(field, n_points=40, tube_radius=0.02)
+                >>> len(scene.layers)
+                1
+                >>> scene.close()
+
+                ```
+        """
+        return self._add_described_layer(
+            kind="streamlines",
+            data=field,
+            name=name,
+            n_points=n_points,
+            source_center=source_center,
+            source_radius=source_radius,
+            max_time=max_time,
+            tube_radius=tube_radius,
+            cmap=cmap,
+            **kwargs,
+        )
+
     def extruded_polygons(
         self,
         gdf: Any,
@@ -733,6 +804,75 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
     if colours is None:
         return merged, scene.plotter.add_mesh(merged, scalars=None, cmap=cmap, **props)
     return merged, scene.plotter.add_mesh(merged, scalars=VALUE, **style, **props)
+
+
+#: The point-data array name the vector field is attached to the streamline grid under.
+_FLOW = "vectors"
+#: The scalar name the per-point speed is stored under for colouring the streamlines.
+_SPEED = "speed"
+
+
+def draw_streamlines(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Integrate the streamlines a `streamlines` layer describes through its vector field.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: the ``(nz, ny, nx, 3)`` vector field.
+        layer: The layer's description, whose props carry the seeding, the tube radius and the colormap.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when nothing integrated and the scene is not `strict`.
+
+    Raises:
+        ValueError: if the field is not a ``(nz, ny, nx, 3)`` array.
+        OffLimbError: when nothing integrated and the scene is `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    n_points = int(props.pop("n_points", 100))
+    source_center = props.pop("source_center", None)
+    source_radius = props.pop("source_radius", None)
+    max_time = props.pop("max_time", None)
+    tube_radius = props.pop("tube_radius", None)
+    cmap = props.pop("cmap", "viridis")
+
+    field = np.asarray(data, dtype="float64")
+    if field.ndim != 4 or field.shape[3] != 3:
+        raise ValueError(
+            f"streamlines expects a (nz, ny, nx, 3) vector field, got shape {field.shape}"
+        )
+    nz, ny, nx, _ = field.shape
+
+    import pyvista as pv
+
+    # Dimensions (nx, ny, nz) put lon→X, lat→Y, level→Z, matching the volume builders; a C-order ravel of a
+    # [z, y, x] array varies x fastest, which is exactly VTK's point order for that grid, so the vectors line
+    # up with the points without a transpose.
+    grid = pv.ImageData(dimensions=(nx, ny, nz))
+    grid.point_data[_FLOW] = field.reshape(-1, 3)
+    seed = {
+        "n_points": n_points,
+        "source_center": tuple(source_center)
+        if source_center is not None
+        else grid.center,
+        # A quarter of the diagonal seeds the interior; VTK's own default radius can collapse to a point and
+        # integrate nothing on a small grid.
+        "source_radius": float(source_radius)
+        if source_radius is not None
+        else float(grid.length) / 4.0,
+    }
+    if max_time is not None:
+        seed["max_time"] = float(max_time)
+    streams = grid.streamlines(_FLOW, **seed)
+
+    if streams.n_points == 0:
+        scene._skip_empty(
+            "streamlines", "no streamlines were integrated from the field"
+        )
+        return None
+
+    streams[_SPEED] = np.linalg.norm(np.asarray(streams[_FLOW]), axis=1)
+    mesh = streams.tube(radius=float(tube_radius)) if tube_radius else streams
+    return mesh, scene.plotter.add_mesh(mesh, scalars=_SPEED, cmap=cmap, **props)
 
 
 def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Any:

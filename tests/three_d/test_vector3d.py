@@ -225,6 +225,33 @@ def test_lines_hidden_when_visible_false():
     scene.close()
 
 
+def _rotational_field(n: int = 8) -> np.ndarray:
+    """A rotational (nz, ny, nx, 3) vector field that seeds non-trivial streamlines."""
+    ax = np.linspace(-1.0, 1.0, n)
+    x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+    return np.stack([-y, x, np.zeros_like(z)], axis=-1)
+
+
+def test_streamlines_integrate_and_render():
+    """#TD-13: streamlines() traces paths through a vector field, colours them by speed, and renders."""
+    scene = Scene3D(off_screen=True)
+    actor = scene.streamlines(_rotational_field(), n_points=40, tube_radius=0.02)
+    assert actor is not None
+    assert len(scene.layers) == 1
+    assert scene.layers[0][0].n_points > 0
+    assert "speed" in scene.layers[0][0].point_data
+    assert bool(scene.screenshot().any())
+    scene.close()
+
+
+def test_streamlines_reject_a_non_vector_field():
+    """streamlines() refuses an array that is not (nz, ny, nx, 3)."""
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(ValueError, match=r"\(nz, ny, nx, 3\)"):
+        scene.streamlines(np.zeros((4, 4, 4)))
+    scene.close()
+
+
 def test_vectors_length_mismatch_raises():
     """vectors() rejects mismatched points/vectors shapes."""
     scene = Scene3D(off_screen=True)
