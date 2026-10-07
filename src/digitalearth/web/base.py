@@ -799,8 +799,9 @@ class WebMapBase:
         #: strand a dead row in a saved page, and so an export can leave the control out entirely.
         self._switcher: dict | None = None
         #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
-        #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
-        #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
+        #: Both modes build one layer per step and swap their visibility: ``"vector"`` and ``"raster"``
+        #: each carry ``layer_ids`` (one per step) plus ``kdim`` and ``times``. ``mode`` is kept because
+        #: only ``"raster"`` is renderable to animation frames (``_temporal_frames``).
         self._temporal: dict | None = None
         #: The bare ``MapWidget`` :meth:`render` built last — the one on screen after ``show()`` or a notebook
         #: repr — kept so :meth:`~digitalearth.web.decoration.DecorationMixin.drawn_features` can read what the

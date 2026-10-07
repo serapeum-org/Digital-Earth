@@ -249,8 +249,8 @@ class TestPerLayerInteraction:
         """
         frames = points.assign(t=["2020", "2021"])
         m = WebMap().timeslider(frames, kdim="t")
-        (layer_id,) = m.layer_ids
-        m.remove_layer(layer_id)
+        for layer_id in list(m.layer_ids):
+            m.remove_layer(layer_id)
         assert m.figure_spec.panels[0].furniture == (), m.figure_spec.panels[
             0
         ].to_dict()
@@ -263,11 +263,11 @@ class TestPerLayerInteraction:
         """
         frames = points.assign(t=["2020", "2021"])
         m = WebMap().timeslider(frames, kdim="t")
-        (stepped,) = m.layer_ids
+        stepped = list(m.layer_ids)
         m.points(points, name="obs").remove_layer("obs")
         kinds = [item.kind for item in m.figure_spec.panels[0].furniture]
         assert kinds == ["time_slider"], kinds
-        assert stepped in m.layer_ids, m.layer_ids
+        assert all(step in m.layer_ids for step in stepped), m.layer_ids
 
 
 class TestTheDeclaration:

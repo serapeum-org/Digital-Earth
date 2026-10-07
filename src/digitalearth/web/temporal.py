@@ -3,11 +3,14 @@
 ``timeslider`` scrubs a time dimension with an ``ipywidgets`` slider, in either of the two forms recipe W6
 specifies:
 
-- **vector** — a layer whose features carry a time field. Every feature is drawn once (so the colour
-  classification spans the whole series and the scale is stable across frames) and the slider sets a MapLibre
-  filter so only the active time step is shown.
+- **vector** — a layer whose features carry a time field. One layer is built per time step (each carrying
+  that step's features), all sharing a single colour classification resolved over the whole series so the
+  scale is stable across steps, and the slider swaps which step's layer is visible.
 - **raster** — a pyramids ``DatasetCollection`` whose members are ordered time steps. Each member is added as
   its own image layer under one frozen colour range, and the slider swaps which layer is visible.
+
+Both forms build one layer per step, so a page saved without the live slider carries a
+``LayerSwitcherControl`` step picker over those layers (WB-4) rather than piling every step up at once.
 
 The slider is wired at :meth:`render` time via :meth:`_wrap_temporal` (returning a slider + map composite);
 :meth:`~digitalearth.web.base.WebMapBase.save` still serialises just the map. ipywidgets/maplibre are
@@ -121,19 +124,19 @@ class TemporalMixin(_MixinBase):
         """Render a time-stepped layer with a slider over its time steps (recipe W6).
 
         Accepts either form the recipe specifies. A **vector** layer (a ``FeatureCollection`` /
-        GeoDataFrame carrying ``kdim``) is drawn once and filtered per step, so the classification spans the
-        whole series; polygons render as fills (a choropleth when ``column`` is given), points as circles. A
-        **raster** stack (a pyramids ``DatasetCollection``) becomes one image layer per member under a single
-        frozen colour range, and the slider swaps which member is visible.
+        GeoDataFrame carrying ``kdim``) becomes one layer per time step, all sharing a single colour
+        classification resolved over the whole series so the scale is stable across steps; polygons render as
+        fills (a choropleth when ``column`` is given), points as circles. A **raster** stack (a pyramids
+        ``DatasetCollection``) becomes one image layer per member under a single frozen colour range. Either
+        way the slider swaps which step's layer is visible, and a page saved without the slider carries a
+        step-picker control over those layers (WB-4).
 
         Args:
             features: A ``FeatureCollection`` / GeoDataFrame whose features carry ``kdim``, or a pyramids
                 ``DatasetCollection`` whose members are ordered time steps.
             kdim: The time attribute to scrub (vector), or the slider's label (raster). A feature whose
-                ``kdim`` is missing gets no slider step — but it is still **drawn**, so it stays hidden
-                behind the live slider (no step's filter matches it) and stays visible in a saved page
-                (which carries no slider, and so no filter at all). Drop such rows before calling if
-                that matters.
+                ``kdim`` is missing (null) carries no step value, so it sits in no step's layer and is not
+                drawn — live or saved. Drop such rows before calling only if you meant them to appear.
             labels: Raster only — per-member slider labels (e.g. datetimes) shown instead of the integer
                 index; must match the member count and be unique.
             band: Raster only — the 1-based band drawn for every member.
@@ -220,35 +223,16 @@ class TemporalMixin(_MixinBase):
                 f"timeslider() needs at least one time step, but no feature carries a {kdim!r} value"
             )
 
-        geom_types = set(gdf.geometry.geom_type.unique())
-        is_polygon = geom_types <= {"Polygon", "MultiPolygon"}
-        # big=False on every path: the slider filters a per-feature MapLibre layer, so the data must not
-        # auto-route to a deck.gl layer (which has no per-feature layer id to filter) (M3).
-        if is_polygon and column is not None:
-            self.choropleth(
-                gdf, column=column, scheme=scheme, k=k, cmap=cmap, opacity=opacity
-            )
-        elif is_polygon:
-            self.polygons(gdf, opacity=opacity, big=False)
-        else:
-            self.points(gdf, column=column, scheme=scheme, k=k, cmap=cmap, big=False)
-
-        self._temporal = {
-            "mode": "vector",
-            "layer_id": self._last_layer_id,
-            "kdim": kdim,
-            "times": times,
-        }
-        # The slider is anchored to the frame, so it is furniture; its frames are the values it steps
-        # through, which is what a renderer needs to draw it from the description (#292).
-        self._record_furniture(
-            "time_slider",
-            mode="vector",
-            layer=self._last_layer_id,
+        return self._timeslider_vector(
+            gdf,
             kdim=kdim,
-            frames=tuple(str(step) for step in times),
+            times=times,
+            column=column,
+            scheme=scheme,
+            k=k,
+            cmap=cmap,
+            opacity=opacity,
         )
-        return self
 
     def _timeslider_stack(
         self,
@@ -361,6 +345,119 @@ class TemporalMixin(_MixinBase):
         )
         return self
 
+    def _timeslider_vector(
+        self,
+        gdf: Any,
+        *,
+        kdim: str,
+        times: list,
+        column: str | None,
+        scheme: Any | None,
+        k: int,
+        cmap: str,
+        opacity: float,
+    ) -> Self:
+        """Build the vector half of :meth:`timeslider`: one layer per time step, swapped by the slider.
+
+        Mirrors :meth:`_timeslider_stack`. The colour classification is resolved **once over the whole
+        series**, so the scale is identical on every step — the acceptance criterion a time series must
+        meet — and that one frozen paint is applied to each step's layer, which carries only that step's
+        features. A MapLibre colour expression is a value-to-colour function, so a step holding only part of
+        the range still paints in the whole series' classes. Only the first step is built visible: the slider
+        toggles from there, and a page saved without a slider then shows one step rather than the whole
+        series piled up.
+
+        Because every step is its own registered layer, a saved page carries a ``LayerSwitcherControl`` step
+        picker (WB-4) exactly as the raster stack does — where the old single-filtered-layer form left a
+        shared page showing every feature at once, the slider having gone with the live kernel.
+
+        Args:
+            gdf: The display-CRS GeoDataFrame, already placed, whose ``kdim`` column carries the time steps.
+            kdim: The time attribute scrubbed; each step draws the rows whose ``kdim`` equals its value.
+            times: The distinct, sorted, non-null step values — the slider's stops, in order.
+            column: Value column to colour by (a graduated/continuous choropleth or circles), or ``None`` for
+                a flat colour.
+            scheme: A cleopatra classification scheme for graduated colouring, or ``None`` for a continuous
+                ramp. Classified once over the whole series.
+            k: Number of classes for the graduated schemes.
+            cmap: matplotlib colormap for the value colouring.
+            opacity: Layer opacity in ``[0, 1]``.
+
+        Returns:
+            This map (chainable).
+        """
+        from digitalearth.web.vector import POINT_SIZE, VECTOR_COLOR
+
+        _, layer_types = _require_layer_api()
+        geom_types = set(gdf.geometry.geom_type.unique())
+        is_polygon = geom_types <= {"Polygon", "MultiPolygon"}
+        # The paint is resolved once, over the whole series, so every step colours by the same
+        # classification. `_color_expr` records `last_breaks`/`last_legend` here too, describing the whole
+        # series the colour key belongs to.
+        color_encoding: Any = None
+        if is_polygon and column is not None:
+            fill, color_encoding = self._color_expr(
+                self._require_column(gdf, column), column, scheme, k, cmap
+            )
+            prefix, layer_type, kind = "fill", layer_types.FILL, "choropleth"
+            paint = {
+                "fill-color": fill,
+                "fill-opacity": float(opacity),
+                "fill-outline-color": "#ffffff",
+            }
+        elif is_polygon:
+            prefix, layer_type, kind = "fill", layer_types.FILL, "polygons"
+            paint = self._fill_paint(opacity, "#ffffff", VECTOR_COLOR)
+        else:
+            prefix, layer_type, kind = "circle", layer_types.CIRCLE, "points"
+            if column is not None:
+                circle_color, color_encoding = self._color_expr(
+                    self._require_column(gdf, column), column, scheme, k, cmap
+                )
+            else:
+                circle_color = VECTOR_COLOR
+            paint = {
+                "circle-radius": POINT_SIZE,
+                "circle-opacity": float(opacity),
+                "circle-color": circle_color,
+            }
+
+        layer_ids: list[str] = []
+        for index, step in enumerate(times):
+            step_gdf = gdf[gdf[kdim] == step]
+            # dict(paint): each layer takes its own copy of the one frozen paint, so a later per-layer
+            # restyle touches one step rather than aliasing them all. The colour encoding is filed on every
+            # step, so the key is present whichever step is the visible one.
+            self._vector_layer(
+                step_gdf,
+                prefix,
+                layer_type,
+                dict(paint),
+                kind=kind,
+                name=str(step),
+                visible=index == 0,
+                source=step_gdf,
+                color_encoding=color_encoding,
+            )
+            layer_ids.append(self._last_layer_id)
+
+        self._temporal = {
+            "mode": "vector",
+            "layer_ids": layer_ids,
+            "kdim": kdim,
+            "times": list(times),
+        }
+        # Furniture mirrors the raster half (`layers=`, not a single `layer=`): the slider steps through the
+        # per-step layers, which is what a renderer draws the control from (#292).
+        self._record_furniture(
+            "time_slider",
+            mode="vector",
+            layers=tuple(layer_ids),
+            kdim=kdim,
+            frames=tuple(str(step) for step in times),
+        )
+        return self
+
     def _check_stack_is_drawable(self, members: Sequence, band: int) -> None:
         """Fail before any layer is registered if a member cannot be drawn, and warn on a huge page.
 
@@ -407,39 +504,35 @@ class TemporalMixin(_MixinBase):
             )
 
     def _temporal_switcher(self) -> dict | None:
-        """Return the step picker a saved page needs, or ``None`` when this map is not a series.
+        """Return the step picker a saved page needs, or ``None`` when this map is not a stepped series.
 
         ``render`` wraps the map in an ``ipywidgets`` slider, which exists only in a live kernel:
-        ``to_html`` serialises the map alone, so a shared page showed one frozen frame and no way to move.
-        Every step is already in the page as its own layer, so a switcher over those makes them all
-        reachable — a step picker rather than a scrubber, but the difference between a usable artifact and
-        a screenshot. The steps carry their time labels as their layer ids, because the switcher captions
-        each row with the id.
-
-        Returns only the raster (layer-stack) form. The vector form draws one layer and moves a MapLibre
-        filter across it, so its steps are not separately addressable, and a true in-page slider cannot be
-        built at all: py-maplibregl's standalone template keeps the map object inside its own closure
-        (``window._maplibreWidget`` is set on the Shiny path only), so injected markup has nothing to drive.
+        ``to_html`` serialises the map alone, so a shared page would show one frozen frame and no way to
+        move. Both series forms — the raster stack and the vector series (WB-4) — now build one layer per
+        step, so a switcher over those layers makes every step reachable in the saved page: a step picker
+        rather than a scrubber, but the difference between a usable artifact and a screenshot. The steps
+        carry their labels as their layer ids, because the switcher captions each row with the id.
 
         Returns:
-            The switcher request, or ``None``.
+            The switcher request, or ``None`` when fewer than two step layers were built.
         """
         config = self._temporal
-        if not config or config.get("mode") != "raster":
+        layer_ids = list((config or {}).get("layer_ids") or [])
+        # One step is not a series; a picker over it would be noise.
+        if len(layer_ids) < 2:
             return None
         return {
-            "layer_ids": list(config.get("layer_ids") or []),
+            "layer_ids": layer_ids,
             "theme": "default",
             "position": "top-right",
-            # One step is not a series; a picker over it would be noise.
             "minimum": 2,
         }
 
     def _wrap_temporal(self, widget: Any) -> Any:
         """Wrap the map ``widget`` in a slider composite that reveals one time step at a time.
 
-        The slider drives whichever mechanism the active mode needs: a MapLibre filter on the single vector
-        layer, or the visibility of one image layer out of the stack.
+        The slider toggles which per-step layer is visible — the same mechanism for the vector series and
+        the raster stack, since both build one layer per step.
 
         Args:
             widget: The built MapLibre ``MapWidget``.
@@ -469,41 +562,35 @@ class TemporalMixin(_MixinBase):
 
     @staticmethod
     def _step_shower(widget: Any, config: dict) -> Any:
-        """Return the callable that reveals one time step on ``widget`` for the configured mode.
+        """Return the callable that reveals one time step on ``widget`` by toggling layer visibility.
+
+        Both series forms build one layer per step, so stepping is the same for each: hide the step that
+        was showing and show the selected one. Only two layers change per move, so a series of N steps does
+        not send O(N) widget messages on every slider move.
 
         Args:
             widget: The built MapLibre ``MapWidget``.
-            config: The ``_temporal`` config recorded by :meth:`timeslider`.
+            config: The ``_temporal`` config recorded by :meth:`timeslider` / :meth:`_timeslider_vector` /
+                :meth:`_timeslider_stack`.
 
         Returns:
-            A one-argument callable taking the slider's value and updating the map: a MapLibre filter for
-            the vector mode, per-layer visibility for the raster mode.
+            A one-argument callable taking the slider's value and showing that step's layer while hiding the
+            one that was visible.
         """
-        if config.get("mode") == "raster":
-            layer_ids = config["layer_ids"]
-            index_of = {step: index for index, step in enumerate(config["times"])}
-            showing = [
-                0
-            ]  # the frame currently visible; layers are built with only the first shown
+        layer_ids = config["layer_ids"]
+        index_of = {step: index for index, step in enumerate(config["times"])}
+        # the step currently visible; layers are built with only the first shown
+        showing = [0]
 
-            def show_raster(value: Any) -> None:
-                active = index_of[value]
-                if active == showing[0]:
-                    return
-                # Only two layers change per step, so touching all N would send O(stack) widget messages
-                # for every slider move.
-                widget.set_visibility(layer_ids[showing[0]], False)
-                widget.set_visibility(layer_ids[active], True)
-                showing[0] = active
+        def show(value: Any) -> None:
+            active = index_of[value]
+            if active == showing[0]:
+                return
+            widget.set_visibility(layer_ids[showing[0]], False)
+            widget.set_visibility(layer_ids[active], True)
+            showing[0] = active
 
-            return show_raster
-
-        layer_id, kdim = config["layer_id"], config["kdim"]
-
-        def show_vector(value: Any) -> None:
-            widget.set_filter(layer_id, ["==", ["get", kdim], value])
-
-        return show_vector
+        return show
 
     def _temporal_times(self) -> list[Any]:
         """Return the distinct time steps of the active time-slider (empty when none is set).
@@ -524,7 +611,7 @@ class TemporalMixin(_MixinBase):
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> m = WebMap()
-                >>> m._temporal = {"layer_id": "pop", "kdim": "year", "times": [2000, 2010, 2020]}
+                >>> m._temporal = {"layer_ids": ["pop-0"], "kdim": "year", "times": [2000, 2010, 2020]}
                 >>> m._temporal_times()
                 [2000, 2010, 2020]
 
@@ -533,7 +620,7 @@ class TemporalMixin(_MixinBase):
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> m = WebMap()
-                >>> m._temporal = {"layer_id": "pop", "kdim": "year", "times": [2000, 2010]}
+                >>> m._temporal = {"layer_ids": ["pop-0"], "kdim": "year", "times": [2000, 2010]}
                 >>> steps = m._temporal_times()
                 >>> steps.append(2030)
                 >>> m._temporal["times"]

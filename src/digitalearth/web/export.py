@@ -409,8 +409,8 @@ class ExportMixin(_MixinBase):
         if config is None or (config.get("mode") != "raster") or len(layer_ids) < 2:
             raise ValueError(
                 "save_animation() needs a raster time series with at least two steps; add one with "
-                "timeslider(collection). The vector time-slider filters a single layer, so its steps "
-                "are not separately renderable."
+                "timeslider(collection). A vector time-slider is exported as a layer-switcher step picker "
+                "rather than rendered to animation frames."
             )
         return [[layer_id] for layer_id in layer_ids]
 

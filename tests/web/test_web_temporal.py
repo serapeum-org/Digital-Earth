@@ -98,7 +98,7 @@ def test_temporal_times_empty_without_slider():
 
 
 class TestTimeSliderNeedsEngine:
-    """``timeslider`` draws the layer once and renders a slider composite (engine required)."""
+    """``timeslider`` builds one layer per step and renders a slider composite (engine required)."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self):
@@ -107,7 +107,7 @@ class TestTimeSliderNeedsEngine:
     def test_records_distinct_time_steps(self, timed_polygons):
         m = WebMap().timeslider(timed_polygons, kdim="time", column="pop")
         assert m._temporal_times() == [2000, 2010, 2020]
-        assert m._temporal["layer_id"] is not None
+        assert len(m._temporal["layer_ids"]) == 3, "one layer per distinct time step"
 
     def test_missing_kdim_raises(self, timed_polygons):
         webMap = WebMap()
@@ -125,16 +125,19 @@ class TestTimeSliderNeedsEngine:
         assert isinstance(slider, ipywidgets.SelectionSlider)
         assert len(slider.options) == 3, "one slider stop per distinct time step"
 
-    def test_large_polygon_series_stays_filterable(self, timed_polygons):
-        """A large temporal polygon set must keep a per-feature layer id for the filter (M3)."""
+    def test_large_polygon_series_stays_addressable(self, timed_polygons):
+        """A large temporal polygon set keeps per-step MapLibre layer ids; it never auto-routes to deck.gl.
+
+        Test scenario:
+            The step layers are the switcher's rows and the saved page's frames, so they must stay
+            addressable MapLibre layers — a deck.gl overlay has no registry id to toggle (M3).
+        """
         m = WebMap()
-        m.big_data_threshold = (
-            2  # 6 polygons > 2; must NOT auto-route to deck (no layer id to filter)
-        )
+        m.big_data_threshold = 2  # 6 polygons > 2; must NOT auto-route to deck (no per-step layer id to toggle)
         m.timeslider(timed_polygons, kdim="time")
         assert m._deck_layers is None, "temporal layers must not auto-route to deck.gl"
-        assert m._temporal["layer_id"] is not None, (
-            "the slider needs a filterable layer id"
+        assert len(m._temporal["layer_ids"]) == 3, (
+            "the slider needs one addressable layer per step"
         )
 
     def test_render_without_slider_is_bare_map(self, timed_polygons):
@@ -149,6 +152,57 @@ class TestTimeSliderNeedsEngine:
         out = tmp_path / "temporal.html"
         WebMap().timeslider(timed_polygons, kdim="time", column="pop").save(str(out))
         assert out.stat().st_size > 1_000
+
+    def test_saved_vector_series_shows_exactly_one_step(self, tmp_path, timed_polygons):
+        """WB-4: a saved vector series shows one step, the rest serialised hidden — not every feature at once.
+
+        Test scenario:
+            ``save`` serialises the map without the live slider. The old vector path drew one layer holding
+            every feature, so a saved page showed the whole series piled up; the per-step layers fix that —
+            only the first step is visible, the other two are written ``visibility: none``.
+        """
+        out = tmp_path / "vector-series.html"
+        WebMap().timeslider(timed_polygons, kdim="time", column="pop").save(str(out))
+        html = out.read_text(encoding="utf-8", errors="replace")
+        assert out.stat().st_size > 1_000, "the saved vector series looks empty"
+        assert html.count('"visibility": "none"') == 2, (
+            "the two non-active steps must be serialised hidden, so one step shows"
+        )
+
+    def test_saved_vector_series_carries_a_step_picker(self, timed_polygons):
+        """WB-4: a multi-step vector series offers a layer-switcher step picker for the saved page.
+
+        Test scenario:
+            The saved page has no slider, so the step picker is what makes each step reachable. It lists
+            every per-step layer, exactly as the raster stack's picker does.
+        """
+        m = WebMap().timeslider(timed_polygons, kdim="time", column="pop")
+        switcher = m._temporal_switcher()
+        assert switcher is not None, (
+            "a multi-step vector series must offer a saved-page step picker"
+        )
+        assert switcher["layer_ids"] == m._temporal["layer_ids"], (
+            "the picker must list every step layer"
+        )
+
+    def test_vector_colour_scale_is_frozen_across_steps(self, timed_points):
+        """WB-4: every step shares one classification, so the colour scale is stable across steps.
+
+        Test scenario:
+            A MapLibre colour expression is a value-to-colour function; computed once over the whole series
+            and reused, every step's paint is byte-for-byte the same, so a step holding only part of the
+            range still colours by the series' classes.
+        """
+        m = WebMap().timeslider(
+            timed_points, kdim="time", column="pop", scheme="quantiles", k=3
+        )
+        colours = [
+            m._layer_tree.get(i).symbology.props["paint"]["circle-color"]
+            for i in m._temporal["layer_ids"]
+        ]
+        assert all(c == colours[0] for c in colours), (
+            f"every step must paint by the one frozen expression, got {colours}"
+        )
 
 
 class TestTimeSliderRejectsUnsupportedInput:
@@ -680,72 +734,65 @@ class TestTimeSliderGeometryRouting:
     def _need_engine(self):
         pytest.importorskip("maplibre")
 
-    def test_polygons_without_column_take_the_plain_fill_path(
-        self, timed_polygons, mocker
-    ):
-        """Polygon input and no ``column`` renders plain fills, not a choropleth.
+    @staticmethod
+    def _step_kinds(m):
+        """Return the distinct registered kinds of a map's per-step temporal layers."""
+        return {m._layer_tree.get(i).kind for i in m._temporal["layer_ids"]}
+
+    def test_polygons_without_column_take_the_plain_fill_path(self, timed_polygons):
+        """Polygon input and no ``column`` builds plain-fill step layers, not choropleths.
 
         Test scenario:
-            The ``elif is_polygon`` branch — ``polygons`` is called with ``big=False`` so the layer keeps a
-            per-feature id the slider can filter, and ``choropleth`` is not used.
+            The ``elif is_polygon`` branch of ``_timeslider_vector`` — every step layer is a plain
+            ``polygons`` fill, and none is a ``choropleth``.
         """
-        polygons = mocker.spy(WebMap, "polygons")
-        choropleth = mocker.spy(WebMap, "choropleth")
-        WebMap().timeslider(timed_polygons, kdim="time")
-        assert polygons.call_count == 1, (
-            "polygon input without a column must render plain fills"
-        )
-        assert choropleth.call_count == 0, "no column means no choropleth"
-        assert polygons.call_args.kwargs["big"] is False, (
-            "the temporal layer must stay filterable"
+        m = WebMap().timeslider(timed_polygons, kdim="time")
+        assert self._step_kinds(m) == {"polygons"}, (
+            "polygon input without a column must build plain fills"
         )
 
-    def test_polygons_with_column_take_the_choropleth_path(
-        self, timed_polygons, mocker
-    ):
-        """Polygon input plus a ``column`` renders a graduated choropleth.
+    def test_polygons_with_column_take_the_choropleth_path(self, timed_polygons):
+        """Polygon input plus a ``column`` builds graduated-choropleth step layers.
 
         Test scenario:
-            The ``is_polygon and column is not None`` branch, with the classification kwargs forwarded.
+            The ``is_polygon and column is not None`` branch, with the classification kwargs reaching the
+            one frozen colour expression: ``k=3`` yields three classes and ``cmap`` drives their colours.
         """
-        choropleth = mocker.spy(WebMap, "choropleth")
-        WebMap().timeslider(
-            timed_polygons, kdim="time", column="pop", k=3, cmap="magma"
+        m = WebMap().timeslider(
+            timed_polygons,
+            kdim="time",
+            column="pop",
+            scheme="quantiles",
+            k=3,
+            cmap="magma",
         )
-        assert choropleth.call_count == 1, (
-            "a column on polygons must render a choropleth"
+        assert self._step_kinds(m) == {"choropleth"}, (
+            "a column on polygons must build choropleth step layers"
         )
-        assert choropleth.call_args.kwargs["column"] == "pop", (
-            "the value column must be forwarded"
+        assert m.last_legend["kind"] == "graduated", (
+            "the scheme must classify the column"
         )
-        assert choropleth.call_args.kwargs["k"] == 3, (
-            "the class count must be forwarded"
-        )
-        assert choropleth.call_args.kwargs["cmap"] == "magma", (
-            "the colormap must be forwarded"
+        assert len(m.last_legend["colors"]) == 3, (
+            "the class count k=3 must reach the classifier"
         )
 
-    def test_point_input_takes_the_circle_path(self, timed_points, mocker):
-        """Non-polygon input renders circles via ``points``.
+    def test_point_input_takes_the_circle_path(self, timed_points):
+        """Non-polygon input builds circle step layers.
 
         Test scenario:
-            The ``else`` branch — point geometries fall through to ``points`` with ``big=False``.
+            The ``else`` branch — point geometries build ``points`` step layers.
         """
-        points = mocker.spy(WebMap, "points")
-        WebMap().timeslider(timed_points, kdim="time", column="pop")
-        assert points.call_count == 1, "point input must render circles"
-        assert points.call_args.kwargs["big"] is False, (
-            "the temporal layer must stay filterable"
-        )
+        m = WebMap().timeslider(timed_points, kdim="time", column="pop")
+        assert self._step_kinds(m) == {"points"}, "point input must build circle layers"
 
     def test_mixed_geometry_currently_falls_through_to_circles(
-        self, timed_polygons, timed_points, mocker
+        self, timed_polygons, timed_points
     ):
         """Documents current routing for a mixed-geometry layer: it is drawn as circles, not fills.
 
         Test scenario:
             ``is_polygon`` is a subset test over the distinct geometry types, so one non-polygon member
-            sends the whole layer down the ``points`` branch. This pins today's behaviour; it is not an
+            sends the whole layer down the circle branch. This pins today's behaviour; it is not an
             endorsement — ``BigDataMixin._require_points`` rejects mixed input outright, so the two
             builders disagree about what mixed geometry means.
         """
@@ -753,11 +800,10 @@ class TestTimeSliderGeometryRouting:
         gpd = pytest.importorskip("geopandas")
         stacked = pandas.concat([timed_polygons, timed_points], ignore_index=True)
         mixed = gpd.GeoDataFrame(stacked, geometry=stacked.geometry, crs=4326)
-        points = mocker.spy(WebMap, "points")
-        polygons = mocker.spy(WebMap, "polygons")
-        WebMap().timeslider(mixed, kdim="time")
-        assert points.call_count == 1, "mixed geometry must not take the polygon path"
-        assert polygons.call_count == 0, "mixed geometry is not polygonal"
+        m = WebMap().timeslider(mixed, kdim="time")
+        assert self._step_kinds(m) == {"points"}, (
+            "mixed geometry must not take the polygon path"
+        )
 
     def test_returns_self_for_chaining(self, timed_polygons):
         """``timeslider`` returns the map so builders can be chained.
@@ -771,18 +817,20 @@ class TestTimeSliderGeometryRouting:
         )
 
     def test_records_the_vector_config_shape(self, timed_polygons):
-        """The recorded config carries the mode, the scrubbed field and the layer the slider filters.
+        """The recorded config carries the mode, the scrubbed field and one layer id per step.
 
         Test scenario:
-            Complements ``test_records_distinct_time_steps``, which covers the step values themselves.
+            Complements ``test_records_distinct_time_steps``, which covers the step values themselves. The
+            vector config now mirrors the raster one — a ``layer_ids`` list, not a single ``layer_id``.
         """
         m = WebMap().timeslider(timed_polygons, kdim="time")
         assert m._temporal["mode"] == "vector", (
             "the vector path must record vector mode"
         )
         assert m._temporal["kdim"] == "time", "the scrubbed field must be recorded"
-        assert m._temporal["layer_id"] == m._last_layer_id, (
-            "the slider must target the layer just built"
+        assert len(m._temporal["layer_ids"]) == 3, "one layer id per step"
+        assert m._temporal["layer_ids"][-1] == m._last_layer_id, (
+            "the last step's layer must be the one built last"
         )
 
     def test_a_non_default_kdim_is_honoured(self, timed_polygons):
@@ -819,7 +867,7 @@ class TestWrapTemporal:
         m = WebMap()
         m._temporal = {
             "mode": "vector",
-            "layer_id": "layer-1",
+            "layer_ids": ["step-0", "step-1", "step-2"],
             "kdim": "time",
             "times": [2000, 2010, 2020],
         }
@@ -871,28 +919,33 @@ class TestWrapTemporal:
             "2020",
         ], "one slider stop per distinct time step, labelled by its value"
 
-    def test_first_time_step_is_filtered_in_immediately(self, configured, fake_widget):
-        """Building the composite applies the filter for the first time step.
+    def test_first_time_step_is_shown_immediately(self, configured, fake_widget):
+        """Building the composite opens on the first step, which is already the visible one.
 
         Test scenario:
-            Without an initial filter the map would open showing every frame at once.
+            The step layers are built with only the first visible, so opening on step 0 is a no-op — no
+            visibility message fires — and the vector mode no longer sets any MapLibre filter.
         """
         configured._wrap_temporal(fake_widget)
-        assert fake_widget.filters == [("layer-1", ["==", ["get", "time"], 2000])], (
-            f"expected exactly the first-step filter, got {fake_widget.filters}"
+        assert fake_widget.visibility == [], (
+            "opening on the already-visible first step must toggle nothing"
+        )
+        assert fake_widget.filters == [], (
+            "the vector mode no longer sets MapLibre filters"
         )
 
-    def test_moving_the_slider_refilters_the_layer(self, configured, fake_widget):
-        """The observer pushes a new MapLibre filter for the selected step.
+    def test_moving_the_slider_swaps_the_visible_step(self, configured, fake_widget):
+        """The observer hides the step that was showing and shows the selected one.
 
         Test scenario:
-            Setting ``slider.value`` fires the ``value`` observer, which must call ``set_filter`` with the
-            equality expression for the new step.
+            Setting ``slider.value`` fires the ``value`` observer, which toggles exactly the outgoing and
+            incoming step layers — the same mechanism the raster stack uses.
         """
         slider, _ = configured._wrap_temporal(fake_widget).children
+        fake_widget.visibility.clear()
         slider.value = 2020
-        assert fake_widget.filters[-1] == ("layer-1", ["==", ["get", "time"], 2020]), (
-            f"the slider must refilter to the selected step, got {fake_widget.filters[-1]}"
+        assert fake_widget.visibility == [("step-0", False), ("step-2", True)], (
+            f"the slider must swap to the selected step's layer, got {fake_widget.visibility}"
         )
 
     def test_opening_on_the_first_frame_needs_no_visibility_calls(
