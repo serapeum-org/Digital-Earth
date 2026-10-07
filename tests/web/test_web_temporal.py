@@ -267,8 +267,9 @@ class TestTimeSliderNeedsEngine:
             the point/polygon/choropleth builders carried, so the refusal lands at the call, not at save.
         """
         m = WebMap()
+        not_finite = float("nan")
         with pytest.raises(ValueError, match="opacity"):
-            m.timeslider(timed_points, kdim="time", opacity=float("nan"))
+            m.timeslider(timed_points, kdim="time", opacity=not_finite)
 
     def test_a_large_vector_series_warns_about_page_size(
         self, timed_points, monkeypatch, warning_log
