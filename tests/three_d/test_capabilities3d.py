@@ -141,6 +141,7 @@ BUILDERS = {
     "streamlines": lambda scene: scene.streamlines(_flow_field(), n_points=30),
     "raster": lambda scene: scene.globe(_dem()),
     "coastlines": lambda scene: scene.globe(_dem()),
+    "reference_lines": lambda scene: scene.coastlines(),
     "text": lambda scene: scene.text(0.0, 0.0, "here"),
     "custom:pyvista": lambda scene: scene.add_mesh(pv.Sphere()),
 }

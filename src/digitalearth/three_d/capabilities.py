@@ -41,6 +41,9 @@ CAPABILITIES = Capabilities(
             # A globe draws its own shoreline onto the sphere — `globe(data)` records one by default — so the
             # tier draws this kind even though it has no standalone coastline builder (review M6).
             "coastlines",
+            # Natural-Earth coastlines/borders drawn as reference lines in a non-globe scene (TD-5b, #205),
+            # through `coastlines()`/`borders()` on the decoration mixin.
+            "reference_lines",
             # A string placed at a coordinate (#203). It is a layer rather than furniture for the same reason
             # it is one on the interactive and web tiers: it is drawn where the data is, not in a corner.
             "text",
@@ -81,10 +84,9 @@ CAPABILITIES = Capabilities(
             "not a rendering choice on top of one"
         ),
         "basemap": "there are no map tiles to drape under a scene drawn in three dimensions",
-        "coastline_overlay": (
-            "a globe draws its own shoreline onto the sphere, and a flat scene has none to trace, so there "
-            "is no builder to add one to a scene"
-        ),
+        # `coastline_overlay` used to be declared absent ("a flat scene has none to trace"); TD-5b built it.
+        # `coastlines()`/`borders()` now draw Natural-Earth reference lines in a non-globe scene (the
+        # `reference_lines` kind above), so the overlay is a feature of the tier rather than a gap.
         # `legend` and `colorbar` are not listed here and never will be: both are now built (order 24) and
         # declared as features above. What that comment used to say — that they were Core *methods* this tier
         # had not written, which was `contract.PENDING`'s answer rather than this one — is the reason they

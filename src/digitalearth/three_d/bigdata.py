@@ -147,6 +147,10 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "a coastline is lines rather than a surface, and geovista already takes the resolution to load "
             "them at"
         ),
+        "reference_lines": (
+            "Natural-Earth coastlines and borders are lines, not a surface, and are already loaded at the "
+            "resolution the caller chose (110m/50m/10m); pick a coarser resolution for fewer vertices"
+        ),
         "text": (
             "a label is one anchor point and one string, so there is never anything to reduce; a scene with "
             "too many labels to read is a composition the caller chose rather than data to thin"
