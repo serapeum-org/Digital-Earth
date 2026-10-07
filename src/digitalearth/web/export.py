@@ -469,3 +469,68 @@ class ExportMixin(_MixinBase):
             driver.save_screenshot(path)
         finally:
             driver.quit()
+
+
+def swipe_html(
+    before: Any, after: Any, *, title: str = DEFAULT_TITLE, height: int = 600
+) -> str:
+    """Return a standalone HTML page that wipes between two maps (WB-13).
+
+    A module-level function, not a method, because it **composes two maps** into one artifact —
+    the same reason ``grid`` / ``shared_colorbar`` are functions. The page overlays the two maps,
+    keeps their cameras in sync, and clips the ``after`` map to the right of a draggable divider,
+    so a viewer wipes between two states of the same area (two basemaps, two dates, before/after an
+    event). It is rendered through :class:`~digitalearth.web.htmldoc.HtmlDocument`, our own export
+    document, because py-maplibregl's single-container ``to_html`` cannot host two maps in one page.
+
+    Args:
+        before: The map shown on the **left** of the divider (a :class:`~digitalearth.web.map.WebMap`).
+        after: The map shown on the **right** of the divider, clipped to it.
+        title: The HTML document title.
+        height: The map height in CSS pixels.
+
+    Returns:
+        The standalone HTML document as a string.
+    """
+    from digitalearth.web.htmldoc import HtmlDocument
+
+    document = HtmlDocument.swipe(
+        before._build_map_widget().to_dict(),
+        after._build_map_widget().to_dict(),
+        height=height,
+    )
+    return document.render(title=title)
+
+
+def save_swipe(
+    before: Any,
+    after: Any,
+    path: str,
+    *,
+    title: str = DEFAULT_TITLE,
+    height: int = 600,
+    offline: bool = False,
+) -> pathlib.Path:
+    """Write a WB-13 swipe page (see :func:`swipe_html`) to ``path``.
+
+    Args:
+        before: The map shown on the left of the divider.
+        after: The map shown on the right of the divider.
+        path: Where to write the ``.html`` file.
+        title: The HTML document title.
+        height: The map height in CSS pixels.
+        offline: When ``True``, inline the maplibre-gl CDN assets so the page opens with no network
+            (best-effort; fetched once at save time), the same contract ``to_html(offline=True)`` has.
+
+    Returns:
+        The :class:`pathlib.Path` written.
+
+    Raises:
+        RuntimeError: when ``offline=True`` and an asset cannot be fetched (no network at save time).
+    """
+    html = swipe_html(before, after, title=title, height=height)
+    if offline:
+        html = ExportMixin._inline_offline_assets(html)
+    out = pathlib.Path(path)
+    out.write_text(html, encoding="utf-8")
+    return out
