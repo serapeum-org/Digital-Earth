@@ -95,3 +95,24 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   pointer-events: none;
 }
+
+.de-geocoder {
+  padding: 4px;
+  background: #ffffff;
+}
+.de-geocoder-input {
+  width: 180px;
+  padding: 4px 6px;
+  font: 12px sans-serif;
+  border: 1px solid #cccccc;
+  border-radius: 3px;
+}
+.de-geocoder-row {
+  padding: 4px 6px;
+  font: 12px sans-serif;
+  cursor: pointer;
+  border-top: 1px solid #eeeeee;
+}
+.de-geocoder-row:hover {
+  background: #f0f0f0;
+}

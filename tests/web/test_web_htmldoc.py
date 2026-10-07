@@ -306,3 +306,52 @@ class TestMeasureHtml:
         out = save_measure(WebMap().basemap(), str(tmp_path / "measure.html"))
         text = out.read_text(encoding="utf-8")
         assert text.startswith("<!DOCTYPE html>") and "de-measure-wrap" in text
+
+
+class TestConditionalLibraries:
+    """The CDN libraries (deck.gl, mapbox-gl-draw) load only when the maps' recorded calls need them."""
+
+    def test_deck_loads_only_when_a_panel_has_a_deck_overlay(self):
+        """deck.gl is loaded when a map records a deck overlay, and omitted otherwise.
+
+        Test scenario:
+            A map drawing a big-data layer records ``addDeckOverlay``; the page must load deck.gl so
+            the runtime can build the overlay. A page whose maps have no deck overlay must not pull
+            the (large) deck.gl bundle.
+        """
+        with_deck = HtmlDocument.swipe(
+            {"mapOptions": {}, "calls": [["addDeckOverlay", [[]]]]},
+            {"mapOptions": {}, "calls": []},
+        )
+        assert "deck.gl@" in with_deck.render(), "deck.gl must load for a deck overlay"
+        plain = HtmlDocument.swipe(
+            {"mapOptions": {}, "calls": []}, {"mapOptions": {}, "calls": []}
+        )
+        assert "deck.gl@" not in plain.render(), "no deck overlay must not load deck.gl"
+
+    def test_draw_loads_when_a_panel_records_a_draw_control(self):
+        """mapbox-gl-draw is loaded when a map records ``addMapboxDraw`` (e.g. a ``measure()`` map).
+
+        Test scenario:
+            A map carrying a draw control must have the draw library on the page so the runtime can
+            rebuild it; detection is off the recorded call, not only the measure document flag.
+        """
+        doc = HtmlDocument.swipe(
+            {"mapOptions": {}, "calls": [["addMapboxDraw", [{}]]]},
+            {"mapOptions": {}, "calls": []},
+        )
+        assert "dist/mapbox-gl-draw" in doc.render(), (
+            "draw library must load for a draw control"
+        )
+
+    def test_a_plain_swipe_loads_neither_deck_nor_draw(self):
+        """A swipe of plain maps pulls only maplibre-gl, not deck.gl or mapbox-gl-draw.
+
+        Test scenario:
+            Loading libraries a page does not use would bloat it; the plain case must stay lean.
+        """
+        html = HtmlDocument.swipe(
+            {"mapOptions": {}, "calls": [["addSource", ["s", {}]]]},
+            {"mapOptions": {}, "calls": []},
+        ).render()
+        assert "deck.gl@" not in html and "dist/mapbox-gl-draw" not in html

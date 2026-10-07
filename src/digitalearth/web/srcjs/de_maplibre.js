@@ -89,6 +89,77 @@
     }
   }
 
+  // A place-search box — the reimplementation of py-maplibregl's MapTilerGeocodingControl. Rather
+  // than vendor the upstream geocoding-control bundle, it calls MapTiler's geocoding API directly
+  // with the caller's key and flies/fits to a chosen result, which is all the tier's `geocoder()`
+  // asks for and keeps the control small and dependency-free.
+  class DEGeocoder {
+    constructor(options) {
+      options = options || {};
+      this._key = options.apiKey;
+      this._placeholder = options.placeholder || "Search";
+    }
+    onAdd(map) {
+      this._map = map;
+      const el = (this._container = document.createElement("div"));
+      el.className = "maplibregl-ctrl maplibregl-ctrl-group de-geocoder";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = this._placeholder;
+      input.className = "de-geocoder-input";
+      const results = document.createElement("div");
+      results.className = "de-geocoder-results";
+      el.appendChild(input);
+      el.appendChild(results);
+      const self = this;
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") self._search(input.value, results);
+      });
+      return el;
+    }
+    _search(query, results) {
+      if (!query || !this._key) return;
+      const map = this._map;
+      const url =
+        "https://api.maptiler.com/geocoding/" +
+        encodeURIComponent(query) +
+        ".json?key=" +
+        encodeURIComponent(this._key) +
+        "&limit=5";
+      fetch(url)
+        .then((r) => r.json())
+        .then((data) => {
+          results.innerHTML = "";
+          (data.features || []).forEach((f) => {
+            const row = document.createElement("div");
+            row.className = "de-geocoder-row";
+            row.textContent = f.place_name || f.text || "";
+            row.addEventListener("click", () => {
+              if (f.bbox) {
+                map.fitBounds([
+                  [f.bbox[0], f.bbox[1]],
+                  [f.bbox[2], f.bbox[3]],
+                ]);
+              } else if (f.center) {
+                map.flyTo({ center: f.center, zoom: 12 });
+              }
+              results.innerHTML = "";
+            });
+            results.appendChild(row);
+          });
+        })
+        .catch(() => {
+          results.textContent = "search failed";
+        });
+    }
+    onRemove() {
+      if (this._container && this._container.parentNode) {
+        this._container.parentNode.removeChild(this._container);
+      }
+      this._map = undefined;
+    }
+  }
+
   // The standard maplibre-gl controls, by the class name py-maplibregl serializes. Each is a real
   // `maplibregl.*Control`, constructed with the options dict the widget recorded.
   const STANDARD_CONTROLS = {
@@ -104,6 +175,7 @@
   function makeControl(type, options) {
     if (type === "LayerSwitcherControl") return new DELayerSwitcher(options);
     if (type === "InfoBoxControl") return new DEInfoBox(options);
+    if (type === "MapTilerGeocodingControl") return new DEGeocoder(options);
     if (STANDARD_CONTROLS[type] && global.maplibregl[type]) {
       return new global.maplibregl[type](options || {});
     }
@@ -163,15 +235,37 @@
     setLight: true,
   };
 
-  // Methods this runtime does not yet rebuild. They are refused by name rather than dropped, so a
-  // page is never exported silently missing a deck.gl overlay, a draw control added for its own
-  // sake, or a marker. (A measure readout adds its own draw control through the feature layer, not
-  // through this list.)
+  // The one call the digitalearth web tier never emits — it draws circle layers, not `Marker`s — so
+  // it is refused by name rather than reimplemented against nothing. A refusal (not a silent drop)
+  // means a future map that did add a marker would fail loudly here instead of exporting it missing.
   const UNSUPPORTED = {
-    addDeckOverlay: "deck.gl overlays",
-    setDeckLayers: "deck.gl overlays",
     addMarker: "markers",
   };
+
+  // deck.gl layers are serialized in deck's `@@type` JSON. The tier's specs use only plain values —
+  // the accessors (getFillColor, getPointRadius, …) are constants, never `@@function`/`@@=` closures —
+  // so each layer is built directly from its class in the deck.gl standalone bundle (which ships the
+  // layers and `MapboxOverlay` but not the separate `@deck.gl/json` converter). A `MapboxOverlay`
+  // draws the layers over the map; the overlay is kept on the map so a later `setDeckLayers` can
+  // swap them. An unexpected `@@`-prefixed accessor is refused rather than passed through as a string.
+  function deckLayersFrom(specs) {
+    const deck = global.deck;
+    return (specs || []).map(function (spec) {
+      const type = spec["@@type"];
+      const Layer = deck[type];
+      if (!Layer) throw new Error("de_maplibre: unknown deck.gl layer " + type);
+      const props = {};
+      for (const key in spec) {
+        if (key === "@@type") continue;
+        const value = spec[key];
+        if (typeof value === "string" && value.indexOf("@@") === 0) {
+          throw new Error("de_maplibre: deck.gl accessor expression not supported: " + value);
+        }
+        props[key] = value;
+      }
+      return new Layer(props);
+    });
+  }
 
   function applyCall(map, call) {
     const name = call[0];
@@ -200,6 +294,25 @@
     if (name === "addPopup" || name === "addTooltip") {
       const [layerId, field] = args;
       bindPopup(map, layerId, field || null, name === "addTooltip");
+      return;
+    }
+    if (name === "addDeckOverlay") {
+      const overlay = new global.deck.MapboxOverlay({
+        interleaved: false,
+        layers: deckLayersFrom(args[0]),
+      });
+      map.addControl(overlay);
+      map._deOverlay = overlay;
+      return;
+    }
+    if (name === "setDeckLayers") {
+      if (map._deOverlay) map._deOverlay.setProps({ layers: deckLayersFrom(args[0]) });
+      return;
+    }
+    if (name === "addMapboxDraw") {
+      const draw = new global.MapboxDraw(args[0] || {});
+      map.addControl(draw);
+      map._deDraw = draw;
       return;
     }
     if (UNSUPPORTED[name]) {

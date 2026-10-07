@@ -29,11 +29,17 @@ MAPLIBRE_VERSION = "5.3.0"
 _MAPLIBRE_JS = f"https://unpkg.com/maplibre-gl@{MAPLIBRE_VERSION}/dist/maplibre-gl.js"
 _MAPLIBRE_CSS = f"https://unpkg.com/maplibre-gl@{MAPLIBRE_VERSION}/dist/maplibre-gl.css"
 
-#: mapbox-gl-draw, loaded only for the measure document (WB-17) — the draw control the readout reads.
-#: Pinned, and the version py-maplibregl itself uses for its draw control.
+#: mapbox-gl-draw, loaded only when a page needs a draw control (the measure readout, or a map that
+#: recorded ``addMapboxDraw``). Pinned, and the version py-maplibregl uses for its own draw control.
 MAPBOX_DRAW_VERSION = "1.4.3"
 _DRAW_JS = f"https://unpkg.com/@mapbox/mapbox-gl-draw@{MAPBOX_DRAW_VERSION}/dist/mapbox-gl-draw.js"
 _DRAW_CSS = f"https://unpkg.com/@mapbox/mapbox-gl-draw@{MAPBOX_DRAW_VERSION}/dist/mapbox-gl-draw.css"
+
+#: deck.gl, loaded only when a map recorded a deck.gl overlay (``addDeckOverlay``) — the big-data GPU
+#: layers. The standalone bundle carries ``JSONConverter`` (to parse the ``@@type`` layer specs) and
+#: ``MapboxOverlay`` (to draw them over the map).
+DECK_VERSION = "9.0.38"
+_DECK_JS = f"https://unpkg.com/deck.gl@{DECK_VERSION}/dist.min.js"
 
 _SRCJS = Path(__file__).parent / "srcjs"
 
@@ -223,26 +229,52 @@ class HtmlDocument:
             needs_draw=True,
         )
 
+    def _panels_record(self, *names: str) -> bool:
+        """Return ``True`` if any panel's serialized ``calls`` records one of ``names``.
+
+        The CDN libraries are loaded on demand: a page gets deck.gl only when a map actually draws a
+        deck.gl overlay, and mapbox-gl-draw only when a map has a draw control — read off the calls
+        the maps recorded, so the libraries track the content rather than being loaded on every page.
+
+        Args:
+            *names: Call method names to look for (e.g. ``"addDeckOverlay"``).
+
+        Returns:
+            Whether any panel records a matching call.
+        """
+        wanted = set(names)
+        return any(
+            call and call[0] in wanted
+            for panel in self.panels
+            for call in panel.data.get("calls", [])
+        )
+
     def render(self, *, title: str = "Digital-Earth map") -> str:
         """Return the standalone HTML string.
+
+        Loads maplibre-gl from the CDN always, and deck.gl / mapbox-gl-draw only when the maps need
+        them — deck.gl when a map records a deck.gl overlay, mapbox-gl-draw when a map has a draw
+        control or the page is a measure page.
 
         Args:
             title: The document ``<title>``.
 
         Returns:
-            A complete HTML document: maplibre-gl (CDN, plus mapbox-gl-draw when a measure document
-            needs it) + our CSS/runtime/feature scripts, the feature markup, and the bootstrap that
-            builds the maps and starts the feature.
+            A complete HTML document: the needed CDN libraries + our CSS/runtime/feature scripts, the
+            feature markup, and the bootstrap that builds the maps and starts the feature.
         """
         scripts = [_asset("de_maplibre.js")]
         if self.feature_js:
             scripts.append(_asset("de_features.js"))
         scripts.append(self.bootstrap_js)
         script_tags = "\n".join(f"<script>\n{js}\n</script>" for js in scripts)
+        needs_deck = self._panels_record("addDeckOverlay", "setDeckLayers")
+        needs_draw = self.needs_draw or self._panels_record("addMapboxDraw")
         draw_css = (
-            f'<link rel="stylesheet" href="{_DRAW_CSS}"/>\n' if self.needs_draw else ""
+            f'<link rel="stylesheet" href="{_DRAW_CSS}"/>\n' if needs_draw else ""
         )
-        draw_js = f'<script src="{_DRAW_JS}"></script>\n' if self.needs_draw else ""
+        draw_js = f'<script src="{_DRAW_JS}"></script>\n' if needs_draw else ""
+        deck_js = f'<script src="{_DECK_JS}"></script>\n' if needs_deck else ""
         return (
             "<!DOCTYPE html>\n"
             '<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
@@ -254,6 +286,7 @@ class HtmlDocument:
             "</head>\n<body>\n"
             f"{self.body_html}\n"
             f'<script src="{_MAPLIBRE_JS}"></script>\n'
+            f"{deck_js}"
             f"{draw_js}"
             f"{script_tags}\n"
             "</body>\n</html>\n"

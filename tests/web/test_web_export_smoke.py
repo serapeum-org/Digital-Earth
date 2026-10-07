@@ -202,3 +202,72 @@ class TestMeasureRendersInABrowser:
         assert probe["readout"] and "Distance: 111" in probe["readout"], (
             f"a 1-degree line must read ~111 km, got {probe['readout']!r}"
         )
+
+
+class TestDeckAndGeocoderInABrowser:
+    """The full reimplementation: deck.gl overlays and the reimplemented geocoder render in a browser."""
+
+    def test_a_big_data_swipe_builds_deck_overlays(self):
+        """Two big-data (deck.gl) maps in a swipe each build a deck overlay with no JS error.
+
+        Test scenario:
+            A ``points(big=True)`` map records a deck.gl overlay; the own-export runtime must load
+            deck.gl, parse the ``@@type`` layer spec, and attach a MapboxOverlay to each map — the
+            proof the deck.gl path works end to end, not only for a single map.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"v": [1.0, 2.0, 3.0]},
+            geometry=[Point(i * 0.1, i * 0.1) for i in range(3)],
+            crs=4326,
+        )
+        before = WebMap().basemap().points(gdf, big=True)
+        after = WebMap().basemap().points(gdf, big=True)
+        html = swipe_html(before, after, title="deck-smoke")
+        probe_js = """() => {
+            const DE = window.DE || {};
+            return {
+                has_deck: typeof window.deck !== 'undefined',
+                overlays: ['de-map-before', 'de-map-after'].map(
+                    id => !!(DE.maps[id] && DE.maps[id]._deOverlay)
+                ),
+            };
+        }"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "deck.html"
+            path.write_text(html, encoding="utf-8")
+            page_errors, console_errors, probe = _render_and_probe(
+                path.as_uri(), probe_js
+            )
+
+        assert page_errors == [], f"uncaught JS error(s): {page_errors}"
+        assert _ignore_network_console(console_errors) == [], console_errors
+        assert probe["has_deck"], "deck.gl did not load for a big-data map"
+        assert probe["overlays"] == [True, True], (
+            f"both maps must build a deck overlay, got {probe['overlays']}"
+        )
+
+    def test_a_geocoder_map_renders_the_search_box(self):
+        """A map carrying a geocoder renders the reimplemented search box with no JS error.
+
+        Test scenario:
+            ``geocoder()`` records a ``MapTilerGeocodingControl``; through the own-export runtime it
+            becomes our ``DEGeocoder`` control, so the search input must be present in the page.
+        """
+        before = WebMap().basemap().geocoder(api_key="demo-key")
+        html = swipe_html(before, WebMap().basemap(), title="geocoder-smoke")
+        probe_js = """() => ({
+            has_box: !!document.querySelector('.de-geocoder-input'),
+        })"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "geo.html"
+            path.write_text(html, encoding="utf-8")
+            page_errors, console_errors, probe = _render_and_probe(
+                path.as_uri(), probe_js
+            )
+
+        assert page_errors == [], f"uncaught JS error(s): {page_errors}"
+        assert _ignore_network_console(console_errors) == [], console_errors
+        assert probe["has_box"], "the reimplemented geocoder search box did not render"
