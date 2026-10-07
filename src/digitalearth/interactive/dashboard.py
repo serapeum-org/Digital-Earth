@@ -1261,5 +1261,8 @@ class DashboardMixin(_MixinBase):
         blob = base64.urlsafe_b64encode(json.dumps(state).encode("utf-8")).decode(
             "ascii"
         )
-        separator = "&" if "?" in base_url else "?"
-        return f"{base_url}{separator}state={blob}"
+        # Strip a trailing separator first, so a base already ending in `?` or `&` does not produce `?&state=`
+        # or `&&state=` (L1); the separator is then `&` only when a real query already follows the `?`.
+        base = base_url.rstrip("?&")
+        separator = "&" if "?" in base else "?"
+        return f"{base}{separator}state={blob}"

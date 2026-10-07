@@ -26,6 +26,13 @@ class TestShareUrl:
         assert plain.startswith("https://host/app?state=")
         assert "&state=" in joined
 
+    def test_a_trailing_separator_in_the_base_url_is_not_doubled(self):
+        """L1 — a base ending in ``?`` or ``&`` must not yield ``?&state=`` / ``&&state=``."""
+        q = InteractiveMap(crs=3857).share_url("https://host/app?")
+        amp = InteractiveMap(crs=3857).share_url("https://host/app?tab=1&")
+        assert q.startswith("https://host/app?state="), q
+        assert amp.startswith("https://host/app?tab=1&state="), amp
+
     def test_a_url_without_state_is_refused(self):
         """Decoding a URL that carries no ``state=`` is a clear error, not a crash."""
         with pytest.raises(ValueError, match="no shareable state"):
