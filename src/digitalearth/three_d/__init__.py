@@ -19,6 +19,7 @@ to give VTK a virtual X server to render into (a no-op where a display already e
 """
 
 from digitalearth.three_d.headless import start_xvfb
+from digitalearth.three_d.panels import grid
 from digitalearth.three_d.scene3d import Scene3D
 
-__all__ = ["Scene3D", "start_xvfb"]
+__all__ = ["Scene3D", "grid", "start_xvfb"]
