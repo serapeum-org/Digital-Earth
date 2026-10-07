@@ -663,6 +663,30 @@ class TestTheRegistryIsAddressable:
             f"the basemap gallery must offer every basemap, got {offered}"
         )
 
+    def test_basemap_gallery_opens_on_a_single_ground(self, points):
+        """WB-14 (M1): the gallery starts with only the first basemap visible, not all stacked.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            py-maplibregl's switcher is checkboxes and every basemap registers visible, so without a single
+            starting ground a saved page would draw both basemaps stacked opaque. Opting the gallery in must
+            leave exactly one basemap visible — the first — so the page opens on one ground.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().tiles("https://a/{z}/{x}/{y}.png").points(points)
+        basemaps = [i for i in m.layer_ids if m._layer_tree.get(i).kind == "basemap"]
+        assert all(m.figure_spec.layers.is_visible(b) for b in basemaps), (
+            "both basemaps start visible before the gallery is built"
+        )
+        m.layer_control(controls=["visibility", "basemap"])
+        visible = [b for b in basemaps if m.figure_spec.layers.is_visible(b)]
+        assert visible == basemaps[:1], (
+            f"the gallery must open on the first basemap alone, got visible={visible}"
+        )
+
     def test_removing_a_layer_drops_it_from_the_map_and_the_index(self, points):
         """A mistake used to mean starting over."""
         from digitalearth.web import WebMap

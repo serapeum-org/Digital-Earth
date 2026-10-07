@@ -1232,8 +1232,9 @@ class DecorationMixin(_MixinBase):
         A map with a basemap, a choropleth and a point overlay had no way to look underneath — which is the
         single most common thing anyone does with a web map. The switch lists the data layers by default:
         basemaps are the ground, not something a viewer toggles — but naming ``"basemap"`` in ``controls=``
-        opts them in as a basemap gallery (WB-14), so a viewer can switch the ground among the basemaps on
-        the map.
+        opts them in as a basemap gallery (WB-14). The gallery opens on the **first** basemap and hides the
+        rest, so a viewer switches the ground from there. py-maplibregl's switcher is checkboxes rather than a
+        radio, so a viewer *can* re-show more than one at once; the page simply starts on a single ground.
 
         The three keywords are the ones the Tier-2 contract declares and the interactive tier now answers to
         as well — the layers to include, the position, the controls to expose — so the same call adds a layer
@@ -1371,6 +1372,18 @@ class DecorationMixin(_MixinBase):
         self._check_layer_order(order)
         applied_opacity = self._apply_layer_opacity(resolved_opacity)
         applied_order = self._apply_layer_order(order)
+        # The basemap gallery (WB-14) opens on ONE ground. py-maplibregl's switcher is checkboxes, and every
+        # basemap is registered visible, so without this a saved page would draw all of them stacked opaque
+        # (the last one winning) rather than letting a viewer switch between them. Start the gallery on the
+        # first offered basemap and hide the rest, so the page opens on one ground and the switcher switches it.
+        if offer_basemaps:
+            gallery = [
+                layer_id
+                for layer_id in wanted
+                if self._layer_tree.get(layer_id).kind == "basemap"
+            ]
+            for extra in gallery[1:]:
+                self.set_visible(extra, False)
         # Held as a request, not appended as a layer: the live layers are resolved when the widget is
         # built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling
         # this twice replaces the request rather than stacking a second identical panel.
