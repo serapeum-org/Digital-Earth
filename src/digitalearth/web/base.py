@@ -1761,43 +1761,50 @@ class WebMapBase:
         )
 
     def _forget_slider_frame(self, layer_id: str) -> None:
-        """Drop a removed layer from the time slider, and the slider itself when nothing is left to step.
+        """Drop a removed layer from the time slider, and the slider itself when a series no longer remains.
 
         Args:
             layer_id: The layer being removed.
 
         Note:
-            A slider that still named a removed layer filtered a layer that was not there — the page kept a
-            control that did nothing, which is the dangling reference this seam is meant to end.
+            A slider that still named a removed layer stepped onto a layer that was not there — the page
+            kept a control that did nothing, which is the dangling reference this seam is meant to end. The
+            ``< 2`` rule mirrors :meth:`_forget_temporal_step`, which nulls ``_temporal`` once fewer than two
+            step layers remain: the two cleanup seams agree, so a one-step remnant never leaves a one-row
+            picker behind for a map that reports no series.
         """
         slider = next(
             (item for item in self._furniture if item.kind == "time_slider"), None
         )
         if slider is None:
             return
-        named = slider.options.get("layers", ())
-        if layer_id == slider.options.get("layer") or tuple(named) == (layer_id,):
+        named = tuple(slider.options.get("layers", ()))
+        if layer_id not in named:
+            return
+        kept = [held for held in named if held != layer_id]
+        # One step is not a series — once removing this layer leaves fewer than two, forget the control
+        # rather than re-recording a one-row picker that `_temporal_switcher` (and `_forget_temporal_step`,
+        # which nulls `_temporal` on the same boundary) would both treat as no series at all.
+        if len(kept) < 2:
             self._forget_furniture("time_slider")
             return
-        if layer_id in named:
-            # The frame at the same position goes with it. Dropping the layer alone left a slider with more
-            # stops than layers — three frames for two layers — so a renderer drawing the control from the
-            # description stepped onto a frame that names nothing (review M9).
-            kept = [index for index, held in enumerate(named) if held != layer_id]
-            frames = tuple(slider.options.get("frames", ()))
-            self._record_furniture(
-                "time_slider",
-                anchor=slider.anchor,
-                **{
-                    **dict(slider.options),
-                    "layers": tuple(named[index] for index in kept),
-                    **(
-                        {"frames": tuple(frames[index] for index in kept)}
-                        if len(frames) == len(named)
-                        else {}
-                    ),
-                },
-            )
+        # The frame at the same position goes with the layer. Dropping the layer alone left a slider with
+        # more stops than layers — three frames for two layers — so a renderer drawing the control from the
+        # description stepped onto a frame that names nothing (review M9).
+        frames = tuple(slider.options.get("frames", ()))
+        self._record_furniture(
+            "time_slider",
+            anchor=slider.anchor,
+            **{
+                **dict(slider.options),
+                "layers": tuple(kept),
+                **(
+                    {"frames": tuple(f for f, held in zip(frames, named) if held != layer_id)}
+                    if len(frames) == len(named)
+                    else {}
+                ),
+            },
+        )
 
     def _index_layer(
         self,

@@ -255,6 +255,26 @@ class TestPerLayerInteraction:
             0
         ].to_dict()
 
+    def test_reducing_a_two_step_series_to_one_forgets_the_slider(self, points):
+        """Removing one step of a two-step series drops the whole slider, not a one-row remnant (L3).
+
+        Args:
+            points: The two features, one per step.
+
+        Test scenario:
+            ``_forget_temporal_step`` nulls ``_temporal`` once fewer than two steps remain; the furniture
+            seam must agree, so removing one of two leaves no ``time_slider`` furniture — not a one-layer
+            picker for a map that now reports no series.
+        """
+        frames = points.assign(t=["2020", "2021"])
+        m = WebMap().timeslider(frames, kdim="t")
+        m.remove_layer(m.layer_ids[0])
+        assert m._temporal is None, "_temporal must be nulled once a series drops below two steps"
+        kinds = [item.kind for item in m.figure_spec.panels[0].furniture]
+        assert "time_slider" not in kinds, (
+            f"a one-step remnant must not leave a time_slider furniture, got {kinds}"
+        )
+
     def test_removing_another_layer_leaves_the_slider_alone(self, points):
         """A slider steps through its own layers; removing a different one does not touch it.
 
