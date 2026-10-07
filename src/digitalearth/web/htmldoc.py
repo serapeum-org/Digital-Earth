@@ -44,9 +44,12 @@ _DECK_JS = f"https://unpkg.com/deck.gl@{DECK_VERSION}/dist.min.js"
 _SRCJS = Path(__file__).parent / "srcjs"
 
 
+# Assets are cached for the life of the process. They are immutable in a built wheel; a developer
+# editing srcjs/*.js in a long-lived process (a running notebook kernel) will not see the change
+# without a restart — acceptable for shipped runtime assets, noted so it is not mistaken for a bug.
 @cache
 def _asset(name: str) -> str:
-    """Return the text of a shipped ``srcjs`` asset (cached).
+    """Return the text of a shipped ``srcjs`` asset (cached for the process).
 
     Args:
         name: The file name under ``web/srcjs`` (e.g. ``"de_maplibre.js"``).
@@ -55,6 +58,31 @@ def _asset(name: str) -> str:
         The file's text.
     """
     return (_SRCJS / name).read_text(encoding="utf-8")
+
+
+def _embed_json(data: dict) -> str:
+    """Serialize ``data`` to JSON safe to embed inline inside a ``<script>`` block.
+
+    ``json.dumps`` does not escape ``<`` / ``>`` / ``&``, so a serialized string containing
+    ``</script>`` (an attribution, a basemap provider, a GeoJSON feature property, an ``InfoBox``
+    legend) would terminate the ``<script>`` element early and turn the rest of the page into live
+    markup — a page break on benign data, a stored-XSS vector when the data is third-party. The three
+    characters are escaped to their ``\\uXXXX`` forms, which a JS string/object literal reads back as
+    the original character, so the data is preserved while the raw ``</script>`` never appears in the
+    HTML source. (U+2028 / U+2029 are already safe: ``json.dumps`` defaults to ``ensure_ascii=True``.)
+
+    Args:
+        data: The ``{mapOptions, calls}`` dict (or any JSON-serialisable value) to embed.
+
+    Returns:
+        A JSON string with ``<`` / ``>`` / ``&`` unicode-escaped.
+    """
+    return (
+        json.dumps(data)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
 
 @dataclass(frozen=True)
@@ -123,8 +151,8 @@ class HtmlDocument:
         bootstrap = (
             "(function(){var ready=0;function go(){if(++ready===2){"
             f'window.DE.swipe("{wrap}","{left}","{right}");}}}}'
-            f'window.DE.buildMap("{left}",{json.dumps(before)},go);'
-            f'window.DE.buildMap("{right}",{json.dumps(after)},go);'
+            f'window.DE.buildMap("{left}",{_embed_json(before)},go);'
+            f'window.DE.buildMap("{right}",{_embed_json(after)},go);'
             "})();"
         )
         return cls(
@@ -169,8 +197,8 @@ class HtmlDocument:
         bootstrap = (
             "(function(){var ready=0;function go(){if(++ready===2){"
             f'window.DE.minimap("{main_id}","{mini_id}");}}}}'
-            f'window.DE.buildMap("{main_id}",{json.dumps(main)},go);'
-            f'window.DE.buildMap("{mini_id}",{json.dumps(overview)},go);'
+            f'window.DE.buildMap("{main_id}",{_embed_json(main)},go);'
+            f'window.DE.buildMap("{mini_id}",{_embed_json(overview)},go);'
             "})();"
         )
         return cls(
@@ -218,7 +246,7 @@ class HtmlDocument:
         )
         opts = json.dumps({"distance": bool(distance), "area": bool(area)})
         bootstrap = (
-            f'window.DE.buildMap("{main_id}",{json.dumps(main)},function(){{'
+            f'window.DE.buildMap("{main_id}",{_embed_json(main)},function(){{'
             f'window.DE.measure("{main_id}","{readout}",{opts});}});'
         )
         return cls(

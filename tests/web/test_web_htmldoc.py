@@ -357,6 +357,41 @@ class TestConditionalLibraries:
         assert "deck.gl@" not in html and "dist/mapbox-gl-draw" not in html
 
 
+class TestScriptSafety:
+    """Embedded map state must not break out of the ``<script>`` block (H1)."""
+
+    def test_a_closing_script_tag_in_data_is_escaped(self):
+        """A ``</script>`` in a serialized string is escaped, so it cannot break out or inject markup.
+
+        Test scenario:
+            A source ``attribution`` of ``x</script><img onerror=...>`` would, if embedded raw,
+            terminate the script and turn the rest into live HTML (a page-break on benign data, an
+            XSS vector on third-party data). The rendered page must not contain the raw breakout, and
+            the data must survive escaped.
+        """
+        evil = {
+            "mapOptions": {},
+            "calls": [
+                ["addSource", ["s", {"attribution": "x</script><img src=q onerror=alert(1)>"}]]
+            ],
+        }
+        html = HtmlDocument.swipe(evil, {"mapOptions": {}, "calls": []}).render()
+        assert "</script><img" not in html, "data broke out of the <script> block"
+        assert "\\u003c/script\\u003e" in html, "the </script> in data was not escaped"
+
+    def test_angle_brackets_and_ampersand_in_data_are_escaped(self):
+        """``<``/``>``/``&`` in embedded data are unicode-escaped, never emitted raw into the script.
+
+        Test scenario:
+            Escaping only ``</`` would still let a lone ``<script>`` or an HTML comment inside data
+            confuse a parser; neutralising the angle brackets and ampersand closes that class.
+        """
+        data = {"mapOptions": {}, "calls": [["addSource", ["s", {"note": "a<b>c&d"}]]]}
+        html = HtmlDocument.measure(data).render()
+        assert "a<b>c&d" not in html, "raw angle brackets/ampersand embedded"
+        assert "a\\u003cb\\u003ec\\u0026d" in html, "data not escaped as expected"
+
+
 class TestOfflineInlining:
     """``offline=True`` routes each save through the CDN-asset inliner."""
 
