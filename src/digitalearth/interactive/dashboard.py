@@ -115,6 +115,43 @@ _ALPHA_ONLY_TYPES = ("RGB",)
 #: The subset of :data:`_OVERRIDABLE_STYLE` an :data:`_ALPHA_ONLY_TYPES` element can take.
 _ALPHA_ONLY_STYLE = ("alpha",)
 
+#: The dashboard's declared widget vocabulary (IN-9): the names `dashboard(widgets=...)` accepts, in the
+#: order they read. Held as data so a name outside it is refused with a did-you-mean rather than silently
+#: dropped, and a new widget is one builder in `_dashboard_widget_builders`, not another `elif`.
+_DASHBOARD_WIDGETS: tuple[str, ...] = ("cmap", "alpha", "basemap")
+
+#: The Panel templates `dashboard(template=...)` can host the app in (IN-9): the short name → the class on
+#: `panel.template`. Held as data for the same reason the widgets are.
+_DASHBOARD_TEMPLATES: dict[str, str] = {
+    "fast": "FastListTemplate",
+    "bootstrap": "BootstrapTemplate",
+    "material": "MaterialTemplate",
+    "vanilla": "VanillaTemplate",
+}
+
+
+def _did_you_mean(kind: str, name: str, known: Sequence[str]) -> str:
+    """Return a refusal message for an unknown name, with a difflib suggestion (IN-13).
+
+    The interactive tier's own did-you-mean: hvPlot and HoloViews suggest the nearest option for an unknown
+    key, and the tier's declared vocabularies — the dashboard widgets and templates — answer the same way
+    rather than listing the choices and leaving the caller to spot their typo.
+
+    Args:
+        kind: What the name is (``"dashboard widget"``, ``"dashboard template"``), quoted in the message.
+        name: The name the caller passed.
+        known: The names that are valid, which the message lists and suggests from.
+
+    Returns:
+        A message naming the unknown value, the nearest match where there is one, and the valid set.
+    """
+    from difflib import get_close_matches
+
+    match = get_close_matches(str(name), [str(k) for k in known], n=1)
+    suggestion = f" (did you mean {match[0]!r}?)" if match else ""
+    return f"unknown {kind} {name!r}{suggestion}; choose from {list(known)}"
+
+
 #: Built-in colormaps offered by the dashboard cmap selector.
 _CMAP_CHOICES = [
     "viridis",
@@ -173,25 +210,32 @@ class DashboardMixin(_MixinBase):
         widgets: Sequence[str] = ("cmap", "alpha"),
         sidebar: bool = True,
         title: str = "",
+        template: str | None = None,
     ) -> Any:
         """Wrap the map and reactive widgets into a Panel layout.
 
         The returned object is a ``panel.viewable.Viewable``: a sidebar (or inline row) of widgets
-        bound to the map's style, beside the live map. Supported widgets: ``"cmap"`` (colormap
-        selector), ``"alpha"`` (opacity slider), ``"basemap"`` (tile-provider selector, which swaps the
-        tile layer under the map and is available on a Web-Mercator map only).
+        bound to the map's style, beside the live map. The widget set is a **declared vocabulary** (IN-9),
+        :data:`_DASHBOARD_WIDGETS` — ``"cmap"`` (colormap selector), ``"alpha"`` (opacity slider),
+        ``"basemap"`` (tile-provider selector, Web-Mercator-only) — so a name outside it is refused with a
+        did-you-mean rather than silently dropped, and a new widget is one entry, not another ``elif``.
 
         Args:
             widgets: Which widgets to expose, in order.
-            sidebar: Lay widgets out in a left sidebar (``True``) or a top row (``False``).
+            sidebar: Lay widgets out in a left sidebar (``True``) or a top row (``False``). Ignored when
+                ``template`` is given — a template has its own sidebar.
             title: Dashboard title (falls back to the map's ``title``).
+            template: A Panel template to host the app in (IN-9) — ``"fast"``, ``"bootstrap"``,
+                ``"material"`` or ``"vanilla"``. ``None`` (default) returns the plain row/column layout.
 
         Returns:
-            A ``panel.viewable.Viewable`` hosting the map + widgets.
+            A ``panel.viewable.Viewable`` hosting the map + widgets — a template instance when ``template``
+            is given, else the row/column layout.
 
         Raises:
-            ValueError: for an unknown widget name, or when ``"basemap"`` is requested on a map whose
-                display CRS is not EPSG:3857 (Bokeh renders tiles in Web Mercator only).
+            ValueError: for an unknown widget name (with a did-you-mean), an unknown ``template`` name, or
+                when ``"basemap"`` is requested on a map whose display CRS is not EPSG:3857 (Bokeh renders
+                tiles in Web Mercator only).
 
         Examples:
             - Build a dashboard with colormap + opacity controls:
@@ -213,6 +257,8 @@ class DashboardMixin(_MixinBase):
 
         view = pn.bind(_view, **bindings)
         panel_map = pn.panel(view)
+        if template is not None:
+            return self._templated(pn, template, controls, panel_map, title)
         heading = (
             pn.pane.Markdown(f"## {title or self.title}")
             if (title or self.title)
@@ -231,8 +277,42 @@ class DashboardMixin(_MixinBase):
             )
         return pn.Column(heading, body) if heading else body
 
+    def _templated(
+        self, pn: Any, template: str, controls: list, panel_map: Any, title: str
+    ) -> Any:
+        """Host the map and widgets in a named Panel template (IN-9).
+
+        Args:
+            pn: The imported panel module.
+            template: A key of :data:`_DASHBOARD_TEMPLATES`.
+            controls: The widget objects for the sidebar.
+            panel_map: The reactive map pane for the main area.
+            title: The template title (falls back to the map's ``title``).
+
+        Returns:
+            The instantiated Panel template.
+
+        Raises:
+            ValueError: for a template name outside the vocabulary, with a did-you-mean.
+        """
+        class_name = _DASHBOARD_TEMPLATES.get(template)
+        if class_name is None:
+            raise ValueError(
+                _did_you_mean("dashboard template", template, sorted(_DASHBOARD_TEMPLATES))
+            )
+        template_class = getattr(pn.template, class_name)
+        return template_class(
+            title=title or self.title or "Digital-Earth",
+            sidebar=list(controls),
+            main=[panel_map],
+        )
+
     def _build_widgets(self, pn: Any, widgets: Sequence[str]) -> tuple:
-        """Construct the requested widgets and the ``pn.bind`` keyword map.
+        """Construct the requested widgets and the ``pn.bind`` keyword map from the declared vocabulary.
+
+        The vocabulary (:data:`_DASHBOARD_WIDGETS`) is consulted as data rather than branched on (IN-9), so
+        a name outside it is refused with a did-you-mean (IN-13) and adding a widget is adding a builder, not
+        another ``elif``.
 
         Args:
             pn: The imported panel module.
@@ -243,29 +323,46 @@ class DashboardMixin(_MixinBase):
             map passed to ``pn.bind``.
 
         Raises:
-            ValueError: for an unknown widget name, or when ``"basemap"`` is requested on a
-                non-Web-Mercator map (Bokeh renders tiles in EPSG:3857 only).
+            ValueError: for an unknown widget name (with a did-you-mean), or when ``"basemap"`` is requested
+                on a non-Web-Mercator map (Bokeh renders tiles in EPSG:3857 only).
         """
+        builders = self._dashboard_widget_builders(pn)
         controls, bindings = [], {}
         for name in widgets:
-            if name == "cmap":
-                widget = pn.widgets.Select(label="Colormap", options=_CMAP_CHOICES)
-            elif name == "alpha":
-                widget = pn.widgets.FloatSlider(
-                    label="Opacity", start=0.0, end=1.0, value=1.0
-                )
-            elif name == "basemap":
-                # Refuse rather than draw a misaligned basemap: the widget swaps in a Bokeh tile layer,
-                # which only registers with the data on a Web-Mercator map.
-                self._require_web_mercator("dashboard basemap")
-                widget = pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
-            else:
+            builder = builders.get(name)
+            if builder is None:
                 raise ValueError(
-                    f"unknown dashboard widget {name!r}; choose from 'cmap'/'alpha'/'basemap'"
+                    _did_you_mean("dashboard widget", name, sorted(builders))
                 )
+            widget = builder()
             controls.append(widget)
             bindings[name] = widget
         return controls, bindings
+
+    def _dashboard_widget_builders(self, pn: Any) -> dict:
+        """Return the declared dashboard-widget vocabulary: name → a builder of its Panel widget (IN-9).
+
+        Args:
+            pn: The imported panel module.
+
+        Returns:
+            A ``{name: () -> widget}`` mapping over :data:`_DASHBOARD_WIDGETS`. ``"basemap"`` carries the
+            Web-Mercator guard in its builder, so it refuses rather than draws a misaligned tile layer.
+        """
+
+        def _basemap() -> Any:
+            # Refuse rather than draw a misaligned basemap: the widget swaps in a Bokeh tile layer, which
+            # only registers with the data on a Web-Mercator map.
+            self._require_web_mercator("dashboard basemap")
+            return pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
+
+        return {
+            "cmap": lambda: pn.widgets.Select(label="Colormap", options=_CMAP_CHOICES),
+            "alpha": lambda: pn.widgets.FloatSlider(
+                label="Opacity", start=0.0, end=1.0, value=1.0
+            ),
+            "basemap": _basemap,
+        }
 
     def _restyled_layers(
         self, overrides: dict, layers: Sequence[Any] | None = None

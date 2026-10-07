@@ -61,6 +61,27 @@ class TestDashboard:
         with pytest.raises(ValueError, match="unknown dashboard widget"):
             m.dashboard(widgets=("bogus",))
 
+    def test_unknown_widget_suggests_the_nearest_name(self, m):
+        """IN-13 — a near-miss widget name gets a did-you-mean, not just the list."""
+        with pytest.raises(ValueError, match="did you mean 'cmap'"):
+            m.dashboard(widgets=("cmp",))
+
+    def test_the_widget_vocabulary_is_declared_data(self, m):
+        """IN-9 — the builders are driven by the declared vocabulary, not an if/elif."""
+        from digitalearth.interactive.dashboard import _DASHBOARD_WIDGETS
+
+        assert set(m._dashboard_widget_builders(pn)) == set(_DASHBOARD_WIDGETS)
+
+    def test_a_template_hosts_the_app(self, m):
+        """IN-9 — ``template=`` returns the named Panel template instance."""
+        app = m.dashboard(template="fast")
+        assert isinstance(app, pn.template.FastListTemplate)
+
+    def test_an_unknown_template_suggests_the_nearest(self, m):
+        """IN-13 — a near-miss template name gets a did-you-mean."""
+        with pytest.raises(ValueError, match="did you mean 'fast'"):
+            m.dashboard(template="fastt")
+
     def test_title_renders_as_heading(self, m):
         app = m.dashboard(title="Discharge")
         markdowns = [p for p in app.select(pn.pane.Markdown)]
