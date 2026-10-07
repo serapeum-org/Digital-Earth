@@ -204,6 +204,29 @@ class TestTimeSliderNeedsEngine:
             f"every step must paint by the one frozen expression, got {colours}"
         )
 
+    def test_a_null_kdim_row_does_not_shift_the_colour_scale(self):
+        """L2: a feature with no time value is excluded from the classification, not just from drawing.
+
+        Test scenario:
+            A huge ``pop`` outlier carried on a null-``kdim`` row lands in no step layer, so it must not be
+            drawn — and it must not move the quantile breaks of the features that *are* drawn either. With
+            the outlier classified, k=2 breaks over ``[1, 2, 3, 1000]`` would top out at 1000; over the
+            drawn ``[1, 2, 3]`` they top out at 3.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"time": [2000, 2010, 2020, None], "pop": [1.0, 2.0, 3.0, 1000.0]},
+            geometry=[Point(i, i) for i in range(4)],
+            crs=4326,
+        )
+        m = WebMap().timeslider(gdf, kdim="time", column="pop", scheme="quantiles", k=2)
+        assert m._temporal_times() == [2000, 2010, 2020], "the null-time row is no step"
+        assert max(m.last_breaks) == 3.0, (
+            f"the never-drawn outlier must not enter the breaks, got {m.last_breaks}"
+        )
+
 
 class TestTimeSliderRejectsUnsupportedInput:
     """Input that is neither a vector layer nor a raster stack is turned away with an actionable error.

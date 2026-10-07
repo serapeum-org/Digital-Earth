@@ -135,8 +135,10 @@ class TemporalMixin(_MixinBase):
             features: A ``FeatureCollection`` / GeoDataFrame whose features carry ``kdim``, or a pyramids
                 ``DatasetCollection`` whose members are ordered time steps.
             kdim: The time attribute to scrub (vector), or the slider's label (raster). A feature whose
-                ``kdim`` is missing (null) carries no step value, so it sits in no step's layer and is not
-                drawn — live or saved. Drop such rows before calling only if you meant them to appear.
+                ``kdim`` is missing (null) carries no step value, so it sits in no step's layer, is not
+                drawn — live or saved — and does not enter the colour classification. Its geometry can still
+                widen the map's initial extent, since the frame is placed before the null rows are dropped;
+                drop such rows before calling if that matters.
             labels: Raster only — per-member slider labels (e.g. datetimes) shown instead of the integer
                 index; must match the member count and be unique.
             band: Raster only — the 1-based band drawn for every member.
@@ -391,13 +393,16 @@ class TemporalMixin(_MixinBase):
         _, layer_types = _require_layer_api()
         geom_types = set(gdf.geometry.geom_type.unique())
         is_polygon = geom_types <= {"Polygon", "MultiPolygon"}
-        # The paint is resolved once, over the whole series, so every step colours by the same
-        # classification. `_color_expr` records `last_breaks`/`last_legend` here too, describing the whole
-        # series the colour key belongs to.
+        # Classify over the DRAWN subset, not the whole frame: a row with a null `kdim` lands in no step
+        # (`gdf[gdf[kdim] == step]` never matches it), so it is never drawn — and it must not shift the
+        # breaks of the rows that are. `drawn` is the union of the per-step subsets; the paint is resolved
+        # once over it so every step colours by the same classification. `_color_expr` records
+        # `last_breaks`/`last_legend` here too, describing the drawn series the colour key belongs to.
+        drawn = gdf[gdf[kdim].notna()]
         color_encoding: Any = None
         if is_polygon and column is not None:
             fill, color_encoding = self._color_expr(
-                self._require_column(gdf, column), column, scheme, k, cmap
+                self._require_column(drawn, column), column, scheme, k, cmap
             )
             prefix, layer_type, kind = "fill", layer_types.FILL, "choropleth"
             paint = {
@@ -412,7 +417,7 @@ class TemporalMixin(_MixinBase):
             prefix, layer_type, kind = "circle", layer_types.CIRCLE, "points"
             if column is not None:
                 circle_color, color_encoding = self._color_expr(
-                    self._require_column(gdf, column), column, scheme, k, cmap
+                    self._require_column(drawn, column), column, scheme, k, cmap
                 )
             else:
                 circle_color = VECTOR_COLOR
