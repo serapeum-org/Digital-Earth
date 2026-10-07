@@ -59,23 +59,95 @@ def _to_vtk_axes(cube: np.ndarray) -> np.ndarray:
     return cube.transpose(2, 1, 0).ravel(order="F")
 
 
-def _volume_grid(cube: np.ndarray) -> "pv.ImageData":
+#: The identity placement — origin at the world origin, one unit per cell — a cube with no georeferencing
+#: (and no explicit ``origin``/``spacing``) is drawn at. Named so the default reads as a decision rather than
+#: three magic triples.
+_UNIT_ORIGIN: tuple[float, float, float] = (0.0, 0.0, 0.0)
+_UNIT_SPACING: tuple[float, float, float] = (1.0, 1.0, 1.0)
+
+
+def _grid_geo(
+    data: Any,
+    cube: np.ndarray,
+    origin: Any,
+    spacing: Any,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Resolve the ``(origin, spacing)`` an ``ImageData`` is placed at (#198).
+
+    A volume used to be built with neither, so it always sat at ``(0, 0, 0)`` with unit spacing and could not
+    share a scene with a terrain in real-world coordinates. Now the placement is resolved, in order:
+
+    1. explicit ``origin`` / ``spacing`` the caller passed (each side independent);
+    2. otherwise, derived from a pyramids ``geotransform`` on ``data`` when it carries one — the horizontal
+       cell size and the lower-left corner, so the cube's footprint lands where the raster's does (the z axis
+       keeps unit spacing, since a GDAL geotransform describes only x/y);
+    3. otherwise the identity placement (:data:`_UNIT_ORIGIN` / :data:`_UNIT_SPACING`), so a bare numpy cube
+       renders exactly as it always did.
+
+    Args:
+        data: The layer's source object, read (duck-typed) for a 6-tuple ``geotransform``; never required to
+            have one.
+        cube: The ``(nz, ny, nx)`` cube, whose ``ny`` sets where the lower-left corner falls.
+        origin: The caller's explicit ``(x, y, z)`` origin, or ``None``.
+        spacing: The caller's explicit ``(dx, dy, dz)`` spacing, or ``None``.
+
+    Returns:
+        The ``(origin, spacing)`` to build the grid with, each a float triple in VTK's ``(x, y, z)`` order.
+    """
+    resolved_origin = _UNIT_ORIGIN if origin is None else tuple(float(v) for v in origin)
+    resolved_spacing = (
+        _UNIT_SPACING if spacing is None else tuple(float(v) for v in spacing)
+    )
+    geotransform = getattr(data, "geotransform", None)
+    if (
+        geotransform is not None
+        and len(tuple(geotransform)) == 6
+        and (origin is None or spacing is None)
+    ):
+        x0, dx, _, y0, _, dy = (float(v) for v in geotransform)
+        rows = int(cube.shape[1])
+        if origin is None:
+            # GDAL's y0 is the top edge and dy is negative for a north-up raster, so the lower-left corner
+            # VTK wants is y0 + dy * rows. z stays at 0 — the geotransform says nothing about level.
+            resolved_origin = (x0, y0 + dy * rows, 0.0)
+        if spacing is None:
+            resolved_spacing = (abs(dx), abs(dy), 1.0)
+    return resolved_origin, resolved_spacing  # type: ignore[return-value]
+
+
+def _volume_grid(
+    cube: np.ndarray,
+    origin: tuple[float, float, float] = _UNIT_ORIGIN,
+    spacing: tuple[float, float, float] = _UNIT_SPACING,
+) -> "pv.ImageData":
     """Build a cell-data ``ImageData`` (dimensions ``shape[::-1] + 1``) for ray-cast volume rendering.
 
     The cube ``(nz, ny, nx)`` maps to world ``(x=lon, y=lat, z=level)`` — see the module docstring's axis note.
+    ``origin`` and ``spacing`` place that grid in real-world coordinates (#198); the defaults are the identity
+    placement a bare numpy cube keeps.
     """
     import pyvista as pv
 
-    grid = pv.ImageData(dimensions=np.array(cube.shape[::-1]) + 1)
+    grid = pv.ImageData(
+        dimensions=np.array(cube.shape[::-1]) + 1, origin=origin, spacing=spacing
+    )
     grid.cell_data[FIELD] = _to_vtk_axes(cube)
     return grid
 
 
-def _point_grid(cube: np.ndarray) -> "pv.ImageData":
-    """Build a point-data ``ImageData`` (dimensions ``shape[::-1]``) for isosurface extraction (lon→X, lat→Y)."""
+def _point_grid(
+    cube: np.ndarray,
+    origin: tuple[float, float, float] = _UNIT_ORIGIN,
+    spacing: tuple[float, float, float] = _UNIT_SPACING,
+) -> "pv.ImageData":
+    """Build a point-data ``ImageData`` (dimensions ``shape[::-1]``) for isosurface extraction (lon→X, lat→Y).
+
+    ``origin`` and ``spacing`` place the grid in real-world coordinates (#198); the defaults are the identity
+    placement.
+    """
     import pyvista as pv
 
-    grid = pv.ImageData(dimensions=cube.shape[::-1])
+    grid = pv.ImageData(dimensions=cube.shape[::-1], origin=origin, spacing=spacing)
     grid.point_data[FIELD] = _to_vtk_axes(cube)
     return grid
 
@@ -117,6 +189,8 @@ class VolumeMixin(_MixinBase):
         name: Any = None,
         cmap: str = "viridis",
         opacity: Any = "sigmoid",
+        origin: tuple[float, float, float] | None = None,
+        spacing: tuple[float, float, float] | None = None,
         big_data_threshold: int | None = None,
         **kwargs: Any,
     ) -> Any:
@@ -127,6 +201,12 @@ class VolumeMixin(_MixinBase):
             cmap: Colormap for the field.
             opacity: Opacity transfer function — a named ramp (``"sigmoid"``, ``"linear"``, ``"geom"`` …), a
                 scalar, or an array. Controls how much of the field is see-through.
+            origin: World ``(x, y, z)`` of the cube's lower-left-bottom corner (#198). ``None`` derives it
+                from the data's pyramids ``geotransform`` when it has one, else places the cube at the world
+                origin — so a volume given a georeferenced cube shares a scene with a terrain in the same CRS
+                instead of sitting at ``(0, 0, 0)``.
+            spacing: World cell size ``(dx, dy, dz)``. ``None`` derives the horizontal size from the data's
+                ``geotransform`` when it has one (the vertical stays one unit per level), else unit spacing.
             big_data_threshold: Voxels above which the cube is resampled to fewer per axis before it is
                 ray-cast (#207). ``None`` (the default) uses the scene's
                 :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a cube at or under the budget
@@ -166,6 +246,8 @@ class VolumeMixin(_MixinBase):
             encodings={"color": Encoding.by_field("color", FIELD)},
             cmap=cmap,
             opacity=opacity,
+            origin=origin,
+            spacing=spacing,
             big_data_threshold=self._resolve_big_data_threshold(
                 big_data_threshold, caller="Scene3D.volume()"
             ),
@@ -179,6 +261,8 @@ class VolumeMixin(_MixinBase):
         name: Any = None,
         isosurfaces: Sequence[float] | None = None,
         cmap: str = "viridis",
+        origin: tuple[float, float, float] | None = None,
+        spacing: tuple[float, float, float] | None = None,
         big_data_threshold: int | None = None,
         **kwargs: Any,
     ) -> Any:
@@ -188,6 +272,10 @@ class VolumeMixin(_MixinBase):
             data: A 3-D numpy cube, or a pyramids ``DatasetCollection`` whose ``.values`` is a 3-D stack.
             isosurfaces: Iso-values to extract; ``None`` lets PyVista pick 10 levels across the data range.
             cmap: Colormap for the extracted surfaces.
+            origin: World ``(x, y, z)`` of the cube's lower-left-bottom corner (#198); ``None`` derives it
+                from the data's pyramids ``geotransform`` when it has one, else the world origin.
+            spacing: World cell size ``(dx, dy, dz)``; ``None`` derives the horizontal size from the data's
+                ``geotransform`` when it has one, else unit spacing.
             big_data_threshold: Cells above which the extracted shells are simplified with ``decimate_pro``
                 before they are drawn (#207). ``None`` (the default) uses the scene's
                 :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`. The budget applies to the
@@ -227,6 +315,8 @@ class VolumeMixin(_MixinBase):
             encodings={"color": Encoding.by_field("color", FIELD)},
             isosurfaces=isosurfaces,
             cmap=cmap,
+            origin=origin,
+            spacing=spacing,
             big_data_threshold=self._resolve_big_data_threshold(
                 big_data_threshold, caller="Scene3D.isosurface()"
             ),
@@ -247,12 +337,16 @@ def draw_volume(scene: Any, data: Any, layer: LayerSpec) -> Any:
     """
     props = drawing_props(layer.symbology.props)
     budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
+    origin = props.pop("origin", None)
+    spacing = props.pop("spacing", None)
     # SSAA (the house theme's anti-aliasing) supersamples the frame, which washes a ray-cast volume out to
     # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
     # on other scenes — this only affects a plotter that's actually showing a volume).
     scene.plotter.disable_anti_aliasing()
+    cube = _cube(data)
+    placed_origin, placed_spacing = _grid_geo(data, cube, origin, spacing)
     grid = reduce_volume(
-        _volume_grid(_cube(data)),
+        _volume_grid(cube, placed_origin, placed_spacing),
         budget,
         kind="volume",
         scalars=FIELD,
@@ -275,7 +369,11 @@ def draw_isosurface(scene: Any, data: Any, layer: LayerSpec) -> Any:
     props = drawing_props(layer.symbology.props)
     isosurfaces = props.pop("isosurfaces", None)
     budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
-    grid = _point_grid(_cube(data))
+    origin = props.pop("origin", None)
+    spacing = props.pop("spacing", None)
+    cube = _cube(data)
+    placed_origin, placed_spacing = _grid_geo(data, cube, origin, spacing)
+    grid = _point_grid(cube, placed_origin, placed_spacing)
     contour_kwargs = {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
     mesh = reduce_surface(
         grid.contour(scalars=FIELD, **contour_kwargs), budget, kind="isosurface"

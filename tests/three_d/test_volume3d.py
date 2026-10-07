@@ -10,7 +10,19 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.volume import FIELD, _cube
+from digitalearth.three_d.volume import FIELD, _cube, _grid_geo
+
+
+class _GeoCube:
+    """A minimal georeferenced cube stand-in: a `.values` stack plus a GDAL `.geotransform`.
+
+    Duck-types the shape `volume`/`isosurface` read — enough to exercise the #198 geo-derivation without a
+    pyramids DatasetCollection.
+    """
+
+    def __init__(self, values, geotransform):
+        self.values = values
+        self.geotransform = geotransform
 
 
 def _gaussian_cube(n: int = 14) -> np.ndarray:
@@ -27,6 +39,58 @@ def _force_off_screen():
     pv.OFF_SCREEN = True
     yield
     pv.OFF_SCREEN = prev
+
+
+def test_volume_defaults_to_the_identity_placement():
+    """#198: a bare numpy cube keeps origin (0, 0, 0) and unit spacing — exactly as before."""
+    scene = Scene3D(off_screen=True)
+    scene.volume(_gaussian_cube(6))
+    grid = scene.layers[0][0]
+    assert tuple(grid.origin) == (0.0, 0.0, 0.0)
+    assert tuple(grid.spacing) == (1.0, 1.0, 1.0)
+    scene.close()
+
+
+def test_volume_takes_explicit_origin_and_spacing():
+    """#198: a volume can be placed in real-world coordinates so it shares a scene with terrain."""
+    scene = Scene3D(off_screen=True)
+    scene.volume(_gaussian_cube(6), origin=(100.0, 200.0, 0.0), spacing=(2.0, 3.0, 5.0))
+    grid = scene.layers[0][0]
+    assert tuple(grid.origin) == (100.0, 200.0, 0.0)
+    assert tuple(grid.spacing) == (2.0, 3.0, 5.0)
+    scene.close()
+
+
+def test_volume_derives_placement_from_a_geotransform():
+    """#198: a georeferenced cube's footprint is read from its pyramids geotransform."""
+    cube = _gaussian_cube(6)  # (6, 6, 6) → rows = 6
+    # GDAL geotransform: x0=10, dx=2, y0(top)=40, dy=-4 → lower-left y = 40 + (-4)*6 = 16.
+    geo = _GeoCube(cube, (10.0, 2.0, 0.0, 40.0, 0.0, -4.0))
+    scene = Scene3D(off_screen=True)
+    scene.volume(geo)
+    grid = scene.layers[0][0]
+    assert tuple(grid.origin) == (10.0, 16.0, 0.0)
+    assert tuple(grid.spacing) == (2.0, 4.0, 1.0)
+    scene.close()
+
+
+def test_grid_geo_explicit_overrides_the_geotransform():
+    """An explicit origin/spacing wins over a geotransform, each side independently."""
+    cube = _gaussian_cube(6)
+    geo = _GeoCube(cube, (10.0, 2.0, 0.0, 40.0, 0.0, -4.0))
+    origin, spacing = _grid_geo(geo, cube, (0.0, 0.0, 0.0), None)
+    assert origin == (0.0, 0.0, 0.0)  # explicit origin wins
+    assert spacing == (2.0, 4.0, 1.0)  # spacing still derived
+
+
+def test_isosurface_takes_explicit_placement():
+    """#198: isosurface() places its grid in real-world coordinates too."""
+    scene = Scene3D(off_screen=True)
+    scene.isosurface(_gaussian_cube(10), isosurfaces=[0.3], origin=(5.0, 5.0, 0.0))
+    mesh = scene.layers[0][0]
+    # The extracted shell sits inside the placed grid, so its x/y bounds start at or above the origin.
+    assert mesh.bounds[0] >= 5.0 and mesh.bounds[2] >= 5.0
+    scene.close()
 
 
 def test_volume_registers_and_renders():
