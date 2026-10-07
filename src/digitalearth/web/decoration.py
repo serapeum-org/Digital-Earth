@@ -71,10 +71,16 @@ _BASEMAP_DISPLAY_NAMES = {
 #: py-maplibregl's two layer-switcher styles, validated here so a typo is not a pydantic traceback.
 _SWITCHER_THEMES = frozenset({"default", "simple"})
 
-#: What this tier's ``layer_control`` can actually build: one visibility row per layer, which is what
-#: py-maplibregl's switcher control is. An opacity slider or a basemap picker would each need a control the
-#: library does not ship, so naming either is refused rather than accepted and dropped.
-_OFFERED_CONTROLS = ("visibility",)
+#: What this tier's ``layer_control`` can actually build. ``"visibility"`` is one row per data layer;
+#: ``"basemap"`` (WB-14) adds the map's basemap layers to the same py-maplibregl switcher, so a viewer can
+#: switch the ground among the basemaps on the map. A live opacity *slider* still needs a control the library
+#: does not ship, so ``"opacity"`` is refused rather than accepted and dropped (``layer_control(opacity=)``
+#: dims a layer declaratively instead).
+_OFFERED_CONTROLS = ("visibility", "basemap")
+
+#: The controls built when the caller names none. A basemap is the ground, so it is offered only when the
+#: caller asks for it (``controls=["visibility", "basemap"]``), never by default.
+_DEFAULT_CONTROLS = ("visibility",)
 
 #: The CRS MapboxDraw reports drawn geometry in. GeoJSON coordinates are lon/lat by definition, whatever the
 #: map shows, so :meth:`DecorationMixin.drawn_features` stamps this rather than reading it off the map.
@@ -1224,23 +1230,27 @@ class DecorationMixin(_MixinBase):
         """Add a switcher so a viewer can turn the data layers on and off, dim them, and reorder them.
 
         A map with a basemap, a choropleth and a point overlay had no way to look underneath — which is the
-        single most common thing anyone does with a web map. The switch lists the data layers only:
-        basemaps are the ground, not something a viewer toggles.
+        single most common thing anyone does with a web map. The switch lists the data layers by default:
+        basemaps are the ground, not something a viewer toggles — but naming ``"basemap"`` in ``controls=``
+        opts them in as a basemap gallery (WB-14). The gallery opens on the **first** basemap and hides the
+        rest, so a viewer switches the ground from there. py-maplibregl's switcher is checkboxes rather than a
+        radio, so a viewer *can* re-show more than one at once; the page simply starts on a single ground.
 
         The three keywords are the ones the Tier-2 contract declares and the interactive tier now answers to
         as well — the layers to include, the position, the controls to expose — so the same call adds a layer
         control on either tier (#264). What was ``layer_ids=`` here is ``layers=``, the name that tier uses
         for the same thing.
 
-        **The manager widens past visibility (WB-8), and the widening is declarative.** ``opacity=`` dims a
-        layer and ``order=`` reorders the stack, each applied **now** — ``opacity`` through
-        :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rewrites the layer's own paint, and
-        ``order`` through :meth:`~digitalearth.web.base.WebMapBase.move_layer` — so the saved page draws the
-        layers dimmed and in that order. The visibility switcher stays a **live page-side control**
-        (py-maplibregl's ``LayerSwitcherControl``); a live opacity slider or a drag-to-reorder control would
-        each need a browser-JS layer this tier does not ship (the X-2 limitation), so ``controls=`` still
-        refuses ``"opacity"`` rather than accept a control it cannot build — the inertness #242/#244 removed.
-        The two are therefore different questions: ``controls=`` selects the *live* switcher controls, while
+        **The manager widens past visibility (WB-8/WB-14), and most of the widening is declarative.**
+        ``opacity=`` dims a layer and ``order=`` reorders the stack, each applied **now** — ``opacity``
+        through :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rewrites the layer's own
+        paint, and ``order`` through :meth:`~digitalearth.web.base.WebMapBase.move_layer` — so the saved page
+        draws the layers dimmed and in that order. The switcher itself stays a **live page-side control**
+        (py-maplibregl's ``LayerSwitcherControl``), and ``controls=["visibility", "basemap"]`` adds the
+        basemap layers to it (WB-14) so the ground is switchable too. A live opacity *slider* or a
+        drag-to-reorder control would each need a browser-JS layer this tier does not ship (the X-2
+        limitation), so ``controls=`` still refuses ``"opacity"`` rather than accept a control it cannot
+        build — the inertness #242/#244 removed. So ``controls=`` selects the *live* switcher controls, while
         ``opacity=``/``order=`` are a one-time transform baked into the page and recorded on the switcher's
         furniture.
 
@@ -1253,13 +1263,14 @@ class DecorationMixin(_MixinBase):
             position: One of the four corners in
                 :data:`~digitalearth.base.controls.CONTROL_POSITIONS` — MapLibre's, and now both tiers'.
             controls: Which controls to expose, from
-                :data:`~digitalearth.base.controls.LAYER_CONTROLS`. ``None`` (the default) offers everything
-                this tier can build, which is ``("visibility",)``: a py-maplibregl switcher is visibility
-                rows and nothing else. Naming ``"opacity"`` or ``"basemap"`` is therefore **refused** rather
-                than accepted and dropped — the interactive tier builds both, and a caller moving a call
-                here should hear that this tier cannot. What the shared resolver answers is recorded on the
-                switcher's furniture, so the panel says which controls it draws rather than leaving a reader
-                to know that this tier draws one.
+                :data:`~digitalearth.base.controls.LAYER_CONTROLS`. ``None`` (the default) offers
+                ``("visibility",)`` — a row per data layer. ``"basemap"`` may be added
+                (``["visibility", "basemap"]``) to list the basemap layers in the same switcher (WB-14), so
+                the ground is switchable. ``"opacity"`` is **refused** rather than accepted and dropped: a
+                live opacity slider is a control py-maplibregl does not ship (use ``opacity=`` for a
+                one-time dim). What the shared resolver answers is recorded on the switcher's furniture, so
+                the panel says which controls it draws rather than leaving a reader to know that this tier
+                draws one.
             theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
                 keyword: it styles the switcher rather than choosing what the switcher contains.
             opacity: A mapping of layer id to opacity in ``[0, 1]``, applied **now** by rewriting each named
@@ -1315,7 +1326,7 @@ class DecorationMixin(_MixinBase):
         # the panel's description and the refusal read one list (review R2-L13). The default goes through it
         # too, so "everything this tier can build" is resolved rather than re-spelled here.
         exposed = resolved_controls(
-            _OFFERED_CONTROLS if controls is None else controls,
+            _DEFAULT_CONTROLS if controls is None else controls,
             offered=_OFFERED_CONTROLS,
             caller="WebMap.layer_control()",
         )
@@ -1325,18 +1336,21 @@ class DecorationMixin(_MixinBase):
             )
         available = self.layer_ids
         # The default offers the *data* layers, not every id: a basemap is described and addressable like
-        # any other layer since it started recording one, and offering it here would put "turn the ground
-        # off" at the top of every switcher. A caller who means to offer it still can, by naming it in
-        # `layers=` — which is why the filter is on the default rather than on what is accepted.
+        # any other layer since it started recording one, and offering it by default would put "turn the
+        # ground off" at the top of every switcher. Naming ``"basemap"`` in ``controls=`` opts the basemap
+        # layers in (WB-14) — a basemap gallery, so a viewer can switch the ground among the basemaps on the
+        # map — and a caller can still name specific ids in ``layers=`` whatever the controls.
+        offer_basemaps = "basemap" in exposed
         offered = [
             layer_id
             for layer_id in available
-            if self._layer_tree.get(layer_id).kind != "basemap"
+            if offer_basemaps or self._layer_tree.get(layer_id).kind != "basemap"
         ]
         if not offered:
             raise ValueError(
                 "layer_control() has nothing to switch: no data layer has been added yet. A basemap is "
-                "the ground rather than a layer a viewer toggles."
+                "the ground rather than a layer a viewer toggles — pass controls=['visibility', 'basemap'] "
+                "to offer the basemaps themselves."
             )
         wanted = list(layers) if layers is not None else offered
         named = [*wanted, *(opacity or {}), *(order or [])]
@@ -1358,6 +1372,18 @@ class DecorationMixin(_MixinBase):
         self._check_layer_order(order)
         applied_opacity = self._apply_layer_opacity(resolved_opacity)
         applied_order = self._apply_layer_order(order)
+        # The basemap gallery (WB-14) opens on ONE ground. py-maplibregl's switcher is checkboxes, and every
+        # basemap is registered visible, so without this a saved page would draw all of them stacked opaque
+        # (the last one winning) rather than letting a viewer switch between them. Start the gallery on the
+        # first offered basemap and hide the rest, so the page opens on one ground and the switcher switches it.
+        if offer_basemaps:
+            gallery = [
+                layer_id
+                for layer_id in wanted
+                if self._layer_tree.get(layer_id).kind == "basemap"
+            ]
+            for extra in gallery[1:]:
+                self.set_visible(extra, False)
         # Held as a request, not appended as a layer: the live layers are resolved when the widget is
         # built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling
         # this twice replaces the request rather than stacking a second identical panel.
