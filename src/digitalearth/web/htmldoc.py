@@ -232,7 +232,17 @@ class HtmlDocument:
 
         Returns:
             The :class:`HtmlDocument` for the measure page.
+
+        Raises:
+            ValueError: If ``main`` already carries a draw control (``measure()`` was called on the
+                map before exporting). The live readout adds its own draw control, so a map that
+                already has one would end up with two; pass the map plain instead.
         """
+        if any(call and call[0] == "addMapboxDraw" for call in main.get("calls", [])):
+            raise ValueError(
+                "measure(): the map already has a draw control (measure() was called on it) — pass "
+                "the map without calling measure(); the live readout adds its own draw control"
+            )
         wrap, main_id, readout = (
             "de-measure-wrap",
             "de-map-measure",

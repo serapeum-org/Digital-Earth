@@ -307,6 +307,19 @@ class TestMeasureHtml:
         text = out.read_text(encoding="utf-8")
         assert text.startswith("<!DOCTYPE html>") and "de-measure-wrap" in text
 
+    def test_a_map_that_already_has_a_draw_control_is_refused(self):
+        """A map that already called ``measure()`` is refused, so the page never gets two draw controls.
+
+        Test scenario:
+            The live readout adds its own draw control; if the map was built with ``measure()`` its
+            recorded ``addMapboxDraw`` would be replayed too, leaving two controls. The map must be
+            passed plain, and a map carrying ``addMapboxDraw`` is refused by name.
+        """
+        with pytest.raises(ValueError, match="draw control"):
+            HtmlDocument.measure(
+                {"mapOptions": {}, "calls": [["addMapboxDraw", [{}]]]}
+            )
+
 
 class TestConditionalLibraries:
     """The CDN libraries (deck.gl, mapbox-gl-draw) load only when the maps' recorded calls need them."""
