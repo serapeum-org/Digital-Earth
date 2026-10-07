@@ -118,7 +118,7 @@ class TestTheSharedSpelling:
 
 
 class TestTheControlsThisTierCanOffer:
-    """``controls=`` is the third shared name, and this tier can honour one entry of it."""
+    """``controls=`` is the third shared name; this tier can honour ``visibility`` and ``basemap``."""
 
     def test_visibility_is_what_it_offers(self, two_layers):
         """Naming the control this tier draws changes nothing, which is what "supported" means.
@@ -129,13 +129,24 @@ class TestTheControlsThisTierCanOffer:
         payload = _payload(two_layers.layer_control(controls=("visibility",)).to_html())
         assert "LayerSwitcherControl" in payload
 
-    @pytest.mark.parametrize("control", ["opacity", "basemap"])
+    def test_basemap_control_is_offered(self, two_layers):
+        """``"basemap"`` is now buildable (WB-14): it is accepted and builds the switcher control.
+
+        Args:
+            two_layers: The map under test.
+        """
+        payload = _payload(
+            two_layers.layer_control(controls=("visibility", "basemap")).to_html()
+        )
+        assert "LayerSwitcherControl" in payload
+
+    @pytest.mark.parametrize("control", ["opacity"])
     def test_a_control_this_tier_cannot_draw_is_refused(self, two_layers, control):
         """Accepting one and ignoring it is how the other tier's flags came to look inert.
 
         Args:
             two_layers: The map under test.
-            control: The control this tier has no widget for.
+            control: The control this tier has no widget for (a live opacity slider).
         """
         with pytest.raises(ValueError) as refused:
             two_layers.layer_control(controls=("visibility", control))

@@ -640,6 +640,29 @@ class TestTheRegistryIsAddressable:
         offered = m.layer_control()._switcher["layer_ids"]
         assert offered == _data_layer_ids(m), offered
 
+    def test_basemap_control_offers_the_basemaps_as_a_gallery(self, points):
+        """WB-14: naming ``"basemap"`` opts the basemap layers into the switcher so the ground is switchable.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            Two basemaps and one data layer. The default switcher offers only the data layer (the test
+            above), but ``controls=["visibility", "basemap"]`` offers every layer — the data layer and both
+            basemaps — so a viewer can switch the ground among them.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().tiles("https://a/{z}/{x}/{y}.png").points(points)
+        offered = m.layer_control(controls=["visibility", "basemap"])._switcher[
+            "layer_ids"
+        ]
+        assert offered == m.layer_ids, offered
+        basemaps = [i for i in m.layer_ids if m._layer_tree.get(i).kind == "basemap"]
+        assert all(basemap in offered for basemap in basemaps), (
+            f"the basemap gallery must offer every basemap, got {offered}"
+        )
+
     def test_removing_a_layer_drops_it_from_the_map_and_the_index(self, points):
         """A mistake used to mean starting over."""
         from digitalearth.web import WebMap
