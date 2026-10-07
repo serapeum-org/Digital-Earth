@@ -275,6 +275,9 @@ class BigDataMixin(_MixinBase):
         """
         _, hv = _require_holoviz()
         if isinstance(layer, hv.core.Dimensioned):
+            # A pre-built element handed straight to rasterize/datashade is not reprojected through pyramids
+            # like a (Feature)GeoDataFrame is, so its CRS is guarded here too (IN-16).
+            self._guard_element_crs(layer, caller="rasterize/datashade")
             return layer
         gdf = self._display_gdf(layer)
         return self._vector_element("Points", gdf, vdims=vdims)

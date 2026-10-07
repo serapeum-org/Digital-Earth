@@ -127,6 +127,38 @@ def _require_holoviz() -> tuple:
     return gv, hv
 
 
+def _epsg_of(crs: Any) -> int | None:
+    """Return the EPSG code a GeoViews element's ``crs`` resolves to, or ``None`` when it does not (IN-16).
+
+    A GeoViews element carries a cartopy projection. The clear-cut case — a projection that *is* a known
+    EPSG code — resolves through ``to_epsg()``; the rest (a bare ``PlateCarree``, a custom projection) resolve
+    through pyproj on the CRS's own definition where they can. Anything that resolves to no code comes back
+    ``None``, and the guard that reads this stays silent for it rather than guess a mismatch — GeoViews' own
+    ``find_crs`` still refuses a genuinely incompatible overlay at render time.
+
+    Args:
+        crs: A cartopy CRS read off an element's ``crs`` attribute.
+
+    Returns:
+        The EPSG integer, or ``None`` when the CRS resolves to none.
+    """
+    to_epsg = getattr(crs, "to_epsg", None)
+    if callable(to_epsg):
+        try:
+            code = to_epsg()
+        except Exception:  # pragma: no cover - a CRS whose to_epsg raises is treated as unresolved
+            code = None
+        if code:
+            return int(code)
+    try:
+        from pyproj import CRS as _PyCRS
+
+        code = _PyCRS.from_user_input(crs).to_epsg()
+    except Exception:  # pragma: no cover - anything pyproj cannot read is left unresolved
+        return None
+    return int(code) if code else None
+
+
 def _masked_to_nan(values: Any) -> Any:
     """Return ``values`` as a float array with masked/nodata cells as ``NaN``.
 
@@ -1293,6 +1325,7 @@ class InteractiveMapBase:
         # (:mod:`digitalearth.base.custom`).
         from digitalearth.interactive.renderer import DRAWN_KINDS
 
+        self._guard_element_crs(element, caller="add_layer")
         resolved = kind or custom_kind("holoviews")
         layer_id = self._layer_id(resolved.split(":")[-1], name)
         # Everything from here to the draw is undone together if any of it raises. The layer is described
@@ -1450,6 +1483,38 @@ class InteractiveMapBase:
             disk, or drawn on another map, gives every layer.
         """
         return dict(self._layer_held.get(layer_id) or {})
+
+    def _guard_element_crs(self, element: Any, *, caller: str) -> None:
+        """Refuse an element handed in directly whose CRS is not this map's display CRS (IN-16).
+
+        The tier pre-reprojects every builder input through pyramids, so a layer built here is always in the
+        display CRS. An element a caller builds and hands to :meth:`add_layer` (or to ``rasterize`` /
+        ``datashade``) is not covered by that, and a GeoViews element silently drawn in the wrong CRS
+        mis-registers with the rest of the map rather than failing — the mis-overlay GeoViews' own ``find_crs``
+        calls worse than a crash. This refuses it at the door, with both CRSs named, when the mismatch can be
+        resolved to EPSG codes; when it cannot (:func:`_epsg_of` returns ``None``), GeoViews still refuses a
+        genuinely incompatible overlay at render time.
+
+        Args:
+            element: The object a caller handed in. ``None`` (a builder's drawn kind) and a plain HoloViews
+                element (no ``crs`` — already in display coordinates by contract) are both left alone.
+            caller: The public method quoted in the refusal.
+
+        Raises:
+            ValueError: when the element carries a CRS that resolves to a different EPSG code than the
+                display CRS.
+        """
+        crs = getattr(element, "crs", None)
+        if crs is None:
+            return
+        code = _epsg_of(crs)
+        if code is not None and not same_crs(code, self.crs):
+            raise ValueError(
+                f"{caller}() was handed an element in EPSG:{code}, but this map's display CRS is "
+                f"EPSG:{self.crs}; it would mis-register with the other layers. Reproject the data through "
+                f"pyramids to the display CRS before building the element, or build the map with "
+                f"InteractiveMap(crs={code})."
+            )
 
     def _needs_reproject(self, data: Any) -> bool:
         """Whether `data` must be reprojected (via pyramids) to the display CRS.
