@@ -355,3 +355,47 @@ class TestConditionalLibraries:
             {"mapOptions": {}, "calls": []},
         ).render()
         assert "deck.gl@" not in html and "dist/mapbox-gl-draw" not in html
+
+
+class TestOfflineInlining:
+    """``offline=True`` routes each save through the CDN-asset inliner."""
+
+    @pytest.mark.parametrize(
+        "saver, extra",
+        [
+            ("save_swipe", True),
+            ("save_minimap", False),
+            ("save_measure", False),
+        ],
+    )
+    def test_offline_inlines_the_assets(self, saver, extra, tmp_path, monkeypatch):
+        """With ``offline=True`` the written page is the inlined HTML, not the CDN-referencing one.
+
+        Args:
+            saver: The save function under test, by name.
+            extra: Whether the function takes a second map positionally (``save_swipe``).
+            tmp_path: pytest's per-test directory.
+            monkeypatch: Replaces the network inliner with a marker, so the branch is covered offline.
+
+        Test scenario:
+            The inliner fetches CDN assets, which needs a network; stubbing it proves the ``offline``
+            branch routes the rendered page through it and writes the result, without a live fetch.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import export as web_export
+
+        monkeypatch.setattr(
+            web_export.ExportMixin,
+            "_inline_offline_assets",
+            staticmethod(lambda html: "<!-- INLINED -->" + html),
+        )
+        func = getattr(web_export, saver)
+        out = tmp_path / "offline.html"
+        base = WebMap().basemap()
+        if extra:
+            func(base, WebMap().basemap(), str(out), offline=True)
+        else:
+            func(base, str(out), offline=True)
+        assert out.read_text(encoding="utf-8").startswith("<!-- INLINED -->"), (
+            f"{saver}(offline=True) did not inline the assets"
+        )
