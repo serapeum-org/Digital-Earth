@@ -122,7 +122,7 @@ class TestSwipeHtml:
         before, after = two_maps
         html = swipe_html(before, after)
         assert "tiles-1-src" in html, "the basemap source did not reach the page"
-        assert "example.com" in html, "the after map's xyz tiles did not reach the page"
+        assert "/{z}/{x}/{y}.png" in html, "the after map's xyz tiles did not reach the page"
 
     def test_title_is_applied(self, two_maps):
         """The document title is the caller's.
@@ -298,7 +298,7 @@ class TestMeasureHtml:
         """
         pytest.importorskip("maplibre")
         html = measure_html(WebMap().basemap())
-        assert "basemaps.cartocdn.com" in html, "the map did not reach the page"
+        assert "dark-matter-gl-style/style.json" in html, "the map did not reach the page"
         assert "de-measure-readout" in html
         assert "DE.measure" in html
 
