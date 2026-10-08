@@ -48,20 +48,29 @@ def test_ocean_and_lakes_draw_their_own_layers():
     scene.close()
 
 
-def test_the_ocean_fill_is_hole_aware():
-    """The ocean fill triangulates its hole-aware rings into a real mesh, not an empty one.
+def test_the_ocean_fill_carves_its_holes():
+    """Carving the ocean's holes yields strictly less filled area than its exterior alone.
 
     Test scenario:
-        The 110m ocean is one exterior ring plus a continent-shaped hole per landmass. The drawer feeds
-        those ``[exterior, *holes]`` rings to the hole-carving triangulator, so the drawn mesh has cells; a
-        fill built from the exterior alone would paint over the continents (the cleopatra#384 bug).
+        The 110m ocean's main part is one exterior ring plus a continent-shaped hole per landmass. The
+        drawer feeds those ``[exterior, *holes]`` rings to the hole-carving triangulator; comparing the
+        holed cap's area against the exterior-only triangulation proves the continents are removed — the
+        cleopatra#384 bug (a solid exterior fill) would have the two areas equal, which ``n_cells > 0``
+        alone cannot tell apart.
     """
-    scene = Scene3D(off_screen=True)
-    scene.ocean()
-    mesh = scene.layers[0][0]
-    assert mesh.n_cells > 0, "the ocean fill triangulated to no cells"
-    assert mesh.n_points > 0
-    scene.close()
+    from cleopatra.basemap.reference import natural_earth_polygons
+
+    from digitalearth.three_d.vector import _cap_with_holes
+
+    rings = max(natural_earth_polygons("ocean", "110m"), key=len)
+    assert len(rings) > 1, "expected the ocean's main part to carry continent holes"
+    exterior = np.asarray(rings[0], dtype="float64")
+    interiors = [np.asarray(hole, dtype="float64") for hole in rings[1:]]
+    holed = _cap_with_holes(exterior, interiors)
+    solid = _cap_with_holes(exterior, [])
+    assert holed.area < solid.area, (
+        f"carving the holes must reduce the filled area: holed {holed.area} vs solid {solid.area}"
+    )
 
 
 def test_a_degenerate_polygon_skips_the_layer(monkeypatch):
