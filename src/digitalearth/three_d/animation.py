@@ -449,6 +449,29 @@ class AnimationMixin(_MixinBase):
                 True
 
                 ```
+            - Freeze the colour scale across frames whose data ranges differ, so a time stack does not
+              flicker: two frames (elevation ~0..2, then ~0..50) re-draw the layer, but ``clim=(0, 50)``
+              keeps the drawn range fixed rather than letting it follow the last frame:
+                ```python
+                >>> import numpy as np, os, tempfile
+                >>> from digitalearth.three_d import Scene3D
+                >>> from digitalearth.base.sources import get_source
+                >>> def swap(s, array):
+                ...     s.remove_layer("dem")
+                ...     s.terrain(get_source(array), name="dem")
+                >>> low = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+                >>> high = low * 50.0
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(low), name="dem")
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     _ = scene.record(
+                ...         [low, high], os.path.join(folder, "stack.gif"), swap, clim=(0.0, 50.0)
+                ...     )
+                >>> tuple(scene.actor_of("dem").mapper.scalar_range)
+                (0.0, 50.0)
+                >>> scene.close()
+
+                ```
         """
         frozen = _checked_clim(clim)
         _open_writer(self.plotter, path, fps)
