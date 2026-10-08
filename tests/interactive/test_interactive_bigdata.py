@@ -169,6 +169,169 @@ class TestRasterize:
         assert isinstance(m.layers[0], hv.Image), f"got {type(m.layers[0])}"
 
 
+class TestDatashadeFrozenScale:
+    """``datashade``/``trajectory`` can pin a colour span so they do not re-autorange per frame (IN-4)."""
+
+    def test_datashade_eq_hist_with_a_span_is_refused_pointing_at_rasterize(
+        self, m, big_points
+    ):
+        """`cnorm="eq_hist"` with a `clim` is refused early with an actionable message (review M2).
+
+        Datashader cannot equalise under a fixed span; the error must name `rasterize` rather than let the
+        raw "span is not (yet) valid to use with eq_hist" surface.
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        with pytest.raises(ValueError, match="eq_hist.*rasterize"):
+            m.datashade(
+                big_points,
+                column="value",
+                clim=(0.0, 1.0),
+                cnorm="eq_hist",
+                dynamic=False,
+            )
+
+    def test_trajectory_eq_hist_with_a_span_is_refused(self, m, big_points):
+        """The trajectory path refuses the same combination with the same actionable message (review M2).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        with pytest.raises(ValueError, match="eq_hist.*rasterize"):
+            m.trajectory(
+                big_points,
+                track_column="cls",
+                clim=(0.0, 1.0),
+                cnorm="eq_hist",
+                dynamic=False,
+            )
+
+    def test_eq_hist_span_guard_is_case_insensitive(self, m, big_points):
+        """`cnorm="EQ_HIST"` is caught too, not only the lower-case spelling (review R2-L1).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        with pytest.raises(ValueError, match="eq_hist.*rasterize"):
+            m.datashade(
+                big_points,
+                column="value",
+                clim=(0.0, 1.0),
+                cnorm="EQ_HIST",
+                dynamic=False,
+            )
+
+    def test_span_with_categorical_color_key_is_refused(self, m, big_points):
+        """A frozen span on a categorical shade is refused — a span is meaningless there (review R2-L1).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture (its ``cls`` column is categorical).
+        """
+        key = {"a": "#ff0000", "b": "#00ff00", "c": "#0000ff"}
+        with pytest.raises(ValueError, match="categorical shade"):
+            m.datashade(
+                big_points, column="cls", color_key=key, clim=(0.0, 1.0), dynamic=False
+            )
+
+    def test_datashade_with_a_span_renders_without_the_eq_hist_trap(
+        self, m, big_points
+    ):
+        """A `clim` span defaults `cnorm` to linear, so the shade does not hit Datashader's eq_hist+span error.
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.datashade(
+            big_points,
+            column="value",
+            clim=(0.0, 20.0),
+            dynamic=False,
+            width=60,
+            height=40,
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
+    def test_datashade_records_the_span_and_norm(self, m, big_points):
+        """The span travels as a plain pair and the chosen `cnorm` is recorded.
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.datashade(
+            big_points,
+            column="value",
+            clim=(1.0, 9.0),
+            cnorm="log",
+            dynamic=False,
+            width=40,
+            height=30,
+        )
+        props = m.figure_spec.layers.get(m.layer_ids[0]).symbology.props
+        assert tuple(props["clim"]) == (1.0, 9.0), props["clim"]
+        assert props["cnorm"] == "log", props
+
+    def test_trajectory_takes_a_frozen_span_too(self, m, big_points):
+        """The trajectory path honours `clim`/`cnorm` the same way (IN-4).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture (its ``cls`` column groups the tracks).
+        """
+        m.trajectory(
+            big_points,
+            track_column="cls",
+            clim=(0.0, 5.0),
+            dynamic=False,
+            width=60,
+            height=40,
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
+    def test_datashade_cnorm_without_a_span(self, m, big_points):
+        """A `cnorm` without a `clim` sets only the normalisation, not a span (IN-4).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.datashade(
+            big_points, column="value", cnorm="log", dynamic=False, width=40, height=30
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
+    def test_trajectory_cnorm_without_a_span(self, m, big_points):
+        """The trajectory path also takes a bare `cnorm` with no span (IN-4).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.trajectory(
+            big_points,
+            track_column="cls",
+            cnorm="linear",
+            dynamic=False,
+            width=60,
+            height=40,
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
+
 class TestDatashade:
     """``datashade`` — shaded RGB, categorical color_key (DI.2a)."""
 

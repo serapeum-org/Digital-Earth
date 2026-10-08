@@ -16,7 +16,14 @@ from typing import Any
 
 from digitalearth.interactive.base import _require_holoviz
 
-__all__ = ["panels", "tabs", "swipe"]
+__all__ = ["panels", "tabs", "swipe", "linked_views", "grid"]
+
+#: The axis specifications `linked_views` accepts, mapped to the axes a `RangeToolLink` drives.
+_LINK_AXES: dict[str, list[str]] = {
+    "both": ["x", "y"],
+    "x": ["x"],
+    "y": ["y"],
+}
 
 
 def _panel() -> Any:
@@ -152,3 +159,88 @@ def swipe(before: Any, after: Any) -> Any:
     """
     pn = _panel()
     return pn.Swipe(_rendered(before), _rendered(after))
+
+
+def linked_views(detail: Any, overview: Any, *, axes: str = "both") -> Any:
+    """Link an overview map to a detail map with a declarative ``RangeToolLink`` (IN-7).
+
+    The overview↔detail pattern the gap names: the overview carries a Bokeh range tool whose box
+    **declaratively** drives the detail's axes, so navigating the small overview pans/zooms the big detail
+    without a Python round-trip (it works in static HTML, unlike a stream-driven link). This is the explicit
+    linked view `panels` only approximates through Bokeh's implicit shared axes.
+
+    Args:
+        detail: The detail (zoomed) map — an ``InteractiveMap`` or a rendered object; the link's target.
+        overview: The overview (context) map; the link's source, which grows the range tool.
+        axes: Which axes the range tool drives — ``"both"`` (default), ``"x"`` or ``"y"``.
+
+    Returns:
+        A ``holoviews.Layout`` of ``detail + overview`` with the ``RangeToolLink`` established between them.
+
+    Raises:
+        ValueError: for an ``axes`` other than ``"both"``/``"x"``/``"y"``.
+
+    Examples:
+        - An overview drives a detail on both axes (needs the engine):
+            ```python
+            >>> from digitalearth.interactive import InteractiveMap             # doctest: +SKIP
+            >>> from digitalearth.interactive.layout import linked_views        # doctest: +SKIP
+            >>> layout = linked_views(                                          # doctest: +SKIP
+            ...     InteractiveMap().field(a), InteractiveMap().field(a)
+            ... )
+            >>> len(layout)                                                     # doctest: +SKIP
+            2
+
+            ```
+    """
+    _require_holoviz()
+    if axes not in _LINK_AXES:
+        raise ValueError(f"unknown axes {axes!r}; choose 'both'/'x'/'y'")
+    from holoviews.plotting.links import RangeToolLink
+
+    detail_obj = _rendered(detail)
+    overview_obj = _rendered(overview)
+    RangeToolLink(overview_obj, detail_obj, axes=_LINK_AXES[axes])
+    return detail_obj + overview_obj
+
+
+def grid(*maps: Any, cols: int = 2) -> Any:
+    """Lay several maps out as a ``GridSpace`` of linked small multiples (IN-7).
+
+    Unlike :func:`panels`' ``+`` ``Layout``, a ``GridSpace`` shares one set of axes across **every** cell
+    declaratively, so panning any cell pans them all — the small-multiples linked view. Cells fill left to
+    right, wrapping every ``cols`` maps; ``row=0`` is the **bottom** row, since a ``GridSpace`` places its y
+    origin at the bottom (so the first row of maps renders along the bottom, not the top).
+
+    Args:
+        *maps: Two or more ``InteractiveMap`` instances (or already-rendered objects).
+        cols: How many cells wide the grid is before it wraps to the next row.
+
+    Returns:
+        A ``holoviews.GridSpace`` keyed by ``(col, row)`` grid position.
+
+    Raises:
+        ValueError: when fewer than two maps are given, or ``cols`` is below one.
+
+    Examples:
+        - Four maps become a 2x2 linked grid (needs the engine):
+            ```python
+            >>> from digitalearth.interactive import InteractiveMap             # doctest: +SKIP
+            >>> from digitalearth.interactive.layout import grid                # doctest: +SKIP
+            >>> gs = grid(m1, m2, m3, m4, cols=2)                               # doctest: +SKIP
+            >>> sorted(gs.keys())                                               # doctest: +SKIP
+            [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+            ```
+    """
+    hv = _require_holoviz()[1]
+    if len(maps) < 2:
+        raise ValueError(
+            f"grid() lays out two or more maps; got {len(maps)}. One panel is a plain render()."
+        )
+    if cols < 1:
+        raise ValueError(f"cols must be at least 1; got {cols}")
+    cells = {
+        (index % cols, index // cols): _rendered(m) for index, m in enumerate(maps)
+    }
+    return hv.GridSpace(cells, kdims=["col", "row"])

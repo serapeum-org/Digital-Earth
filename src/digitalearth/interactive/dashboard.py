@@ -13,7 +13,7 @@ WASM/Pyodide export is **out** for a pyramids-backed app: GDAL/pyramids cannot r
 live app must be *served*, not converted. ``save_app`` is the offline path (pre-rendered states only).
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import reduce
 from importlib.util import find_spec
@@ -193,6 +193,68 @@ class ExportPlan:
             f"save_app(embed=True) would bake {self.total_states} states ({breakdown}), over the "
             f"{self.max_states} cap — Panel will truncate it. Drop a widget, or serve() the app instead."
         )
+
+
+@dataclass(frozen=True)
+class Deployment:
+    """How a dashboard will be **served**, modelled before (or instead of) launching it (IN-10).
+
+    The export side of IN-10 is modelled by :class:`ExportPlan`; this is its deployment counterpart. A
+    served app is not a baked page — it is a live process with per-session state, so what matters is the
+    session model, not a state count: whether a per-session ``onload`` hook runs when a viewer connects,
+    whether a periodic callback refreshes the view, and how the server is scaled (threads/processes). A
+    pyramids-backed app must be *served* (GDAL runs on the server), never exported to WASM/Pyodide, so this
+    is the deployment a data-backed map actually uses.
+
+    Attributes:
+        title: The served app's title.
+        threaded: Whether ``pn.serve`` runs each session on its own thread.
+        num_procs: How many server processes to fork (``1`` keeps a single process).
+        has_onload: Whether a per-session ``pn.state.onload`` hook is registered.
+        periodic_ms: The refresh period in milliseconds for a ``pn.state`` periodic callback, or ``None``.
+
+    Examples:
+        - A threaded single-process deployment that refreshes every half-second:
+            ```python
+            >>> from digitalearth.interactive.dashboard import Deployment
+            >>> plan = Deployment(title="rain", threaded=True, num_procs=1, has_onload=True, periodic_ms=500)
+            >>> plan.live, plan.periodic_ms
+            (True, 500)
+
+            ```
+    """
+
+    title: str
+    threaded: bool
+    num_procs: int
+    has_onload: bool
+    periodic_ms: int | None
+
+    @property
+    def live(self) -> bool:
+        """Whether the deployment carries any live per-session behaviour.
+
+        Returns:
+            ``True`` when an ``onload`` hook or a periodic refresh is modelled — i.e. the app does more
+            than serve a static first render.
+        """
+        return self.has_onload or self.periodic_ms is not None
+
+    @property
+    def summary(self) -> str:
+        """A one-line description of the deployment.
+
+        Returns:
+            A sentence naming the scaling and the session model.
+        """
+        scale = f"{self.num_procs} proc(s), {'threaded' if self.threaded else 'single-thread'}"
+        refresh = (
+            f"refresh {self.periodic_ms}ms"
+            if self.periodic_ms is not None
+            else "no refresh"
+        )
+        onload = "onload hook" if self.has_onload else "no onload"
+        return f"serve {self.title!r}: {scale}; {onload}; {refresh}"
 
 
 def _did_you_mean(kind: str, name: str, known: Sequence[str]) -> str:
@@ -654,17 +716,99 @@ class DashboardMixin(_MixinBase):
             widgets=tuple(counts), total_states=total, max_states=max_states
         )
 
-    def serve(self, **kwargs: Any) -> Any:
-        """Mark the dashboard servable for ``panel serve`` and return it.
+    def serve_plan(
+        self,
+        *,
+        threaded: bool = True,
+        num_procs: int = 1,
+        onload: Callable | None = None,
+        periodic: Callable | None = None,
+        period_ms: int = 1000,
+    ) -> Deployment:
+        """Model how :meth:`serve` would deploy this dashboard, without launching anything (IN-10).
+
+        The deployment counterpart of :meth:`export_plan`: it returns the :class:`Deployment` describing the
+        session model and scaling, so a caller can inspect (or log) the deployment before standing a server
+        up — the same "model, don't just do" shape the export side already has.
 
         Args:
+            threaded: Whether each session runs on its own thread.
+            num_procs: How many server processes to fork.
+            onload: A per-session hook run when a viewer connects (presence is modelled, not the callable).
+            periodic: A callback run on a timer for live refresh (presence is modelled).
+            period_ms: The refresh period in milliseconds when ``periodic`` is given.
+
+        Returns:
+            The :class:`Deployment` for this configuration.
+        """
+        return Deployment(
+            title=self.title or "dashboard",
+            threaded=threaded,
+            num_procs=num_procs,
+            has_onload=onload is not None,
+            periodic_ms=period_ms if periodic is not None else None,
+        )
+
+    def serve(
+        self,
+        *,
+        start: bool = False,
+        onload: Callable | None = None,
+        periodic: Callable | None = None,
+        period_ms: int = 1000,
+        threaded: bool = True,
+        num_procs: int = 1,
+        **kwargs: Any,
+    ) -> Any:
+        """Deploy the dashboard: wire its per-session state, mark it servable, optionally launch it (IN-10).
+
+        Previously this only called ``app.servable()``. Now the deployment is modelled and its session state
+        is wired through ``pn.state``: an ``onload`` hook runs per connecting session, and a ``periodic``
+        callback refreshes the view on a timer — the live half of IN-10, beside :meth:`export_plan`'s export
+        half. With ``start=True`` it actually launches a ``pn.serve`` server (threaded) and returns it;
+        otherwise it marks the app servable (for ``panel serve app.py``) and returns the viewable.
+
+        Args:
+            start: When ``True``, launch a ``pn.serve`` server now and return it; when ``False`` (default),
+                mark the app servable and return the viewable for ``panel serve``.
+            onload: A no-arg callable run once per session when a viewer connects, via ``pn.state.onload`` —
+                where per-session data (a user's AOI, a cached read) is initialised.
+            periodic: A no-arg callable run every ``period_ms`` via ``pn.state.add_periodic_callback`` —
+                a live data refresh. It is created per session when the session loads (not at call time, so
+                no timer spins before a viewer connects), and each session's handle is kept on the map so
+                ``close()`` can stop it.
+            period_ms: The period for ``periodic``, in milliseconds.
+            threaded: Passed to ``pn.serve`` when ``start=True``; also modelled in :meth:`serve_plan`.
+            num_procs: Passed to ``pn.serve`` when ``start=True``; also modelled in :meth:`serve_plan`.
             **kwargs: Forwarded to :meth:`dashboard`.
 
         Returns:
-            The servable ``panel.viewable.Viewable``.
+            The running ``panel.io.server.Server`` when ``start=True``, else the servable
+            ``panel.viewable.Viewable``.
         """
+        pn = _require_panel()
         app = self.dashboard(**kwargs)
+        # Per-session state (IN-10), installed through a single `pn.state.onload` hook so it attaches **per
+        # connecting session**, not once at call time (review R2-M1). `add_periodic_callback` starts its timer
+        # the instant it is created, so creating it here would spin a live timer before any viewer exists and
+        # register the hooks against whatever `curdoc` happened to be current; deferring both to onload makes
+        # the per-session claim true and leaves `serve(start=False)` a pure "mark servable" until a session
+        # loads. Each session's periodic handle is kept on the map so `close()` can stop it.
+        if onload is not None or periodic is not None:
+
+            def _install_session_state() -> None:
+                """Run the caller's onload and start this session's periodic refresh, once per session."""
+                if onload is not None:
+                    onload()
+                if periodic is not None:
+                    self._session_callbacks.append(
+                        pn.state.add_periodic_callback(periodic, period=period_ms)
+                    )
+
+            pn.state.onload(_install_session_state)
         app.servable()
+        if start:
+            return pn.serve(app, threaded=threaded, num_procs=num_procs, show=False)
         return app
 
     def save_app(self, path: Any, *, embed: bool = True, **kwargs: Any) -> Path:
@@ -1153,29 +1297,33 @@ class DashboardMixin(_MixinBase):
             chosen, {"alpha": op}, basemap, basemap_context="layer_control basemap"
         )
 
-    def attribute_table(self, features: Any, *, linked: bool = False) -> Any:
-        """Build a read-only ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13).
+    def attribute_table(
+        self, features: Any, *, linked: bool = False, source: Any = None
+    ) -> Any:
+        """Build a ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13 / IN-5).
 
-        The table is a **read-only view** of the attributes, not a selection-linked companion to the map:
-        two-way linking needs a ``holoviews.link_selections`` (or a selection stream) shared with the map's
-        elements, which is roadmap IN-5 / DE-13. ``linked=True`` is refused rather than accepted and
-        ignored.
+        With ``linked=False`` (the default) the table is a **read-only view** of the attributes. With
+        ``linked=True`` it is a **two-way selection companion** to the map: a ``Selection1D`` stream is
+        shared between the table's row selection and a map layer's element, so selecting rows highlights the
+        matching geometry and brushing the map selects the matching rows. Either way the cells are
+        ``disabled`` so the view cannot be edited into disagreeing with the data.
 
         Args:
             features: A pyramids ``FeatureCollection`` (or GeoDataFrame) whose non-geometry columns
                 populate the table.
-            linked: Must stay ``False``; ``True`` raises ``NotImplementedError``. It used to
-                default to ``True`` and do nothing, which read as "linking is on" when no
-                selection was ever shared with the map.
+            linked: When ``True`` (IN-5), wire a two-way selection link to ``source`` — the table becomes
+                row-selectable and its selection mirrors the map's, in both directions, through one shared
+                ``Selection1D`` stream (a re-entrancy guard stops the echo). Needs a live kernel to
+                round-trip a *gesture*, but the Python link itself is live immediately.
+            source: The map layer the link listens on; defaults to the layer added last. Ignored when
+                ``linked=False``.
 
         Returns:
-            A ``panel.widgets.Tabulator`` of the attribute columns — paginated, and ``disabled`` so
-            the view cannot be edited into disagreeing with the data on the map.
+            A ``panel.widgets.Tabulator`` of the attribute columns — paginated and ``disabled``; row-
+            selectable and selection-linked to the map when ``linked=True``.
 
         Raises:
-            NotImplementedError: when ``linked=True`` is passed — two-way selection linking
-                is not implemented (roadmap IN-5 / DE-13), and the flag is refused rather
-                than accepted and ignored.
+            ValueError: when ``linked=True`` but the map has no layer to link to.
 
         Examples:
             - The geometry column is dropped; what is left is the attributes, unchanged:
@@ -1190,40 +1338,108 @@ class DashboardMixin(_MixinBase):
                 True
 
                 ```
-            - The view is read-only by construction — a viewer cannot edit a cell into disagreeing
-              with the map:
+            - ``linked=True`` returns a row-selectable table whose selection drives the map and back:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> InteractiveMap().attribute_table(fc).disabled              # doctest: +SKIP
-                True
-
-                ```
-            - ``linked=True`` is refused: nothing shares a selection with the map's elements yet,
-              and the table is ``disabled``, so it could not emit one either:
-                ```python
-                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> try:                                                       # doctest: +SKIP
-                ...     InteractiveMap().attribute_table(fc, linked=True)
-                ... except NotImplementedError as error:
-                ...     print(str(error).split(" — ")[0])
-                attribute_table(linked=True) is not implemented
+                >>> m = InteractiveMap().points(fc)                           # doctest: +SKIP
+                >>> table = m.attribute_table(fc, linked=True)                 # doctest: +SKIP
+                >>> table.selection = [0, 2]        # selecting rows ...        # doctest: +SKIP
+                >>> m._table_links[-1][1].index     # ... drives the stream     # doctest: +SKIP
+                [0, 2]
 
                 ```
         """
-        if linked:
-            raise NotImplementedError(
-                "attribute_table(linked=True) is not implemented — this Tabulator is disabled=True, so it "
-                "cannot emit a selection. For brushing that links the map to its data use "
-                "cross_filter(...), whose link_selections instance carries selection_expr back into Python, "
-                "or annotate(...) for an editable attribute table over a drawn layer. Pass linked=False "
-                "(the default) for the read-only attribute view."
-            )
         pn = _require_panel()
         pn.extension("tabulator")
         frame = features.drop(columns=[features.geometry.name], errors="ignore")
-        return pn.widgets.Tabulator(
-            frame, disabled=True, pagination="remote", page_size=20
+        if not linked:
+            return pn.widgets.Tabulator(
+                frame, disabled=True, pagination="remote", page_size=20
+            )
+        return self._linked_attribute_table(frame, source=source)
+
+    def _linked_attribute_table(self, frame: Any, *, source: Any = None) -> Any:
+        """Build a row-selectable table two-way-linked to a map layer's selection (IN-5).
+
+        Args:
+            frame: The attribute frame (geometry already dropped) to show.
+            source: The map layer to link to; defaults to the one added last.
+
+        Returns:
+            The ``panel.widgets.Tabulator`` whose selection mirrors the map's, kept alive on the map.
+
+        Note:
+            The link maps a table row *position* to the element's ``Selection1D`` index, so it is sound only
+            when ``frame`` and ``source`` share one row order. The table is built ``sortable=False`` to hold
+            that alignment against a client-side sort; a non-selectable ``source`` (e.g. a raster) mirrors
+            nothing rather than erroring.
+        """
+        _require_holoviz()
+        from holoviews import streams
+
+        pn = _require_panel()
+        # Resolve the element to link to the way `_source_layer` does, inline so this reads only the shared
+        # state base (the caller's source, else the layer added last) rather than a sibling mixin's method.
+        if source is not None:
+            src = source
+        elif self._last_layer_id is None:
+            raise ValueError(
+                "attribute_table(linked=True) needs a source layer — add a builder call or pass source="
+            )
+        else:
+            src = self.layers[self._last_layer_index("attribute_table")]
+        # `sortable=False` keeps the link sound (review L3): the link maps a table row *position* straight to
+        # a `Selection1D` element index, so a client-side column sort — which reorders rows without touching
+        # the element — would cross-map selections to the wrong geometry. Disabling sort holds the two index
+        # spaces aligned; the precondition that `frame` and `src` share one row order still stands (see the
+        # method docstring), and a non-selectable `src` (e.g. a raster) simply mirrors nothing.
+        table = pn.widgets.Tabulator(
+            frame,
+            disabled=True,
+            selectable="checkbox",
+            sortable=False,
+            pagination="remote",
+            page_size=20,
         )
+        stream = streams.Selection1D(source=src)
+        # One guard for both directions: setting one side's selection fires the other side's handler, which
+        # would set this side straight back — the echo that makes a naive two-way link oscillate. While a
+        # handler runs the guard is held, so the mirrored write lands silently and stops there.
+        guard = {"busy": False}
+
+        def _table_to_map(event: Any) -> None:
+            """Push the table's row selection onto the shared stream.
+
+            Args:
+                event: The param event carrying the new selection in ``event.new``.
+            """
+            if guard["busy"]:
+                return
+            guard["busy"] = True
+            try:
+                stream.event(index=list(event.new))
+            finally:
+                guard["busy"] = False
+
+        def _map_to_table(index: Any = None, **_ignore: Any) -> None:
+            """Mirror the map's selection back onto the table's rows.
+
+            Args:
+                index: The selected row indices from the ``Selection1D`` stream.
+                _ignore: Any other stream contents, unused.
+            """
+            if guard["busy"]:
+                return
+            guard["busy"] = True
+            try:
+                table.selection = list(index or [])
+            finally:
+                guard["busy"] = False
+
+        table.param.watch(_table_to_map, "selection")
+        stream.add_subscriber(_map_to_table)
+        self._table_links.append((table, stream))
+        return table
 
     def share(
         self, *, params: Sequence[str] = ("cmap", "extent", "time", "basemap")

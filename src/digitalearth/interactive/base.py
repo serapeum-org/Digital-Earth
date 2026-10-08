@@ -551,6 +551,13 @@ class InteractiveMapBase:
         # data into a `live()` layer so only the changed glyphs redraw. Empty until a live layer is added;
         # let go on `close()` with the rest of the engine state.
         self._live_streams: dict[str, Any] = {}
+        # Two-way table<->map links (IN-5), one per `attribute_table(linked=True)`: each entry is the
+        # `(Tabulator, Selection1D)` pair whose selections mirror each other, kept alive here so neither the
+        # widget's param watcher nor the stream's subscriber is garbage-collected while the map lives.
+        self._table_links: list[tuple[Any, Any]] = []
+        # Periodic session callbacks registered by `serve(periodic=...)` (IN-10): kept here so the handle
+        # `pn.state.add_periodic_callback` returns is not garbage-collected while the served map lives.
+        self._session_callbacks: list[Any] = []
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
         # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
         self._built_mesh: tuple | None = None
@@ -1824,6 +1831,7 @@ class InteractiveMapBase:
         common: dict | None = None,
         bokeh: dict | None = None,
         owner: Any = None,
+        element_name: str | None = None,
     ) -> Any:
         """Apply backend-agnostic style opts plus Bokeh-only frame opts to ``element``.
 
@@ -1841,12 +1849,30 @@ class InteractiveMapBase:
             bokeh: Extra Bokeh-only options merged over the default frame.
             owner: The registered layer this element is a *frame* of, for a dynamic layer whose frames are
                 drawn one per viewport. `None` for an element that is itself the layer.
+            element_name: The HoloViews type name to validate ``**opts`` against (IN-13). A builder whose
+                styled element is a lazy ``DynamicMap`` (the default-dynamic Datashader path) passes its known
+                target — ``"RGB"`` / ``"Image"`` — because the wrapper's own type carries no options and its
+                ``.type`` is ``None`` until a frame draws. ``None`` (default) derives it from ``element``.
 
         Returns:
             The styled element.
         """
         _require_holoviz()  # called for its actionable ImportError; no module name is needed here
         style = self._style_record(common, bokeh)
+        # Validate the raw `**opts` surface against what this element actually takes, so a misspelt keyword is
+        # refused with a did-you-mean rather than splatted unchecked into `.opts()` (IN-13 #437). The builder
+        # may hand us the target name when the styled element is a lazy wrapper (a `DynamicMap` whose `.type`
+        # is not yet resolved); otherwise we read it off the element, unwrapping a HoloMap/DynamicMap through
+        # its resolved `.type` when it has one.
+        from digitalearth.interactive.style_fold import validate_opts
+
+        resolved_name = element_name or type(element).__name__
+        if element_name is None and resolved_name in ("DynamicMap", "HoloMap"):
+            target = getattr(element, "type", None)
+            if target is not None:
+                resolved_name = target.__name__
+        validate_opts(style["common"], resolved_name)
+        validate_opts(style["bokeh"], resolved_name)
         if style["common"]:
             element = element.opts(**style["common"])
         element = element.opts(backend="bokeh", **style["bokeh"])
@@ -2308,6 +2334,22 @@ class InteractiveMapBase:
         self._layer_keys.clear()
         self._layer_held.clear()
         self._live_streams.clear()
+        # Release the two registries the capability rows added (review L1): a `pn.state` periodic callback
+        # (IN-10) keeps the event loop pinning the whole map after close unless it is stopped, and a linked
+        # attribute table (IN-5) holds the map through its Selection1D subscriber. Stop each periodic
+        # callback best-effort — a handle registered off-server may never have started — then drop both.
+        for callback in self._session_callbacks:
+            stop = getattr(callback, "stop", None)
+            if callable(stop):
+                try:
+                    stop()
+                except (
+                    ValueError,
+                    RuntimeError,
+                ):  # already stopped / no running loop to detach from
+                    pass
+        self._session_callbacks.clear()
+        self._table_links.clear()
 
     def __enter__(self) -> Self:
         """Enter the runtime context, returning the map.

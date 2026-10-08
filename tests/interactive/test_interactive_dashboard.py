@@ -122,6 +122,82 @@ class TestServeAndExport:
         app = m.serve(widgets=("cmap",))
         assert isinstance(app, pn.viewable.Viewable)
 
+    def test_serve_plan_models_the_deployment(self, m):
+        """`serve_plan` models the session hooks and scaling without launching a server (IN-10 #435).
+
+        Args:
+            m: The map fixture.
+        """
+        plan = m.serve_plan(
+            onload=lambda: None, periodic=lambda: None, period_ms=500, num_procs=2
+        )
+        assert plan.has_onload, plan
+        assert plan.periodic_ms == 500, plan
+        assert plan.num_procs == 2, plan
+        assert plan.live, "an onload + periodic deployment must read as live"
+        assert "refresh 500ms" in plan.summary, plan.summary
+
+    def test_serve_plan_bare_is_not_live(self, m):
+        """With no session hooks the deployment serves a static first render (IN-10 #435).
+
+        Args:
+            m: The map fixture.
+        """
+        plan = m.serve_plan()
+        assert not plan.live, plan
+        assert plan.periodic_ms is None, plan
+        assert not plan.has_onload, plan
+
+    def test_close_releases_session_callbacks_and_table_links(self, m, point_fc):
+        """`close()` stops per-session periodic callbacks and drops the linked-table registry (review L1).
+
+        Args:
+            m: The map fixture (carries a field layer to link against).
+            point_fc: The point FeatureCollection fixture.
+        """
+        stopped = []
+
+        class _StubPeriodic:
+            """Stand-in for a session's PeriodicCallback handle that records being stopped."""
+
+            def stop(self):
+                stopped.append(True)
+
+        m._session_callbacks.append(_StubPeriodic())
+        m.attribute_table(point_fc, linked=True)
+        assert m._session_callbacks, "precondition: session callbacks populated"
+        assert m._table_links, "precondition: table links populated"
+        m.close()
+        assert stopped == [True], "close() must stop the periodic callback"
+        assert not m._session_callbacks, "close() must drop periodic callbacks"
+        assert not m._table_links, "close() must drop linked-table registry"
+
+    def test_serve_defers_periodic_to_a_per_session_onload(self, m, monkeypatch):
+        """`serve(periodic=...)` spins no timer at call time; it installs per session on load (review M1).
+
+        Args:
+            m: The map fixture.
+            monkeypatch: Captures the per-session onload hook `serve` registers.
+        """
+        captured = []
+        monkeypatch.setattr(pn.state, "onload", lambda fn: captured.append(fn))
+        loaded = []
+        m.serve(
+            onload=lambda: loaded.append("load"),
+            periodic=lambda: None,
+            period_ms=250,
+            widgets=("cmap",),
+        )
+        assert m._session_callbacks == [], (
+            "no periodic timer may start before a session connects"
+        )
+        assert captured, "serve() must register a per-session onload hook"
+        captured[0]()
+        assert loaded == ["load"], "the caller's onload must run per session"
+        assert len(m._session_callbacks) == 1, (
+            "the periodic callback is created per session, on load"
+        )
+
     def test_save_app_writes_standalone_file(self, m, tmp_path):
         out = tmp_path / "app.html"
         assert m.save_app(str(out), widgets=("cmap",)) == out
@@ -681,11 +757,111 @@ class TestInertFlagsAreRefused:
             multi.layer_control().layer_control_panel, pn.viewable.Viewable
         ), "the default call must keep working unchanged"
 
-    def test_attribute_table_linked_true_raises(self, point_fc):
-        """#243 — ``linked=True`` is refused (two-way linking needs link_selections)."""
-        fresh_map = InteractiveMap()
-        with pytest.raises(NotImplementedError, match="linked"):
-            fresh_map.attribute_table(point_fc, linked=True)
+    def test_attribute_table_linked_returns_a_selectable_registered_table(
+        self, point_fc
+    ):
+        """`linked=True` returns a row-selectable table and registers the two-way link (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        assert isinstance(table, pn.widgets.Tabulator), f"got {type(table)}"
+        assert table.selectable, "a linked table must be row-selectable"
+        assert len(linked_map._table_links) == 1, (
+            "the link must be kept alive on the map"
+        )
+
+    def test_linked_table_accepts_an_explicit_source(self, point_fc):
+        """`source=` links the table to a named layer rather than the last one added (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        target = linked_map.layers[-1]
+        table = linked_map.attribute_table(point_fc, linked=True, source=target)
+        assert linked_map._table_links[-1][1].source is target, (
+            "an explicit source must be the stream's source"
+        )
+        assert isinstance(table, pn.widgets.Tabulator), f"got {type(table)}"
+
+    def test_linked_table_is_not_sortable_to_keep_indices_aligned(self, point_fc):
+        """The linked table disables client-side sort so row positions stay aligned to the element (L3 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        assert table.sortable is False, (
+            f"a linked table must not be sortable (would remap indices), got {table.sortable!r}"
+        )
+
+    def test_linked_table_selection_drives_the_map(self, point_fc):
+        """Selecting rows pushes the indices onto the shared Selection1D stream (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        stream = linked_map._table_links[-1][1]
+        table.selection = [0, 2]
+        assert stream.index == [0, 2], (
+            f"table selection must drive the stream, got {stream.index}"
+        )
+
+    def test_linked_table_round_trips_an_index_beyond_the_first_page(self):
+        """Under remote pagination the link maps absolute row indices, not per-page ones (review R2-L3).
+
+        The fixture tables have fewer rows than ``page_size=20`` so never paginate; this builds 25 rows and
+        round-trips a selection on page 2 in both directions.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        big = gpd.GeoDataFrame(
+            {"fid": list(range(25))},
+            geometry=[Point(float(i), float(i)) for i in range(25)],
+            crs="EPSG:4326",
+        )
+        linked_map = InteractiveMap().points(big)
+        table = linked_map.attribute_table(big, linked=True)
+        stream = linked_map._table_links[-1][1]
+        table.selection = [22]
+        assert stream.index == [22], (
+            f"a page-2 row must map to absolute index 22, got {stream.index}"
+        )
+        stream.event(index=[23])
+        assert table.selection == [23], (
+            f"the stream must drive the table to absolute 23, got {table.selection}"
+        )
+
+    def test_linked_map_selection_drives_the_table(self, point_fc):
+        """A map-side selection mirrors back onto the table's rows, without oscillating (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        stream = linked_map._table_links[-1][1]
+        stream.event(index=[1])
+        assert table.selection == [1], (
+            f"the stream must drive the table, got {table.selection}"
+        )
+
+    def test_linked_table_without_a_layer_raises(self, point_fc):
+        """`linked=True` with nothing on the map to link to is refused (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        bare = InteractiveMap()
+        with pytest.raises(ValueError, match="attribute_table"):
+            bare.attribute_table(point_fc, linked=True)
 
     def test_attribute_table_linked_defaults_to_false(self, point_fc):
         """The default must not promise linking, and must still return the read-only table."""

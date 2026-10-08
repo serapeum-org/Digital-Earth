@@ -32,6 +32,42 @@ from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 _AGGREGATORS = ("count", "any", "sum", "mean", "min", "max", "std", "var", "count_cat")
 
 
+def _reject_invalid_span(clim: Any, cnorm: Any, color_key: Any, method: str) -> None:
+    """Refuse a frozen span the shaded path cannot honour, with an actionable message (IN-4, M2/R2-L1).
+
+    Two combinations reach Datashader as cryptic engine errors and are refused up front instead:
+
+    * a span under eq-hist shading (``cnorm="eq_hist"``) — Datashader's ``shade`` raises
+      ``span is not (yet) valid to use with eq_hist``; the match is case-insensitive so ``"EQ_HIST"`` is
+      caught too (R2-L1);
+    * a span together with a categorical ``color_key`` — a span is a continuous range and means nothing for
+      ``count_cat`` category colours, which otherwise surfaces as a cryptic ``Invalid hex color`` (R2-L1).
+
+    Args:
+        clim: The recorded span, or ``None`` (nothing to check when absent).
+        cnorm: The recorded normalisation, or ``None``.
+        color_key: The categorical colour mapping, or ``None``.
+        method: The builder name, for the message.
+
+    Raises:
+        ValueError: when a span is given under eq-hist, or together with a categorical ``color_key``.
+    """
+    if clim is None:
+        return
+    if str(cnorm).lower() == "eq_hist":
+        raise ValueError(
+            f"{method}() cannot freeze a span (clim=) under cnorm='eq_hist' — Datashader refuses it. Use "
+            "rasterize(clim=..., cnorm='eq_hist'), which equalises via Bokeh's EqHistColorMapper, or pass a "
+            "different cnorm (e.g. 'linear' or 'log') to this builder."
+        )
+    if color_key is not None:
+        raise ValueError(
+            f"{method}() cannot freeze a span (clim=) on a categorical shade (color_key=): a span is a "
+            "continuous range and does not apply to category colours. Drop clim, or shade a continuous "
+            "column without color_key."
+        )
+
+
 def _resolve_aggregator(aggregator: Any, column: str | None) -> Any:
     """Turn an ``aggregator`` name (+ optional ``column``) into a Datashader reduction.
 
@@ -164,7 +200,7 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     if "clim" in common:
         common["clim"] = _engine_pair(common["clim"])
     rasterized = interactive_map._styled(
-        rasterized, common=common, bokeh={"tools": ["hover"]}
+        rasterized, common=common, bokeh={"tools": ["hover"]}, element_name="Image"
     )
     return DrawnLayer(element=rasterized, style=common)
 
@@ -198,6 +234,16 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         op_kwargs["color_key"] = _color_key(color_key)
     else:
         op_kwargs["cmap"] = props.get("cmap")
+    # Frozen colour scale (IN-4): a recorded `clim` becomes the shade `clims` (span), and `cnorm` its
+    # normalisation — defaulting to "linear" because Datashader refuses a span under eq-hist (X-4). Without a
+    # `clim` the shade re-autoranges per frame, HoloViews' default, so neither key is passed then.
+    clim = _engine_pair(props.get("clim"))
+    cnorm = props.get("cnorm")
+    if clim is not None:
+        op_kwargs["clims"] = clim
+        op_kwargs["cnorm"] = cnorm or "linear"
+    elif cnorm is not None:
+        op_kwargs["cnorm"] = cnorm
     shaded = _datashade(
         element,
         aggregator=_resolve_aggregator(props.get("aggregator"), column),
@@ -206,7 +252,10 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     )
     common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     return DrawnLayer(
-        element=interactive_map._styled(shaded, common=common or None), style=common
+        element=interactive_map._styled(
+            shaded, common=common or None, element_name="RGB"
+        ),
+        style=common,
     )
 
 
@@ -242,12 +291,23 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
             op_kwargs["color_key"] = _color_key(color_key)
     else:
         op_kwargs["cmap"] = props.get("cmap")
+    # Frozen colour scale (IN-4), as in draw_datashade: clims=span, cnorm defaults to "linear" under a span.
+    traj_clim = _engine_pair(props.get("clim"))
+    traj_cnorm = props.get("cnorm")
+    if traj_clim is not None:
+        op_kwargs["clims"] = traj_clim
+        op_kwargs["cnorm"] = traj_cnorm or "linear"
+    elif traj_cnorm is not None:
+        op_kwargs["cnorm"] = traj_cnorm
     shaded = _datashade(path, dynamic=props.get("dynamic", True), **op_kwargs)
     if props.get("dynspread"):
         shaded = _dynspread(shaded)
     common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     return DrawnLayer(
-        element=interactive_map._styled(shaded, common=common or None), style=common
+        element=interactive_map._styled(
+            shaded, common=common or None, element_name="RGB"
+        ),
+        style=common,
     )
 
 
@@ -381,6 +441,8 @@ class BigDataMixin(_MixinBase):
         aggregator: Any = "count",
         column: str | None = None,
         dynamic: bool = True,
+        clim: tuple[float, float] | None = None,
+        cnorm: str | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
@@ -401,6 +463,11 @@ class BigDataMixin(_MixinBase):
                 ``count_cat`` when the aggregator is left at ``"count"``.
             column: The value/category column.
             dynamic: Re-shade on every viewport change; ``False`` bakes a static RGB.
+            clim: Frozen ``(vmin, vmax)`` colour span (IN-4). ``None`` (default) re-autoranges per frame;
+                a pair pins the shade's domain (passed to the shade operation as ``clims``).
+            cnorm: Shade normalisation — ``"linear"`` / ``"log"`` / ``"eq_hist"``. ``None`` leaves
+                HoloViews' default, but **defaults to ``"linear"`` when ``clim`` is set**, because
+                Datashader refuses a span under ``eq_hist`` (the X-4 trap).
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -413,6 +480,7 @@ class BigDataMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
+        _reject_invalid_span(clim, cnorm, color_key, "datashade")
         if color_key is not None and aggregator == "count":
             aggregator = "count_cat"
         if aggregator == "count_cat" and column is not None:
@@ -440,6 +508,8 @@ class BigDataMixin(_MixinBase):
                     "canvas": canvas,
                     "color_key": describe(held, "color_key", color_key),
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "clim": describe(held, "clim", _travelling_pair(clim)),
+                    "cnorm": cnorm,
                     "common": {},
                     "opts": described_opts,
                 }
@@ -456,6 +526,8 @@ class BigDataMixin(_MixinBase):
         cmap: str = "viridis",
         color_key: Any | None = None,
         dynamic: bool = True,
+        clim: tuple[float, float] | None = None,
+        cnorm: str | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
@@ -472,6 +544,11 @@ class BigDataMixin(_MixinBase):
                 whole table as one track.
             by: Optional categorical column colouring tracks per class (``count_cat`` blend).
             dynspread: Grow isolated pixels so sparse tracks stay visible.
+            clim: Frozen ``(vmin, vmax)`` colour span (IN-4). ``None`` (default) re-autoranges per frame;
+                a pair pins the shade's domain (passed to the shade operation as ``clims``).
+            cnorm: Shade normalisation — ``"linear"`` / ``"log"`` / ``"eq_hist"``. ``None`` leaves
+                HoloViews' default, but **defaults to ``"linear"`` when ``clim`` is set**, because
+                Datashader refuses a span under ``eq_hist`` (the X-4 trap).
             cmap: Colormap for continuous shading (ignored when ``color_key`` is given).
             color_key: ``{category: colour}`` mapping used with ``by``, or a list of colours in category
                 order — the two forms HoloViews takes.
@@ -488,6 +565,7 @@ class BigDataMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
+        _reject_invalid_span(clim, cnorm, color_key, "trajectory")
         canvas: dict = {
             key: opts.pop(key) for key in ("width", "height") if key in opts
         }
@@ -502,6 +580,8 @@ class BigDataMixin(_MixinBase):
             held=held,
             symbology=Symbology(
                 props={
+                    "clim": describe(held, "clim", _travelling_pair(clim)),
+                    "cnorm": cnorm,
                     "via": "trajectory",
                     "track_column": track_column,
                     "by": by,

@@ -107,6 +107,43 @@ class TestLargeImage:
             f"bbox not the window: {bbox}"
         )
 
+    def test_dynamic_layer_carries_a_plotsize_stream(self, m):
+        """A dynamic large_image binds a PlotSize stream so a browser resize re-reads (IN-6 #432).
+
+        Args:
+            m: The map fixture.
+        """
+        from holoviews.streams import PlotSize, RangeXY
+
+        m.large_image(_FakeCOG(), dynamic=True)
+        kinds = {type(s) for s in m.layers[0].streams}
+        assert RangeXY in kinds, f"expected a RangeXY stream, got {kinds}"
+        assert PlotSize in kinds, f"expected a PlotSize stream, got {kinds}"
+
+    def test_resize_re_reads_at_the_new_resolution(self, m):
+        """A larger PlotSize reads a larger window than a smaller one — the resize actually re-samples.
+
+        Args:
+            m: The map fixture.
+        """
+        from holoviews.streams import PlotSize, RangeXY
+
+        cog = _FakeCOG()
+        m.large_image(cog, dynamic=True, max_pixels=400 * 300)
+        dmap = m.layers[0]
+        rng = next(s for s in dmap.streams if isinstance(s, RangeXY))
+        size = next(s for s in dmap.streams if isinstance(s, PlotSize))
+        rng.event(x_range=(-5.0e5, 5.0e5), y_range=(-4.0e5, 4.0e5))
+        size.event(width=400, height=300)
+        dmap[()]
+        big_w, big_h = cog.read_calls[-1][1], cog.read_calls[-1][2]
+        size.event(width=80, height=60)
+        dmap[()]
+        small_w, small_h = cog.read_calls[-1][1], cog.read_calls[-1][2]
+        assert (small_w, small_h) < (big_w, big_h), (
+            f"a smaller canvas must read fewer cells: {small_w}x{small_h} vs {big_w}x{big_h}"
+        )
+
     def test_missing_cog_surface_raises(self, m, dataset):
         """A plain Dataset without read_part/preview raises an actionable error (upstream-gated)."""
 
