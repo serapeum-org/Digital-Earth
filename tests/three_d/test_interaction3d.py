@@ -120,7 +120,8 @@ def test_picked_layer_none_for_a_foreign_actor(monkeypatch):
     Args:
         monkeypatch: Patches picked_actor to a stray actor that belongs to no layer.
     """
-    stray = pv.Plotter(off_screen=True).add_mesh(pv.Sphere())
+    stray_plotter = pv.Plotter(off_screen=True)
+    stray = stray_plotter.add_mesh(pv.Sphere())
     scene = Scene3D(off_screen=True)
     scene.terrain(_dem(), name="dem")
     monkeypatch.setattr(
@@ -128,6 +129,7 @@ def test_picked_layer_none_for_a_foreign_actor(monkeypatch):
     )
     assert scene.picked_layer() is None  # stray is not in the scene's drawn layers
     scene.close()
+    stray_plotter.close()
 
 
 def test_a_widget_on_a_described_but_undrawn_layer_is_refused():
