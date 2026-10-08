@@ -1120,9 +1120,9 @@ class RasterMixin(_MixinBase):
             band: 1-based band to read.
             max_pixels: Cell budget per rendered frame. The canvas follows the map's own width and height
                 within it, so a wide map reads a wide window rather than a square one.
-            dynamic: Re-read the viewport on pan/zoom via a ``RangeXY`` stream (needs a live server);
-                ``False`` renders one frame of the whole raster within the budget (deterministic — what
-                tests assert).
+            dynamic: Re-read the viewport on pan/zoom via a ``RangeXY`` stream **and on a browser-window
+                resize via a ``PlotSize`` stream** (IN-6 #432), both needing a live server; ``False``
+                renders one frame of the whole raster within the budget (deterministic — what tests assert).
             cmap: Colormap; ``None`` (default) resolves from the band's variable name via
                 ``autostyle.auto_style`` (#249), with ``"viridis"`` behind the lookup as the fallback.
             name: The caller's own name for the layer, used as its id and its label; ``None``
@@ -1156,13 +1156,14 @@ class RasterMixin(_MixinBase):
                 (13, 14)
 
                 ```
-            - The default ``dynamic=True`` registers a viewport-driven layer instead, carrying the
-              one stream that re-reads the window from the axes ranges on every pan/zoom:
+            - The default ``dynamic=True`` registers a viewport-driven layer instead, carrying two
+              streams — a ``RangeXY`` that re-reads the window from the axes ranges on every pan/zoom, and
+              a ``PlotSize`` that re-reads at the new resolution on a browser-window resize (IN-6):
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> m = InteractiveMap().large_image(dem)                      # doctest: +SKIP
                 >>> len(m.layers[0].streams)                                   # doctest: +SKIP
-                1
+                2
                 >>> sorted(m.layers[0].streams[0].contents)                    # doctest: +SKIP
                 ['x_range', 'y_range']
 
@@ -1266,22 +1267,46 @@ class RasterMixin(_MixinBase):
                 return held["view"]
             return held["view"].reread(request)
 
-        def _frame(x_range: Any = None, y_range: Any = None) -> Any:
+        def _frame(
+            x_range: Any = None,
+            y_range: Any = None,
+            width: Any = None,
+            height: Any = None,
+            scale: Any = None,
+        ) -> Any:
             """Read the window the viewport asks for, and draw it.
 
             Args:
                 x_range: The viewport's x range, or `None` for the first frame.
                 y_range: Its y range, or `None`.
+                width: The live canvas width in px from the ``PlotSize`` stream (IN-6), or `None`.
+                height: The live canvas height in px, or `None`.
+                scale: The ``PlotSize`` device-pixel ratio — accepted so the callback matches the
+                    stream's parameters; the read is sized from ``width``/``height``, not from it.
 
             Returns:
                 The styled element for that window.
             """
+            del scale
+            # Size the read from the live canvas when the PlotSize stream reports one (IN-6 #432): a browser
+            # resize now re-reads at the new resolution, not only a pan/zoom. The fixed `target` (self.width/
+            # height) is the fallback for the first frame and the static path, where PlotSize gives nothing.
+            frame_target = (
+                target
+                if not width or not height
+                else RenderTarget(
+                    "window",
+                    width=int(width),
+                    height=int(height),
+                    budget=props["max_pixels"],
+                )
+            )
             if x_range is None or y_range is None:
                 # The first frame is the whole raster within the budget: a canvas with no region windows
                 # the source itself, which is what `preview` used to approximate.
-                request = target.view_request(Viewport(self.crs))
+                request = frame_target.view_request(Viewport(self.crs))
             else:
-                request = target.view_request(
+                request = frame_target.view_request(
                     Viewport(self.crs),
                     bounds=Bounds(
                         x_range[0], y_range[0], x_range[1], y_range[1], crs=self.crs
@@ -1296,9 +1321,11 @@ class RasterMixin(_MixinBase):
 
         if not dynamic:
             return _frame(), common
-        from holoviews.streams import RangeXY
+        from holoviews.streams import PlotSize, RangeXY
 
-        dmap = hv.DynamicMap(_frame, streams=[RangeXY()])
+        # RangeXY re-reads on pan/zoom; PlotSize re-reads on a browser-window resize (IN-6 #432), feeding the
+        # live canvas width/height into `_frame` so the window is read at the resolution actually shown.
+        dmap = hv.DynamicMap(_frame, streams=[RangeXY(), PlotSize()])
         owner["layer"] = dmap
         # The style every frame will be drawn with, filed against the layer a caller holds before any frame
         # exists, so `style_of` answers for it at once (review M17). It used to be filed by drawing a first
