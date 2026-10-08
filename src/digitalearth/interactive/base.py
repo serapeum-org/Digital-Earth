@@ -2334,6 +2334,22 @@ class InteractiveMapBase:
         self._layer_keys.clear()
         self._layer_held.clear()
         self._live_streams.clear()
+        # Release the two registries the capability rows added (review L1): a `pn.state` periodic callback
+        # (IN-10) keeps the event loop pinning the whole map after close unless it is stopped, and a linked
+        # attribute table (IN-5) holds the map through its Selection1D subscriber. Stop each periodic
+        # callback best-effort — a handle registered off-server may never have started — then drop both.
+        for callback in self._session_callbacks:
+            stop = getattr(callback, "stop", None)
+            if callable(stop):
+                try:
+                    stop()
+                except (
+                    ValueError,
+                    RuntimeError,
+                ):  # already stopped / no running loop to detach from
+                    pass
+        self._session_callbacks.clear()
+        self._table_links.clear()
 
     def __enter__(self) -> Self:
         """Enter the runtime context, returning the map.

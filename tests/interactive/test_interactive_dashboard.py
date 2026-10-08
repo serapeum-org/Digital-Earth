@@ -144,6 +144,22 @@ class TestServeAndExport:
         plan = m.serve_plan()
         assert not plan.live and plan.periodic_ms is None and not plan.has_onload, plan
 
+    def test_close_releases_session_callbacks_and_table_links(self, m, point_fc):
+        """`close()` stops periodic callbacks and drops the linked-table registry (review L1).
+
+        Args:
+            m: The map fixture (carries a field layer to link against).
+            point_fc: The point FeatureCollection fixture.
+        """
+        m.serve(periodic=lambda: None, period_ms=200, widgets=("cmap",))
+        m.attribute_table(point_fc, linked=True)
+        assert m._session_callbacks and m._table_links, (
+            "precondition: both registries populated"
+        )
+        m.close()
+        assert not m._session_callbacks, "close() must stop and drop periodic callbacks"
+        assert not m._table_links, "close() must drop linked-table registry"
+
     def test_serve_registers_a_periodic_callback(self, m):
         """`serve(periodic=...)` wires a pn.state periodic callback and keeps its handle (IN-10 #435).
 
