@@ -209,7 +209,8 @@ def grid(*maps: Any, cols: int = 2) -> Any:
 
     Unlike :func:`panels`' ``+`` ``Layout``, a ``GridSpace`` shares one set of axes across **every** cell
     declaratively, so panning any cell pans them all — the small-multiples linked view. Cells fill left to
-    right, top to bottom, wrapping every ``cols`` maps.
+    right, wrapping every ``cols`` maps; ``row=0`` is the **bottom** row, since a ``GridSpace`` places its y
+    origin at the bottom (so the first row of maps renders along the bottom, not the top).
 
     Args:
         *maps: Two or more ``InteractiveMap`` instances (or already-rendered objects).

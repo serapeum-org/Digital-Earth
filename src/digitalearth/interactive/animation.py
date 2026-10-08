@@ -92,7 +92,9 @@ class AnimationMixin(_MixinBase):
         return [
             (layer_id, element)
             for layer_id, element in zip(self.layer_ids, self.layers)
-            if isinstance(element, (hv.DynamicMap, hv.HoloMap)) and element.kdims
+            # `DynamicMap` subclasses `HoloMap`, so this one check catches a timecube's DynamicMap and a
+            # frames() HoloMap alike; `.kdims` excludes a static element with no selector.
+            if isinstance(element, hv.HoloMap) and element.kdims
         ]
 
     def _time_dynamicmap(self, layer: str | None = None) -> Any:
