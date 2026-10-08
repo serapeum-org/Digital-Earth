@@ -1294,6 +1294,12 @@ _BUILT_IN_KINDS = (
         "overlay",
     ),
     (
+        "reference_fill",
+        "none",
+        "Natural Earth land/ocean/lakes as 3-D hole-aware reference fills — 3-D land/ocean/lakes",
+        "overlay",
+    ),
+    (
         "land",
         "none",
         "Natural Earth land — land",

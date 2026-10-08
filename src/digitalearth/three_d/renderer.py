@@ -52,6 +52,7 @@ DRAWN_KINDS: tuple[str, ...] = (
     "raster",
     "coastlines",
     "reference_lines",
+    "reference_fill",
     "text",
     "custom:pyvista",
 )
@@ -132,6 +133,7 @@ def drawer_for(kind: str) -> Any:
         "raster": globe.draw_globe,
         "coastlines": globe.draw_coastlines,
         "reference_lines": decoration.draw_reference_lines,
+        "reference_fill": decoration.draw_reference_fill,
         "text": decoration.draw_text,
         "custom:pyvista": draw_custom,
     }
