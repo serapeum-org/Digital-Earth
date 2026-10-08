@@ -167,7 +167,7 @@ class FlatMixin(_MixinBase):
         *,
         name: Any = None,
         column: str | None = None,
-        scheme: Any | None = "quantiles",
+        scheme: Any | None = None,
         k: int = 5,
         cmap: str = "viridis",
         opacity: float | None = None,
@@ -176,14 +176,17 @@ class FlatMixin(_MixinBase):
     ) -> Any:
         """Draw a flat polygon fill coloured by a column (a map choropleth on the ground plane).
 
-        The Core ``choropleth`` verb: :meth:`polygons` that always colours by a column, defaulting to a
-        quantile classification as the other tiers' choropleth does.
+        The Core ``choropleth`` verb: :meth:`polygons` that always colours by a column. ``scheme`` defaults to
+        ``None`` — a continuous ramp over the raw values — exactly as the static, web and interactive tiers'
+        ``choropleth`` default, so one call classifies the same way whichever tier draws it; pass a scheme name
+        (``"quantiles"``, …) to cut classes.
 
         Args:
             features: A GeoDataFrame of ``Polygon``/``MultiPolygon`` geometries.
             column: The attribute column to colour by — **required**; for an unclassified fill use
                 :meth:`polygons`.
-            scheme: How ``column`` is classified; defaults to ``"quantiles"``.
+            scheme: How ``column`` is classified; ``None`` (the default) is a continuous ramp, as on every
+                other tier.
             k: Number of classes for a graduated ``scheme``.
             cmap: Colormap for the classes.
             opacity: Fill opacity; ``None`` leaves the engine default.

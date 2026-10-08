@@ -80,6 +80,23 @@ def test_choropleth_classifies_the_fill():
     scene.close()
 
 
+def test_choropleth_default_scheme_matches_the_other_tiers():
+    """#F1: choropleth defaults scheme=None (a continuous ramp), as static/web/interactive do.
+
+    A classified default would make `choropleth(gdf, column="x")` mean class codes on 3-D but a continuous
+    ramp on every other tier — the cross-tier inconsistency the Core vocabulary exists to prevent.
+    """
+    import inspect
+
+    assert inspect.signature(Scene3D.choropleth).parameters["scheme"].default is None
+    # Behaviourally: with no scheme the fill carries the raw column values, not class indices (0, 1, ...).
+    scene = Scene3D(off_screen=True)
+    scene.choropleth(_squares(), column="pop")  # pop == [10.0, 20.0]
+    mesh = scene.layers[0][0]
+    assert sorted({float(v) for v in mesh.cell_data[VALUE]}) == [10.0, 20.0]
+    scene.close()
+
+
 def test_choropleth_needs_a_column():
     """A choropleth with no column is refused — there is nothing to colour by."""
     scene = Scene3D(off_screen=True)
