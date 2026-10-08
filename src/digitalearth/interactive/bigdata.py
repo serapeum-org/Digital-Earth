@@ -164,7 +164,7 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     if "clim" in common:
         common["clim"] = _engine_pair(common["clim"])
     rasterized = interactive_map._styled(
-        rasterized, common=common, bokeh={"tools": ["hover"]}
+        rasterized, common=common, bokeh={"tools": ["hover"]}, element_name="Image"
     )
     return DrawnLayer(element=rasterized, style=common)
 
@@ -216,7 +216,10 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     )
     common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     return DrawnLayer(
-        element=interactive_map._styled(shaded, common=common or None), style=common
+        element=interactive_map._styled(
+            shaded, common=common or None, element_name="RGB"
+        ),
+        style=common,
     )
 
 
@@ -265,7 +268,10 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         shaded = _dynspread(shaded)
     common = {**dict(props.get("common") or {}), **dict(props.get("opts") or {})}
     return DrawnLayer(
-        element=interactive_map._styled(shaded, common=common or None), style=common
+        element=interactive_map._styled(
+            shaded, common=common or None, element_name="RGB"
+        ),
+        style=common,
     )
 
 

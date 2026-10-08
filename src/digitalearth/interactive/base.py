@@ -1831,6 +1831,7 @@ class InteractiveMapBase:
         common: dict | None = None,
         bokeh: dict | None = None,
         owner: Any = None,
+        element_name: str | None = None,
     ) -> Any:
         """Apply backend-agnostic style opts plus Bokeh-only frame opts to ``element``.
 
@@ -1848,20 +1849,30 @@ class InteractiveMapBase:
             bokeh: Extra Bokeh-only options merged over the default frame.
             owner: The registered layer this element is a *frame* of, for a dynamic layer whose frames are
                 drawn one per viewport. `None` for an element that is itself the layer.
+            element_name: The HoloViews type name to validate ``**opts`` against (IN-13). A builder whose
+                styled element is a lazy ``DynamicMap`` (the default-dynamic Datashader path) passes its known
+                target — ``"RGB"`` / ``"Image"`` — because the wrapper's own type carries no options and its
+                ``.type`` is ``None`` until a frame draws. ``None`` (default) derives it from ``element``.
 
         Returns:
             The styled element.
         """
         _require_holoviz()  # called for its actionable ImportError; no module name is needed here
         style = self._style_record(common, bokeh)
-        # Validate the raw `**opts` surface against what this element actually takes, so a misspelt keyword
-        # is refused with a did-you-mean rather than splatted unchecked into `.opts()` (IN-13 #437). This is
-        # the single chokepoint every builder's options pass through, and the element type is known here.
+        # Validate the raw `**opts` surface against what this element actually takes, so a misspelt keyword is
+        # refused with a did-you-mean rather than splatted unchecked into `.opts()` (IN-13 #437). The builder
+        # may hand us the target name when the styled element is a lazy wrapper (a `DynamicMap` whose `.type`
+        # is not yet resolved); otherwise we read it off the element, unwrapping a HoloMap/DynamicMap through
+        # its resolved `.type` when it has one.
         from digitalearth.interactive.style_fold import validate_opts
 
-        element_name = type(element).__name__
-        validate_opts(style["common"], element_name)
-        validate_opts(style["bokeh"], element_name)
+        resolved_name = element_name or type(element).__name__
+        if element_name is None and resolved_name in ("DynamicMap", "HoloMap"):
+            target = getattr(element, "type", None)
+            if target is not None:
+                resolved_name = target.__name__
+        validate_opts(style["common"], resolved_name)
+        validate_opts(style["bokeh"], resolved_name)
         if style["common"]:
             element = element.opts(**style["common"])
         element = element.opts(backend="bokeh", **style["bokeh"])

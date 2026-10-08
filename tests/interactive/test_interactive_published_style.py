@@ -670,8 +670,10 @@ class TestOptsValidation:
 
     def test_misspelt_option_is_refused_with_a_suggestion(self):
         """A near-miss keyword raises before HoloViews, naming the option it meant."""
+        scene = InteractiveMap()
+        dem = _dem()
         with pytest.raises(ValueError, match="did you mean.*width"):
-            InteractiveMap().field(_dem(), widht=600)
+            scene.field(dem, widht=600)
 
     def test_a_valid_option_still_passes(self):
         """A keyword the element accepts is applied, not refused."""
@@ -680,5 +682,25 @@ class TestOptsValidation:
 
     def test_unknown_option_on_points_is_refused(self):
         """The guard covers vector builders too, not just rasters."""
+        scene = InteractiveMap()
+        pts = _points()
         with pytest.raises(ValueError, match="not an option"):
-            InteractiveMap().points(_points(), nonsense_option=1)
+            scene.points(pts, nonsense_option=1)
+
+    def test_default_dynamic_datashade_is_also_guarded(self):
+        """The guard covers the default `dynamic=True` Datashader path, not only static elements (M1).
+
+        The styled element there is a lazy `DynamicMap`, so the builder's known target (`RGB`) must drive the
+        check — otherwise the most common big-data path ships unguarded.
+        """
+        scene = InteractiveMap()
+        pts = _points()
+        with pytest.raises(ValueError, match="did you mean.*width"):
+            scene.datashade(pts, column="pop", dynamic=True, widht=600)
+
+    def test_default_dynamic_rasterize_is_also_guarded(self):
+        """The guard also covers default-dynamic `rasterize`, whose target is `Image` (M1)."""
+        scene = InteractiveMap()
+        pts = _points()
+        with pytest.raises(ValueError, match="did you mean.*width"):
+            scene.rasterize(pts, column="pop", dynamic=True, widht=600)
