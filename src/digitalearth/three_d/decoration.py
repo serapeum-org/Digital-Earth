@@ -63,6 +63,7 @@ __all__ = [
     "DecorationMixin",
     "axis_labels",
     "axis_titles",
+    "draw_reference_fill",
     "draw_reference_lines",
     "draw_text",
     "redraw_decoration",
@@ -417,6 +418,74 @@ def draw_reference_lines(
     merged = pv.MultiBlock(lines).combine()
     return merged, scene.plotter.add_mesh(
         merged, color=color, line_width=float(width), opacity=float(opacity), **props
+    )
+
+
+def draw_reference_fill(
+    scene: Any, _data: Any, layer: LayerSpec
+) -> tuple[Any, Any] | None:
+    """Draw the Natural-Earth land/ocean/lake fill a `reference_fill` layer describes.
+
+    The fill counterpart of :func:`draw_reference_lines`. The polygons are read **hole-aware** from
+    cleopatra's `natural_earth_polygons` (each part `[exterior, *holes]`) and triangulated into flat caps at
+    `z=0` with their holes carved (:func:`~digitalearth.three_d.vector._cap_with_holes`), so an ocean fill
+    shows the continents through it rather than painting over them (cleopatra#384).
+
+    Args:
+        scene: The scene being drawn into.
+        _data: The source slot every drawer takes, unread here — the polygons come from Natural Earth, named
+            by the layer's props, so a figure holding this layer is storable with no in-memory source.
+        layer: The layer's description, whose props carry the dataset, resolution and fill style.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when Natural Earth returned no fillable polygon and the scene is
+        not `strict`.
+
+    Raises:
+        OffLimbError: when there is nothing to draw and the scene is `strict`.
+    """
+    from cleopatra.basemap.reference import natural_earth_polygons
+
+    from digitalearth.three_d.vector import _cap_with_holes
+
+    props = drawing_props(layer.symbology.props)
+    dataset = props.pop("dataset")
+    resolution = props.pop("resolution")
+    color = props.pop("color", "#cccccc")
+    opacity = props.pop("opacity", 1.0)
+    # The polygons are lon/lat; as with the reference lines, reprojecting them into a projected display CRS
+    # is pyramids' job, not this tier's, so draw them as given and say so rather than silently misplacing
+    # them.
+    if scene.display_crs is not None and not is_geographic(scene.display_crs):
+        logger.warning(
+            "%s: Natural-Earth reference fills are in EPSG:4326 and may not align with the scene's %r "
+            "display CRS; reproject the scene's data to a geographic CRS, or wait on the pyramids "
+            "reprojection path",
+            layer.kind,
+            scene.display_crs,
+        )
+
+    import pyvista as pv
+
+    caps = []
+    for rings in natural_earth_polygons(dataset, resolution):
+        # The first ring is the exterior; a part whose exterior is degenerate is nothing to fill, and a
+        # degenerate hole is skipped rather than carved.
+        if not rings or len(rings[0]) < 3:
+            continue
+        exterior = np.asarray(rings[0], dtype="float64")
+        interiors = [
+            np.asarray(hole, dtype="float64") for hole in rings[1:] if len(hole) >= 3
+        ]
+        caps.append(_cap_with_holes(exterior, interiors))
+    if not caps:
+        scene._skip_empty(
+            layer.kind, f"natural_earth_polygons({dataset!r}) returned no polygons"
+        )
+        return None
+    merged = pv.MultiBlock(caps).combine()
+    return merged, scene.plotter.add_mesh(
+        merged, color=color, opacity=float(opacity), **props
     )
 
 
@@ -924,5 +993,178 @@ class DecorationMixin(_MixinBase):
             resolution=resolution,
             color=color,
             width=width,
+            opacity=opacity,
+        )
+
+    def land(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Any = None,
+        color: str = "#e9e4d8",
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Any:
+        """Fill Natural-Earth land polygons in the scene (TD-5b, #205).
+
+        The fill counterpart of :meth:`coastlines`: where the shoreline is a line, this paints the land. The
+        polygons are **hole-aware** — cleopatra 0.42.0's ``natural_earth_polygons`` returns each part as
+        ``[exterior, *holes]``, so an inland lake is carved out of the fill rather than painted over
+        (cleopatra#384). They are drawn as flat caps on the ground plane (``z=0``) from the same Natural-Earth
+        source the static and web tiers read, so a figure holding the layer is storable with no in-memory
+        source. The polygons are geographic (EPSG:4326); over a projected display CRS they are drawn but
+        warned about, because reprojecting them is pyramids' job (as for :meth:`coastlines`).
+
+        The fill is ground cover and is banded ``underlay`` (bottom of the layer tree, like the static and
+        interactive ``land``/``ocean``/``lakes`` kinds). That governs the **layer-tree order** — the scene's
+        layer list and switcher — not what occludes what: the renderer composites actors by depth, so a flat
+        data layer coincident on the ground plane (``z=0``) will z-fight an opaque fill regardless of band.
+        Give the fill ``opacity`` below 1, or treat it as the scene's sole ground, when drawing flat data over
+        it; a terrain or any elevated layer sits above the ``z=0`` fill with no conflict.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: Layer id; ``None`` numbers it ``land``.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``. Non-finite values are refused.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor, or ``None`` when Natural Earth returned no polygon (see ``strict``).
+
+        Raises:
+            ValueError: if ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``.
+        """
+        return self._reference_fill(
+            "land",
+            "land",
+            resolution,
+            name=name,
+            color=color,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def ocean(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Any = None,
+        color: str = "#aad3df",
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Any:
+        """Fill Natural-Earth ocean polygons in the scene (TD-5b, #205).
+
+        The same hole-aware fill path as :meth:`land`, for the ocean — the polygon that carries one
+        continent-shaped hole per landmass, so the hole-aware ``natural_earth_polygons`` matters most here.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: Layer id; ``None`` numbers it ``ocean``.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor, or ``None`` when Natural Earth returned no polygon (see ``strict``).
+
+        Raises:
+            ValueError: if ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``.
+        """
+        return self._reference_fill(
+            "ocean",
+            "ocean",
+            resolution,
+            name=name,
+            color=color,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def lakes(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Any = None,
+        color: str = "#aad3df",
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Any:
+        """Fill Natural-Earth lake polygons in the scene (TD-5b, #205).
+
+        The same hole-aware fill path as :meth:`land` and :meth:`ocean`, for inland water.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: Layer id; ``None`` numbers it ``lakes``.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor, or ``None`` when Natural Earth returned no polygon (see ``strict``).
+
+        Raises:
+            ValueError: if ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``.
+        """
+        return self._reference_fill(
+            "lakes",
+            "lakes",
+            resolution,
+            name=name,
+            color=color,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def _reference_fill(
+        self,
+        dataset: str,
+        prefix: str,
+        resolution: str,
+        *,
+        name: Any,
+        color: str,
+        opacity: float,
+        visible: bool,
+    ) -> Any:
+        """Register one Natural-Earth polygon fill — land, ocean or lakes.
+
+        :meth:`land`, :meth:`ocean` and :meth:`lakes` are one mechanism over three Natural-Earth datasets, so
+        the body lives here; the geometry is read hole-aware and triangulated by :func:`draw_reference_fill`.
+
+        Args:
+            dataset: The Natural-Earth polygon dataset — ``"land"``, ``"ocean"`` or ``"lakes"``.
+            prefix: The id the layer is numbered under when ``name`` is ``None``.
+            resolution: One of ``"110m"``, ``"50m"`` or ``"10m"``.
+            name: The caller's layer id, or ``None`` to use ``prefix``.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor, or ``None`` when Natural Earth returned no polygon.
+
+        Raises:
+            ValueError: for an unknown resolution, or a non-finite opacity.
+        """
+        if resolution not in _NATURAL_EARTH_RESOLUTIONS:
+            raise ValueError(
+                f"{prefix}() resolution={resolution!r} must be one of "
+                f"{sorted(_NATURAL_EARTH_RESOLUTIONS)} — the resolutions Natural Earth publishes"
+            )
+        # Refuse a non-finite opacity at the call, as the web tier's `as_finite` does: a figure holding NaN
+        # or infinity could not be written down, and the symptom would otherwise surface far from the cause.
+        if not math.isfinite(opacity):
+            raise ValueError(f"{prefix}() opacity={opacity!r} must be a finite number")
+        return self._add_described_layer(
+            kind="reference_fill",
+            data=None,
+            name=name if name is not None else prefix,
+            visible=visible,
+            dataset=dataset,
+            resolution=resolution,
+            color=color,
             opacity=opacity,
         )
