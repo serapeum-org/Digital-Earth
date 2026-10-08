@@ -555,6 +555,9 @@ class InteractiveMapBase:
         # `(Tabulator, Selection1D)` pair whose selections mirror each other, kept alive here so neither the
         # widget's param watcher nor the stream's subscriber is garbage-collected while the map lives.
         self._table_links: list[tuple[Any, Any]] = []
+        # Periodic session callbacks registered by `serve(periodic=...)` (IN-10): kept here so the handle
+        # `pn.state.add_periodic_callback` returns is not garbage-collected while the served map lives.
+        self._session_callbacks: list[Any] = []
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
         # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
         self._built_mesh: tuple | None = None

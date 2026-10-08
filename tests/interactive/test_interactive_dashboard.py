@@ -122,6 +122,40 @@ class TestServeAndExport:
         app = m.serve(widgets=("cmap",))
         assert isinstance(app, pn.viewable.Viewable)
 
+    def test_serve_plan_models_the_deployment(self, m):
+        """`serve_plan` models the session hooks and scaling without launching a server (IN-10 #435).
+
+        Args:
+            m: The map fixture.
+        """
+        plan = m.serve_plan(
+            onload=lambda: None, periodic=lambda: None, period_ms=500, num_procs=2
+        )
+        assert plan.has_onload and plan.periodic_ms == 500 and plan.num_procs == 2, plan
+        assert plan.live, "an onload + periodic deployment must read as live"
+        assert "refresh 500ms" in plan.summary, plan.summary
+
+    def test_serve_plan_bare_is_not_live(self, m):
+        """With no session hooks the deployment serves a static first render (IN-10 #435).
+
+        Args:
+            m: The map fixture.
+        """
+        plan = m.serve_plan()
+        assert not plan.live and plan.periodic_ms is None and not plan.has_onload, plan
+
+    def test_serve_registers_a_periodic_callback(self, m):
+        """`serve(periodic=...)` wires a pn.state periodic callback and keeps its handle (IN-10 #435).
+
+        Args:
+            m: The map fixture.
+        """
+        before = len(m._session_callbacks)
+        m.serve(periodic=lambda: None, period_ms=250, widgets=("cmap",))
+        assert len(m._session_callbacks) == before + 1, (
+            "a periodic callback handle must be kept on the map so it is not GC'd"
+        )
+
     def test_save_app_writes_standalone_file(self, m, tmp_path):
         out = tmp_path / "app.html"
         assert m.save_app(str(out), widgets=("cmap",)) == out

@@ -13,7 +13,7 @@ WASM/Pyodide export is **out** for a pyramids-backed app: GDAL/pyramids cannot r
 live app must be *served*, not converted. ``save_app`` is the offline path (pre-rendered states only).
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import reduce
 from importlib.util import find_spec
@@ -193,6 +193,68 @@ class ExportPlan:
             f"save_app(embed=True) would bake {self.total_states} states ({breakdown}), over the "
             f"{self.max_states} cap — Panel will truncate it. Drop a widget, or serve() the app instead."
         )
+
+
+@dataclass(frozen=True)
+class Deployment:
+    """How a dashboard will be **served**, modelled before (or instead of) launching it (IN-10).
+
+    The export side of IN-10 is modelled by :class:`ExportPlan`; this is its deployment counterpart. A
+    served app is not a baked page — it is a live process with per-session state, so what matters is the
+    session model, not a state count: whether a per-session ``onload`` hook runs when a viewer connects,
+    whether a periodic callback refreshes the view, and how the server is scaled (threads/processes). A
+    pyramids-backed app must be *served* (GDAL runs on the server), never exported to WASM/Pyodide, so this
+    is the deployment a data-backed map actually uses.
+
+    Attributes:
+        title: The served app's title.
+        threaded: Whether ``pn.serve`` runs each session on its own thread.
+        num_procs: How many server processes to fork (``1`` keeps a single process).
+        has_onload: Whether a per-session ``pn.state.onload`` hook is registered.
+        periodic_ms: The refresh period in milliseconds for a ``pn.state`` periodic callback, or ``None``.
+
+    Examples:
+        - A threaded single-process deployment that refreshes every half-second:
+            ```python
+            >>> from digitalearth.interactive.dashboard import Deployment
+            >>> plan = Deployment(title="rain", threaded=True, num_procs=1, has_onload=True, periodic_ms=500)
+            >>> plan.live, plan.periodic_ms
+            (True, 500)
+
+            ```
+    """
+
+    title: str
+    threaded: bool
+    num_procs: int
+    has_onload: bool
+    periodic_ms: int | None
+
+    @property
+    def live(self) -> bool:
+        """Whether the deployment carries any live per-session behaviour.
+
+        Returns:
+            ``True`` when an ``onload`` hook or a periodic refresh is modelled — i.e. the app does more
+            than serve a static first render.
+        """
+        return self.has_onload or self.periodic_ms is not None
+
+    @property
+    def summary(self) -> str:
+        """A one-line description of the deployment.
+
+        Returns:
+            A sentence naming the scaling and the session model.
+        """
+        scale = f"{self.num_procs} proc(s), {'threaded' if self.threaded else 'single-thread'}"
+        refresh = (
+            f"refresh {self.periodic_ms}ms"
+            if self.periodic_ms is not None
+            else "no refresh"
+        )
+        onload = "onload hook" if self.has_onload else "no onload"
+        return f"serve {self.title!r}: {scale}; {onload}; {refresh}"
 
 
 def _did_you_mean(kind: str, name: str, known: Sequence[str]) -> str:
@@ -654,17 +716,88 @@ class DashboardMixin(_MixinBase):
             widgets=tuple(counts), total_states=total, max_states=max_states
         )
 
-    def serve(self, **kwargs: Any) -> Any:
-        """Mark the dashboard servable for ``panel serve`` and return it.
+    def serve_plan(
+        self,
+        *,
+        threaded: bool = True,
+        num_procs: int = 1,
+        onload: Callable | None = None,
+        periodic: Callable | None = None,
+        period_ms: int = 1000,
+    ) -> Deployment:
+        """Model how :meth:`serve` would deploy this dashboard, without launching anything (IN-10).
+
+        The deployment counterpart of :meth:`export_plan`: it returns the :class:`Deployment` describing the
+        session model and scaling, so a caller can inspect (or log) the deployment before standing a server
+        up — the same "model, don't just do" shape the export side already has.
 
         Args:
+            threaded: Whether each session runs on its own thread.
+            num_procs: How many server processes to fork.
+            onload: A per-session hook run when a viewer connects (presence is modelled, not the callable).
+            periodic: A callback run on a timer for live refresh (presence is modelled).
+            period_ms: The refresh period in milliseconds when ``periodic`` is given.
+
+        Returns:
+            The :class:`Deployment` for this configuration.
+        """
+        return Deployment(
+            title=self.title or "dashboard",
+            threaded=threaded,
+            num_procs=num_procs,
+            has_onload=onload is not None,
+            periodic_ms=period_ms if periodic is not None else None,
+        )
+
+    def serve(
+        self,
+        *,
+        start: bool = False,
+        onload: Callable | None = None,
+        periodic: Callable | None = None,
+        period_ms: int = 1000,
+        threaded: bool = True,
+        num_procs: int = 1,
+        **kwargs: Any,
+    ) -> Any:
+        """Deploy the dashboard: wire its per-session state, mark it servable, optionally launch it (IN-10).
+
+        Previously this only called ``app.servable()``. Now the deployment is modelled and its session state
+        is wired through ``pn.state``: an ``onload`` hook runs per connecting session, and a ``periodic``
+        callback refreshes the view on a timer — the live half of IN-10, beside :meth:`export_plan`'s export
+        half. With ``start=True`` it actually launches a ``pn.serve`` server (threaded) and returns it;
+        otherwise it marks the app servable (for ``panel serve app.py``) and returns the viewable.
+
+        Args:
+            start: When ``True``, launch a ``pn.serve`` server now and return it; when ``False`` (default),
+                mark the app servable and return the viewable for ``panel serve``.
+            onload: A no-arg callable run once per session when a viewer connects, via ``pn.state.onload`` —
+                where per-session data (a user's AOI, a cached read) is initialised.
+            periodic: A no-arg callable run every ``period_ms`` via ``pn.state.add_periodic_callback`` —
+                a live data refresh. Its handle is kept on the map so it is not garbage-collected.
+            period_ms: The period for ``periodic``, in milliseconds.
+            threaded: Passed to ``pn.serve`` when ``start=True``; also modelled in :meth:`serve_plan`.
+            num_procs: Passed to ``pn.serve`` when ``start=True``; also modelled in :meth:`serve_plan`.
             **kwargs: Forwarded to :meth:`dashboard`.
 
         Returns:
-            The servable ``panel.viewable.Viewable``.
+            The running ``panel.io.server.Server`` when ``start=True``, else the servable
+            ``panel.viewable.Viewable``.
         """
+        pn = _require_panel()
         app = self.dashboard(**kwargs)
+        # Per-session state (IN-10): onload runs when a viewer connects; a periodic callback refreshes the
+        # view. Both are no-ops until a session is live, but registering them here is what turns a static
+        # first render into a deployed, stateful app. The periodic handle is kept so it survives this scope.
+        if onload is not None:
+            pn.state.onload(onload)
+        if periodic is not None:
+            self._session_callbacks.append(
+                pn.state.add_periodic_callback(periodic, period=period_ms)
+            )
         app.servable()
+        if start:
+            return pn.serve(app, threaded=threaded, num_procs=num_procs, show=False)
         return app
 
     def save_app(self, path: Any, *, embed: bool = True, **kwargs: Any) -> Path:
