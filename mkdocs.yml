@@ -138,6 +138,17 @@ nav:
       - Big data (Datashader/COG): examples/interactive/06_big_data.ipynb
       - Time cubes & projections: examples/interactive/07_temporal_and_projections.ipynb
       - Interaction & dashboards: examples/interactive/08_interaction_and_dashboards.ipynb
+      - "Comprehensive guide":
+        - At a glance: examples/interactive/guide/00_overview_and_data.ipynb
+        - Raster fields: examples/interactive/guide/01_raster.ipynb
+        - Big data (Datashader): examples/interactive/guide/02_big_data.ipynb
+        - Vector layers: examples/interactive/guide/03_vectors.ipynb
+        - Mesh & density: examples/interactive/guide/04_mesh_density.ipynb
+        - Temporal & animation: examples/interactive/guide/05_temporal_animation.ipynb
+        - Decoration & projections: examples/interactive/guide/06_decoration_projection.ipynb
+        - Interaction: examples/interactive/guide/07_interaction.ipynb
+        - Linked views & layouts: examples/interactive/guide/08_linked_layouts.ipynb
+        - Dashboards & deployment: examples/interactive/guide/09_dashboards_deployment.ipynb
     - 3-D visualization (PyVista):
       - Overview (all plot types): examples/pyvista/15_3d_visualization.ipynb
       - Scene3D — the 3-D host: examples/pyvista/01_scene3d_basics.ipynb
