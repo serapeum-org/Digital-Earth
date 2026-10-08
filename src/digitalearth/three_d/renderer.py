@@ -85,10 +85,10 @@ def drawer_for(kind: str) -> Any:
         - A kind from another tier is refused by name:
             ```python
             >>> from digitalearth.three_d.renderer import drawer_for
-            >>> drawer_for("choropleth")  # doctest: +ELLIPSIS
+            >>> drawer_for("hexbin")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            KeyError: "the 3-D tier does not draw 'choropleth' layers; it draws [...]"
+            KeyError: "the 3-D tier does not draw 'hexbin' layers; it draws [...]"
 
             ```
     """
