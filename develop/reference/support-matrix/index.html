@@ -4001,7 +4001,7 @@ declaration. <code>✓</code> means the backend supports it; <code>—</code> me
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
-<td>✓</td>
+<td>—</td>
 </tr>
 <tr>
 <td><code>clusters</code></td>
@@ -4120,7 +4120,7 @@ declaration. <code>✓</code> means the backend supports it; <code>—</code> me
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
-<td>✓</td>
+<td>—</td>
 </tr>
 <tr>
 <td><code>mesh</code></td>
@@ -4162,27 +4162,20 @@ declaration. <code>✓</code> means the backend supports it; <code>—</code> me
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
-<td>✓</td>
+<td>—</td>
 </tr>
 <tr>
 <td><code>polygons</code></td>
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
-<td>✓</td>
+<td>—</td>
 </tr>
 <tr>
 <td><code>raster</code></td>
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
-<td>✓</td>
-</tr>
-<tr>
-<td><code>reference_lines</code></td>
-<td>—</td>
-<td>—</td>
-<td>—</td>
 <td>✓</td>
 </tr>
 <tr>
@@ -4204,7 +4197,7 @@ declaration. <code>✓</code> means the backend supports it; <code>—</code> me
 <td>✓</td>
 <td>—</td>
 <td>✓</td>
-<td>✓</td>
+<td>—</td>
 </tr>
 <tr>
 <td><code>terrain</code></td>
@@ -4649,6 +4642,8 @@ omissions with no positive counterpart on any backend, so they appear only in th
 <ul>
 <li><strong><code>attribution</code></strong> — a render window has no credit line; a caller writes one beside the image it saves</li>
 <li><strong><code>basemap</code></strong> — there are no map tiles to drape under a scene drawn in three dimensions</li>
+<li><strong><code>coastline_overlay</code></strong> — a globe draws its own shoreline onto the sphere, and a flat scene has none to trace,
+  so there is no builder to add one to a scene</li>
 <li><strong><code>domain</code></strong> — a scene is framed by its camera, not by an extent, so there is no region to set</li>
 <li><strong><code>fullscreen</code></strong> — the render window is resized by the window manager, not by a control in the scene</li>
 <li><strong><code>layer_switcher</code></strong> — layers are switched by id through the scene's own API rather than from a panel</li>
