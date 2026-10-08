@@ -123,7 +123,7 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
         ),
         "streamlines": (
             "a streamline is an integrated path already bounded by its seed count and integration time; "
-            "fewer or shorter lines come from seeding fewer points (n_points) or a smaller max_time, not from "
+            "fewer or shorter lines come from seeding fewer points (n_points) or a smaller max_length, not from "
             "simplifying the traced geometry after the fact"
         ),
         "extrusion": (

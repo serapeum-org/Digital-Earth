@@ -716,3 +716,9 @@ class TestTheSurfaceBudgetCountsTrianglesOnBothSides:
         assert drawn.n_cells < shell.n_cells, (
             f"a {shell.n_cells}-triangle mesh drew {drawn.n_cells} at a budget of {shell.n_cells - 1}"
         )
+
+
+def test_streamlines_reason_names_the_current_keyword():
+    """#F2-1: the streamlines big-data reason names max_length, not the removed max_time keyword."""
+    assert "max_time" not in UNREDUCED["streamlines"]
+    assert "max_length" in UNREDUCED["streamlines"]
