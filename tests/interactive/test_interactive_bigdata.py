@@ -172,6 +172,43 @@ class TestRasterize:
 class TestDatashadeFrozenScale:
     """``datashade``/``trajectory`` can pin a colour span so they do not re-autorange per frame (IN-4)."""
 
+    def test_datashade_eq_hist_with_a_span_is_refused_pointing_at_rasterize(
+        self, m, big_points
+    ):
+        """`cnorm="eq_hist"` with a `clim` is refused early with an actionable message (review M2).
+
+        Datashader cannot equalise under a fixed span; the error must name `rasterize` rather than let the
+        raw "span is not (yet) valid to use with eq_hist" surface.
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        with pytest.raises(ValueError, match="eq_hist.*rasterize"):
+            m.datashade(
+                big_points,
+                column="value",
+                clim=(0.0, 1.0),
+                cnorm="eq_hist",
+                dynamic=False,
+            )
+
+    def test_trajectory_eq_hist_with_a_span_is_refused(self, m, big_points):
+        """The trajectory path refuses the same combination with the same actionable message (review M2).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        with pytest.raises(ValueError, match="eq_hist.*rasterize"):
+            m.trajectory(
+                big_points,
+                track_column="cls",
+                clim=(0.0, 1.0),
+                cnorm="eq_hist",
+                dynamic=False,
+            )
+
     def test_datashade_with_a_span_renders_without_the_eq_hist_trap(
         self, m, big_points
     ):
