@@ -1015,11 +1015,18 @@ class DecorationMixin(_MixinBase):
         source. The polygons are geographic (EPSG:4326); over a projected display CRS they are drawn but
         warned about, because reprojecting them is pyramids' job (as for :meth:`coastlines`).
 
+        The fill is ground cover and is banded ``underlay`` (bottom of the layer tree, like the static and
+        interactive ``land``/``ocean``/``lakes`` kinds). That governs the **layer-tree order** — the scene's
+        layer list and switcher — not what occludes what: the renderer composites actors by depth, so a flat
+        data layer coincident on the ground plane (``z=0``) will z-fight an opaque fill regardless of band.
+        Give the fill ``opacity`` below 1, or treat it as the scene's sole ground, when drawing flat data over
+        it; a terrain or any elevated layer sits above the ``z=0`` fill with no conflict.
+
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             name: Layer id; ``None`` numbers it ``land``.
             color: Fill colour.
-            opacity: Fill opacity in ``[0, 1]``.
+            opacity: Fill opacity in ``[0, 1]``. Non-finite values are refused.
             visible: Whether the layer is drawn when added.
 
         Returns:
@@ -1140,13 +1147,17 @@ class DecorationMixin(_MixinBase):
             The registered actor, or ``None`` when Natural Earth returned no polygon.
 
         Raises:
-            ValueError: for an unknown resolution.
+            ValueError: for an unknown resolution, or a non-finite opacity.
         """
         if resolution not in _NATURAL_EARTH_RESOLUTIONS:
             raise ValueError(
                 f"{prefix}() resolution={resolution!r} must be one of "
                 f"{sorted(_NATURAL_EARTH_RESOLUTIONS)} — the resolutions Natural Earth publishes"
             )
+        # Refuse a non-finite opacity at the call, as the web tier's `as_finite` does: a figure holding NaN
+        # or infinity could not be written down, and the symptom would otherwise surface far from the cause.
+        if not math.isfinite(opacity):
+            raise ValueError(f"{prefix}() opacity={opacity!r} must be a finite number")
         return self._add_described_layer(
             kind="reference_fill",
             data=None,

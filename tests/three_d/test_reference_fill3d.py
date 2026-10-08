@@ -48,29 +48,42 @@ def test_ocean_and_lakes_draw_their_own_layers():
     scene.close()
 
 
-def test_the_ocean_fill_carves_its_holes():
-    """Carving the ocean's holes yields strictly less filled area than its exterior alone.
+def test_the_ocean_fill_carves_its_holes_through_the_drawer():
+    """The drawer (``scene.ocean()``) produces a mesh with less area than an exterior-only fill.
 
     Test scenario:
-        The 110m ocean's main part is one exterior ring plus a continent-shaped hole per landmass. The
-        drawer feeds those ``[exterior, *holes]`` rings to the hole-carving triangulator; comparing the
-        holed cap's area against the exterior-only triangulation proves the continents are removed — the
-        cleopatra#384 bug (a solid exterior fill) would have the two areas equal, which ``n_cells > 0``
-        alone cannot tell apart.
+        This goes through ``draw_reference_fill`` end-to-end — ``scene.ocean()`` reads the hole-aware rings,
+        extracts ``rings[1:]`` as holes and triangulates them — then compares the DRAWN mesh's area against
+        an exterior-only triangulation of the same parts. The drawn (holed) area is strictly smaller, which
+        only holds when the drawer wires the continents through as holes; the cleopatra#384 bug (a solid
+        exterior fill) would make the two equal. Exercising the drawer, not ``_cap_with_holes`` directly,
+        guards the drawer's own ``rings[1:]`` handling.
     """
     from cleopatra.basemap.reference import natural_earth_polygons
 
     from digitalearth.three_d.vector import _cap_with_holes
 
-    rings = max(natural_earth_polygons("ocean", "110m"), key=len)
-    assert len(rings) > 1, "expected the ocean's main part to carry continent holes"
-    exterior = np.asarray(rings[0], dtype="float64")
-    interiors = [np.asarray(hole, dtype="float64") for hole in rings[1:]]
-    holed = _cap_with_holes(exterior, interiors)
-    solid = _cap_with_holes(exterior, [])
-    assert holed.area < solid.area, (
-        f"carving the holes must reduce the filled area: holed {holed.area} vs solid {solid.area}"
+    scene = Scene3D(off_screen=True)
+    scene.ocean()
+    drawn = scene.layers[0][0]
+    solid_area = sum(
+        _cap_with_holes(np.asarray(part[0], dtype="float64"), []).area
+        for part in natural_earth_polygons("ocean", "110m")
+        if len(part[0]) >= 3
     )
+    assert drawn.area < solid_area, (
+        f"the drawer must carve the ocean's holes: drawn {drawn.area} vs exterior-only {solid_area}"
+    )
+    scene.close()
+
+
+def test_a_non_finite_opacity_is_refused():
+    """A NaN opacity is refused at the call, as the web tier does — a figure cannot hold a non-finite value."""
+    scene = Scene3D(off_screen=True)
+    nan = float("nan")
+    with pytest.raises(ValueError, match="opacity"):
+        scene.ocean(opacity=nan)
+    scene.close()
 
 
 def test_a_degenerate_polygon_skips_the_layer(monkeypatch):
@@ -95,20 +108,29 @@ def test_a_degenerate_polygon_skips_the_layer(monkeypatch):
     scene.close()
 
 
-def test_the_fill_is_banded_as_ground_cover_under_the_data():
-    """A fill is ground cover: it bands ``underlay`` (below the data), not ``overlay`` like the lines.
+def test_the_fill_bands_underlay_below_the_lines_in_the_layer_tree():
+    """The fill bands ``underlay`` — below the reference lines in the LAYER TREE (not 3-D occlusion).
 
     Test scenario:
-        ``reference_fill`` is the opposite end of the stack from the reference *lines*: an opaque area fill
-        belongs under the data, a thin line over it. Banding the fill ``overlay`` (as ``reference_lines`` is)
-        would draw an opaque ocean/land over a flat data layer coincident at ``z=0``. This pins the band so it
-        cannot silently regress to ``overlay``.
+        ``reference_fill`` is ground cover, so it bands ``underlay`` like the static/interactive
+        ``land``/``ocean``/``lakes`` kinds, whereas the reference *lines* band ``overlay``. This governs the
+        scene's **layer-tree order** (the layer list and switcher): the fill is ordered before an overlay
+        line. It does **not** govern 3-D occlusion — the renderer composites actors by depth, so what is in
+        front is decided by ``z``/opacity, not by band (coplanar ``z=0`` layers are separated by opacity).
+        This pins the band value and its tree order so it cannot regress to ``overlay``.
     """
     from digitalearth.base.spec.layer import _layer_band
 
     scene = Scene3D(off_screen=True)
     scene.ocean()
-    assert _layer_band(scene.figure_spec.layers.get("ocean")) == "underlay"
+    scene.coastlines()
+    figure = scene.figure_spec
+    assert _layer_band(figure.layers.get("ocean")) == "underlay"
+    assert _layer_band(figure.layers.get("coastlines")) == "overlay"
+    ids = scene.layer_ids
+    assert ids.index("ocean") < ids.index("coastlines"), (
+        f"the underlay fill must be ordered before the overlay line in the tree: {ids}"
+    )
     scene.close()
 
 
