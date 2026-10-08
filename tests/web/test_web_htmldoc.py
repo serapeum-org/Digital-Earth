@@ -83,7 +83,8 @@ class TestHtmlDocumentSwipe:
         assert "maplibre-gl@5.3.0/dist/maplibre-gl.css" in html, (
             "maplibre-gl CSS not loaded"
         )
-        assert "DE.buildMap" in html and "DELayerSwitcher" in html, "runtime missing"
+        assert "DE.buildMap" in html, "runtime bootstrap missing"
+        assert "DELayerSwitcher" in html, "runtime control missing"
         assert "DE.swipe" in html, "swipe feature missing"
         assert html.count("window.DE.buildMap(") == 2, "both maps must be built"
 
@@ -159,7 +160,8 @@ class TestSaveSwipe:
         assert out.exists(), out
         text = out.read_text(encoding="utf-8")
         assert text.startswith("<!DOCTYPE html>"), "not an HTML document"
-        assert "de-swipe-wrap" in text and out.stat().st_size > 2_000, "looks empty"
+        assert "de-swipe-wrap" in text, "swipe wrapper missing"
+        assert out.stat().st_size > 2_000, "file looks empty"
 
 
 class TestHtmlDocumentMinimap:
@@ -190,7 +192,8 @@ class TestHtmlDocumentMinimap:
             {"mapOptions": {}, "calls": []},
             mini_size=(240, 160),
         ).render()
-        assert 'id="de-minimap"' in html and "width:240px;height:160px" in html
+        assert 'id="de-minimap"' in html
+        assert "width:240px;height:160px" in html
         assert "DE.minimap" in html, "minimap feature missing"
         assert html.count("window.DE.buildMap(") == 2, "both maps must be built"
 
@@ -232,7 +235,8 @@ class TestMinimapHtml:
         pytest.importorskip("maplibre")
         out = save_minimap(WebMap().basemap(), str(tmp_path / "mini.html"))
         text = out.read_text(encoding="utf-8")
-        assert text.startswith("<!DOCTYPE html>") and "de-minimap-wrap" in text
+        assert text.startswith("<!DOCTYPE html>")
+        assert "de-minimap-wrap" in text
 
 
 class TestHtmlDocumentMeasure:
@@ -278,7 +282,8 @@ class TestHtmlDocumentMeasure:
         html = HtmlDocument.measure(
             {"mapOptions": {}, "calls": []}, distance=True, area=False
         ).render()
-        assert '"distance": true' in html and '"area": false' in html
+        assert '"distance": true' in html
+        assert '"area": false' in html
 
 
 class TestMeasureHtml:
@@ -294,7 +299,8 @@ class TestMeasureHtml:
         pytest.importorskip("maplibre")
         html = measure_html(WebMap().basemap())
         assert "basemaps.cartocdn.com" in html, "the map did not reach the page"
-        assert "de-measure-readout" in html and "DE.measure" in html
+        assert "de-measure-readout" in html
+        assert "DE.measure" in html
 
     def test_save_measure_writes_a_file(self, tmp_path):
         """``save_measure`` writes a real HTML document.
@@ -305,7 +311,8 @@ class TestMeasureHtml:
         pytest.importorskip("maplibre")
         out = save_measure(WebMap().basemap(), str(tmp_path / "measure.html"))
         text = out.read_text(encoding="utf-8")
-        assert text.startswith("<!DOCTYPE html>") and "de-measure-wrap" in text
+        assert text.startswith("<!DOCTYPE html>")
+        assert "de-measure-wrap" in text
 
     def test_a_map_that_already_has_a_draw_control_is_refused(self):
         """A map that already called ``measure()`` is refused, so the page never gets two draw controls.
@@ -367,7 +374,8 @@ class TestConditionalLibraries:
             {"mapOptions": {}, "calls": [["addSource", ["s", {}]]]},
             {"mapOptions": {}, "calls": []},
         ).render()
-        assert "deck.gl@" not in html and "dist/mapbox-gl-draw" not in html
+        assert "deck.gl@" not in html
+        assert "dist/mapbox-gl-draw" not in html
 
 
 class TestScriptSafety:

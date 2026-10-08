@@ -271,7 +271,8 @@ class TestMeasureRendersInABrowser:
         assert probe["canvas_count"] >= 1, f"the map must draw a canvas: {probe}"
         assert probe["measures"] == ["de-map-measure"], probe["measures"]
         assert probe["has_draw"], "mapbox-gl-draw did not load"
-        assert probe["readout"] and "Distance: 111" in probe["readout"], (
+        assert probe["readout"], "the measure readout stayed empty"
+        assert "Distance: 111" in probe["readout"], (
             f"a 1-degree line must read ~111 km, got {probe['readout']!r}"
         )
 
@@ -408,9 +409,9 @@ class TestDeckAndGeocoderInABrowser:
         assert "limit=1" in url, f"limit not passed through: {url}"
         assert "language=nl" in url, f"language not passed through: {url}"
         assert "country=nl" in url, f"country not passed through: {url}"
-        assert abs(center_after["lng"] - center_before["lng"]) < 1e-6 and (
-            abs(center_after["lat"] - center_before["lat"]) < 1e-6
-        ), f"fly_to=False must not move the camera: {center_before} -> {center_after}"
+        moved = f"fly_to=False must not move the camera: {center_before} -> {center_after}"
+        assert abs(center_after["lng"] - center_before["lng"]) < 1e-6, moved
+        assert abs(center_after["lat"] - center_before["lat"]) < 1e-6, moved
 
     def test_a_nested_deck_accessor_is_refused(self):
         """A deck layer carrying a nested ``@@`` accessor is refused loudly, not silently mis-rendered.
@@ -461,12 +462,12 @@ class TestRuntimeSafety:
             path.write_text(html, encoding="utf-8")
             page_errors, _console, result = _render_and_probe(path.as_uri(), probe_js)
         assert page_errors == [], f"uncaught JS error(s): {page_errors}"
-        assert "<img" not in result and "<b>" not in result, (
-            f"popup property markup was not escaped: {result!r}"
-        )
-        assert "&lt;img" in result and "a&lt;b&gt;" in result, (
-            f"expected escaped entities, got {result!r}"
-        )
+        not_escaped = f"popup property markup was not escaped: {result!r}"
+        assert "<img" not in result, not_escaped
+        assert "<b>" not in result, not_escaped
+        escaped = f"expected escaped entities, got {result!r}"
+        assert "&lt;img" in result, escaped
+        assert "a&lt;b&gt;" in result, escaped
 
     def test_set_deck_layers_without_an_overlay_is_refused(self):
         """``setDeckLayers`` replayed without a prior ``addDeckOverlay`` raises, not silently no-ops.
