@@ -4,6 +4,8 @@ Gated on the optional ``3d`` extra (pyvista). Covers flat points, flat polygon f
 each drawn on the ground plane (z=0) and distinct from the positioned builders (point_cloud / extruded_polygons).
 """
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -103,6 +105,27 @@ def test_choropleth_needs_a_column():
     squares = _squares()
     with pytest.raises(ValueError, match="needs a column"):
         scene.choropleth(squares)
+    scene.close()
+
+
+def test_points_empty_table_is_skipped_with_a_warning(caplog):
+    """An empty point table draws nothing and warns, rather than registering an empty layer."""
+    scene = Scene3D(off_screen=True)
+    with caplog.at_level(logging.WARNING):
+        assert scene.points(np.zeros((0, 3))) is None
+    assert not scene.layers
+    assert "points" in caplog.text
+    scene.close()
+
+
+def test_polygons_empty_collection_is_skipped_with_a_warning(caplog):
+    """An empty polygon collection draws nothing and warns."""
+    empty = gpd.GeoDataFrame({"v": []}, geometry=[])
+    scene = Scene3D(off_screen=True)
+    with caplog.at_level(logging.WARNING):
+        assert scene.polygons(empty) is None
+    assert not scene.layers
+    assert "polygons" in caplog.text
     scene.close()
 
 

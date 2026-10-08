@@ -69,6 +69,16 @@ def test_coastlines_over_a_projected_scene_warn_about_the_crs(caplog):
     assert "EPSG:4326" in caplog.text
 
 
+def test_coastlines_and_borders_take_a_custom_name():
+    """A caller-supplied name is used as the layer id, for both coastlines and borders."""
+    scene = Scene3D(off_screen=True)
+    scene.coastlines(name="shore")
+    scene.borders(name="frontier")
+    assert "shore" in scene.layer_ids
+    assert "frontier" in scene.layer_ids
+    scene.close()
+
+
 def test_coastlines_resolution_is_recorded_on_the_layer():
     """The dataset and resolution travel on the layer description so the figure replays."""
     scene = Scene3D(off_screen=True)

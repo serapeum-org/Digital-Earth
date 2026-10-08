@@ -135,6 +135,42 @@ def test_terrain_texture_rejects_a_non_image_array():
         _as_texture(flat)
 
 
+def test_as_texture_accepts_a_band_first_array():
+    """A band-first (3, H, W) array — a pyramids RGB raster's values — is transposed to band-last."""
+    from digitalearth.three_d.terrain import _as_texture
+
+    band_first = np.random.default_rng(0).integers(0, 255, size=(3, 8, 8), dtype=np.uint8)
+    texture = _as_texture(band_first)
+    assert texture.to_array().shape[:2] == (8, 8)
+
+
+def test_as_texture_scales_a_float_array_to_bytes():
+    """A non-uint8 (float) image is scaled into 0-255 by its own range."""
+    from digitalearth.three_d.terrain import _as_texture
+
+    rng = np.random.default_rng(1)
+    floats = rng.random((8, 8, 3))  # in [0, 1)
+    texture = _as_texture(floats)
+    assert texture.to_array().dtype == np.uint8
+
+
+def test_as_texture_reads_an_image_path(tmp_path):
+    """A path is read through PyVista's own image reader.
+
+    Args:
+        tmp_path: Supplies a temporary PNG to read back.
+    """
+    import matplotlib.image as mpimg
+
+    rgb = np.random.default_rng(2).random((8, 8, 3))
+    png = tmp_path / "tex.png"
+    mpimg.imsave(str(png), rgb)
+    from digitalearth.three_d.terrain import _as_texture
+
+    texture = _as_texture(str(png))
+    assert texture.to_array().shape[2] in (3, 4)
+
+
 def test_terrain_nodata_is_a_gap_not_fabricated_ground():
     """#200: a NaN (masked nodata) cell renders as a hole, not as flat ground at the surface floor.
 

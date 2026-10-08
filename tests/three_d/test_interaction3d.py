@@ -102,3 +102,39 @@ def test_picked_layer_is_none_without_a_pick():
     scene.terrain(_dem())
     assert scene.picked_layer() is None
     scene.close()
+
+
+def test_enable_then_disable_picking():
+    """enable_picking() turns a point pick on through PyVista, and disable_picking() turns it off."""
+    scene = Scene3D(off_screen=True)
+    scene.terrain(_dem())
+    scene.enable_picking(mode="point")
+    scene.disable_picking()  # no error: the mode can be switched after disabling
+    scene.enable_picking(mode="cell")
+    scene.close()
+
+
+def test_picked_layer_none_for_a_foreign_actor(monkeypatch):
+    """picked_layer() is None when the picked actor is not one of the scene's layers.
+
+    Args:
+        monkeypatch: Patches picked_actor to a stray actor that belongs to no layer.
+    """
+    stray = pv.Plotter(off_screen=True).add_mesh(pv.Sphere())
+    scene = Scene3D(off_screen=True)
+    scene.terrain(_dem(), name="dem")
+    monkeypatch.setattr(
+        type(scene.plotter), "picked_actor", property(lambda _self: stray)
+    )
+    assert scene.picked_layer() is None  # stray is not in the scene's drawn layers
+    scene.close()
+
+
+def test_a_widget_on_a_described_but_undrawn_layer_is_refused():
+    """A widget on a layer whose mesh the renderer no longer holds is refused by name."""
+    scene = Scene3D(off_screen=True)
+    scene.terrain(_dem(), name="dem")
+    scene.renderer._drawn.clear()  # the layer stays described, but nothing is drawn for it
+    with pytest.raises(ValueError, match="nothing drawn"):
+        scene.clip_plane("dem")
+    scene.close()
