@@ -72,7 +72,10 @@
   // used by the tier for a legend / title panel.
   class DEInfoBox {
     constructor(options) {
-      this._content = (options && (options.content || options.cssText)) || "";
+      // `content` is a required field on the widget's InfoBoxControl, so it is always present; default
+      // to "" if ever absent rather than falling back to `cssText` (which would render the inline CSS
+      // string as HTML body).
+      this._content = (options && options.content) || "";
       this._css = (options && options.cssText) || "";
     }
     onAdd() {
@@ -284,6 +287,7 @@
     }
     if (value && typeof value === "object") {
       for (const key in value) {
+        if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
         if (key.indexOf("@@") === 0) {
           throw new Error("de_maplibre: deck.gl accessor key not supported: " + key);
         }
@@ -307,7 +311,11 @@
       if (!Layer) throw new Error("de_maplibre: unknown deck.gl layer " + type);
       const props = {};
       for (const key in spec) {
-        if (key === "@@type") continue;
+        if (!Object.prototype.hasOwnProperty.call(spec, key)) continue;
+        // Skip `__proto__`: JSON.parse makes it an OWN property, and `props["__proto__"] = …` would
+        // trigger the prototype setter (pollution) rather than set a plain key. Not reachable from
+        // the tier's own serialization, but a cheap guard against a hand-crafted spec.
+        if (key === "@@type" || key === "__proto__") continue;
         if (key !== "data") refuseDeckAccessors(spec[key]);
         props[key] = spec[key];
       }
