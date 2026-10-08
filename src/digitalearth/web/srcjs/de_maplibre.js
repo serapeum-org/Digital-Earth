@@ -364,7 +364,12 @@
           ")"
       );
     }
-    // Anything else: the widget's own fall-through contract — invoke it on the map if it exists.
+    // Anything else mirrors py-maplibregl's own contract: a serialized call is a method name on the
+    // maplibre Map, so it is invoked directly. This is a general pass-through, not a curated allowlist
+    // — any call whose name is a Map method is executed, which is what lets new widget calls work here
+    // without a code change. The loud refusal below therefore only catches a name that is NOT a Map
+    // method; a call that needs bespoke handling but collides with a method name is handled ahead of
+    // here (the special cases above) or listed in UNSUPPORTED, not caught by this fall-through.
     if (typeof map[name] === "function") {
       map[name].apply(map, args);
       return;

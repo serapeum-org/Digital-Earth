@@ -36,8 +36,9 @@ _DRAW_JS = f"https://unpkg.com/@mapbox/mapbox-gl-draw@{MAPBOX_DRAW_VERSION}/dist
 _DRAW_CSS = f"https://unpkg.com/@mapbox/mapbox-gl-draw@{MAPBOX_DRAW_VERSION}/dist/mapbox-gl-draw.css"
 
 #: deck.gl, loaded only when a map recorded a deck.gl overlay (``addDeckOverlay``) — the big-data GPU
-#: layers. The standalone bundle carries ``JSONConverter`` (to parse the ``@@type`` layer specs) and
-#: ``MapboxOverlay`` (to draw them over the map).
+#: layers. The standalone bundle carries the layer classes and ``MapboxOverlay`` (to draw them over
+#: the map) but **not** the separate ``@deck.gl/json`` converter, so the runtime builds each ``@@type``
+#: layer directly from its class rather than through a ``JSONConverter`` (see ``de_maplibre.js``).
 DECK_VERSION = "9.0.38"
 _DECK_JS = f"https://unpkg.com/deck.gl@{DECK_VERSION}/dist.min.js"
 
