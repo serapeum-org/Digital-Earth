@@ -290,6 +290,47 @@ class InteractionMixin(_MixinBase):
         src = self._source_layer(source, "on_reset")
         return hv.DynamicMap(callback, streams=[streams.PlotReset(source=src)])
 
+    def on_resize(self, callback: Callable, *, source: Any = None) -> Any:
+        """Wire a ``PlotSize`` stream to ``callback`` and return the ``DynamicMap`` (DI.8 / IN-8).
+
+        Fires when the plot's canvas changes size — a browser-window resize, a responsive relayout — so a
+        map can re-fetch or re-bin at the resolution actually shown rather than the one it was built at. The
+        selection/reset family's third member: :meth:`on_select` brushes, :meth:`on_reset` resets, this one
+        catches the resize the row names. Needs a live kernel/server to round-trip.
+
+        Args:
+            callback: Invoked with ``width``, ``height`` (px) and ``scale`` (the device-pixel ratio) on
+                each resize; returns a HoloViews element.
+            source: The element the stream listens on; defaults to the layer the caller added last.
+
+        Returns:
+            The ``hv.DynamicMap`` driven by the ``PlotSize`` stream.
+
+        Raises:
+            ValueError: when there is no source layer.
+
+        Examples:
+            - A ``PlotSize`` stream is wired onto the last layer, so a resize re-runs the callback:
+                ```python
+                >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap       # doctest: +SKIP
+                >>> import holoviews as hv                                    # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+                >>> dmap = InteractiveMap().field(dem).on_resize(             # doctest: +SKIP
+                ...     lambda width, height, scale: hv.Points([])
+                ... )
+                >>> [type(stream).__name__ for stream in dmap.streams]        # doctest: +SKIP
+                ['PlotSize']
+
+                ```
+        """
+        _require_holoviz()
+        import holoviews as hv
+        from holoviews import streams
+
+        src = self._source_layer(source, "on_resize")
+        return hv.DynamicMap(callback, streams=[streams.PlotSize(source=src)])
+
     def draw(
         self,
         kind: str = "box",
@@ -301,13 +342,15 @@ class InteractionMixin(_MixinBase):
         """Add a draw/edit tool so the user can sketch an area-of-interest (DI.8).
 
         Wraps a HoloViews draw stream around a fresh annotation layer: ``"box"`` → ``BoxEdit``,
-        ``"poly"`` → ``PolyDraw``, ``"point"`` → ``PointDraw``, ``"freehand"`` → ``FreehandDraw``. Read
-        the result back via :attr:`drawn_geometry`. Needs a live kernel/server — static HTML captures
-        nothing.
+        ``"poly"`` → ``PolyDraw``, ``"point"`` → ``PointDraw``, ``"freehand"`` → ``FreehandDraw``, plus the
+        two *editing* tools that move the vertices of existing geometry (IN-8): ``"poly-edit"`` →
+        ``PolyEdit`` and ``"curve-edit"`` → ``CurveEdit``. Read the result back via :attr:`drawn_geometry`.
+        Needs a live kernel/server — static HTML captures nothing.
 
         Args:
-            kind: ``"box"`` / ``"poly"`` / ``"point"`` / ``"freehand"``.
-            num_objects: Max number of shapes (``None`` = unlimited).
+            kind: ``"box"`` / ``"poly"`` / ``"point"`` / ``"freehand"`` (draw new) or ``"poly-edit"`` /
+                ``"curve-edit"`` (edit the vertices of existing geometry).
+            num_objects: Max number of shapes (``None`` = unlimited); ignored by the edit tools.
             name: The caller's own name for the annotation layer, used as its id and its label;
                 ``None`` (default) generates one, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -336,9 +379,19 @@ class InteractionMixin(_MixinBase):
         elif kind == "freehand":
             layer = gv.Path([], crs=crs)
             stream = streams.FreehandDraw(source=layer, num_objects=num_objects or 0)
+        elif kind == "poly-edit":
+            # Edits the *vertices* of existing polygons (IN-8) — drag/add/delete nodes — rather than drawing
+            # a new shape. PolyEdit takes no num_objects; it operates on whatever polygons the layer holds.
+            layer = gv.Polygons([], crs=crs)
+            stream = streams.PolyEdit(source=layer)
+        elif kind == "curve-edit":
+            # Edits the vertices of an existing path/curve (IN-8): move the nodes of a line in place.
+            layer = gv.Path([], crs=crs)
+            stream = streams.CurveEdit(source=layer)
         else:
             raise ValueError(
-                f"unknown draw kind {kind!r}; choose 'box'/'poly'/'point'/'freehand'"
+                f"unknown draw kind {kind!r}; choose "
+                "'box'/'poly'/'point'/'freehand'/'poly-edit'/'curve-edit'"
             )
         # Appended, not overwritten (IN-11): a map can carry several draw tools at once, and a second
         # `draw()` no longer silently replaces the first tool's binding. `_draw_stream` tracks the most

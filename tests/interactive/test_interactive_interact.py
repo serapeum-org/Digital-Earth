@@ -128,11 +128,45 @@ class TestDrawAOI:
 
     @pytest.mark.parametrize(
         "kind, element",
-        [("poly", "Polygons"), ("point", "Points"), ("freehand", "Path")],
+        [
+            ("poly", "Polygons"),
+            ("point", "Points"),
+            ("freehand", "Path"),
+            ("poly-edit", "Polygons"),
+            ("curve-edit", "Path"),
+        ],
     )
     def test_draw_other_kinds(self, m, kind, element):
         m.draw(kind)
         assert type(m.layers[-1]).__name__ == element, f"{kind} → {type(m.layers[-1])}"
+
+    @pytest.mark.parametrize(
+        "kind, stream_name",
+        [("poly-edit", "PolyEdit"), ("curve-edit", "CurveEdit")],
+    )
+    def test_edit_kinds_bind_the_editing_stream(self, m, kind, stream_name):
+        """The two edit kinds wire a vertex-editing stream, not a draw stream (IN-8 #434).
+
+        Args:
+            m: The map fixture.
+            kind: The edit draw kind under test.
+            stream_name: The HoloViews stream class it must bind.
+        """
+        m.draw(kind)
+        assert type(m._draw_stream).__name__ == stream_name, (
+            f"{kind} → {type(m._draw_stream).__name__}"
+        )
+
+    def test_on_resize_binds_a_plotsize_stream(self, m):
+        """`on_resize` returns a DynamicMap carrying a PlotSize stream — the resize hook (IN-8 #434).
+
+        Args:
+            m: The map fixture.
+        """
+        dmap = m.on_resize(lambda width, height, scale: gv.Points([]))
+        assert [type(s).__name__ for s in dmap.streams] == ["PlotSize"], (
+            f"expected a PlotSize stream, got {[type(s).__name__ for s in dmap.streams]}"
+        )
 
     def test_drawn_geometry_returns_raw_data_for_non_box(self, m):
         """A non-box draw stream returns its raw column dict (not a bbox tuple)."""
