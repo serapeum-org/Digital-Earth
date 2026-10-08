@@ -108,7 +108,8 @@ def test_polygon_parts_reads_interior_rings():
     assert len(parts) == 1
     exterior, interiors = parts[0]
     assert exterior.shape[1] == 2
-    assert len(interiors) == 1 and interiors[0].shape[1] == 2
+    assert len(interiors) == 1
+    assert interiors[0].shape[1] == 2
 
 
 def test_extrude_polygon_carves_the_hole():

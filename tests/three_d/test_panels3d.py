@@ -35,7 +35,8 @@ def test_grid_composes_scenes_into_subplots():
     plotter = grid([_scene(), _scene(flip=True)], shape=(1, 2), off_screen=True)
     assert len(plotter.renderers) == 2
     image = plotter.screenshot()
-    assert image.ndim == 3 and bool(image.any())
+    assert image.ndim == 3
+    assert bool(image.any())
     plotter.close()
 
 

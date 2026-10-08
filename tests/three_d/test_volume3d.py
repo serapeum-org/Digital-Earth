@@ -89,7 +89,8 @@ def test_isosurface_takes_explicit_placement():
     scene.isosurface(_gaussian_cube(10), isosurfaces=[0.3], origin=(5.0, 5.0, 0.0))
     mesh = scene.layers[0][0]
     # The extracted shell sits inside the placed grid, so its x/y bounds start at or above the origin.
-    assert mesh.bounds[0] >= 5.0 and mesh.bounds[2] >= 5.0
+    assert mesh.bounds[0] >= 5.0
+    assert mesh.bounds[2] >= 5.0
     scene.close()
 
 
