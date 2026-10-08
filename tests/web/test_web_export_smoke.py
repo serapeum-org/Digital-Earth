@@ -113,6 +113,57 @@ class TestSwipeRendersInABrowser:
             f"setting the split to 0.3 must clip the after map, got {probe['clip']!r}"
         )
 
+    def test_dragging_moves_the_split_and_the_listeners_are_released(self):
+        """Dragging the divider moves the split; after release, a free pointer move does not (L4).
+
+        Test scenario:
+            The window-level move/up listeners are attached only for the duration of a drag, so a
+            page does not accumulate handlers. Proof: a drag moves the clip, then a pointer move with
+            the button up leaves the clip exactly where the drag left it.
+        """
+        from playwright.sync_api import sync_playwright
+
+        html = swipe_html(WebMap().basemap(), WebMap().basemap(), title="drag")
+        page_errors: list = []
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "drag.html"
+            path.write_text(html, encoding="utf-8")
+            with sync_playwright() as play:
+                try:
+                    browser = play.chromium.launch()
+                except Exception as exc:  # browser not installed -> skip
+                    pytest.skip(f"Chromium not available for Playwright: {exc}")
+                page = browser.new_page(viewport={"width": 800, "height": 600})
+                page.on("pageerror", lambda err: page_errors.append(str(err)))
+                page.goto(path.as_uri(), wait_until="load")
+                page.wait_for_timeout(4000)
+                box = page.eval_on_selector(
+                    ".de-swipe-divider", "el => el.getBoundingClientRect()"
+                )
+                page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 20)
+                page.mouse.down()
+                page.mouse.move(200, 300)
+                page.mouse.up()
+                page.wait_for_timeout(150)
+                after_drag = page.eval_on_selector(
+                    "#de-map-after", "el => el.style.clipPath"
+                )
+                page.mouse.move(650, 300)
+                page.wait_for_timeout(150)
+                after_release = page.eval_on_selector(
+                    "#de-map-after", "el => el.style.clipPath"
+                )
+                browser.close()
+
+        assert page_errors == [], f"uncaught JS error(s): {page_errors}"
+        assert after_drag not in ("", "inset(0px 0px 0px 50%)"), (
+            f"dragging to x=200 should have moved the split off its 50% start, got {after_drag!r}"
+        )
+        assert after_release == after_drag, (
+            "a pointer move after release must not move the split (the drag listeners were not "
+            f"removed): drag left {after_drag!r}, free move changed it to {after_release!r}"
+        )
+
 
 class TestMinimapRendersInABrowser:
     """WB-20 — the minimap page builds a main map and a synced overview that draws a view rectangle."""

@@ -14,7 +14,11 @@
   const DE = (global.DE = global.DE || { maps: {}, version: 1 });
 
   // Keep two maps' cameras identical. A move on either is mirrored onto the other; the `syncing`
-  // guard stops the mirrored jump from firing a second move and looping.
+  // guard stops the mirrored jump from firing a second move and looping. This relies on maplibre
+  // emitting `move` *synchronously* inside `jumpTo` (the standard behaviour): the re-entrant mirror
+  // then observes `syncing === true` before the flag is reset in the line below. Were emission ever
+  // deferred, the guard would already be false when the mirrored move arrived and the two maps would
+  // feed back into each other — so this assumption is load-bearing, not incidental.
   function linkCameras(a, b) {
     let syncing = false;
     function mirror(from, to) {
@@ -64,32 +68,36 @@
     }
     place();
 
-    let dragging = false;
     function fractionFromEvent(ev) {
       const rect = wrap.getBoundingClientRect();
       const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
       return rect.width ? x / rect.width : 0.5;
     }
-    function onDown(ev) {
-      dragging = true;
-      fraction = fractionFromEvent(ev);
-      place();
-      ev.preventDefault();
-    }
+    // The move/up listeners are window-level (dragging continues even when the pointer leaves the
+    // divider), so they are attached only for the duration of a drag and removed on release. A page
+    // may host several swipes; registering them once at setup would leak a handler per swipe, each
+    // firing on every pointer move for the life of the page.
     function onMove(ev) {
-      if (!dragging) return;
       fraction = fractionFromEvent(ev);
       place();
     }
     function onUp() {
-      dragging = false;
+      global.removeEventListener("mousemove", onMove);
+      global.removeEventListener("touchmove", onMove);
+      global.removeEventListener("mouseup", onUp);
+      global.removeEventListener("touchend", onUp);
+    }
+    function onDown(ev) {
+      fraction = fractionFromEvent(ev);
+      place();
+      ev.preventDefault();
+      global.addEventListener("mousemove", onMove);
+      global.addEventListener("touchmove", onMove, { passive: false });
+      global.addEventListener("mouseup", onUp);
+      global.addEventListener("touchend", onUp);
     }
     divider.addEventListener("mousedown", onDown);
     divider.addEventListener("touchstart", onDown, { passive: false });
-    global.addEventListener("mousemove", onMove);
-    global.addEventListener("touchmove", onMove, { passive: false });
-    global.addEventListener("mouseup", onUp);
-    global.addEventListener("touchend", onUp);
 
     // Expose the control so a test (or a caller) can read/set the split without a pointer.
     const handle = {
