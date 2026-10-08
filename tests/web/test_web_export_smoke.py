@@ -359,7 +359,9 @@ class TestDeckAndGeocoderInABrowser:
         before = (
             WebMap()
             .basemap()
-            .geocoder(api_key="demo-key", language="nl", country="nl", limit=1, fly_to=False)
+            .geocoder(
+                api_key="demo-key", language="nl", country="nl", limit=1, fly_to=False
+            )
         )
         html = swipe_html(before, WebMap().basemap(), title="geo-opts")
         captured: list = []
@@ -409,7 +411,9 @@ class TestDeckAndGeocoderInABrowser:
         assert "limit=1" in url, f"limit not passed through: {url}"
         assert "language=nl" in url, f"language not passed through: {url}"
         assert "country=nl" in url, f"country not passed through: {url}"
-        moved = f"fly_to=False must not move the camera: {center_before} -> {center_after}"
+        moved = (
+            f"fly_to=False must not move the camera: {center_before} -> {center_after}"
+        )
         assert abs(center_after["lng"] - center_before["lng"]) < 1e-6, moved
         assert abs(center_after["lat"] - center_before["lat"]) < 1e-6, moved
 
@@ -436,7 +440,9 @@ class TestDeckAndGeocoderInABrowser:
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "accessor.html"
             path.write_text(html, encoding="utf-8")
-            page_errors, _console, _probe = _render_and_probe(path.as_uri(), "() => ({})")
+            page_errors, _console, _probe = _render_and_probe(
+                path.as_uri(), "() => ({})"
+            )
         assert any("accessor" in e for e in page_errors), (
             f"a nested deck accessor must be refused with an error, got {page_errors}"
         )
@@ -484,7 +490,9 @@ class TestRuntimeSafety:
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "sdl.html"
             path.write_text(html, encoding="utf-8")
-            page_errors, _console, _probe = _render_and_probe(path.as_uri(), "() => ({})")
+            page_errors, _console, _probe = _render_and_probe(
+                path.as_uri(), "() => ({})"
+            )
         assert any("setDeckLayers" in e for e in page_errors), (
             f"setDeckLayers without an overlay must be refused, got {page_errors}"
         )

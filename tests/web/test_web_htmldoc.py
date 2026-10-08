@@ -122,7 +122,9 @@ class TestSwipeHtml:
         before, after = two_maps
         html = swipe_html(before, after)
         assert "tiles-1-src" in html, "the basemap source did not reach the page"
-        assert "/{z}/{x}/{y}.png" in html, "the after map's xyz tiles did not reach the page"
+        assert "/{z}/{x}/{y}.png" in html, (
+            "the after map's xyz tiles did not reach the page"
+        )
 
     def test_title_is_applied(self, two_maps):
         """The document title is the caller's.
@@ -298,7 +300,9 @@ class TestMeasureHtml:
         """
         pytest.importorskip("maplibre")
         html = measure_html(WebMap().basemap())
-        assert "dark-matter-gl-style/style.json" in html, "the map did not reach the page"
+        assert "dark-matter-gl-style/style.json" in html, (
+            "the map did not reach the page"
+        )
         assert "de-measure-readout" in html
         assert "DE.measure" in html
 
@@ -323,9 +327,7 @@ class TestMeasureHtml:
             passed plain, and a map carrying ``addMapboxDraw`` is refused by name.
         """
         with pytest.raises(ValueError, match="draw control"):
-            HtmlDocument.measure(
-                {"mapOptions": {}, "calls": [["addMapboxDraw", [{}]]]}
-            )
+            HtmlDocument.measure({"mapOptions": {}, "calls": [["addMapboxDraw", [{}]]]})
 
 
 class TestConditionalLibraries:
@@ -393,7 +395,10 @@ class TestScriptSafety:
         evil = {
             "mapOptions": {},
             "calls": [
-                ["addSource", ["s", {"attribution": "x</script><img src=q onerror=alert(1)>"}]]
+                [
+                    "addSource",
+                    ["s", {"attribution": "x</script><img src=q onerror=alert(1)>"}],
+                ]
             ],
         }
         html = HtmlDocument.swipe(evil, {"mapOptions": {}, "calls": []}).render()
