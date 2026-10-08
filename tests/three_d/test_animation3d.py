@@ -12,7 +12,13 @@ pytest.importorskip("imageio")
 
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D, animation
-from digitalearth.three_d.animation import _finite_number, _open_writer, _up_vector
+from digitalearth.three_d.animation import (
+    _checked_clim,
+    _finite_number,
+    _freeze_colour_range,
+    _open_writer,
+    _up_vector,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -653,3 +659,66 @@ def test_up_vector_and_finite_number_reject_without_a_scene():
         _finite_number(infinity, "factor")
     with pytest.raises(ValueError, match="3-component viewup"):
         _up_vector([1.0, 2.0])
+
+
+def test_freeze_colour_range_pins_every_layer_mapper():
+    """#210: _freeze_colour_range fixes the scalar-to-colour range on the drawn layer's mapper."""
+    scene = _terrain_scene()
+    _freeze_colour_range(scene, (0.0, 123.0))
+    assert tuple(scene.layers[0][1].mapper.scalar_range) == (0.0, 123.0)
+    scene.close()
+
+
+def _redraw_dem(scene, array):
+    """Re-add the 'dem' terrain from a per-frame array (the flicker-prone update pattern)."""
+    scene.remove_layer("dem")
+    scene.terrain(get_source(array), name="dem")
+
+
+def test_record_clim_freezes_the_scale_across_frames(tmp_path):
+    """#210: clim= holds one colour range across frames whose own data ranges differ.
+
+    Two frames: elevation ~0..2, then ~0..100. With clim=(0, 50) the drawn mapper stays pinned to (0, 50)
+    rather than following the final frame's ~0..100 — which is what stops the time stack flickering.
+    """
+    low_range = np.add.outer(np.linspace(0.0, 1.0, 8), np.linspace(0.0, 1.0, 8))
+    high_range = np.add.outer(np.linspace(0.0, 50.0, 8), np.linspace(0.0, 50.0, 8))
+
+    scene = Scene3D(off_screen=True)
+    scene.terrain(get_source(low_range), name="dem")
+    scene.record(
+        [low_range, high_range],
+        str(tmp_path / "frozen.gif"),
+        _redraw_dem,
+        clim=(0.0, 50.0),
+    )
+    assert tuple(scene.actor_of("dem").mapper.scalar_range) == (0.0, 50.0)
+    scene.close()
+
+
+def test_record_without_clim_lets_the_range_follow_the_last_frame(tmp_path):
+    """The contrast: with no clim the final range reflects the last frame's own data (~0..100), not a fixed one."""
+    low_range = np.add.outer(np.linspace(0.0, 1.0, 8), np.linspace(0.0, 1.0, 8))
+    high_range = np.add.outer(np.linspace(0.0, 50.0, 8), np.linspace(0.0, 50.0, 8))
+
+    scene = Scene3D(off_screen=True)
+    scene.terrain(get_source(low_range), name="dem")
+    scene.record([low_range, high_range], str(tmp_path / "loose.gif"), _redraw_dem)
+    _low, high = scene.actor_of("dem").mapper.scalar_range
+    scene.close()
+    assert high > 50.0  # the last frame's ~0..100 range, not frozen
+
+
+@pytest.mark.parametrize(
+    "bad", [(5.0, 5.0), (10.0, 1.0), (float("nan"), 1.0), (1.0,), (1.0, 2.0, 3.0), "xy"]
+)
+def test_checked_clim_rejects_a_bad_range(bad):
+    """clim must be two finite numbers with low < high; anything else is a ValueError naming clim."""
+    with pytest.raises(ValueError, match="clim"):
+        _checked_clim(bad)
+
+
+def test_checked_clim_passes_none_and_a_good_pair_through():
+    """None stays None (per-frame behaviour); a valid pair comes back as floats."""
+    assert _checked_clim(None) is None
+    assert _checked_clim((0, 10)) == (0.0, 10.0)
