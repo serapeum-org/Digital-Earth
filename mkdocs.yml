@@ -150,6 +150,13 @@ nav:
       - 'GIS data — rasters in 3-D': examples/pyvista/08_raster_3d.ipynb
       - 'GIS data — vectors in 3-D': examples/pyvista/09_vector_3d.ipynb
       - 'GIS data — combined raster + vector scene': examples/pyvista/10_gis_scene_3d.ipynb
+      - 'Flat Core verbs — points/polygons/choropleth': examples/pyvista/11_flat_core_verbs.ipynb
+      - Lines, vectors & streamlines: examples/pyvista/12_lines_vectors_streamlines.ipynb
+      - Decoration, guides & views: examples/pyvista/13_decoration_guides_views.ipynb
+      - Interaction — clip/slice/threshold/pick: examples/pyvista/14_interaction_widgets.ipynb
+      - Multi-panel scenes & serving: examples/pyvista/16_panels_and_serving.ipynb
+      - 'One-call quickmap & export': examples/pyvista/17_quickmap_3d_and_export.ipynb
+      - 'Real-world DEM (earthlens)': examples/pyvista/18_real_world_dem_earthlens.ipynb
     # The gallery's labels are the *method* vocabulary; its filenames are the *render* vocabulary — the
     # `kind=`/`via` token each notebook demonstrates (`imshow`, `contour`, `contourf`, `scatter`, `shapes`,
     # and `pcolormesh`, `quiver`, `tricontourf`, … beside them). Those tokens are all live, so the five that
