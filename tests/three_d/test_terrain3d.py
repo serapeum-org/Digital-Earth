@@ -139,7 +139,9 @@ def test_as_texture_accepts_a_band_first_array():
     """A band-first (3, H, W) array — a pyramids RGB raster's values — is transposed to band-last."""
     from digitalearth.three_d.terrain import _as_texture
 
-    band_first = np.random.default_rng(0).integers(0, 255, size=(3, 8, 8), dtype=np.uint8)
+    band_first = np.random.default_rng(0).integers(
+        0, 255, size=(3, 8, 8), dtype=np.uint8
+    )
     texture = _as_texture(band_first)
     assert texture.to_array().shape[:2] == (8, 8)
 
