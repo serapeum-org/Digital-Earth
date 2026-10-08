@@ -86,6 +86,23 @@ def test_a_degenerate_polygon_skips_the_layer(monkeypatch):
     scene.close()
 
 
+def test_the_fill_is_banded_as_ground_cover_under_the_data():
+    """A fill is ground cover: it bands ``underlay`` (below the data), not ``overlay`` like the lines.
+
+    Test scenario:
+        ``reference_fill`` is the opposite end of the stack from the reference *lines*: an opaque area fill
+        belongs under the data, a thin line over it. Banding the fill ``overlay`` (as ``reference_lines`` is)
+        would draw an opaque ocean/land over a flat data layer coincident at ``z=0``. This pins the band so it
+        cannot silently regress to ``overlay``.
+    """
+    from digitalearth.base.spec.layer import _layer_band
+
+    scene = Scene3D(off_screen=True)
+    scene.ocean()
+    assert _layer_band(scene.figure_spec.layers.get("ocean")) == "underlay"
+    scene.close()
+
+
 def test_an_unknown_resolution_is_refused():
     """An unknown Natural-Earth resolution is refused by name, before any download."""
     scene = Scene3D(off_screen=True)
