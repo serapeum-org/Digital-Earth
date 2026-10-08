@@ -145,31 +145,54 @@ class TestServeAndExport:
         assert not plan.live and plan.periodic_ms is None and not plan.has_onload, plan
 
     def test_close_releases_session_callbacks_and_table_links(self, m, point_fc):
-        """`close()` stops periodic callbacks and drops the linked-table registry (review L1).
+        """`close()` stops per-session periodic callbacks and drops the linked-table registry (review L1).
 
         Args:
             m: The map fixture (carries a field layer to link against).
             point_fc: The point FeatureCollection fixture.
         """
-        m.serve(periodic=lambda: None, period_ms=200, widgets=("cmap",))
+        stopped = []
+
+        class _StubPeriodic:
+            """Stand-in for a session's PeriodicCallback handle that records being stopped."""
+
+            def stop(self):
+                stopped.append(True)
+
+        m._session_callbacks.append(_StubPeriodic())
         m.attribute_table(point_fc, linked=True)
         assert m._session_callbacks and m._table_links, (
             "precondition: both registries populated"
         )
         m.close()
-        assert not m._session_callbacks, "close() must stop and drop periodic callbacks"
+        assert stopped == [True], "close() must stop the periodic callback"
+        assert not m._session_callbacks, "close() must drop periodic callbacks"
         assert not m._table_links, "close() must drop linked-table registry"
 
-    def test_serve_registers_a_periodic_callback(self, m):
-        """`serve(periodic=...)` wires a pn.state periodic callback and keeps its handle (IN-10 #435).
+    def test_serve_defers_periodic_to_a_per_session_onload(self, m, monkeypatch):
+        """`serve(periodic=...)` spins no timer at call time; it installs per session on load (review M1).
 
         Args:
             m: The map fixture.
+            monkeypatch: Captures the per-session onload hook `serve` registers.
         """
-        before = len(m._session_callbacks)
-        m.serve(periodic=lambda: None, period_ms=250, widgets=("cmap",))
-        assert len(m._session_callbacks) == before + 1, (
-            "a periodic callback handle must be kept on the map so it is not GC'd"
+        captured = []
+        monkeypatch.setattr(pn.state, "onload", lambda fn: captured.append(fn))
+        loaded = []
+        m.serve(
+            onload=lambda: loaded.append("load"),
+            periodic=lambda: None,
+            period_ms=250,
+            widgets=("cmap",),
+        )
+        assert m._session_callbacks == [], (
+            "no periodic timer may start before a session connects"
+        )
+        assert captured, "serve() must register a per-session onload hook"
+        captured[0]()
+        assert loaded == ["load"], "the caller's onload must run per session"
+        assert len(m._session_callbacks) == 1, (
+            "the periodic callback is created per session, on load"
         )
 
     def test_save_app_writes_standalone_file(self, m, tmp_path):

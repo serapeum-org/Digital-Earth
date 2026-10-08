@@ -774,7 +774,9 @@ class DashboardMixin(_MixinBase):
             onload: A no-arg callable run once per session when a viewer connects, via ``pn.state.onload`` —
                 where per-session data (a user's AOI, a cached read) is initialised.
             periodic: A no-arg callable run every ``period_ms`` via ``pn.state.add_periodic_callback`` —
-                a live data refresh. Its handle is kept on the map so it is not garbage-collected.
+                a live data refresh. It is created per session when the session loads (not at call time, so
+                no timer spins before a viewer connects), and each session's handle is kept on the map so
+                ``close()`` can stop it.
             period_ms: The period for ``periodic``, in milliseconds.
             threaded: Passed to ``pn.serve`` when ``start=True``; also modelled in :meth:`serve_plan`.
             num_procs: Passed to ``pn.serve`` when ``start=True``; also modelled in :meth:`serve_plan`.
@@ -786,15 +788,24 @@ class DashboardMixin(_MixinBase):
         """
         pn = _require_panel()
         app = self.dashboard(**kwargs)
-        # Per-session state (IN-10): onload runs when a viewer connects; a periodic callback refreshes the
-        # view. Both are no-ops until a session is live, but registering them here is what turns a static
-        # first render into a deployed, stateful app. The periodic handle is kept so it survives this scope.
-        if onload is not None:
-            pn.state.onload(onload)
-        if periodic is not None:
-            self._session_callbacks.append(
-                pn.state.add_periodic_callback(periodic, period=period_ms)
-            )
+        # Per-session state (IN-10), installed through a single `pn.state.onload` hook so it attaches **per
+        # connecting session**, not once at call time (review R2-M1). `add_periodic_callback` starts its timer
+        # the instant it is created, so creating it here would spin a live timer before any viewer exists and
+        # register the hooks against whatever `curdoc` happened to be current; deferring both to onload makes
+        # the per-session claim true and leaves `serve(start=False)` a pure "mark servable" until a session
+        # loads. Each session's periodic handle is kept on the map so `close()` can stop it.
+        if onload is not None or periodic is not None:
+
+            def _install_session_state() -> None:
+                """Run the caller's onload and start this session's periodic refresh, once per session."""
+                if onload is not None:
+                    onload()
+                if periodic is not None:
+                    self._session_callbacks.append(
+                        pn.state.add_periodic_callback(periodic, period=period_ms)
+                    )
+
+            pn.state.onload(_install_session_state)
         app.servable()
         if start:
             return pn.serve(app, threaded=threaded, num_procs=num_procs, show=False)
