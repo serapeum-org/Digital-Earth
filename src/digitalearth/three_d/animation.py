@@ -78,7 +78,7 @@ def _finalize_frames(plotter: Any) -> None:
 
 
 def _freeze_colour_range(scene: Any, clim: tuple[float, float]) -> None:
-    """Pin every drawn layer's colour range (and its scalar bar) to ``clim`` (#210).
+    """Pin every drawn layer's colour range to ``clim`` (#210).
 
     `record`'s ``update`` callback usually re-draws a layer per frame — ``scene.terrain(frame)``,
     ``scene.point_cloud(frame, values=…)`` — and each builder derives its own ``clim`` from *that frame's*
@@ -87,15 +87,23 @@ def _freeze_colour_range(scene: Any, clim: tuple[float, float]) -> None:
     scene currently holds, so one colour scale spans the whole animation.
 
     It reaches the layers through :attr:`scene.renderer.drawn`, so a layer the callback removed and re-added
-    this frame is the one pinned. An actor with no scalar mapper (a volume ray-cast, whose colour range is
-    ``volume(clim=…)``'s job) is skipped rather than forced.
+    this frame is the one pinned. A ray-cast volume is skipped: its colour range is ``volume(clim=…)``'s job,
+    and because its ``SmartVolumeMapper`` *silently accepts* a new ``scalar_range`` (rather than raising), the
+    skip is an explicit ``pyvista.Volume`` check, not a caught exception. An actor exposing no settable scalar
+    range at all is tolerated by the defensive ``except``.
 
     Args:
         scene: The scene whose drawn layers to pin.
         clim: The ``(low, high)`` colour range to hold for every frame.
     """
+    import pyvista as pv
+
     low, high = float(clim[0]), float(clim[1])
     for _mesh, actor in scene.renderer.drawn.values():
+        if isinstance(
+            actor, pv.Volume
+        ):  # volume colour range belongs to volume(clim=), not to the freeze
+            continue
         mapper = getattr(actor, "mapper", None)
         if mapper is None:
             continue
@@ -104,12 +112,11 @@ def _freeze_colour_range(scene: Any, clim: tuple[float, float]) -> None:
         except (
             AttributeError,
             TypeError,
-        ):  # a volume actor / a mapper with no scalar range
+        ):  # an actor whose mapper exposes no settable scalar range
             continue
-    # The scalar bar reads its range from the mapper's lookup table; update it too so the key the viewer
-    # reads matches the pinned colours. Only when one is drawn — `update_scalar_bar_range` raises otherwise.
-    if getattr(scene.plotter, "scalar_bars", None):
-        scene.plotter.update_scalar_bar_range((low, high))
+    # No separate scalar-bar update: a bar shares its mapper's lookup table, so setting ``scalar_range`` on the
+    # mapper above already moves the bar. ``plotter.update_scalar_bar_range`` would only re-set the plotter's one
+    # *active* mapper — redundant for the pinned layers, and it would stomp a skipped volume whose mapper is active.
 
 
 def _checked_clim(clim: Any) -> tuple[float, float] | None:

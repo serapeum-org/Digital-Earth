@@ -724,12 +724,42 @@ def test_checked_clim_passes_none_and_a_good_pair_through():
     assert _checked_clim((0, 10)) == (0.0, 10.0)
 
 
-def test_freeze_colour_range_tolerates_actors_without_a_usable_mapper():
-    """#210: a layer whose actor has no scalar mapper (None, or one that refuses a range) is skipped, not raised.
+def test_freeze_colour_range_leaves_a_volume_to_its_own_clim():
+    """#210: a ray-cast volume's range is `volume(clim=)`'s job, so the freeze must skip it, not force-pin it.
 
-    Covers the volume-actor / no-scalar-bar branches: a ray-cast volume's mapper rejects `scalar_range`, and a
-    scene drawn without a scalar bar has none to update.
+    A real pyvista `Volume` mapper silently *accepts* a new `scalar_range`, so a loop that only guards on an
+    exception would override the volume's own range. The freeze detects the `Volume` actor and skips it; this
+    test asserts the volume's range is byte-for-byte unchanged by a freeze to a different range.
     """
+    ax = np.linspace(-2.0, 2.0, 12)
+    xx, yy, zz = np.meshgrid(ax, ax, ax, indexing="ij")
+    cube = np.exp(-(xx**2 + yy**2 + zz**2))
+
+    scene = Scene3D(off_screen=True)
+    scene.volume(cube, name="vol")
+    before = tuple(scene.renderer.drawn["vol"][1].mapper.scalar_range)
+    _freeze_colour_range(scene, (0.0, 5.0))
+    after = tuple(scene.renderer.drawn["vol"][1].mapper.scalar_range)
+    assert after == before, (
+        f"the volume range must be untouched by the freeze: {before} -> {after}"
+    )
+    scene.close()
+
+
+def test_freeze_colour_range_skips_an_actor_without_a_mapper():
+    """A layer whose actor exposes no mapper (`mapper is None`) is skipped without raising."""
+
+    class _Actor:
+        mapper = None
+
+    scene = Scene3D(off_screen=True)
+    scene.renderer._drawn["no-mapper"] = (object(), _Actor())
+    _freeze_colour_range(scene, (0.0, 5.0))  # must not raise
+    scene.close()
+
+
+def test_freeze_colour_range_tolerates_a_mapper_that_refuses_a_range():
+    """A non-volume actor whose mapper rejects `scalar_range` is tolerated (the defensive `except`)."""
 
     class _RefusesRange:
         @property
@@ -738,16 +768,13 @@ def test_freeze_colour_range_tolerates_actors_without_a_usable_mapper():
 
         @scalar_range.setter
         def scalar_range(self, value):
-            raise TypeError("this mapper has no scalar range")
+            raise TypeError("this mapper exposes no settable scalar range")
 
     class _Actor:
         def __init__(self, mapper):
             self.mapper = mapper
 
     scene = Scene3D(off_screen=True)
-    scene.renderer._drawn["no-mapper"] = (object(), _Actor(None))
     scene.renderer._drawn["refuses"] = (object(), _Actor(_RefusesRange()))
-    _freeze_colour_range(
-        scene, (0.0, 5.0)
-    )  # must not raise; the fresh plotter has no scalar bar to update
+    _freeze_colour_range(scene, (0.0, 5.0))  # must not raise
     scene.close()
