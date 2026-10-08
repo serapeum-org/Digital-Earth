@@ -585,6 +585,6 @@ jobs:
           pixi run -e web pip install "playwright>=1.44,<2"
           pixi run -e web playwright install --with-deps chromium
 
-      - name: Run the deck.gl browser smoke test
+      - name: Run the browser smoke tests (deck.gl + standalone export)
         run: |
-          pixi run -e web pytest tests/web/test_web_deck_smoke.py -v
+          pixi run -e web pytest tests/web/test_web_deck_smoke.py tests/web/test_web_export_smoke.py -v

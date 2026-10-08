@@ -1,0 +1,118 @@
+/* Styles for the Digital-Earth standalone export (de_maplibre.js / de_features.js). */
+
+.de-swipe-wrap {
+  position: relative;
+  width: 100%;
+}
+.de-swipe-map {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.de-swipe-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  margin-left: -2px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  cursor: ew-resize;
+  z-index: 2;
+}
+.de-swipe-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.de-minimap-wrap {
+  position: relative;
+  width: 100%;
+}
+.de-minimap-main {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.de-minimap {
+  position: absolute;
+  right: 10px;
+  bottom: 26px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  z-index: 2;
+}
+
+.de-layer-switcher {
+  padding: 6px 8px;
+  font: 12px/1.4 sans-serif;
+  background: #ffffff;
+}
+.de-ls-row {
+  display: block;
+  white-space: nowrap;
+}
+
+.de-infobox {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 6px 8px;
+  font: 12px/1.4 sans-serif;
+  border-radius: 4px;
+}
+
+.de-measure-wrap {
+  position: relative;
+  width: 100%;
+}
+.de-measure-map {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.de-measure-readout {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 6px 10px;
+  font: 12px/1.4 sans-serif;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.de-geocoder {
+  padding: 4px;
+  background: #ffffff;
+}
+.de-geocoder-input {
+  width: 180px;
+  padding: 4px 6px;
+  font: 12px sans-serif;
+  border: 1px solid #cccccc;
+  border-radius: 3px;
+}
+.de-geocoder-row {
+  padding: 4px 6px;
+  font: 12px sans-serif;
+  cursor: pointer;
+  border-top: 1px solid #eeeeee;
+}
+.de-geocoder-row:hover {
+  background: #f0f0f0;
+}

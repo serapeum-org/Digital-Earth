@@ -2315,9 +2315,12 @@ class DecorationMixin(_MixinBase):
         py-maplibregl ships ``MapTilerGeocodingControl`` but the tier exposed no way to add it. The service
         is keyed, and **Digital-Earth ships no key**: the caller supplies their own MapTiler key here, which
         is held only on the live control and is deliberately **not** recorded in the figure's description —
-        the same rule ST-24 follows for a basemap credential, so a saved page cannot leak the key. A figure
-        read back carries the geocoder as furniture without a key, and so draws its map without the search
-        box, rather than embedding the secret.
+        the same rule ST-24 follows for a basemap credential, so a page **rebuilt from a stored description**
+        cannot leak the key: a figure read back carries the geocoder as furniture without a key, and so draws
+        its map without the search box, rather than embedding the secret. Note this protects the
+        description-readback path only — a **direct** export of the *live* map (``to_html``/``save`` or the
+        standalone ``save_swipe``/``save_minimap``/``save_measure``) does serialise the key, since a
+        client-side geocoder cannot query MapTiler without it; use a referrer-restricted key when sharing.
 
         Args:
             api_key: The caller's MapTiler API key. Pass your own, for example from the environment

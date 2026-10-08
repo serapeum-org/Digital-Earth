@@ -24,8 +24,27 @@ The engine import is **lazy**: this package imports without the optional ``web``
 builder/render method without it raises an actionable ``ImportError`` (``pip install 'digitalearth[web]'``).
 """
 
+from digitalearth.web.export import (
+    measure_html,
+    minimap_html,
+    save_measure,
+    save_minimap,
+    save_swipe,
+    swipe_html,
+)
 from digitalearth.web.map import WebMap
 from digitalearth.web.raster import TileRoute
 from digitalearth.web.vector import ContourInterval, VectorTileSource
 
-__all__ = ["WebMap", "ContourInterval", "TileRoute", "VectorTileSource"]
+__all__ = [
+    "WebMap",
+    "ContourInterval",
+    "TileRoute",
+    "VectorTileSource",
+    "swipe_html",
+    "save_swipe",
+    "minimap_html",
+    "save_minimap",
+    "measure_html",
+    "save_measure",
+]
