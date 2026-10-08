@@ -117,9 +117,8 @@ class TestLargeImage:
 
         m.large_image(_FakeCOG(), dynamic=True)
         kinds = {type(s) for s in m.layers[0].streams}
-        assert RangeXY in kinds and PlotSize in kinds, (
-            f"expected both RangeXY and PlotSize, got {kinds}"
-        )
+        assert RangeXY in kinds, f"expected a RangeXY stream, got {kinds}"
+        assert PlotSize in kinds, f"expected a PlotSize stream, got {kinds}"
 
     def test_resize_re_reads_at_the_new_resolution(self, m):
         """A larger PlotSize reads a larger window than a smaller one — the resize actually re-samples.

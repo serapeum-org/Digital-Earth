@@ -119,7 +119,8 @@ class TestFrames:
         m = InteractiveMap().frames(self._point_frames(), dimension="t")
         app = m.play(fps=4)
         players = app.select(pn.widgets.DiscretePlayer)
-        assert players and len(players[0].options) == 3, (
+        assert players, "play() must include a DiscretePlayer for a frames() layer"
+        assert len(players[0].options) == 3, (
             "a frames() vector layer must play its three frames"
         )
 
@@ -131,9 +132,11 @@ class TestFrames:
         """
         out = tmp_path / "moving.html"
         result = InteractiveMap().frames(self._point_frames()).save_animation(str(out))
-        assert result == out and out.exists(), f"scrubber HTML not written: {result}"
+        assert result == out, f"scrubber HTML path mismatch: {result}"
+        assert out.exists(), f"scrubber HTML not written: {result}"
 
     def test_frames_empty_raises(self):
         """An empty frame set has nothing to animate and is refused (IN-12)."""
+        bare = InteractiveMap()
         with pytest.raises(ValueError, match="at least one frame"):
-            InteractiveMap().frames({})
+            bare.frames({})

@@ -131,7 +131,9 @@ class TestServeAndExport:
         plan = m.serve_plan(
             onload=lambda: None, periodic=lambda: None, period_ms=500, num_procs=2
         )
-        assert plan.has_onload and plan.periodic_ms == 500 and plan.num_procs == 2, plan
+        assert plan.has_onload, plan
+        assert plan.periodic_ms == 500, plan
+        assert plan.num_procs == 2, plan
         assert plan.live, "an onload + periodic deployment must read as live"
         assert "refresh 500ms" in plan.summary, plan.summary
 
@@ -142,7 +144,9 @@ class TestServeAndExport:
             m: The map fixture.
         """
         plan = m.serve_plan()
-        assert not plan.live and plan.periodic_ms is None and not plan.has_onload, plan
+        assert not plan.live, plan
+        assert plan.periodic_ms is None, plan
+        assert not plan.has_onload, plan
 
     def test_close_releases_session_callbacks_and_table_links(self, m, point_fc):
         """`close()` stops per-session periodic callbacks and drops the linked-table registry (review L1).
@@ -161,9 +165,8 @@ class TestServeAndExport:
 
         m._session_callbacks.append(_StubPeriodic())
         m.attribute_table(point_fc, linked=True)
-        assert m._session_callbacks and m._table_links, (
-            "precondition: both registries populated"
-        )
+        assert m._session_callbacks, "precondition: session callbacks populated"
+        assert m._table_links, "precondition: table links populated"
         m.close()
         assert stopped == [True], "close() must stop the periodic callback"
         assert not m._session_callbacks, "close() must drop periodic callbacks"

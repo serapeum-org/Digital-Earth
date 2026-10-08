@@ -106,7 +106,8 @@ class TestLinkedViews:
         """
         detail, overview = maps
         layout = linked_views(detail, overview)
-        assert isinstance(layout, hv.Layout) and len(layout) == 2, f"got {layout}"
+        assert isinstance(layout, hv.Layout), f"got {type(layout)}"
+        assert len(layout) == 2, f"expected two panels, got {len(layout)}"
 
     def test_registers_a_rangetoollink(self, maps):
         """The overview becomes a RangeToolLink source — the declarative link, not implicit shared axes.
