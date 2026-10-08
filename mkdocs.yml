@@ -122,6 +122,10 @@ nav:
     - Animating data on the globe: examples/12_animated_globe.ipynb
     - Charts & map decorations: examples/13_charts_and_decorations.ipynb
     - Textured 3-D globe: examples/14_textured_globe_3d.ipynb
+    - Managing layers: examples/15_layer_management.ipynb
+    - Framing, viewports & insets: examples/16_framing_and_insets.ipynb
+    - Multi-panel figures: examples/17_multi_panel_figures.ipynb
+    - Global decorations (night, Tissot, tiles): examples/18_global_decorations.ipynb
     - Presets & styling:
       - Preset library gallery: examples/presets/01_preset_gallery.ipynb
       - Domain presets on matching data: examples/presets/02_domain_presets.ipynb
@@ -181,6 +185,17 @@ nav:
       - Polygons:
         - choropleth: examples/plots/17_choropleth.ipynb
         - polygons: examples/plots/18_shapes.ipynb
+        - cartogram: examples/plots/31_cartogram.ipynb
+      - Point aggregation:
+        - voronoi: examples/plots/27_voronoi.ipynb
+        - quadtree: examples/plots/28_quadtree.ipynb
+        - hexbin: examples/plots/29_hexbin.ipynb
+        - kde: examples/plots/30_kde.ipynb
+      - Lines & flows:
+        - lines: examples/plots/32_lines.ipynb
+        - sankey: examples/plots/33_sankey.ipynb
+      - Annotation:
+        - labels: examples/plots/34_labels.ipynb
       - Ensemble & series:
         - spaghetti: examples/plots/19_spaghetti.ipynb
         - envelope: examples/plots/20_envelope.ipynb
