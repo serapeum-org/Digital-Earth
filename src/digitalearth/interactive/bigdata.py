@@ -501,6 +501,11 @@ class BigDataMixin(_MixinBase):
                 whole table as one track.
             by: Optional categorical column colouring tracks per class (``count_cat`` blend).
             dynspread: Grow isolated pixels so sparse tracks stay visible.
+            clim: Frozen ``(vmin, vmax)`` colour span (IN-4). ``None`` (default) re-autoranges per frame;
+                a pair pins the shade's domain (passed to the shade operation as ``clims``).
+            cnorm: Shade normalisation — ``"linear"`` / ``"log"`` / ``"eq_hist"``. ``None`` leaves
+                HoloViews' default, but **defaults to ``"linear"`` when ``clim`` is set**, because
+                Datashader refuses a span under ``eq_hist`` (the X-4 trap).
             cmap: Colormap for continuous shading (ignored when ``color_key`` is given).
             color_key: ``{category: colour}`` mapping used with ``by``, or a list of colours in category
                 order — the two forms HoloViews takes.
