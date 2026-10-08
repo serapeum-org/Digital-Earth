@@ -722,3 +722,32 @@ def test_checked_clim_passes_none_and_a_good_pair_through():
     """None stays None (per-frame behaviour); a valid pair comes back as floats."""
     assert _checked_clim(None) is None
     assert _checked_clim((0, 10)) == (0.0, 10.0)
+
+
+def test_freeze_colour_range_tolerates_actors_without_a_usable_mapper():
+    """#210: a layer whose actor has no scalar mapper (None, or one that refuses a range) is skipped, not raised.
+
+    Covers the volume-actor / no-scalar-bar branches: a ray-cast volume's mapper rejects `scalar_range`, and a
+    scene drawn without a scalar bar has none to update.
+    """
+
+    class _RefusesRange:
+        @property
+        def scalar_range(self):
+            return (0.0, 1.0)
+
+        @scalar_range.setter
+        def scalar_range(self, value):
+            raise TypeError("this mapper has no scalar range")
+
+    class _Actor:
+        def __init__(self, mapper):
+            self.mapper = mapper
+
+    scene = Scene3D(off_screen=True)
+    scene.renderer._drawn["no-mapper"] = (object(), _Actor(None))
+    scene.renderer._drawn["refuses"] = (object(), _Actor(_RefusesRange()))
+    _freeze_colour_range(
+        scene, (0.0, 5.0)
+    )  # must not raise; the fresh plotter has no scalar bar to update
+    scene.close()
