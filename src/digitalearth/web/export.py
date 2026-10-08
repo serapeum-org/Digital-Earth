@@ -522,6 +522,11 @@ def save_swipe(
         offline: When ``True``, inline the maplibre-gl CDN assets so the page opens with no network
             (best-effort; fetched once at save time), the same contract ``to_html(offline=True)`` has.
 
+    Note:
+        If a map carries a geocoder, its MapTiler API key is serialised into the written file — a
+        client-side geocoder cannot query MapTiler without it. Use a referrer-restricted key when
+        sharing the page.
+
     Returns:
         The :class:`pathlib.Path` written.
 
@@ -595,6 +600,11 @@ def save_minimap(
         height: The main map height in CSS pixels.
         mini_size: ``(width, height)`` of the overview inset, in CSS pixels.
         offline: When ``True``, inline the maplibre-gl CDN assets (best-effort, fetched once).
+
+    Note:
+        If a map carries a geocoder, its MapTiler API key is serialised into the written file — a
+        client-side geocoder cannot query MapTiler without it. Use a referrer-restricted key when
+        sharing the page.
 
     Returns:
         The :class:`pathlib.Path` written.
@@ -673,6 +683,11 @@ def save_measure(
         height: The map height in CSS pixels.
         offline: When ``True``, inline the CDN assets (both maplibre-gl and mapbox-gl-draw) so the
             page opens with no network (best-effort, fetched once at save time).
+
+    Note:
+        If a map carries a geocoder, its MapTiler API key is serialised into the written file — a
+        client-side geocoder cannot query MapTiler without it. Use a referrer-restricted key when
+        sharing the page.
 
     Returns:
         The :class:`pathlib.Path` written.
