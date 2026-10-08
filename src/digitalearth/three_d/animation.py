@@ -135,6 +135,12 @@ def _checked_clim(clim: Any) -> tuple[float, float] | None:
     """
     if clim is None:
         return None
+    if isinstance(
+        clim, (str, bytes)
+    ):  # a 2-char string unpacks to two items — reject it, don't read it as a range
+        raise ValueError(
+            f"record() needs clim=(low, high) — two numbers — got {clim!r}"
+        )
     try:
         low, high = clim
         low, high = float(low), float(high)

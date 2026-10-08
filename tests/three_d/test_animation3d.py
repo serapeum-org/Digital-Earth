@@ -722,10 +722,21 @@ def test_record_without_clim_lets_the_range_follow_the_last_frame(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "bad", [(5.0, 5.0), (10.0, 1.0), (float("nan"), 1.0), (1.0,), (1.0, 2.0, 3.0), "xy"]
+    "bad",
+    [
+        (5.0, 5.0),
+        (10.0, 1.0),
+        (float("nan"), 1.0),
+        (1.0,),
+        (1.0, 2.0, 3.0),
+        "xy",
+        "12",
+        b"12",
+    ],
 )
 def test_checked_clim_rejects_a_bad_range(bad):
-    """clim must be two finite numbers with low < high; anything else is a ValueError naming clim."""
+    """clim must be two finite numbers with low < high; anything else — including a 2-char string — is a
+    ValueError naming clim (a string must not be read as a two-element range)."""
     with pytest.raises(ValueError, match="clim"):
         _checked_clim(bad)
 
