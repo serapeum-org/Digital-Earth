@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -11396,10 +11396,15 @@ re-adds a layer), then one frame is written. Typical <code>frames</code> is a <c
 <p><strong>Freeze the colour scale with <code>clim</code> so a time stack does not flicker (#210).</strong> When <code>update</code>
 re-draws a layer each frame, each builder derives its own colour range from that frame's data, so the
 range moves frame to frame and the clip flickers. Passing <code>clim=(low, high)</code> pins the colour range on
-every drawn layer (and its scalar bar) after each <code>update</code>, so one scale spans the whole animation —
-compute it once over the full stack (e.g. <code>(stack.values.min(), stack.values.max())</code>) and hand it in.
-<code>None</code> (the default) keeps the per-frame behaviour. A ray-cast volume's range is
-:meth:<code>~digitalearth.three_d.volume.VolumeMixin.volume</code>'s own <code>clim=</code> instead.</p>
+every drawn colour-mapped layer (the scalar bar follows its mapper) after each <code>update</code>, so one scale
+spans the whole animation — compute it once over the full stack (e.g.
+<code>(stack.values.min(), stack.values.max())</code>) and hand it in. <code>None</code> (the default) keeps the per-frame
+behaviour. A ray-cast volume's range is :meth:<code>~digitalearth.three_d.volume.VolumeMixin.volume</code>'s own
+<code>clim=</code> instead.</p>
+<p>Scope: <code>clim</code> pins <strong>every</strong> colour-mapped layer in the scene, not only the one <code>update</code> animates.
+That is what the time-stack use case wants (there is one data layer), but in a scene that holds a second
+colour-mapped layer on a different scale, that layer is clamped to <code>clim</code> too for the recording. To hold
+one layer while others keep their own range, build them in separate scenes.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -11488,8 +11493,9 @@ speed shared with every other tier's animation entry point, declared once in
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>(low, high)</code> colour range held fixed across every frame; <code>None</code> lets each frame keep the
-range its own data drives (the pre-#210 behaviour).</p>
+                <p><code>(low, high)</code> colour range held fixed across every frame, applied to <strong>every</strong> colour-mapped
+layer in the scene (a ray-cast volume is excepted — its range stays <code>volume(clim=)</code>'s).
+<code>None</code> lets each frame keep the range its own data drives (the pre-#210 behaviour).</p>
               </div>
             </td>
             <td>
@@ -11685,7 +11691,14 @@ range its own data drives (the pre-#210 behaviour).</p>
 <span class="normal"><a href="#__codelineno-0-494">494</a></span>
 <span class="normal"><a href="#__codelineno-0-495">495</a></span>
 <span class="normal"><a href="#__codelineno-0-496">496</a></span>
-<span class="normal"><a href="#__codelineno-0-497">497</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="k">def</span><span class="w"> </span><span class="nf">record</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-497">497</a></span>
+<span class="normal"><a href="#__codelineno-0-498">498</a></span>
+<span class="normal"><a href="#__codelineno-0-499">499</a></span>
+<span class="normal"><a href="#__codelineno-0-500">500</a></span>
+<span class="normal"><a href="#__codelineno-0-501">501</a></span>
+<span class="normal"><a href="#__codelineno-0-502">502</a></span>
+<span class="normal"><a href="#__codelineno-0-503">503</a></span>
+<span class="normal"><a href="#__codelineno-0-504">504</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="k">def</span><span class="w"> </span><span class="nf">record</span><span class="p">(</span>
 <a id="__codelineno-0-403" name="__codelineno-0-403"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-404" name="__codelineno-0-404"></a>    <span class="n">frames</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
 <a id="__codelineno-0-405" name="__codelineno-0-405"></a>    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -11702,85 +11715,92 @@ range its own data drives (the pre-#210 behaviour).</p>
 <a id="__codelineno-0-416" name="__codelineno-0-416"></a><span class="sd">    **Freeze the colour scale with ``clim`` so a time stack does not flicker (#210).** When ``update``</span>
 <a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">    re-draws a layer each frame, each builder derives its own colour range from that frame&#39;s data, so the</span>
 <a id="__codelineno-0-418" name="__codelineno-0-418"></a><span class="sd">    range moves frame to frame and the clip flickers. Passing ``clim=(low, high)`` pins the colour range on</span>
-<a id="__codelineno-0-419" name="__codelineno-0-419"></a><span class="sd">    every drawn layer (and its scalar bar) after each ``update``, so one scale spans the whole animation —</span>
-<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">    compute it once over the full stack (e.g. ``(stack.values.min(), stack.values.max())``) and hand it in.</span>
-<a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="sd">    ``None`` (the default) keeps the per-frame behaviour. A ray-cast volume&#39;s range is</span>
-<a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="sd">    :meth:`~digitalearth.three_d.volume.VolumeMixin.volume`&#39;s own ``clim=`` instead.</span>
-<a id="__codelineno-0-423" name="__codelineno-0-423"></a>
-<a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">        frames: Iterable of per-frame states passed one at a time to ``update``.</span>
-<a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">        path: Output file. A video suffix writes a movie; anything else a GIF.</span>
-<a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">        update: Callback ``(scene, frame) -&gt; None`` that updates the scene before each frame is captured.</span>
-<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">        fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one</span>
-<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">            speed shared with every other tier&#39;s animation entry point, declared once in</span>
-<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">            :mod:`digitalearth.base.animation`; this method used to default to ``8``.</span>
-<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">        clim: ``(low, high)`` colour range held fixed across every frame; ``None`` lets each frame keep the</span>
-<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">            range its own data drives (the pre-#210 behaviour).</span>
-<a id="__codelineno-0-433" name="__codelineno-0-433"></a>
-<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">        The ``path`` written.</span>
-<a id="__codelineno-0-436" name="__codelineno-0-436"></a>
-<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">        ValueError: if ``clim`` is given but is not two finite numbers with ``low &lt; high``.</span>
-<a id="__codelineno-0-439" name="__codelineno-0-439"></a>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">        - Animate a growing terrain over three frames:</span>
-<a id="__codelineno-0-442" name="__codelineno-0-442"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">            &gt;&gt;&gt; import numpy as np, os, tempfile</span>
-<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
-<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.sources import get_source</span>
-<a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">            &gt;&gt;&gt; dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))</span>
-<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
-<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">            &gt;&gt;&gt; _ = scene.terrain(get_source(dem))</span>
-<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">            &gt;&gt;&gt; def grow(s, factor):</span>
-<a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="sd">            ...     s.layers[0][0].points[:, 2] *= factor</span>
-<a id="__codelineno-0-451" name="__codelineno-0-451"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">            ...     out = scene.record([1.1, 1.1, 1.1], os.path.join(folder, &quot;grow.gif&quot;), grow)</span>
-<a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="sd">            ...     size = os.path.getsize(out)</span>
-<a id="__codelineno-0-454" name="__codelineno-0-454"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-455" name="__codelineno-0-455"></a><span class="sd">            &gt;&gt;&gt; size &gt; 0</span>
-<a id="__codelineno-0-456" name="__codelineno-0-456"></a><span class="sd">            True</span>
-<a id="__codelineno-0-457" name="__codelineno-0-457"></a>
-<a id="__codelineno-0-458" name="__codelineno-0-458"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a><span class="sd">        - Freeze the colour scale across frames whose data ranges differ, so a time stack does not</span>
-<a id="__codelineno-0-460" name="__codelineno-0-460"></a><span class="sd">          flicker: two frames (elevation ~0..2, then ~0..50) re-draw the layer, but ``clim=(0, 50)``</span>
-<a id="__codelineno-0-461" name="__codelineno-0-461"></a><span class="sd">          keeps the drawn range fixed rather than letting it follow the last frame:</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="sd">            &gt;&gt;&gt; import numpy as np, os, tempfile</span>
-<a id="__codelineno-0-464" name="__codelineno-0-464"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
-<a id="__codelineno-0-465" name="__codelineno-0-465"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.sources import get_source</span>
-<a id="__codelineno-0-466" name="__codelineno-0-466"></a><span class="sd">            &gt;&gt;&gt; def swap(s, array):</span>
-<a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">            ...     s.remove_layer(&quot;dem&quot;)</span>
-<a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">            ...     s.terrain(get_source(array), name=&quot;dem&quot;)</span>
-<a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="sd">            &gt;&gt;&gt; low = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))</span>
-<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">            &gt;&gt;&gt; high = low * 50.0</span>
-<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
-<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">            &gt;&gt;&gt; _ = scene.terrain(get_source(low), name=&quot;dem&quot;)</span>
-<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">            ...     _ = scene.record(</span>
-<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">            ...         [low, high], os.path.join(folder, &quot;stack.gif&quot;), swap, clim=(0.0, 50.0)</span>
-<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">            ...     )</span>
-<a id="__codelineno-0-477" name="__codelineno-0-477"></a><span class="sd">            &gt;&gt;&gt; tuple(scene.actor_of(&quot;dem&quot;).mapper.scalar_range)</span>
-<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">            (0.0, 50.0)</span>
-<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-480" name="__codelineno-0-480"></a>
-<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-483" name="__codelineno-0-483"></a>    <span class="n">frozen</span> <span class="o">=</span> <span class="n">_checked_clim</span><span class="p">(</span><span class="n">clim</span><span class="p">)</span>
-<a id="__codelineno-0-484" name="__codelineno-0-484"></a>    <span class="n">_open_writer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">fps</span><span class="p">)</span>
-<a id="__codelineno-0-485" name="__codelineno-0-485"></a>    <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-486" name="__codelineno-0-486"></a>        <span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">frames</span><span class="p">:</span>
-<a id="__codelineno-0-487" name="__codelineno-0-487"></a>            <span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frame</span><span class="p">)</span>
-<a id="__codelineno-0-488" name="__codelineno-0-488"></a>            <span class="k">if</span> <span class="n">frozen</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-489" name="__codelineno-0-489"></a>                <span class="c1"># After `update` (which may have re-drawn the layer), before the frame is captured, so the</span>
-<a id="__codelineno-0-490" name="__codelineno-0-490"></a>                <span class="c1"># colour scale is the same every frame rather than whatever this frame&#39;s data derived.</span>
-<a id="__codelineno-0-491" name="__codelineno-0-491"></a>                <span class="n">_freeze_colour_range</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frozen</span><span class="p">)</span>
-<a id="__codelineno-0-492" name="__codelineno-0-492"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">write_frame</span><span class="p">()</span>
-<a id="__codelineno-0-493" name="__codelineno-0-493"></a>    <span class="k">finally</span><span class="p">:</span>
-<a id="__codelineno-0-494" name="__codelineno-0-494"></a>        <span class="n">_finalize_frames</span><span class="p">(</span>
-<a id="__codelineno-0-495" name="__codelineno-0-495"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span>
-<a id="__codelineno-0-496" name="__codelineno-0-496"></a>        <span class="p">)</span>  <span class="c1"># always flush/close the writer, even if a frame raised</span>
-<a id="__codelineno-0-497" name="__codelineno-0-497"></a>    <span class="k">return</span> <span class="n">path</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a><span class="sd">    every drawn colour-mapped layer (the scalar bar follows its mapper) after each ``update``, so one scale</span>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">    spans the whole animation — compute it once over the full stack (e.g.</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="sd">    ``(stack.values.min(), stack.values.max())``) and hand it in. ``None`` (the default) keeps the per-frame</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="sd">    behaviour. A ray-cast volume&#39;s range is :meth:`~digitalearth.three_d.volume.VolumeMixin.volume`&#39;s own</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><span class="sd">    ``clim=`` instead.</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a>
+<a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">    Scope: ``clim`` pins **every** colour-mapped layer in the scene, not only the one ``update`` animates.</span>
+<a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">    That is what the time-stack use case wants (there is one data layer), but in a scene that holds a second</span>
+<a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">    colour-mapped layer on a different scale, that layer is clamped to ``clim`` too for the recording. To hold</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">    one layer while others keep their own range, build them in separate scenes.</span>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">        frames: Iterable of per-frame states passed one at a time to ``update``.</span>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">        path: Output file. A video suffix writes a movie; anything else a GIF.</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">        update: Callback ``(scene, frame) -&gt; None`` that updates the scene before each frame is captured.</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">        fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">            speed shared with every other tier&#39;s animation entry point, declared once in</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">            :mod:`digitalearth.base.animation`; this method used to default to ``8``.</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">        clim: ``(low, high)`` colour range held fixed across every frame, applied to **every** colour-mapped</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">            layer in the scene (a ray-cast volume is excepted — its range stays ``volume(clim=)``&#39;s).</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">            ``None`` lets each frame keep the range its own data drives (the pre-#210 behaviour).</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a><span class="sd">        The ``path`` written.</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">        ValueError: if ``clim`` is given but is not two finite numbers with ``low &lt; high``.</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">        - Animate a growing terrain over three frames:</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="sd">            &gt;&gt;&gt; import numpy as np, os, tempfile</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.sources import get_source</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="sd">            &gt;&gt;&gt; dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a><span class="sd">            &gt;&gt;&gt; _ = scene.terrain(get_source(dem))</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a><span class="sd">            &gt;&gt;&gt; def grow(s, factor):</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a><span class="sd">            ...     s.layers[0][0].points[:, 2] *= factor</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a><span class="sd">            ...     out = scene.record([1.1, 1.1, 1.1], os.path.join(folder, &quot;grow.gif&quot;), grow)</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a><span class="sd">            ...     size = os.path.getsize(out)</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a><span class="sd">            &gt;&gt;&gt; size &gt; 0</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="sd">            True</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a><span class="sd">        - Freeze the colour scale across frames whose data ranges differ, so a time stack does not</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">          flicker: two frames (elevation ~0..2, then ~0..50) re-draw the layer, but ``clim=(0, 50)``</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">          keeps the drawn range fixed rather than letting it follow the last frame:</span>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">            &gt;&gt;&gt; import numpy as np, os, tempfile</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.sources import get_source</span>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">            &gt;&gt;&gt; def swap(s, array):</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">            ...     s.remove_layer(&quot;dem&quot;)</span>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">            ...     s.terrain(get_source(array), name=&quot;dem&quot;)</span>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">            &gt;&gt;&gt; low = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a><span class="sd">            &gt;&gt;&gt; high = low * 50.0</span>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">            &gt;&gt;&gt; _ = scene.terrain(get_source(low), name=&quot;dem&quot;)</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">            ...     _ = scene.record(</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">            ...         [low, high], os.path.join(folder, &quot;stack.gif&quot;), swap, clim=(0.0, 50.0)</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">            ...     )</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a><span class="sd">            &gt;&gt;&gt; tuple(scene.actor_of(&quot;dem&quot;).mapper.scalar_range)</span>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">            (0.0, 50.0)</span>
+<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a>
+<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a>    <span class="n">frozen</span> <span class="o">=</span> <span class="n">_checked_clim</span><span class="p">(</span><span class="n">clim</span><span class="p">)</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a>    <span class="n">_open_writer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">fps</span><span class="p">)</span>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a>        <span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">frames</span><span class="p">:</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a>            <span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frame</span><span class="p">)</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a>            <span class="k">if</span> <span class="n">frozen</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a>                <span class="c1"># After `update` (which may have re-drawn the layer), before the frame is captured, so the</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a>                <span class="c1"># colour scale is the same every frame rather than whatever this frame&#39;s data derived.</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a>                <span class="n">_freeze_colour_range</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frozen</span><span class="p">)</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">write_frame</span><span class="p">()</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a>    <span class="k">finally</span><span class="p">:</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a>        <span class="n">_finalize_frames</span><span class="p">(</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a>        <span class="p">)</span>  <span class="c1"># always flush/close the writer, even if a frame raised</span>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a>    <span class="k">return</span> <span class="n">path</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11862,14 +11882,7 @@ plotter until something changes it back.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/three_d/animation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-499">499</a></span>
-<span class="normal"><a href="#__codelineno-0-500">500</a></span>
-<span class="normal"><a href="#__codelineno-0-501">501</a></span>
-<span class="normal"><a href="#__codelineno-0-502">502</a></span>
-<span class="normal"><a href="#__codelineno-0-503">503</a></span>
-<span class="normal"><a href="#__codelineno-0-504">504</a></span>
-<span class="normal"><a href="#__codelineno-0-505">505</a></span>
-<span class="normal"><a href="#__codelineno-0-506">506</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-506">506</a></span>
 <span class="normal"><a href="#__codelineno-0-507">507</a></span>
 <span class="normal"><a href="#__codelineno-0-508">508</a></span>
 <span class="normal"><a href="#__codelineno-0-509">509</a></span>
@@ -11896,41 +11909,48 @@ plotter until something changes it back.</p>
 <span class="normal"><a href="#__codelineno-0-530">530</a></span>
 <span class="normal"><a href="#__codelineno-0-531">531</a></span>
 <span class="normal"><a href="#__codelineno-0-532">532</a></span>
-<span class="normal"><a href="#__codelineno-0-533">533</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-499" name="__codelineno-0-499"></a><span class="k">def</span><span class="w"> </span><span class="nf">jupyter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;trame&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Switch PyVista&#39;s rendering backend so the scene displays interactively in a notebook.</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a><span class="sd">    The backend is PyVista&#39;s, set process-wide rather than per scene, so it stays in force for every</span>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">    plotter until something changes it back.</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">        backend: A PyVista Jupyter backend — ``&quot;trame&quot;`` (default, server/remote), ``&quot;client&quot;`` (vtk.js),</span>
-<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">            ``&quot;static&quot;`` (screenshot), or ``&quot;html&quot;``.</span>
+<span class="normal"><a href="#__codelineno-0-533">533</a></span>
+<span class="normal"><a href="#__codelineno-0-534">534</a></span>
+<span class="normal"><a href="#__codelineno-0-535">535</a></span>
+<span class="normal"><a href="#__codelineno-0-536">536</a></span>
+<span class="normal"><a href="#__codelineno-0-537">537</a></span>
+<span class="normal"><a href="#__codelineno-0-538">538</a></span>
+<span class="normal"><a href="#__codelineno-0-539">539</a></span>
+<span class="normal"><a href="#__codelineno-0-540">540</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="k">def</span><span class="w"> </span><span class="nf">jupyter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;trame&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Switch PyVista&#39;s rendering backend so the scene displays interactively in a notebook.</span>
 <a id="__codelineno-0-508" name="__codelineno-0-508"></a>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">        - Switch to the static (screenshot) backend and read the change back. The restore is in a</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">          ``finally`` because the backend is process-wide: doctests share one interpreter, and a failure</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">          between the switch and the restore would leave every later one on a renderer nobody chose:</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">            &gt;&gt;&gt; previous = pv.global_theme.jupyter_backend</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">            ...     scene.jupyter(&quot;static&quot;)</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">            ...     pv.global_theme.jupyter_backend</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">            ... finally:</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">            ...     scene.close()</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">            ...     pv.set_jupyter_backend(previous)</span>
-<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">            &#39;static&#39;</span>
-<a id="__codelineno-0-525" name="__codelineno-0-525"></a>
-<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-527" name="__codelineno-0-527"></a>
-<a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">        orbit: writes a fly-through to a file instead, for when a notebook is not the destination.</span>
-<a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-531" name="__codelineno-0-531"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">    The backend is PyVista&#39;s, set process-wide rather than per scene, so it stays in force for every</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">    plotter until something changes it back.</span>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">        backend: A PyVista Jupyter backend — ``&quot;trame&quot;`` (default, server/remote), ``&quot;client&quot;`` (vtk.js),</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">            ``&quot;static&quot;`` (screenshot), or ``&quot;html&quot;``.</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">        - Switch to the static (screenshot) backend and read the change back. The restore is in a</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">          ``finally`` because the backend is process-wide: doctests share one interpreter, and a failure</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">          between the switch and the restore would leave every later one on a renderer nobody chose:</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">            &gt;&gt;&gt; previous = pv.global_theme.jupyter_backend</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">            ...     scene.jupyter(&quot;static&quot;)</span>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">            ...     pv.global_theme.jupyter_backend</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">            ... finally:</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">            ...     scene.close()</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">            ...     pv.set_jupyter_backend(previous)</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">            &#39;static&#39;</span>
 <a id="__codelineno-0-532" name="__codelineno-0-532"></a>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a>    <span class="n">pv</span><span class="o">.</span><span class="n">set_jupyter_backend</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">        orbit: writes a fly-through to a file instead, for when a notebook is not the destination.</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a>    <span class="n">pv</span><span class="o">.</span><span class="n">set_jupyter_backend</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
