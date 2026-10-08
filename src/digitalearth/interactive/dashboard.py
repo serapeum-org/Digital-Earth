@@ -1356,6 +1356,12 @@ class DashboardMixin(_MixinBase):
 
         Returns:
             The ``panel.widgets.Tabulator`` whose selection mirrors the map's, kept alive on the map.
+
+        Note:
+            The link maps a table row *position* to the element's ``Selection1D`` index, so it is sound only
+            when ``frame`` and ``source`` share one row order. The table is built ``sortable=False`` to hold
+            that alignment against a client-side sort; a non-selectable ``source`` (e.g. a raster) mirrors
+            nothing rather than erroring.
         """
         _require_holoviz()
         from holoviews import streams
@@ -1371,10 +1377,16 @@ class DashboardMixin(_MixinBase):
             )
         else:
             src = self.layers[self._last_layer_index("attribute_table")]
+        # `sortable=False` keeps the link sound (review L3): the link maps a table row *position* straight to
+        # a `Selection1D` element index, so a client-side column sort — which reorders rows without touching
+        # the element — would cross-map selections to the wrong geometry. Disabling sort holds the two index
+        # spaces aligned; the precondition that `frame` and `src` share one row order still stands (see the
+        # method docstring), and a non-selectable `src` (e.g. a raster) simply mirrors nothing.
         table = pn.widgets.Tabulator(
             frame,
             disabled=True,
             selectable="checkbox",
+            sortable=False,
             pagination="remote",
             page_size=20,
         )

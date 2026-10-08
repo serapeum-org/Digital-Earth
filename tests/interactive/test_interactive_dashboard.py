@@ -761,6 +761,18 @@ class TestInertFlagsAreRefused:
         )
         assert isinstance(table, pn.widgets.Tabulator), f"got {type(table)}"
 
+    def test_linked_table_is_not_sortable_to_keep_indices_aligned(self, point_fc):
+        """The linked table disables client-side sort so row positions stay aligned to the element (L3 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        assert table.sortable is False, (
+            f"a linked table must not be sortable (would remap indices), got {table.sortable!r}"
+        )
+
     def test_linked_table_selection_drives_the_map(self, point_fc):
         """Selecting rows pushes the indices onto the shared Selection1D stream (IN-5 #431).
 
