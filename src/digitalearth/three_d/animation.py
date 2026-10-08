@@ -416,10 +416,16 @@ class AnimationMixin(_MixinBase):
         **Freeze the colour scale with ``clim`` so a time stack does not flicker (#210).** When ``update``
         re-draws a layer each frame, each builder derives its own colour range from that frame's data, so the
         range moves frame to frame and the clip flickers. Passing ``clim=(low, high)`` pins the colour range on
-        every drawn layer (and its scalar bar) after each ``update``, so one scale spans the whole animation —
-        compute it once over the full stack (e.g. ``(stack.values.min(), stack.values.max())``) and hand it in.
-        ``None`` (the default) keeps the per-frame behaviour. A ray-cast volume's range is
-        :meth:`~digitalearth.three_d.volume.VolumeMixin.volume`'s own ``clim=`` instead.
+        every drawn colour-mapped layer (the scalar bar follows its mapper) after each ``update``, so one scale
+        spans the whole animation — compute it once over the full stack (e.g.
+        ``(stack.values.min(), stack.values.max())``) and hand it in. ``None`` (the default) keeps the per-frame
+        behaviour. A ray-cast volume's range is :meth:`~digitalearth.three_d.volume.VolumeMixin.volume`'s own
+        ``clim=`` instead.
+
+        Scope: ``clim`` pins **every** colour-mapped layer in the scene, not only the one ``update`` animates.
+        That is what the time-stack use case wants (there is one data layer), but in a scene that holds a second
+        colour-mapped layer on a different scale, that layer is clamped to ``clim`` too for the recording. To hold
+        one layer while others keep their own range, build them in separate scenes.
 
         Args:
             frames: Iterable of per-frame states passed one at a time to ``update``.
@@ -428,8 +434,9 @@ class AnimationMixin(_MixinBase):
             fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one
                 speed shared with every other tier's animation entry point, declared once in
                 :mod:`digitalearth.base.animation`; this method used to default to ``8``.
-            clim: ``(low, high)`` colour range held fixed across every frame; ``None`` lets each frame keep the
-                range its own data drives (the pre-#210 behaviour).
+            clim: ``(low, high)`` colour range held fixed across every frame, applied to **every** colour-mapped
+                layer in the scene (a ray-cast volume is excepted — its range stays ``volume(clim=)``'s).
+                ``None`` lets each frame keep the range its own data drives (the pre-#210 behaviour).
 
         Returns:
             The ``path`` written.
