@@ -14949,6 +14949,41 @@ whole table as one track.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>clim</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="float">float</span>, <span title="float">float</span>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Frozen <code>(vmin, vmax)</code> colour span (IN-4). <code>None</code> (default) re-autoranges per frame;
+a pair pins the shade's domain (passed to the shade operation as <code>clims</code>).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cnorm</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Shade normalisation — <code>"linear"</code> / <code>"log"</code> / <code>"eq_hist"</code>. <code>None</code> leaves
+HoloViews' default, but <strong>defaults to <code>"linear"</code> when <code>clim</code> is set</strong>, because
+Datashader refuses a span under <code>eq_hist</code> (the X-4 trap).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>cmap</code>
             </td>
             <td>
@@ -15149,7 +15184,12 @@ element while the figure went on calling it visible (#327).</p>
 <span class="normal"><a href="#__codelineno-0-545">545</a></span>
 <span class="normal"><a href="#__codelineno-0-546">546</a></span>
 <span class="normal"><a href="#__codelineno-0-547">547</a></span>
-<span class="normal"><a href="#__codelineno-0-548">548</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="k">def</span><span class="w"> </span><span class="nf">trajectory</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-548">548</a></span>
+<span class="normal"><a href="#__codelineno-0-549">549</a></span>
+<span class="normal"><a href="#__codelineno-0-550">550</a></span>
+<span class="normal"><a href="#__codelineno-0-551">551</a></span>
+<span class="normal"><a href="#__codelineno-0-552">552</a></span>
+<span class="normal"><a href="#__codelineno-0-553">553</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="k">def</span><span class="w"> </span><span class="nf">trajectory</span><span class="p">(</span>
 <a id="__codelineno-0-477" name="__codelineno-0-477"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-478" name="__codelineno-0-478"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-479" name="__codelineno-0-479"></a>    <span class="o">*</span><span class="p">,</span>
@@ -15177,51 +15217,56 @@ element while the figure went on calling it visible (#327).</p>
 <a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">            whole table as one track.</span>
 <a id="__codelineno-0-502" name="__codelineno-0-502"></a><span class="sd">        by: Optional categorical column colouring tracks per class (``count_cat`` blend).</span>
 <a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">        dynspread: Grow isolated pixels so sparse tracks stay visible.</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">        cmap: Colormap for continuous shading (ignored when ``color_key`` is given).</span>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">        color_key: ``{category: colour}`` mapping used with ``by``, or a list of colours in category</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">            order — the two forms HoloViews takes.</span>
-<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">        dynamic: Re-shade on every viewport change; ``False`` bakes a static RGB.</span>
-<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">        **opts: ``width``/``height`` pin the canvas; everything else styles the result.</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a>    <span class="n">canvas</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a>        <span class="n">key</span><span class="p">:</span> <span class="n">opts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">opts</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a>    <span class="p">}</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-524" name="__codelineno-0-524"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
-<a id="__codelineno-0-525" name="__codelineno-0-525"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-526" name="__codelineno-0-526"></a>        <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-527" name="__codelineno-0-527"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-528" name="__codelineno-0-528"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-529" name="__codelineno-0-529"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;lines&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-530" name="__codelineno-0-530"></a>        <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
-<a id="__codelineno-0-531" name="__codelineno-0-531"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
-<a id="__codelineno-0-532" name="__codelineno-0-532"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-534" name="__codelineno-0-534"></a>                <span class="s2">&quot;clim&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;clim&quot;</span><span class="p">,</span> <span class="n">_travelling_pair</span><span class="p">(</span><span class="n">clim</span><span class="p">)),</span>
-<a id="__codelineno-0-535" name="__codelineno-0-535"></a>                <span class="s2">&quot;cnorm&quot;</span><span class="p">:</span> <span class="n">cnorm</span><span class="p">,</span>
-<a id="__codelineno-0-536" name="__codelineno-0-536"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;trajectory&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-537" name="__codelineno-0-537"></a>                <span class="s2">&quot;track_column&quot;</span><span class="p">:</span> <span class="n">track_column</span><span class="p">,</span>
-<a id="__codelineno-0-538" name="__codelineno-0-538"></a>                <span class="s2">&quot;by&quot;</span><span class="p">:</span> <span class="n">by</span><span class="p">,</span>
-<a id="__codelineno-0-539" name="__codelineno-0-539"></a>                <span class="s2">&quot;dynspread&quot;</span><span class="p">:</span> <span class="n">dynspread</span><span class="p">,</span>
-<a id="__codelineno-0-540" name="__codelineno-0-540"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
-<a id="__codelineno-0-541" name="__codelineno-0-541"></a>                <span class="s2">&quot;color_key&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;color_key&quot;</span><span class="p">,</span> <span class="n">color_key</span><span class="p">),</span>
-<a id="__codelineno-0-542" name="__codelineno-0-542"></a>                <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">dynamic</span><span class="p">,</span>
-<a id="__codelineno-0-543" name="__codelineno-0-543"></a>                <span class="s2">&quot;canvas&quot;</span><span class="p">:</span> <span class="n">canvas</span><span class="p">,</span>
-<a id="__codelineno-0-544" name="__codelineno-0-544"></a>                <span class="s2">&quot;common&quot;</span><span class="p">:</span> <span class="p">{},</span>
-<a id="__codelineno-0-545" name="__codelineno-0-545"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
-<a id="__codelineno-0-546" name="__codelineno-0-546"></a>            <span class="p">}</span>
-<a id="__codelineno-0-547" name="__codelineno-0-547"></a>        <span class="p">),</span>
-<a id="__codelineno-0-548" name="__codelineno-0-548"></a>    <span class="p">)</span>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">        clim: Frozen ``(vmin, vmax)`` colour span (IN-4). ``None`` (default) re-autoranges per frame;</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">            a pair pins the shade&#39;s domain (passed to the shade operation as ``clims``).</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">        cnorm: Shade normalisation — ``&quot;linear&quot;`` / ``&quot;log&quot;`` / ``&quot;eq_hist&quot;``. ``None`` leaves</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">            HoloViews&#39; default, but **defaults to ``&quot;linear&quot;`` when ``clim`` is set**, because</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">            Datashader refuses a span under ``eq_hist`` (the X-4 trap).</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">        cmap: Colormap for continuous shading (ignored when ``color_key`` is given).</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">        color_key: ``{category: colour}`` mapping used with ``by``, or a list of colours in category</span>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">            order — the two forms HoloViews takes.</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">        dynamic: Re-shade on every viewport change; ``False`` bakes a static RGB.</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">        **opts: ``width``/``height`` pin the canvas; everything else styles the result.</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a>    <span class="n">canvas</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a>        <span class="n">key</span><span class="p">:</span> <span class="n">opts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">opts</span>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a>    <span class="p">}</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a>        <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;lines&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a>        <span class="n">source</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a>                <span class="s2">&quot;clim&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;clim&quot;</span><span class="p">,</span> <span class="n">_travelling_pair</span><span class="p">(</span><span class="n">clim</span><span class="p">)),</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a>                <span class="s2">&quot;cnorm&quot;</span><span class="p">:</span> <span class="n">cnorm</span><span class="p">,</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;trajectory&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a>                <span class="s2">&quot;track_column&quot;</span><span class="p">:</span> <span class="n">track_column</span><span class="p">,</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a>                <span class="s2">&quot;by&quot;</span><span class="p">:</span> <span class="n">by</span><span class="p">,</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a>                <span class="s2">&quot;dynspread&quot;</span><span class="p">:</span> <span class="n">dynspread</span><span class="p">,</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
+<a id="__codelineno-0-546" name="__codelineno-0-546"></a>                <span class="s2">&quot;color_key&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;color_key&quot;</span><span class="p">,</span> <span class="n">color_key</span><span class="p">),</span>
+<a id="__codelineno-0-547" name="__codelineno-0-547"></a>                <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">dynamic</span><span class="p">,</span>
+<a id="__codelineno-0-548" name="__codelineno-0-548"></a>                <span class="s2">&quot;canvas&quot;</span><span class="p">:</span> <span class="n">canvas</span><span class="p">,</span>
+<a id="__codelineno-0-549" name="__codelineno-0-549"></a>                <span class="s2">&quot;common&quot;</span><span class="p">:</span> <span class="p">{},</span>
+<a id="__codelineno-0-550" name="__codelineno-0-550"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
+<a id="__codelineno-0-551" name="__codelineno-0-551"></a>            <span class="p">}</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552"></a>        <span class="p">),</span>
+<a id="__codelineno-0-553" name="__codelineno-0-553"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
