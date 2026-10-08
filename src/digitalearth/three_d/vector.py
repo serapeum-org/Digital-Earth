@@ -5,12 +5,13 @@ Two vector visualizations:
 - :meth:`vectors` — arrow **glyphs** oriented and scaled by a ``(u, v, w)`` field at a set of points
   (``mesh.glyph``); the classic flow/wind arrows in 3-D.
 - :meth:`extruded_polygons` — turn polygon footprints into **3-D prisms** (``triangulate().extrude(...)``), the
-  building-block of extruded-building / choropleth-relief views.
+  building-block of extruded-building / choropleth-relief views. A footprint with holes (interior rings) is
+  carved all the way through (#199), so a ring courtyard or a lake in a landmass is a shaft, not a filled column.
 
 Polygons come from the GeoDataFrame pyramids returns (a ``FeatureCollection``, which *is* a GeoDataFrame, or
-``Dataset.get_cell_polygons()``); only their coordinates are read (``geom.exterior.coords``, ``geom.geoms``), so
-this module imports neither shapely nor geopandas (the HARD RULE / ``test_no_competitor_imports`` guard). CRS work
-stays in pyramids.
+``Dataset.get_cell_polygons()``); only their coordinates are read (``geom.exterior.coords``,
+``geom.interiors``, ``geom.geoms``), so this module imports neither shapely nor geopandas (the HARD RULE /
+``test_no_competitor_imports`` guard). CRS work stays in pyramids.
 """
 
 import math
@@ -30,17 +31,20 @@ MAGNITUDE = "magnitude"
 VALUE = "value"
 
 
-def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
-    """Yield each polygon's exterior ring as an ``(M, 2)`` coordinate array (duck-typed; no shapely import).
+def _polygon_parts(geom: Any) -> Iterator[tuple[np.ndarray, list[np.ndarray]]]:
+    """Yield each polygon part as its exterior ring and its interior (hole) rings.
 
-    Handles ``Polygon`` (one ring) and ``MultiPolygon`` (one ring per part). Holes are ignored — exterior
-    footprints only.
+    Handles ``Polygon`` (one part) and ``MultiPolygon`` (one part per member), duck-typed on the public
+    ``.exterior`` / ``.interiors`` / ``.geoms`` attributes so neither shapely nor geopandas is imported (the
+    HARD RULE). This is the hole-aware reader the extrusion draws from; :func:`_exterior_rings` is the
+    exterior-only view kept for the callers (and tests) that never cared about holes.
 
     Args:
         geom: A shapely ``Polygon``/``MultiPolygon`` (read via its public attributes, never imported).
 
     Yields:
-        numpy.ndarray: the ``(M, 2)`` exterior-ring coordinates of each polygon part.
+        ``(exterior, interiors)`` per part — the ``(M, 2)`` exterior ring and a (possibly empty) list of
+        ``(K, 2)`` interior-ring arrays, one per hole.
 
     Raises:
         TypeError: if ``geom`` is not a ``Polygon`` or ``MultiPolygon`` (e.g. a ``Point``/``LineString``).
@@ -52,11 +56,37 @@ def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
         )
     parts = geom.geoms if geom_type == "MultiPolygon" else [geom]
     for part in parts:
-        yield np.asarray(part.exterior.coords, dtype="float64")
+        exterior = np.asarray(part.exterior.coords, dtype="float64")
+        interiors = [
+            np.asarray(ring.coords, dtype="float64") for ring in part.interiors
+        ]
+        yield exterior, interiors
+
+
+def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
+    """Yield each polygon part's exterior ring as an ``(M, 2)`` coordinate array (duck-typed; no shapely).
+
+    The exterior-only view over :func:`_polygon_parts`; holes are read and carved by the extrusion itself
+    (:func:`_extrude_polygon`), not here.
+
+    Args:
+        geom: A shapely ``Polygon``/``MultiPolygon`` (read via its public attributes, never imported).
+
+    Yields:
+        numpy.ndarray: the ``(M, 2)`` exterior-ring coordinates of each polygon part.
+
+    Raises:
+        TypeError: if ``geom`` is not a ``Polygon`` or ``MultiPolygon`` (e.g. a ``Point``/``LineString``).
+    """
+    for exterior, _interiors in _polygon_parts(geom):
+        yield exterior
 
 
 def _extrude_ring(ring: np.ndarray, height: float) -> "pv.PolyData":
     """Extrude a flat ``(M, 2)`` polygon ring into a capped 3-D prism of the given height.
+
+    The solid-footprint path: a part with no holes is extruded straight from its one ring, so the common case
+    keeps the exact geometry it always had. A part *with* holes goes through :func:`_extrude_polygon` instead.
 
     Args:
         ring: ``(M, 2)`` exterior-ring coordinates (the first/last point may repeat).
@@ -70,6 +100,127 @@ def _extrude_ring(ring: np.ndarray, height: float) -> "pv.PolyData":
     z = np.zeros((len(ring), 1))
     face = pv.PolyData(np.hstack([ring, z]), faces=np.r_[len(ring), range(len(ring))])
     return face.triangulate().extrude((0.0, 0.0, float(height)), capping=True)
+
+
+def _ring_loops(rings: list[np.ndarray]) -> "pv.PolyData":
+    """Build one ``PolyData`` of closed polyline loops from a list of ``(M, 2)`` rings.
+
+    The input :func:`_cap_with_holes` hands to the contour triangulator: every ring becomes a closed polyline
+    cell, so the triangulator sees the exterior and each hole as the nested contours it fills by the even-odd
+    rule.
+
+    Args:
+        rings: The rings to turn into loops — the exterior first, then each interior.
+
+    Returns:
+        pyvista.PolyData: the loops, all at ``z=0``.
+    """
+    import pyvista as pv
+
+    points: list[np.ndarray] = []
+    lines: list[int] = []
+    offset = 0
+    for ring in rings:
+        # Drop a repeated closing vertex; the loop is closed by pointing the last line segment back at the
+        # first index, so a duplicated first/last point would otherwise be a zero-length edge.
+        coords = ring[:-1] if len(ring) > 1 and np.allclose(ring[0], ring[-1]) else ring
+        count = len(coords)
+        points.append(np.column_stack([coords, np.zeros(count)]))
+        lines.extend([count + 1, *range(offset, offset + count), offset])
+        offset += count
+    return pv.PolyData(np.vstack(points), lines=np.array(lines))
+
+
+def _cap_with_holes(exterior: np.ndarray, interiors: list[np.ndarray]) -> "pv.PolyData":
+    """Triangulate a polygon-with-holes into a flat cap at ``z=0``, with each interior ring carved out.
+
+    Uses VTK's ``vtkContourTriangulator`` — the one filter that triangulates a set of nested closed contours
+    by the even-odd rule, so a hole inside the exterior is removed. ``PolyData.triangulate()`` and
+    ``delaunay_2d`` both fill the holes instead (measured), which is the #199 bug. ``vtkmodules`` is the render
+    engine PyVista is built on, not a GIS dependency, so importing this one filter is within the tier's rule.
+
+    Args:
+        exterior: The ``(M, 2)`` exterior ring.
+        interiors: The ``(K, 2)`` interior (hole) rings; never empty when this is called.
+
+    Returns:
+        pyvista.PolyData: the triangulated planar cap with the holes carved out.
+    """
+    import pyvista as pv
+    from vtkmodules.vtkFiltersGeneral import vtkContourTriangulator
+
+    triangulator = vtkContourTriangulator()
+    triangulator.SetInputData(_ring_loops([exterior, *interiors]))
+    triangulator.Update()
+    return pv.wrap(triangulator.GetOutput())
+
+
+def _extrude_polygon(
+    exterior: np.ndarray, interiors: list[np.ndarray], height: float
+) -> "pv.PolyData":
+    """Extrude a polygon **with holes** into a capped prism whose holes pass all the way through.
+
+    The cap is triangulated with its holes carved (:func:`_cap_with_holes`); extruding that surface with
+    ``capping=True`` sweeps both the exterior boundary and every hole boundary into walls, so each hole is a
+    shaft through the solid rather than a filled column (#199).
+
+    Args:
+        exterior: The ``(M, 2)`` exterior ring.
+        interiors: The ``(K, 2)`` interior (hole) rings.
+        height: Extrusion height along +z.
+
+    Returns:
+        pyvista.PolyData: the solid prism with the holes carved through it.
+    """
+    return _cap_with_holes(exterior, interiors).extrude(
+        (0.0, 0.0, float(height)), capping=True
+    )
+
+
+def _line_parts(geom: Any) -> Iterator[np.ndarray]:
+    """Yield each line part as an ``(M, 2)``/``(M, 3)`` coordinate array (duck-typed; no shapely import).
+
+    Handles ``LineString`` (one part) and ``MultiLineString`` (one per part), read through the public
+    ``.coords`` / ``.geoms`` attributes so neither shapely nor geopandas is imported (the HARD RULE).
+
+    Args:
+        geom: A shapely ``LineString``/``MultiLineString`` (read via its public attributes, never imported).
+
+    Yields:
+        numpy.ndarray: the vertices of each part, with whatever dimensionality the geometry carries (2-D or
+        3-D); :func:`_polyline` lifts a 2-D part onto ``z=0``.
+
+    Raises:
+        TypeError: if ``geom`` is not a ``LineString`` or ``MultiLineString`` (e.g. a ``Point``/``Polygon``).
+    """
+    geom_type = geom.geom_type
+    if geom_type == "LineString":
+        yield np.asarray(geom.coords, dtype="float64")
+    elif geom_type == "MultiLineString":
+        for part in geom.geoms:
+            yield np.asarray(part.coords, dtype="float64")
+    else:
+        raise TypeError(
+            f"lines expects LineString/MultiLineString geometries, got {geom_type}"
+        )
+
+
+def _polyline(coords: np.ndarray) -> "pv.PolyData":
+    """Build a single-polyline ``PolyData`` through ``coords``, lifting a 2-D line onto ``z=0``.
+
+    Args:
+        coords: ``(M, 2)`` or ``(M, 3)`` vertices of one line part.
+
+    Returns:
+        pyvista.PolyData: one polyline cell through every vertex.
+    """
+    import pyvista as pv
+
+    points = np.asarray(coords, dtype="float64")
+    if points.shape[1] == 2:
+        points = np.column_stack([points, np.zeros(len(points))])
+    count = len(points)
+    return pv.PolyData(points, lines=np.hstack([[count], range(count)]).astype("int64"))
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -88,6 +239,7 @@ def _classify_or_refuse(
     cmap: Any,
     pinned: dict[str, Any],
     scale: Scale | None = None,
+    caller: str = "extruded_polygons",
 ) -> tuple[dict[str, Any], np.ndarray | None]:
     """Cut `colours` into classes once, per feature, and refuse a colour keyword the scheme owns.
 
@@ -107,6 +259,8 @@ def _classify_or_refuse(
             :func:`~digitalearth.three_d.base.classified_scalars` reads it only as far as it answers this
             request — a `scheme`/`k`/`cmap` the description was not cut with is cut here — so the saving
             cannot become a veto over a restyle (review R2-L11, R2-H3).
+        caller: The public method this is classifying for, named in the clash message so `lines()` and
+            `extruded_polygons()` each report in their own words.
 
     Returns:
         A ``(style, scalars)`` pair: the colour keywords to forward to `add_mesh`, and the per-feature class
@@ -132,7 +286,7 @@ def _classify_or_refuse(
         # were rewritten to, and overriding them re-colours the wrong classes.
         names = ", ".join(f"{name}=" for name in clashing)
         raise TypeError(
-            f"extruded_polygons() got {names} together with scheme={scheme!r}, which sets "
+            f"{caller}() got {names} together with scheme={scheme!r}, which sets "
             f"{names} from the classes it cut; drop it, or drop scheme="
         )
     if chosen_nan_color is not None:
@@ -237,6 +391,168 @@ class VectorMixin(_MixinBase):
             name=name,
             vectors=vectors,
             factor=factor,
+            cmap=cmap,
+            **kwargs,
+        )
+
+    def lines(
+        self,
+        features: Any,
+        *,
+        name: Any = None,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
+        cmap: str = "viridis",
+        width: float | None = None,
+        color: Any = None,
+        opacity: float | None = None,
+        visible: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Draw line features (rivers, roads, trajectories) as 3-D polylines and register them as one layer.
+
+        The tier's Core ``lines`` verb. The geometries are placed in the scene's display CRS — setting it when
+        the scene has none, reprojected through pyramids when they are in another — then drawn as polylines; a
+        2-D line is lifted onto ``z=0``, a line that already carries a z keeps it.
+
+        Args:
+            features: A GeoDataFrame of ``LineString``/``MultiLineString`` geometries (e.g. a pyramids
+                ``FeatureCollection``); coordinates are read by duck-typing (no geopandas/shapely import).
+            column: Optional attribute column to colour the lines by; ``None`` for a flat colour.
+            scheme: How ``column`` is classified — ``None`` for a continuous ramp over the raw values,
+                ``"categorical"`` for one colour per distinct value, or any
+                ``cleopatra.styling.styles.classify`` name (``"quantiles"``, ``"equal_interval"``, …) for ``k``
+                graduated classes, computed exactly as the 2-D tiers compute them.
+            k: Number of classes for a graduated ``scheme``; ignored otherwise.
+            cmap: Colormap used when colouring by ``column``.
+            width: Line width in **screen pixels** (PyVista's ``line_width``), the same screen measure the
+                other tiers' ``width`` is; ``None`` leaves the engine default. A raw polyline is one pixel
+                wide, so a wider ``width`` is usually wanted to read a 3-D line against relief.
+            color: Flat colour for every line when ``column`` is not given; ignored when it is.
+            opacity: Line opacity in ``[0, 1]``; ``None`` leaves the engine default.
+            visible: Whether the layer is drawn when added (``False`` adds it hidden but addressable).
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`. A classified layer derives ``clim`` and
+                ``n_colors`` from the classes it cut, so passing one of those *and* a ``scheme`` is a
+                ``TypeError`` naming the keyword.
+
+        Returns:
+            The registered :class:`pyvista.Actor` for the merged polyline mesh, or ``None`` when there were no
+            line geometries to draw (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+
+        Raises:
+            ValueError: if ``scheme`` cannot classify ``column``. Also — only under ``strict=True`` —
+                :class:`~digitalearth.base.crs.OffLimbError` when there were no lines, otherwise skipped
+                with a warning.
+            TypeError: if the geometries are not lines, or if ``scheme`` is combined with a colour keyword it
+                sets (``clim`` / ``n_colors``).
+
+        Examples:
+            - Two line features coloured by an attribute (needs geopandas at the call site — only ever as the
+              type pyramids hands back):
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from digitalearth.three_d import Scene3D
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"flow": [3.0, 7.0]},
+                ...     geometry=[LineString([(0, 0), (1, 1), (2, 0)]),
+                ...               LineString([(0, 2), (2, 2)])],
+                ... )
+                >>> scene = Scene3D(off_screen=True)
+                >>> actor = scene.lines(gdf, column="flow", width=4.0)
+                >>> scene.layers[0][0].n_cells
+                2
+                >>> scene.close()
+
+                ```
+        """
+        return self._add_described_layer(
+            kind="lines",
+            data=features,
+            name=name,
+            visible=visible,
+            # The lines' colour comes from `column`, so a key over this layer explains that column (order 24);
+            # no column is a flat colour and publishes nothing for a key to label. The scale carries the
+            # classes the drawer cuts, from the same classifier, so a legend cannot disagree with the lines.
+            encodings=_color_encoding(features, column, scheme, k, cmap),
+            column=column,
+            scheme=scheme,
+            k=k,
+            cmap=cmap,
+            width=width,
+            color=color,
+            opacity=opacity,
+            **kwargs,
+        )
+
+    def streamlines(
+        self,
+        field: np.ndarray,
+        *,
+        name: Any = None,
+        n_points: int = 100,
+        source_center: tuple[float, float, float] | None = None,
+        source_radius: float | None = None,
+        max_length: float | None = None,
+        tube_radius: float | None = None,
+        cmap: str = "viridis",
+        **kwargs: Any,
+    ) -> Any:
+        """Trace streamlines through a 3-D vector field and register them as one layer.
+
+        Flow visualization: seed a sphere of points in the field and integrate the paths a massless particle
+        would follow, coloured by speed. This is the 3-D counterpart of a 2-D streamplot — the scientific half
+        of the tier, distinct from :meth:`vectors`, which draws a fixed arrow at each sample rather than
+        following the flow.
+
+        Args:
+            field: A ``(nz, ny, nx, 3)`` array of ``(u, v, w)`` vectors on a regular grid — the same
+                ``(level, y, x)`` axis order the volume builders use, with the three components last.
+            n_points: How many seed points to integrate from (placed on the source sphere).
+            source_center: World ``(x, y, z)`` centre of the seed sphere; ``None`` uses the grid's centre.
+            source_radius: Radius of the seed sphere; ``None`` uses a quarter of the grid's diagonal, which
+                seeds the interior rather than a single point.
+            max_length: Maximum integration length per streamline; ``None`` lets VTK choose from the grid size.
+            tube_radius: If given, render each streamline as a tube of this radius (world units) so it reads
+                against the scene; ``None`` draws one-pixel polylines.
+            cmap: Colormap for the speed (vector magnitude) the streamlines are coloured by.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
+
+        Returns:
+            The registered :class:`pyvista.Actor` for the streamline mesh, or ``None`` when the field seeded
+            no streamlines (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+
+        Raises:
+            ValueError: if ``field`` is not a ``(nz, ny, nx, 3)`` array. Also — only under ``strict=True`` —
+                :class:`~digitalearth.base.crs.OffLimbError` when nothing integrated, otherwise skipped with a
+                warning.
+
+        Examples:
+            - Trace a simple rotational field:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.three_d import Scene3D
+                >>> ax = np.linspace(-1, 1, 10)
+                >>> x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+                >>> field = np.stack([-y, x, np.zeros_like(z)], axis=-1)
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.streamlines(field, n_points=40, tube_radius=0.02)
+                >>> len(scene.layers)
+                1
+                >>> scene.close()
+
+                ```
+        """
+        return self._add_described_layer(
+            kind="streamlines",
+            data=field,
+            name=name,
+            n_points=n_points,
+            source_center=source_center,
+            source_radius=source_radius,
+            max_length=max_length,
+            tube_radius=tube_radius,
             cmap=cmap,
             **kwargs,
         )
@@ -468,8 +784,14 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
     prisms: list[pv.PolyData] = []
     for i, geom in enumerate(geoms):
         h = _finite_height(heights, height, i)
-        for ring in _exterior_rings(geom):
-            prism = _extrude_ring(ring, h)
+        for exterior, interiors in _polygon_parts(geom):
+            # A solid footprint keeps the exact geometry it always had; a footprint with holes is carved
+            # through (#199) rather than filled.
+            prism = (
+                _extrude_ring(exterior, h)
+                if not interiors
+                else _extrude_polygon(exterior, interiors, h)
+            )
             if scalars is not None:
                 prism.cell_data[VALUE] = np.full(prism.n_cells, scalars[i])
             prisms.append(prism)
@@ -482,3 +804,147 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
     if colours is None:
         return merged, scene.plotter.add_mesh(merged, scalars=None, cmap=cmap, **props)
     return merged, scene.plotter.add_mesh(merged, scalars=VALUE, **style, **props)
+
+
+#: The point-data array name the vector field is attached to the streamline grid under.
+_FLOW = "vectors"
+#: The scalar name the per-point speed is stored under for colouring the streamlines.
+_SPEED = "speed"
+
+
+def draw_streamlines(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Integrate the streamlines a `streamlines` layer describes through its vector field.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: the ``(nz, ny, nx, 3)`` vector field.
+        layer: The layer's description, whose props carry the seeding, the tube radius and the colormap.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when nothing integrated and the scene is not `strict`.
+
+    Raises:
+        ValueError: if the field is not a ``(nz, ny, nx, 3)`` array.
+        OffLimbError: when nothing integrated and the scene is `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    n_points = int(props.pop("n_points", 100))
+    source_center = props.pop("source_center", None)
+    source_radius = props.pop("source_radius", None)
+    max_length = props.pop("max_length", None)
+    tube_radius = props.pop("tube_radius", None)
+    cmap = props.pop("cmap", "viridis")
+
+    field = np.asarray(data, dtype="float64")
+    if field.ndim != 4 or field.shape[3] != 3:
+        raise ValueError(
+            f"streamlines expects a (nz, ny, nx, 3) vector field, got shape {field.shape}"
+        )
+    nz, ny, nx, _ = field.shape
+
+    import pyvista as pv
+
+    # Dimensions (nx, ny, nz) put lon→X, lat→Y, level→Z, matching the volume builders; a C-order ravel of a
+    # [z, y, x] array varies x fastest, which is exactly VTK's point order for that grid, so the vectors line
+    # up with the points without a transpose.
+    grid = pv.ImageData(dimensions=(nx, ny, nz))
+    grid.point_data[_FLOW] = field.reshape(-1, 3)
+    seed = {
+        "n_points": n_points,
+        "source_center": tuple(source_center)
+        if source_center is not None
+        else grid.center,
+        # A quarter of the diagonal seeds the interior; VTK's own default radius can collapse to a point and
+        # integrate nothing on a small grid.
+        "source_radius": float(source_radius)
+        if source_radius is not None
+        else float(grid.length) / 4.0,
+    }
+    if max_length is not None:
+        seed["max_length"] = float(max_length)
+    streams = grid.streamlines(_FLOW, **seed)
+
+    if streams.n_points == 0:
+        scene._skip_empty(
+            "streamlines", "no streamlines were integrated from the field"
+        )
+        return None
+
+    streams[_SPEED] = np.linalg.norm(np.asarray(streams[_FLOW]), axis=1)
+    mesh = streams.tube(radius=float(tube_radius)) if tube_radius else streams
+    return mesh, scene.plotter.add_mesh(mesh, scalars=_SPEED, cmap=cmap, **props)
+
+
+def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the polylines a `lines` layer describes.
+
+    Args:
+        scene: The scene being drawn into — its display CRS places the features, its `strict` policy decides
+            what an empty collection does.
+        data: The layer's source object: the line features to draw.
+        layer: The layer's description, whose props carry the colour column, the classification and the width.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when there were no lines and the scene is not `strict`.
+
+    Raises:
+        ValueError: if the scheme cannot classify the column.
+        TypeError: if the geometries are not lines, or a pinned colour keyword clashes with the scheme.
+        OffLimbError: when there are no lines and the scene is `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    column = props.pop("column", None)
+    scheme = props.pop("scheme", None)
+    k = props.pop("k", 5)
+    cmap = props.pop("cmap", "viridis")
+    width = props.pop("width", None)
+    color = props.pop("color", None)
+    opacity = props.pop("opacity", None)
+    gdf = scene._place(data, layer="lines")
+    geoms = gdf.geometry
+    colours = gdf[column].to_numpy() if column else None
+
+    # Classify once, per feature, before building the polylines — the same one-pass contract the extrusion
+    # keeps, reusing the cut the builder already recorded on the layer's colour encoding (review R2-L11).
+    encoding = layer.symbology.encoding("color")
+    style, scalars = _classify_or_refuse(
+        colours,
+        scheme=scheme,
+        k=k,
+        cmap=cmap,
+        pinned=props,
+        scale=None if encoding is None else encoding.scale,
+        caller="lines",
+    )
+
+    import pyvista as pv
+
+    polylines: list[pv.PolyData] = []
+    for i, geom in enumerate(geoms):
+        for coords in _line_parts(geom):
+            line = _polyline(coords)
+            if scalars is not None:
+                line.cell_data[VALUE] = np.full(line.n_cells, scalars[i])
+            polylines.append(line)
+
+    if not polylines:
+        scene._skip_empty("lines", "no line geometries to draw")
+        return None
+
+    # `width` is a screen measure (pixels), so it is `line_width`, not geometry; `color`/`opacity` are only
+    # passed when given, since `add_mesh` reads `None` for some of them as "no value" rather than "default".
+    extra: dict[str, Any] = {}
+    if width is not None:
+        extra["line_width"] = float(width)
+    if opacity is not None:
+        extra["opacity"] = float(opacity)
+    merged = pv.MultiBlock(polylines).combine()
+    if colours is None:
+        if color is not None:
+            extra["color"] = color
+        return merged, scene.plotter.add_mesh(
+            merged, scalars=None, cmap=cmap, **extra, **props
+        )
+    return merged, scene.plotter.add_mesh(
+        merged, scalars=VALUE, **style, **extra, **props
+    )

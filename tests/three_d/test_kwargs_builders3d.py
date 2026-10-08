@@ -27,7 +27,7 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 gpd = pytest.importorskip("geopandas")
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
@@ -45,6 +45,11 @@ DRAWS_WITH_KWARGS = {
     "point_cloud": "this drawer's own guard, which names the keyword and the colouring that derives it",
     "vectors": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "extruded_polygons": "`_classify_or_refuse`, which names the keyword and the scheme that derives it",
+    "points": "`add_points(cloud, scalars=SCALAR, **style, **props)` — Python's duplicate-keyword TypeError",
+    "polygons": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
+    "choropleth": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
+    "lines": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
+    "streamlines": "`add_mesh(mesh, scalars=_SPEED, **props)` — Python's duplicate-keyword TypeError",
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
     "isosurface": "`add_mesh(mesh, scalars=FIELD, **props)` — Python's duplicate-keyword TypeError",
     "globe": "geovista's own `add_mesh` call, reached with `scalars` already pinned",
@@ -64,6 +69,14 @@ NOT_A_DRAWING_CALL = {
     "save": "writes the scene that was already drawn; its keywords reach the exporter",
     "screenshot": "captures the scene that was already drawn; its keywords reach the plotter's own call",
     "show": "opens the window on the scene that was already drawn",
+    "clip_plane": "a live widget below the seam: its keywords reach add_mesh_clip_plane, not a derived style",
+    "slice_planes": "a live widget below the seam: its keywords reach add_mesh_slice, not a derived style",
+    "clip_box": "a live widget below the seam: its keywords reach add_mesh_clip_box, not a derived style",
+    "threshold": "a live widget below the seam: its keywords reach add_mesh_threshold, not a derived style",
+    "isovalue": "a live widget below the seam: its keywords reach add_mesh_isovalue, not a derived style",
+    "slider": "a live widget below the seam: its keywords reach add_slider_widget, not a derived style",
+    "enable_picking": "turns on a pick gesture; its keywords reach enable_*_picking, not a derived style",
+    "serve": "opens a live trame view of the already-described scene; its keywords reach show_trame",
 }
 
 
@@ -111,6 +124,40 @@ def _squares():
     )
 
 
+def _point_gdf():
+    """Return a GeoDataFrame of points with a numeric column (for the flat points builder)."""
+    return gpd.GeoDataFrame(
+        {"pop": [1.0, 2.0, 3.0]},
+        geometry=[Point(0, 0), Point(1, 1), Point(2, 0)],
+    )
+
+
+def _flow_field():
+    """Return a small rotational vector field.
+
+    Returns:
+        The ``(nz, ny, nx, 3)`` field a `streamlines` layer is built from.
+    """
+    ax = np.linspace(-1.0, 1.0, 8)
+    x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+    return np.stack([-y, x, np.zeros_like(z)], axis=-1)
+
+
+def _lines():
+    """Return two line features with a numeric column.
+
+    Returns:
+        The frame a `lines` layer is built from.
+    """
+    return gpd.GeoDataFrame(
+        {"flow": [3.0, 7.0]},
+        geometry=[
+            LineString([(0, 0), (1, 1), (2, 0)]),
+            LineString([(0, 2), (2, 2)]),
+        ],
+    )
+
+
 def _grid():
     """Return a small `ImageData` carrying a cell field.
 
@@ -146,6 +193,11 @@ def _draw(scene, builder: str, extra: dict):
         "extruded_polygons": lambda: scene.extruded_polygons(
             _squares(), column="pop", height=2.0, **extra
         ),
+        "lines": lambda: scene.lines(_lines(), column="flow", **extra),
+        "streamlines": lambda: scene.streamlines(_flow_field(), n_points=30, **extra),
+        "points": lambda: scene.points(_point_gdf(), column="pop", **extra),
+        "polygons": lambda: scene.polygons(_squares(), column="pop", **extra),
+        "choropleth": lambda: scene.choropleth(_squares(), column="pop", **extra),
         "volume": lambda: scene.volume(_cube(), **extra),
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),

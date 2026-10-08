@@ -40,6 +40,7 @@ thing the Core contract exists to prevent. A north arrow is not built at all: th
 its reason (a scene can be looked at from any direction, so there is no fixed north on screen).
 """
 
+import logging
 import math
 from dataclasses import replace as with_fields
 from typing import TYPE_CHECKING, Any, Self
@@ -52,10 +53,17 @@ from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.three_d.layer import drawing_props
 
+logger = logging.getLogger(__name__)
+
+#: The Natural-Earth resolutions :mod:`cleopatra.basemap.reference` publishes — the spelling the static and
+#: web tiers' coastlines/borders use too, so one resolution means one dataset on every tier.
+_NATURAL_EARTH_RESOLUTIONS: frozenset[str] = frozenset({"110m", "50m", "10m"})
+
 __all__ = [
     "DecorationMixin",
     "axis_labels",
     "axis_titles",
+    "draw_reference_lines",
     "draw_text",
     "redraw_decoration",
 ]
@@ -356,6 +364,60 @@ def redraw_decoration(scene: Any) -> None:
         _draw_axes_box(plotter, scene.display_crs, held["axes"])
     if "orientation_axes" in held:
         _draw_orientation_axes(plotter, scene.display_crs, held["orientation_axes"])
+
+
+def draw_reference_lines(
+    scene: Any, _data: Any, layer: LayerSpec
+) -> tuple[Any, Any] | None:
+    """Draw the Natural-Earth coastline or border lines a `reference_lines` layer describes.
+
+    Args:
+        scene: The scene being drawn into.
+        _data: The source slot every drawer takes, unread here — the lines come from Natural Earth, named by
+            the layer's props, so a figure holding this layer is storable with no in-memory source.
+        layer: The layer's description, whose props carry the dataset, resolution and line style.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when Natural Earth returned no drawable line and the scene is not
+        `strict`.
+
+    Raises:
+        OffLimbError: when there is nothing to draw and the scene is `strict`.
+    """
+    from cleopatra.basemap.reference import natural_earth
+
+    from digitalearth.three_d.vector import _polyline
+
+    props = drawing_props(layer.symbology.props)
+    dataset = props.pop("dataset")
+    resolution = props.pop("resolution")
+    color = props.pop("color", "#000000")
+    width = props.pop("width", 1.0)
+    opacity = props.pop("opacity", 1.0)
+    # The lines are lon/lat; reprojecting them into a projected display CRS is pyramids' job, not this tier's,
+    # so draw them as given and say so rather than silently misplacing them (the fills half of #205 waits on
+    # cleopatra#384 regardless).
+    if scene.display_crs is not None and not is_geographic(scene.display_crs):
+        logger.warning(
+            "%s: Natural-Earth reference lines are in EPSG:4326 and may not align with the scene's %r display "
+            "CRS; reproject the scene's data to a geographic CRS, or wait on the pyramids reprojection path",
+            layer.kind,
+            scene.display_crs,
+        )
+
+    import pyvista as pv
+
+    parts = [
+        np.asarray(part, dtype="float64") for part in natural_earth(dataset, resolution)
+    ]
+    lines = [_polyline(part) for part in parts if len(part) >= 2]
+    if not lines:
+        scene._skip_empty(layer.kind, f"natural_earth({dataset!r}) returned no lines")
+        return None
+    merged = pv.MultiBlock(lines).combine()
+    return merged, scene.plotter.add_mesh(
+        merged, color=color, line_width=float(width), opacity=float(opacity), **props
+    )
 
 
 def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
@@ -732,3 +794,135 @@ class DecorationMixin(_MixinBase):
             **kwargs,
         )
         return self
+
+    def coastlines(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Any = None,
+        color: str = "#000000",
+        width: float = 1.0,
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Any:
+        """Draw Natural-Earth coastlines as reference lines in the scene (TD-5b, #205).
+
+        Reference geography was reachable only inside :meth:`~digitalearth.three_d.globe.GlobeMixin.globe`,
+        where geovista traces the shoreline onto the sphere. This draws it in an ordinary (non-globe) scene —
+        a terrain, say — from the same ``cleopatra.basemap.reference`` Natural-Earth coordinates the static and
+        web tiers read, as 3-D polylines on the ground plane. The lines are in geographic coordinates
+        (EPSG:4326); over a scene whose display CRS is projected they are drawn but warned about, because
+        reprojecting them is pyramids' job and the land/ocean **polygon fills** half of #205 is still blocked
+        upstream on cleopatra#384.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: Layer id; ``None`` numbers it ``coastlines``.
+            color: Line colour.
+            width: Line width in screen pixels.
+            opacity: Line opacity in ``[0, 1]``.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor, or ``None`` when Natural Earth returned no lines (see ``strict``).
+
+        Raises:
+            ValueError: if ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``.
+        """
+        return self._reference_lines(
+            "coastline",
+            "coastlines",
+            resolution,
+            name=name,
+            color=color,
+            width=width,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def borders(
+        self,
+        resolution: str = "110m",
+        *,
+        name: Any = None,
+        color: str = "#777777",
+        width: float = 1.0,
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Any:
+        """Draw Natural-Earth country borders as reference lines in the scene (TD-5b, #205).
+
+        The shoreline counterpart :meth:`coastlines` for country boundaries — the same line path over the
+        ``borders`` Natural-Earth dataset.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            name: Layer id; ``None`` numbers it ``borders``.
+            color: Line colour.
+            width: Line width in screen pixels.
+            opacity: Line opacity in ``[0, 1]``.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor, or ``None`` when Natural Earth returned no lines (see ``strict``).
+
+        Raises:
+            ValueError: if ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``.
+        """
+        return self._reference_lines(
+            "borders",
+            "borders",
+            resolution,
+            name=name,
+            color=color,
+            width=width,
+            opacity=opacity,
+            visible=visible,
+        )
+
+    def _reference_lines(
+        self,
+        dataset: str,
+        prefix: str,
+        resolution: str,
+        *,
+        name: Any,
+        color: str,
+        width: float,
+        opacity: float,
+        visible: bool,
+    ) -> Any:
+        """Register one Natural-Earth line layer — a coastline or a border.
+
+        Args:
+            dataset: The Natural-Earth dataset name cleopatra takes — ``"coastline"`` or ``"borders"``.
+            prefix: The id the layer is numbered under when ``name`` is ``None``.
+            resolution: One of ``"110m"``, ``"50m"`` or ``"10m"``.
+            name: The caller's layer id, or ``None`` to use ``prefix``.
+            color: Line colour.
+            width: Line width in screen pixels.
+            opacity: Line opacity in ``[0, 1]``.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor, or ``None`` when Natural Earth returned no lines.
+
+        Raises:
+            ValueError: for an unknown resolution.
+        """
+        if resolution not in _NATURAL_EARTH_RESOLUTIONS:
+            raise ValueError(
+                f"{prefix}() resolution={resolution!r} must be one of "
+                f"{sorted(_NATURAL_EARTH_RESOLUTIONS)} — the resolutions Natural Earth publishes"
+            )
+        return self._add_described_layer(
+            kind="reference_lines",
+            data=None,
+            name=name if name is not None else prefix,
+            visible=visible,
+            dataset=dataset,
+            resolution=resolution,
+            color=color,
+            width=width,
+            opacity=opacity,
+        )

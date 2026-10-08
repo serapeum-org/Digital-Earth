@@ -183,8 +183,8 @@ class TestDrawingFromTheDescription:
 
     def test_a_kind_the_tier_cannot_draw_is_refused_by_name(self, scene):
         """A figure written for another backend names what it wanted drawn."""
-        with pytest.raises(KeyError, match="does not draw 'choropleth'"):
-            drawer_for("choropleth")
+        with pytest.raises(KeyError, match="does not draw 'hexbin'"):
+            drawer_for("hexbin")
 
     def test_the_renderer_holds_what_it_drew(self, scene):
         """A layer id reaches the mesh and the actor behind it."""
@@ -806,7 +806,7 @@ class TestTheRemainingArms:
         scene.terrain(get_source(_dem()), name="a")
         figure = scene.figure_spec
         refused = with_fields(
-            figure, layers=figure.layers.add(LayerSpec("chor", "choropleth"))
+            figure, layers=figure.layers.add(LayerSpec("chor", "hexbin"))
         )
         with pytest.raises(KeyError, match="does not draw"):
             scene._change(refused)
@@ -829,7 +829,7 @@ class TestTheRemainingArms:
 
         figure = scene.figure_spec
         tree = figure.layers.add(LayerSpec("a", "terrain", source_id="a")).add(
-            LayerSpec("chor", "choropleth", source_id="a")
+            LayerSpec("chor", "hexbin", source_id="a")
         )
         sources = {"a": DataRef.of(get_source(_dem()), name="h2-probe")}
         refused = with_fields(figure, layers=tree, sources=sources)
@@ -849,7 +849,7 @@ class TestTheRemainingArms:
         scene.terrain(get_source(_dem()), name="a")
         figure = scene.figure_spec
         refused = with_fields(
-            figure, layers=figure.layers.add(LayerSpec("chor", "choropleth"))
+            figure, layers=figure.layers.add(LayerSpec("chor", "hexbin"))
         )
         with pytest.raises(KeyError):
             scene._change(refused)

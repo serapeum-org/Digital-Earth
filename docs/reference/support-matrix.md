@@ -13,7 +13,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | --- | --- | --- | --- | --- |
 | `basemap` | ✓ | ✓ | ✓ | — |
 | `borders` | ✓ | — | ✓ | — |
-| `choropleth` | ✓ | ✓ | ✓ | — |
+| `choropleth` | ✓ | ✓ | ✓ | ✓ |
 | `clusters` | — | ✓ | — | — |
 | `coastlines` | ✓ | — | ✓ | ✓ |
 | `contours` | ✓ | ✓ | ✓ | — |
@@ -30,18 +30,19 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `labels` | ✓ | ✓ | ✓ | — |
 | `lakes` | ✓ | — | ✓ | — |
 | `land` | ✓ | — | ✓ | — |
-| `lines` | ✓ | ✓ | ✓ | — |
+| `lines` | ✓ | ✓ | ✓ | ✓ |
 | `mesh` | ✓ | — | ✓ | — |
 | `model` | — | ✓ | — | — |
 | `nightshade` | ✓ | — | — | — |
 | `ocean` | ✓ | — | ✓ | — |
 | `point_cloud` | — | ✓ | — | ✓ |
-| `points` | ✓ | ✓ | ✓ | — |
-| `polygons` | ✓ | ✓ | ✓ | — |
+| `points` | ✓ | ✓ | ✓ | ✓ |
+| `polygons` | ✓ | ✓ | ✓ | ✓ |
 | `raster` | ✓ | ✓ | ✓ | ✓ |
+| `reference_lines` | — | — | — | ✓ |
 | `rgb` | ✓ | ✓ | ✓ | — |
 | `rivers` | ✓ | — | ✓ | — |
-| `streamlines` | ✓ | — | ✓ | — |
+| `streamlines` | ✓ | — | ✓ | ✓ |
 | `terrain` | — | ✓ | — | ✓ |
 | `text` | ✓ | ✓ | ✓ | ✓ |
 | `tissot` | ✓ | — | — | — |
@@ -174,8 +175,6 @@ omissions with no positive counterpart on any backend, so they appear only in th
 
 - **`attribution`** — a render window has no credit line; a caller writes one beside the image it saves
 - **`basemap`** — there are no map tiles to drape under a scene drawn in three dimensions
-- **`coastline_overlay`** — a globe draws its own shoreline onto the sphere, and a flat scene has none to trace,
-  so there is no builder to add one to a scene
 - **`domain`** — a scene is framed by its camera, not by an extent, so there is no region to set
 - **`fullscreen`** — the render window is resized by the window manager, not by a control in the scene
 - **`layer_switcher`** — layers are switched by id through the scene's own API rather than from a panel

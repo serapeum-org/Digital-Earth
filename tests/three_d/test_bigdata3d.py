@@ -246,10 +246,10 @@ class TestATerrainOverTheBudgetIsDecimated:
 class TestASurfaceWithNoFacesIsDrawnWholeRatherThanDeleted:
     """`reduce_surface`'s own guard, reached by a direct call rather than through a drawn kind.
 
-    Nothing in `REDUCTIONS` routes a vertex-only mesh to the surface filter — `point_cloud` sits in
-    `UNREDUCED` for exactly this reason — but `reduce_surface` is public, so a caller's own cloud can arrive
-    at it. Triangulating one empties it, and an empty mesh drawn in place of the cloud would have deleted the
-    layer rather than thinned it, which is the one outcome a reduction must never have.
+    Nothing routes a vertex-only mesh to the surface filter — `point_cloud` reduces by subsampling
+    (`extract_points`), not by `decimate_pro` — but `reduce_surface` is public, so a caller's own cloud can
+    arrive at it. Triangulating one empties it, and an empty mesh drawn in place of the cloud would have
+    deleted the layer rather than thinned it, which is the one outcome a reduction must never have.
     """
 
     def test_triangulating_a_cloud_really_does_empty_it(self):
@@ -391,40 +391,41 @@ class TestAnIsosurfaceOverTheBudgetIsDecimated:
 class TestTheKindsWithNoRouteSaySo:
     """#207's other half: above the budget it must not hang silently. It does not reduce — it reports."""
 
-    def test_a_point_cloud_over_the_budget_is_reported_by_name(self, caplog):
-        """`decimate_pro` refuses a vertex-only mesh, so this kind has no route — and says which it is.
+    def test_a_point_cloud_over_the_budget_is_subsampled_to_it(self):
+        """#207: a cloud over the budget is thinned to at most the budget, not drawn whole.
 
-        Args:
-            caplog: Captures the warning the report logs.
+        `decimate_pro` refuses a vertex-only mesh, so a cloud is reduced by subsampling its points
+        (`extract_points` over an even stride) rather than by a surface filter.
         """
-        scene = Scene3D(off_screen=True)
-        scene.big_data_threshold = 100
-        with caplog.at_level(logging.WARNING):
-            scene.point_cloud(_points())
-        scene.close()
-        assert "point_cloud" in caplog.text, caplog.text
-
-    def test_a_point_cloud_over_the_budget_keeps_every_point(self):
-        """Nothing is quietly dropped: an unreduced kind is drawn whole, and the report is the answer."""
         scene = Scene3D(off_screen=True)
         scene.big_data_threshold = 100
         scene.point_cloud(_points())
         points = scene.mesh_of("point_cloud-1").n_points
         scene.close()
-        assert points == 5_000
+        assert points <= 100, points
 
-    def test_the_report_names_the_count_and_the_budget(self, caplog):
-        """A report a caller cannot act on is not a report; the two numbers are what they act on.
+    def test_the_subsample_is_logged_with_the_two_counts(self, caplog):
+        """A reduction a caller cannot act on is not a report; the before count and the budget are logged.
 
         Args:
-            caplog: Captures the warning the report logs.
+            caplog: Captures the INFO line the reduction logs.
         """
         scene = Scene3D(off_screen=True)
         scene.big_data_threshold = 100
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.INFO):
             scene.point_cloud(_points())
         scene.close()
+        assert "point_cloud" in caplog.text, caplog.text
         assert "5,000" in caplog.text, caplog.text
+        assert "points" in caplog.text, caplog.text
+
+    def test_a_point_cloud_under_the_budget_keeps_every_point(self):
+        """A cloud at or under the budget is drawn whole — nothing is thinned that fits."""
+        scene = Scene3D(off_screen=True)
+        scene.point_cloud(_points(10))
+        points = scene.mesh_of("point_cloud-1").n_points
+        scene.close()
+        assert points == 10
 
     def test_an_extrusion_over_the_budget_is_reported(self, caplog):
         """Prisms combine into an `UnstructuredGrid`, which PyVista gives no `decimate_pro` at all.
@@ -715,3 +716,9 @@ class TestTheSurfaceBudgetCountsTrianglesOnBothSides:
         assert drawn.n_cells < shell.n_cells, (
             f"a {shell.n_cells}-triangle mesh drew {drawn.n_cells} at a budget of {shell.n_cells - 1}"
         )
+
+
+def test_streamlines_reason_names_the_current_keyword():
+    """#F2-1: the streamlines big-data reason names max_length, not the removed max_time keyword."""
+    assert "max_time" not in UNREDUCED["streamlines"]
+    assert "max_length" in UNREDUCED["streamlines"]

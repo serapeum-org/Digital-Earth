@@ -330,11 +330,14 @@ class TestComposedClassMro:
                     "Scene3D",
                     "TerrainMixin",
                     "PointCloudMixin",
+                    "FlatMixin",
                     "VolumeMixin",
                     "VectorMixin",
                     "GlobeMixin",
                     "DecorationMixin",
                     "GuideMixin",
+                    "InteractionMixin",
+                    "ServeMixin",
                     "AnimationMixin",
                     "Scene3DBase",
                     "object",
@@ -566,7 +569,7 @@ COMPOSED_CLASSES = {
 CONTRACT_CLASS_FLOOR = 40
 CONTRACT_METHOD_FLOOR = 265
 
-#: The 3-D tier's own return convention, shared by nine builders.
+#: The 3-D tier's own return convention, shared by its data builders.
 _THREE_D_ACTOR = (
     "the 3-D tier's builders hand back the PyVista actor they made rather than the scene (round 1's M13); "
     "converting the tier is a `src/` change, not this guard's"
@@ -592,8 +595,15 @@ CONTRACT_CARVE_OUTS = {
     "digitalearth.three_d.terrain:TerrainMixin.terrain": _THREE_D_ACTOR,
     "digitalearth.three_d.vector:VectorMixin.extruded_polygons": _THREE_D_ACTOR,
     "digitalearth.three_d.vector:VectorMixin.vectors": _THREE_D_ACTOR,
+    "digitalearth.three_d.vector:VectorMixin.lines": _THREE_D_ACTOR,
+    "digitalearth.three_d.vector:VectorMixin.streamlines": _THREE_D_ACTOR,
     "digitalearth.three_d.volume:VolumeMixin.isosurface": _THREE_D_ACTOR,
     "digitalearth.three_d.volume:VolumeMixin.volume": _THREE_D_ACTOR,
+    "digitalearth.three_d.flat:FlatMixin.points": _THREE_D_ACTOR,
+    "digitalearth.three_d.flat:FlatMixin.polygons": _THREE_D_ACTOR,
+    "digitalearth.three_d.flat:FlatMixin.choropleth": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration:DecorationMixin.coastlines": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration:DecorationMixin.borders": _THREE_D_ACTOR,
 }
 
 

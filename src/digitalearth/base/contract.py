@@ -383,17 +383,16 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
         "3d": MappingProxyType(
             {
                 "field": "a raster becomes terrain, a volume or a globe here, each its own builder",
-                "points": (
-                    "positioned 3-D points are point_cloud() here, which takes a z per point; a flat points "
-                    "builder is unscheduled"
-                ),
                 "add_layer": (
                     "a caller's own object is a PyVista mesh or volume, so it is added with add_mesh() or "
                     "add_volume(), each of which records a custom:pyvista layer"
                 ),
-                "lines": "line features in three dimensions — #201",
-                "polygons": "polygons are drawn extruded here; a flat fill is unscheduled",
-                "choropleth": "a classified fill follows polygons, and is unscheduled with them",
+                # `lines` (#201), `points`, `polygons` and `choropleth` were listed here, each as "unscheduled"
+                # or "extruded only / a flat fill is unscheduled". They are built now: `Scene3D.lines` draws
+                # 3-D polylines (`digitalearth.three_d.vector.draw_lines`), and `points`/`polygons`/
+                # `choropleth` draw flat features on the ground plane (`digitalearth.three_d.flat`), each over
+                # its own renderer with the Core keywords, so all four are drawn kinds
+                # (`three_d/capabilities.py`) rather than pending ones.
                 # `colorbar` ("the scalar bar is PyVista's, and becomes a guide on the encoding") and
                 # `legend` ("a keyed list beside a scene") were listed here against order 24, which has now
                 # built both: `digitalearth.three_d.guides` records a `Guide` on the layer's own colour

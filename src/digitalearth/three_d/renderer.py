@@ -40,12 +40,18 @@ logger = logging.getLogger(__name__)
 DRAWN_KINDS: tuple[str, ...] = (
     "terrain",
     "point_cloud",
+    "points",
+    "polygons",
+    "choropleth",
     "volume",
     "isosurface",
     "vectors",
     "extrusion",
+    "lines",
+    "streamlines",
     "raster",
     "coastlines",
+    "reference_lines",
     "text",
     "custom:pyvista",
 )
@@ -79,10 +85,10 @@ def drawer_for(kind: str) -> Any:
         - A kind from another tier is refused by name:
             ```python
             >>> from digitalearth.three_d.renderer import drawer_for
-            >>> drawer_for("choropleth")  # doctest: +ELLIPSIS
+            >>> drawer_for("hexbin")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            KeyError: "the 3-D tier does not draw 'choropleth' layers; it draws [...]"
+            KeyError: "the 3-D tier does not draw 'hexbin' layers; it draws [...]"
 
             ```
     """
@@ -103,6 +109,7 @@ def drawer_for(kind: str) -> Any:
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.
     from digitalearth.three_d import (
         decoration,
+        flat,
         globe,
         point_cloud,
         terrain,
@@ -113,12 +120,18 @@ def drawer_for(kind: str) -> Any:
     drawers = {
         "terrain": terrain.draw_terrain,
         "point_cloud": point_cloud.draw_point_cloud,
+        "points": flat.draw_points,
+        "polygons": flat.draw_polygons,
+        "choropleth": flat.draw_polygons,
         "volume": volume.draw_volume,
         "isosurface": volume.draw_isosurface,
         "vectors": vector.draw_vectors,
         "extrusion": vector.draw_extruded_polygons,
+        "lines": vector.draw_lines,
+        "streamlines": vector.draw_streamlines,
         "raster": globe.draw_globe,
         "coastlines": globe.draw_coastlines,
+        "reference_lines": decoration.draw_reference_lines,
         "text": decoration.draw_text,
         "custom:pyvista": draw_custom,
     }

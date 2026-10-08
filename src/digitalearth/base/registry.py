@@ -1288,6 +1288,12 @@ _BUILT_IN_KINDS = (
         "overlay",
     ),
     (
+        "reference_lines",
+        "none",
+        "Natural Earth coastlines/borders as 3-D reference lines — 3-D coastlines/borders",
+        "overlay",
+    ),
+    (
         "land",
         "none",
         "Natural Earth land — land",

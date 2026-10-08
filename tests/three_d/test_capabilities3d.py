@@ -25,7 +25,7 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 import geopandas as gpd  # noqa: E402
-from shapely.geometry import Polygon  # noqa: E402
+from shapely.geometry import LineString, Polygon  # noqa: E402
 
 from digitalearth.base.spec import Scale  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
@@ -82,6 +82,33 @@ def _polygons() -> gpd.GeoDataFrame:
     )
 
 
+def _lines() -> gpd.GeoDataFrame:
+    """Return two line features with a numeric column.
+
+    Returns:
+        The collection `lines` is given.
+    """
+    return gpd.GeoDataFrame(
+        {"value": [1.0, 2.0]},
+        geometry=[
+            LineString([(4.0, 52.0), (5.0, 52.5), (6.0, 52.0)]),
+            LineString([(4.0, 53.0), (6.0, 53.0)]),
+        ],
+        crs=4326,
+    )
+
+
+def _flow_field() -> np.ndarray:
+    """Return a small rotational ``(nz, ny, nx, 3)`` vector field.
+
+    Returns:
+        The field a `streamlines` layer is built from.
+    """
+    ax = np.linspace(-1.0, 1.0, 8)
+    x, y, z = np.meshgrid(ax, ax, ax, indexing="ij")
+    return np.stack([-y, x, np.zeros_like(z)], axis=-1)
+
+
 def _dem():
     """Return the committed raster.
 
@@ -103,12 +130,18 @@ def _dem():
 BUILDERS = {
     "terrain": lambda scene: scene.terrain(_dem()),
     "point_cloud": lambda scene: scene.point_cloud(_cloud()),
+    "points": lambda scene: scene.points(_cloud()),
+    "polygons": lambda scene: scene.polygons(_polygons()),
+    "choropleth": lambda scene: scene.choropleth(_polygons(), column="value"),
     "volume": lambda scene: scene.volume(_cube()),
     "isosurface": lambda scene: scene.isosurface(_cube(), isosurfaces=[0.5]),
     "vectors": lambda scene: scene.vectors(np.zeros((2, 3)), np.ones((2, 3))),
     "extrusion": lambda scene: scene.extruded_polygons(_polygons(), height=10.0),
+    "lines": lambda scene: scene.lines(_lines()),
+    "streamlines": lambda scene: scene.streamlines(_flow_field(), n_points=30),
     "raster": lambda scene: scene.globe(_dem()),
     "coastlines": lambda scene: scene.globe(_dem()),
+    "reference_lines": lambda scene: scene.coastlines(),
     "text": lambda scene: scene.text(0.0, 0.0, "here"),
     "custom:pyvista": lambda scene: scene.add_mesh(pv.Sphere()),
 }
@@ -344,13 +377,15 @@ class TestARefusalCarriesTheDeclaredReason:
         """The other half: no declared reason, no sentence written at the call site.
 
         Test scenario:
-            The tier says nothing about `choropleth` — it is simply another tier's kind — so the refusal
-            names it and lists what this tier draws, and stops there. If the clause were unconditional it
-            would be the hand-written sentence #294 exists to remove, wearing the declaration's clothes.
+            The tier says nothing about `hexbin` — it is simply another tier's kind — so the refusal names it
+            and lists what this tier draws, and stops there. If the clause were unconditional it would be the
+            hand-written sentence #294 exists to remove, wearing the declaration's clothes. (`choropleth` used
+            to be the example here; it is a drawn 3-D kind now that the flat builders landed, so a kind the
+            tier still does not draw stands in.)
         """
-        assert CAPABILITIES.reason("choropleth") is None, CAPABILITIES.absent
+        assert CAPABILITIES.reason("hexbin") is None, CAPABILITIES.absent
         with pytest.raises(KeyError) as refused:
-            drawer_for("choropleth")
+            drawer_for("hexbin")
         assert "—" not in str(refused.value), str(refused.value)
 
 

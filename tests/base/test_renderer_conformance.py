@@ -860,7 +860,7 @@ class ThreeDContract(RendererContract):
         # apart.
         tree = figure.layers.add(
             LayerSpec("second", "terrain", source_id=drawable.source_id)
-        ).add(LayerSpec("refused", "choropleth", source_id=drawable.source_id))
+        ).add(LayerSpec("refused", "hexbin", source_id=drawable.source_id))
         return with_fields(figure, layers=tree)
 
     def apply_figure(self, tier, figure) -> None:

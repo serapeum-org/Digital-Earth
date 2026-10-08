@@ -19,13 +19,6 @@ styled layer is fully described only for the tier that drew it.
 - **matplotlib** — the caller's keywords stay in props['opts'] and go to cleopatra as they are; nothing on this
   tier folds them into declared channels
 
-## Cannot build a layer already hidden
-
-`visible=False` at build time is not honoured; a layer on this tier is hidden with `set_visible()` after it is built.
-
-- **3d** — visible= is not a parameter of its builders; it reaches PyVista through **kwargs, which raises
-  TypeError, so a 3-D layer is hidden with set_visible() after it is built
-
 ## No portable classification
 
 The tier publishes no class edges for a classified layer, so a figure carries none and a legend cannot be reproduced

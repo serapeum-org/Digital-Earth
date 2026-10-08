@@ -111,12 +111,94 @@ def test_vertical_scale_stretches_the_mesh():
     assert tall_h == pytest.approx(5.0 * flat_h)
 
 
-def test_terrain_handles_nan_nodata():
-    """NaN (masked nodata) cells do not crash the mesh build and are filled to the surface floor."""
+def test_terrain_drapes_a_texture():
+    """#202: terrain(texture=) drapes an image over the relief with planar UV, publishing no colour key."""
+    dem = np.add.outer(np.linspace(0.0, 1.0, 12), np.linspace(0.0, 1.0, 12))
+    rgb = np.random.default_rng(0).integers(0, 255, size=(8, 8, 3), dtype=np.uint8)
+    scene = Scene3D(off_screen=True)
+    scene.terrain(get_source(dem), texture=rgb)
+    mesh = scene.layers[0][0]
+    assert mesh.active_texture_coordinates is not None
+    assert mesh.active_texture_coordinates.shape[1] == 2
+    # A textured surface is coloured by the image, not a field, so no colour encoding is published.
+    assert scene.figure_spec.layers.get("terrain-1").symbology.encoding("color") is None
+    assert bool(scene.screenshot().any())
+    scene.close()
+
+
+def test_terrain_texture_rejects_a_non_image_array():
+    """A texture array that is not (H, W, 3|4) is refused by name."""
+    from digitalearth.three_d.terrain import _as_texture
+
+    flat = np.zeros((8, 8))
+    with pytest.raises(ValueError, match=r"\(H, W, 3\|4\)"):
+        _as_texture(flat)
+
+
+def test_as_texture_accepts_a_band_first_array():
+    """A band-first (3, H, W) array — a pyramids RGB raster's values — is transposed to band-last."""
+    from digitalearth.three_d.terrain import _as_texture
+
+    band_first = np.random.default_rng(0).integers(
+        0, 255, size=(3, 8, 8), dtype=np.uint8
+    )
+    texture = _as_texture(band_first)
+    assert texture.to_array().shape[:2] == (8, 8)
+
+
+def test_as_texture_scales_a_float_array_to_bytes():
+    """A non-uint8 (float) image is scaled into 0-255 by its own range."""
+    from digitalearth.three_d.terrain import _as_texture
+
+    rng = np.random.default_rng(1)
+    floats = rng.random((8, 8, 3))  # in [0, 1)
+    texture = _as_texture(floats)
+    assert texture.to_array().dtype == np.uint8
+
+
+def test_as_texture_reads_an_image_path(tmp_path):
+    """A path is read through PyVista's own image reader.
+
+    Args:
+        tmp_path: Supplies a temporary PNG to read back.
+    """
+    import matplotlib.image as mpimg
+
+    rgb = np.random.default_rng(2).random((8, 8, 3))
+    png = tmp_path / "tex.png"
+    mpimg.imsave(str(png), rgb)
+    from digitalearth.three_d.terrain import _as_texture
+
+    texture = _as_texture(str(png))
+    assert texture.to_array().shape[2] in (3, 4)
+
+
+def test_terrain_nodata_is_a_gap_not_fabricated_ground():
+    """#200: a NaN (masked nodata) cell renders as a hole, not as flat ground at the surface floor.
+
+    The geometry must still be well-formed (no NaN coordinates, or VTK cannot build the grid), but the nodata
+    node is **blanked** so every cell touching it is hidden — a gap — and its elevation scalar stays NaN so a
+    still-visible edge reads as missing rather than as the floor value.
+    """
     dem = np.add.outer(np.linspace(0.0, 1.0, 5), np.linspace(0.0, 1.0, 5))
     dem[0, 0] = np.nan
     mesh = _terrain_mesh(dem, np.arange(5.0), np.arange(5.0), vertical_scale=1.0)
-    assert np.isfinite(mesh.points).all()  # geometry has no NaN coordinates
+
+    assert np.isfinite(
+        mesh.points
+    ).all()  # geometry has no NaN coordinates — VTK can build it
+
+    # The nodata node is blanked (VTK's hidden-point ghost flag), every finite node is not.
+    ghost = mesh.point_data["vtkGhostType"]
+    nodata = ~np.isfinite(dem.ravel(order="F"))
+    assert nodata.sum() == 1
+    assert (ghost[nodata] != 0).all()  # the one nodata node is hidden
+    assert (ghost[~nodata] == 0).all()  # no finite node is hidden
+
+    # The elevation scalar keeps the NaN, so missing data is coloured missing rather than as the floor.
+    elevation = mesh.point_data[ELEVATION]
+    assert np.isnan(elevation[nodata]).all()
+    assert np.isfinite(elevation[~nodata]).all()
 
 
 def test_vertical_unit_scale_geographic_vs_projected():
