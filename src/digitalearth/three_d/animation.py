@@ -6,7 +6,8 @@ Three deliverables on top of a built scene:
   The path is shapeable: ``factor`` sets its radius and ``shift`` lifts it along ``viewup``, which together
   decide whether near-flat terrain is looked down on or seen edge-on.
 - :meth:`record` — drive a frame-by-frame animation from a sequence of states (e.g. a ``DatasetCollection``
-  time stack), via a user ``update`` callback, to a GIF/MP4.
+  time stack), via a user ``update`` callback, to a GIF/MP4. ``clim=`` holds one colour scale across every
+  frame so a time stack does not flicker (#210).
 - :meth:`jupyter` — switch PyVista to the trame backend so the scene displays interactively in a notebook.
   That backend is process-wide, not per scene.
 
@@ -74,6 +75,84 @@ def _finalize_frames(plotter: Any) -> None:
     writer = getattr(plotter, "mwriter", None)
     if writer is not None:
         writer.close()
+
+
+def _freeze_colour_range(scene: Any, clim: tuple[float, float]) -> None:
+    """Pin every drawn layer's colour range to ``clim`` (#210).
+
+    `record`'s ``update`` callback usually re-draws a layer per frame — ``scene.terrain(frame)``,
+    ``scene.point_cloud(frame, values=…)`` — and each builder derives its own ``clim`` from *that frame's*
+    data, so the colour range jumps frame to frame and the clip flickers. Applied after each ``update`` and
+    before the frame is written, this fixes the scalar-to-colour mapping on the mesh/surface/point mappers the
+    scene currently holds, so one colour scale spans the whole animation.
+
+    It reaches the layers through :attr:`scene.renderer.drawn`, so a layer the callback removed and re-added
+    this frame is the one pinned. A ray-cast volume is skipped: its colour range is ``volume(clim=…)``'s job,
+    and because its ``SmartVolumeMapper`` *silently accepts* a new ``scalar_range`` (rather than raising), the
+    skip is an explicit ``pyvista.Volume`` check, not a caught exception. An actor exposing no settable scalar
+    range at all is tolerated by the defensive ``except``.
+
+    Args:
+        scene: The scene whose drawn layers to pin.
+        clim: The ``(low, high)`` colour range to hold for every frame.
+    """
+    import pyvista as pv
+
+    low, high = float(clim[0]), float(clim[1])
+    for _mesh, actor in scene.renderer.drawn.values():
+        if isinstance(
+            actor, pv.Volume
+        ):  # volume colour range belongs to volume(clim=), not to the freeze
+            continue
+        mapper = getattr(actor, "mapper", None)
+        if mapper is None:
+            continue
+        try:
+            mapper.scalar_range = (low, high)
+        except (
+            AttributeError,
+            TypeError,
+        ):  # an actor whose mapper exposes no settable scalar range
+            continue
+    # No separate scalar-bar update: a bar shares its mapper's lookup table, so setting ``scalar_range`` on the
+    # mapper above already moves the bar. ``plotter.update_scalar_bar_range`` would only re-set the plotter's one
+    # *active* mapper — redundant for the pinned layers, and it would stomp a skipped volume whose mapper is active.
+
+
+def _checked_clim(clim: Any) -> tuple[float, float] | None:
+    """Return ``clim`` as a validated ``(low, high)`` float pair, or ``None`` when it is ``None``.
+
+    Validated before the writer opens, so a bad range fails fast rather than part-way through a clip.
+
+    Args:
+        clim: The caller's ``clim`` — ``(low, high)`` or ``None``.
+
+    Returns:
+        The pair as floats, or ``None``.
+
+    Raises:
+        ValueError: if ``clim`` is not two finite numbers with ``low < high``.
+    """
+    if clim is None:
+        return None
+    if isinstance(
+        clim, (str, bytes)
+    ):  # a 2-char string unpacks to two items — reject it, don't read it as a range
+        raise ValueError(
+            f"record() needs clim=(low, high) — two numbers — got {clim!r}"
+        )
+    try:
+        low, high = clim
+        low, high = float(low), float(high)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"record() needs clim=(low, high) — two numbers — got {clim!r}"
+        ) from exc
+    if not (np.isfinite(low) and np.isfinite(high)) or low >= high:
+        raise ValueError(
+            f"record() needs clim=(low, high) with low < high and both finite, got {clim!r}"
+        )
+    return (low, high)
 
 
 def _finite_number(value: Any, name: str) -> float:
@@ -333,11 +412,26 @@ class AnimationMixin(_MixinBase):
         update: Callable[["AnimationMixin", Any], None],
         *,
         fps: float = DEFAULT_FPS,
+        clim: tuple[float, float] | None = None,
     ) -> str:
         """Render a frame-by-frame animation driven by ``update`` and write it to a GIF/MP4.
 
         For each item in ``frames``, ``update(self, frame)`` mutates the scene (e.g. swaps the active scalars or
         re-adds a layer), then one frame is written. Typical ``frames`` is a ``DatasetCollection`` time stack.
+
+        **Freeze the colour scale with ``clim`` so a time stack does not flicker (#210).** When ``update``
+        re-draws a layer each frame, each builder derives its own colour range from that frame's data, so the
+        range moves frame to frame and the clip flickers. Passing ``clim=(low, high)`` pins the colour range on
+        every drawn colour-mapped layer (the scalar bar follows its mapper) after each ``update``, so one scale
+        spans the whole animation — compute it once over the full stack (e.g.
+        ``(stack.values.min(), stack.values.max())``) and hand it in. ``None`` (the default) keeps the per-frame
+        behaviour. A ray-cast volume's range is :meth:`~digitalearth.three_d.volume.VolumeMixin.volume`'s own
+        ``clim=`` instead.
+
+        Scope: ``clim`` pins **every** colour-mapped layer in the scene, not only the one ``update`` animates.
+        That is what the time-stack use case wants (there is one data layer), but in a scene that holds a second
+        colour-mapped layer on a different scale, that layer is clamped to ``clim`` too for the recording. To hold
+        one layer while others keep their own range, build them in separate scenes.
 
         Args:
             frames: Iterable of per-frame states passed one at a time to ``update``.
@@ -346,9 +440,15 @@ class AnimationMixin(_MixinBase):
             fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one
                 speed shared with every other tier's animation entry point, declared once in
                 :mod:`digitalearth.base.animation`; this method used to default to ``8``.
+            clim: ``(low, high)`` colour range held fixed across every frame, applied to **every** colour-mapped
+                layer in the scene (a ray-cast volume is excepted — its range stays ``volume(clim=)``'s).
+                ``None`` lets each frame keep the range its own data drives (the pre-#210 behaviour).
 
         Returns:
             The ``path`` written.
+
+        Raises:
+            ValueError: if ``clim`` is given but is not two finite numbers with ``low < high``.
 
         Examples:
             - Animate a growing terrain over three frames:
@@ -369,11 +469,39 @@ class AnimationMixin(_MixinBase):
                 True
 
                 ```
+            - Freeze the colour scale across frames whose data ranges differ, so a time stack does not
+              flicker: two frames (elevation ~0..2, then ~0..50) re-draw the layer, but ``clim=(0, 50)``
+              keeps the drawn range fixed rather than letting it follow the last frame:
+                ```python
+                >>> import numpy as np, os, tempfile
+                >>> from digitalearth.three_d import Scene3D
+                >>> from digitalearth.base.sources import get_source
+                >>> def swap(s, array):
+                ...     s.remove_layer("dem")
+                ...     s.terrain(get_source(array), name="dem")
+                >>> low = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+                >>> high = low * 50.0
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(low), name="dem")
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     _ = scene.record(
+                ...         [low, high], os.path.join(folder, "stack.gif"), swap, clim=(0.0, 50.0)
+                ...     )
+                >>> tuple(scene.actor_of("dem").mapper.scalar_range)
+                (0.0, 50.0)
+                >>> scene.close()
+
+                ```
         """
+        frozen = _checked_clim(clim)
         _open_writer(self.plotter, path, fps)
         try:
             for frame in frames:
                 update(self, frame)
+                if frozen is not None:
+                    # After `update` (which may have re-drawn the layer), before the frame is captured, so the
+                    # colour scale is the same every frame rather than whatever this frame's data derived.
+                    _freeze_colour_range(self, frozen)
                 self.plotter.write_frame()
         finally:
             _finalize_frames(

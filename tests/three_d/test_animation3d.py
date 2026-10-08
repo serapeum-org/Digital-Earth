@@ -12,7 +12,13 @@ pytest.importorskip("imageio")
 
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D, animation
-from digitalearth.three_d.animation import _finite_number, _open_writer, _up_vector
+from digitalearth.three_d.animation import (
+    _checked_clim,
+    _finite_number,
+    _freeze_colour_range,
+    _open_writer,
+    _up_vector,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -653,3 +659,145 @@ def test_up_vector_and_finite_number_reject_without_a_scene():
         _finite_number(infinity, "factor")
     with pytest.raises(ValueError, match="3-component viewup"):
         _up_vector([1.0, 2.0])
+
+
+def test_freeze_colour_range_pins_every_layer_mapper():
+    """#210: _freeze_colour_range fixes the scalar-to-colour range on the drawn layer's mapper."""
+    scene = _terrain_scene()
+    _freeze_colour_range(scene, (0.0, 123.0))
+    assert tuple(scene.layers[0][1].mapper.scalar_range) == (0.0, 123.0)
+    scene.close()
+
+
+def _redraw_dem(scene, array):
+    """Re-add the 'dem' terrain from a per-frame array (the flicker-prone update pattern)."""
+    scene.remove_layer("dem")
+    scene.terrain(get_source(array), name="dem")
+
+
+def test_record_clim_freezes_the_scale_on_every_frame(tmp_path):
+    """#210: clim= holds one colour range on EVERY frame, not merely the last.
+
+    Two frames whose own data differ (elevation ~0..2, then ~0..100). The range is captured at each
+    ``write_frame``; with clim=(0, 50) every captured range is (0, 50) — including the *first* frame, whose
+    native ~0..2 range a last-frame-only freeze would leave unpinned. That per-frame hold is the anti-flicker
+    guarantee, which a final-state-only assertion cannot distinguish from no freeze.
+    """
+    low_range = np.add.outer(np.linspace(0.0, 1.0, 8), np.linspace(0.0, 1.0, 8))
+    high_range = np.add.outer(np.linspace(0.0, 50.0, 8), np.linspace(0.0, 50.0, 8))
+
+    scene = Scene3D(off_screen=True)
+    scene.terrain(get_source(low_range), name="dem")
+    per_frame: list[tuple] = []
+    original_write = scene.plotter.write_frame
+
+    def _capture_range():
+        per_frame.append(tuple(scene.actor_of("dem").mapper.scalar_range))
+        return original_write()
+
+    scene.plotter.write_frame = _capture_range
+    scene.record(
+        [low_range, high_range],
+        str(tmp_path / "frozen.gif"),
+        _redraw_dem,
+        clim=(0.0, 50.0),
+    )
+    scene.close()
+    assert per_frame == [(0.0, 50.0), (0.0, 50.0)], (
+        f"every frame must be frozen to (0, 50): {per_frame}"
+    )
+
+
+def test_record_without_clim_lets_the_range_follow_the_last_frame(tmp_path):
+    """The contrast: with no clim the final range reflects the last frame's own data (~0..100), not a fixed one."""
+    low_range = np.add.outer(np.linspace(0.0, 1.0, 8), np.linspace(0.0, 1.0, 8))
+    high_range = np.add.outer(np.linspace(0.0, 50.0, 8), np.linspace(0.0, 50.0, 8))
+
+    scene = Scene3D(off_screen=True)
+    scene.terrain(get_source(low_range), name="dem")
+    scene.record([low_range, high_range], str(tmp_path / "loose.gif"), _redraw_dem)
+    _low, high = scene.actor_of("dem").mapper.scalar_range
+    scene.close()
+    assert high > 50.0  # the last frame's ~0..100 range, not frozen
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        (5.0, 5.0),
+        (10.0, 1.0),
+        (float("nan"), 1.0),
+        (1.0,),
+        (1.0, 2.0, 3.0),
+        "xy",
+        "12",
+        b"12",
+    ],
+)
+def test_checked_clim_rejects_a_bad_range(bad):
+    """clim must be two finite numbers with low < high; anything else — including a 2-char string — is a
+    ValueError naming clim (a string must not be read as a two-element range)."""
+    with pytest.raises(ValueError, match="clim"):
+        _checked_clim(bad)
+
+
+def test_checked_clim_passes_none_and_a_good_pair_through():
+    """None stays None (per-frame behaviour); a valid pair comes back as floats."""
+    assert _checked_clim(None) is None
+    assert _checked_clim((0, 10)) == (0.0, 10.0)
+
+
+def test_freeze_colour_range_leaves_a_volume_to_its_own_clim():
+    """#210: a ray-cast volume's range is `volume(clim=)`'s job, so the freeze must skip it, not force-pin it.
+
+    A real pyvista `Volume` mapper silently *accepts* a new `scalar_range`, so a loop that only guards on an
+    exception would override the volume's own range. The freeze detects the `Volume` actor and skips it; this
+    test asserts the volume's range is byte-for-byte unchanged by a freeze to a different range.
+    """
+    ax = np.linspace(-2.0, 2.0, 12)
+    xx, yy, zz = np.meshgrid(ax, ax, ax, indexing="ij")
+    cube = np.exp(-(xx**2 + yy**2 + zz**2))
+
+    scene = Scene3D(off_screen=True)
+    scene.volume(cube, name="vol")
+    before = tuple(scene.renderer.drawn["vol"][1].mapper.scalar_range)
+    _freeze_colour_range(scene, (0.0, 5.0))
+    after = tuple(scene.renderer.drawn["vol"][1].mapper.scalar_range)
+    assert after == before, (
+        f"the volume range must be untouched by the freeze: {before} -> {after}"
+    )
+    scene.close()
+
+
+def test_freeze_colour_range_skips_an_actor_without_a_mapper():
+    """A layer whose actor exposes no mapper (`mapper is None`) is skipped without raising."""
+
+    class _Actor:
+        mapper = None
+
+    scene = Scene3D(off_screen=True)
+    scene.renderer._drawn["no-mapper"] = (object(), _Actor())
+    _freeze_colour_range(scene, (0.0, 5.0))  # must not raise
+    scene.close()
+
+
+def test_freeze_colour_range_tolerates_a_mapper_that_refuses_a_range():
+    """A non-volume actor whose mapper rejects `scalar_range` is tolerated (the defensive `except`)."""
+
+    class _RefusesRange:
+        @property
+        def scalar_range(self):
+            return (0.0, 1.0)
+
+        @scalar_range.setter
+        def scalar_range(self, value):
+            raise TypeError("this mapper exposes no settable scalar range")
+
+    class _Actor:
+        def __init__(self, mapper):
+            self.mapper = mapper
+
+    scene = Scene3D(off_screen=True)
+    scene.renderer._drawn["refuses"] = (object(), _Actor(_RefusesRange()))
+    _freeze_colour_range(scene, (0.0, 5.0))  # must not raise
+    scene.close()
