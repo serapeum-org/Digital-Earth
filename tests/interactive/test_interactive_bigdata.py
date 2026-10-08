@@ -209,6 +209,35 @@ class TestDatashadeFrozenScale:
                 dynamic=False,
             )
 
+    def test_eq_hist_span_guard_is_case_insensitive(self, m, big_points):
+        """`cnorm="EQ_HIST"` is caught too, not only the lower-case spelling (review R2-L1).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        with pytest.raises(ValueError, match="eq_hist.*rasterize"):
+            m.datashade(
+                big_points,
+                column="value",
+                clim=(0.0, 1.0),
+                cnorm="EQ_HIST",
+                dynamic=False,
+            )
+
+    def test_span_with_categorical_color_key_is_refused(self, m, big_points):
+        """A frozen span on a categorical shade is refused — a span is meaningless there (review R2-L1).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture (its ``cls`` column is categorical).
+        """
+        key = {"a": "#ff0000", "b": "#00ff00", "c": "#0000ff"}
+        with pytest.raises(ValueError, match="categorical shade"):
+            m.datashade(
+                big_points, column="cls", color_key=key, clim=(0.0, 1.0), dynamic=False
+            )
+
     def test_datashade_with_a_span_renders_without_the_eq_hist_trap(
         self, m, big_points
     ):

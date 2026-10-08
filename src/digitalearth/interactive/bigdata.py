@@ -32,27 +32,39 @@ from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 _AGGREGATORS = ("count", "any", "sum", "mean", "min", "max", "std", "var", "count_cat")
 
 
-def _reject_eq_hist_span(clim: Any, cnorm: Any, method: str) -> None:
-    """Refuse a frozen span under eq-hist shading, pointing at the builder that supports it (IN-4, M2).
+def _reject_invalid_span(clim: Any, cnorm: Any, color_key: Any, method: str) -> None:
+    """Refuse a frozen span the shaded path cannot honour, with an actionable message (IN-4, M2/R2-L1).
 
-    Datashader's ``shade`` raises a cryptic ``span is not (yet) valid to use with eq_hist`` when a ``clims``
-    span is passed under ``how="eq_hist"``. The shaded builders default ``cnorm`` to ``"linear"`` under a
-    span to avoid it, but an *explicit* ``cnorm="eq_hist"`` would still reach the engine — so refuse it early
-    with an actionable message rather than let the raw error surface mid-render.
+    Two combinations reach Datashader as cryptic engine errors and are refused up front instead:
+
+    * a span under eq-hist shading (``cnorm="eq_hist"``) — Datashader's ``shade`` raises
+      ``span is not (yet) valid to use with eq_hist``; the match is case-insensitive so ``"EQ_HIST"`` is
+      caught too (R2-L1);
+    * a span together with a categorical ``color_key`` — a span is a continuous range and means nothing for
+      ``count_cat`` category colours, which otherwise surfaces as a cryptic ``Invalid hex color`` (R2-L1).
 
     Args:
-        clim: The recorded span, or ``None``.
+        clim: The recorded span, or ``None`` (nothing to check when absent).
         cnorm: The recorded normalisation, or ``None``.
+        color_key: The categorical colour mapping, or ``None``.
         method: The builder name, for the message.
 
     Raises:
-        ValueError: when a span is given together with ``cnorm="eq_hist"``.
+        ValueError: when a span is given under eq-hist, or together with a categorical ``color_key``.
     """
-    if clim is not None and cnorm == "eq_hist":
+    if clim is None:
+        return
+    if str(cnorm).lower() == "eq_hist":
         raise ValueError(
             f"{method}() cannot freeze a span (clim=) under cnorm='eq_hist' — Datashader refuses it. Use "
             "rasterize(clim=..., cnorm='eq_hist'), which equalises via Bokeh's EqHistColorMapper, or pass a "
             "different cnorm (e.g. 'linear' or 'log') to this builder."
+        )
+    if color_key is not None:
+        raise ValueError(
+            f"{method}() cannot freeze a span (clim=) on a categorical shade (color_key=): a span is a "
+            "continuous range and does not apply to category colours. Drop clim, or shade a continuous "
+            "column without color_key."
         )
 
 
@@ -468,7 +480,7 @@ class BigDataMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        _reject_eq_hist_span(clim, cnorm, "datashade")
+        _reject_invalid_span(clim, cnorm, color_key, "datashade")
         if color_key is not None and aggregator == "count":
             aggregator = "count_cat"
         if aggregator == "count_cat" and column is not None:
@@ -553,7 +565,7 @@ class BigDataMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        _reject_eq_hist_span(clim, cnorm, "trajectory")
+        _reject_invalid_span(clim, cnorm, color_key, "trajectory")
         canvas: dict = {
             key: opts.pop(key) for key in ("width", "height") if key in opts
         }
