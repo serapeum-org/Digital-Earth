@@ -7,8 +7,9 @@ registered: ``play`` binds a ``panel.widgets.Player`` to its time kdim for auto-
 matplotlib backend or a client-side **scrubber** HTML that animates offline with no server.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.interactive.base import _require_holoviz
@@ -37,12 +38,52 @@ class AnimationMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
+    def frames(
+        self,
+        frames: Any,
+        *,
+        dimension: str = "frame",
+        name: str | None = None,
+        visible: bool = True,
+    ) -> Self:
+        """Register any sequence of elements as one animatable **temporal layer** (IN-12).
+
+        The Selection-frame layer model the gap names: ``play``/``save_animation`` could only drive the
+        raster ``hv.DynamicMap`` a :meth:`~digitalearth.interactive.temporal.TemporalMixin.timecube` built,
+        so "animate any temporal layer" was unreachable for, say, a time-varying *vector* layer. This folds
+        an arbitrary frame set — a mapping ``{key: element}`` or a plain sequence — into one ``hv.HoloMap``
+        keyed by ``dimension``, a selectable-by-key layer that :meth:`play` and :meth:`save_animation` then
+        animate exactly like a time cube, whatever the element type.
+
+        Args:
+            frames: A ``{key: element}`` mapping (keys become the frame selector values, e.g. datetimes) or a
+                sequence of elements (enumerated 0, 1, 2, …). Each element is any HoloViews/GeoViews element.
+            dimension: The key dimension's name — the axis the player/scrubber steps along.
+            name: The caller's own name for the layer, used as its id and label; ``None`` generates one, and
+                a name already on the map is suffixed ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn; ``False`` builds and describes it hidden (#327).
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``frames`` is empty — there is nothing to animate.
+        """
+        _gv, hv = _require_holoviz()
+        items = dict(frames) if isinstance(frames, Mapping) else dict(enumerate(frames))
+        if not items:
+            raise ValueError("frames() needs at least one frame to animate")
+        holomap = hv.HoloMap(items, kdims=[dimension])
+        self.add_layer(holomap, name=name, visible=visible, kind="custom:holoviews")
+        return self
+
     def _animatable_layers(self) -> list:
         """Return every temporal layer that can be animated, as ``(layer_id, element)`` (IN-12).
 
-        A temporal layer is a registered ``hv.DynamicMap`` with key dimensions — a ``timecube`` today, and
-        any other slider-driven layer a future builder registers. Listing **all** of them is what lifts the
-        old "first ``DynamicMap`` only" limit: a map with two time layers can animate either by id.
+        A temporal layer is a registered ``hv.DynamicMap`` **or ``hv.HoloMap``** with key dimensions — a
+        ``timecube`` or a :meth:`frames` layer today, and any other slider-driven layer a future builder
+        registers. Listing **all** of them is what lifts the old "first ``DynamicMap`` only" limit: a map
+        with two temporal layers (of any element type) can animate either by id.
 
         Returns:
             The animatable layers in draw order, each as ``(layer_id, element)``.
@@ -51,7 +92,7 @@ class AnimationMixin(_MixinBase):
         return [
             (layer_id, element)
             for layer_id, element in zip(self.layer_ids, self.layers)
-            if isinstance(element, hv.DynamicMap) and element.kdims
+            if isinstance(element, (hv.DynamicMap, hv.HoloMap)) and element.kdims
         ]
 
     def _time_dynamicmap(self, layer: str | None = None) -> Any:
@@ -93,6 +134,10 @@ class AnimationMixin(_MixinBase):
             An ``hv.HoloMap`` over the same kdim — exportable as a finite animation.
         """
         gv, hv = _require_holoviz()
+        # A frames() layer is already a finite HoloMap — return it unchanged. Only a lazy DynamicMap (a
+        # timecube) needs materialising, and its frame keys live on the kdim's explicit `.values`.
+        if isinstance(dmap, hv.HoloMap) and not isinstance(dmap, hv.DynamicMap):
+            return dmap
         keys = list(dmap.kdims[0].values)
         return hv.HoloMap({key: dmap[key] for key in keys}, kdims=dmap.kdims)
 
@@ -155,7 +200,9 @@ class AnimationMixin(_MixinBase):
 
         gv, hv = _require_holoviz()
         dmap = self._time_dynamicmap(layer)
-        values = list(dmap.kdims[0].values)
+        # A timecube DynamicMap carries its frame keys on the kdim's explicit `.values`; a frames() HoloMap
+        # carries them as its own keys instead. Take whichever is populated so both kinds play (IN-12).
+        values = list(dmap.kdims[0].values) or list(dmap.keys())
         # DiscretePlayer (not Player) steps through arbitrary labelled values (ints / datetimes).
         player = pn.widgets.DiscretePlayer(
             options=values,

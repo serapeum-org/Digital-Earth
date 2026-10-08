@@ -85,3 +85,55 @@ class TestSaveAnimation:
         interactiveMap = InteractiveMap()
         with pytest.raises(ValueError, match="no time cube"):
             interactiveMap.save_animation(destination)
+
+
+class TestFrames:
+    """``frames`` registers any element sequence as one animatable temporal layer (IN-12 #436)."""
+
+    @staticmethod
+    def _point_frames():
+        """Return three frames of a moving point — a temporal VECTOR layer, not a raster cube.
+
+        Returns:
+            A ``{step: hv.Points}`` mapping.
+        """
+        return {step: hv.Points([(step, step)]) for step in range(3)}
+
+    def test_frames_from_mapping_is_animatable(self):
+        """A frames() mapping registers one animatable temporal layer keyed by its frames (IN-12)."""
+        m = InteractiveMap().frames(self._point_frames(), dimension="t")
+        animatable = m._animatable_layers()
+        assert len(animatable) == 1, (
+            f"frames() must register one animatable layer, got {animatable}"
+        )
+
+    def test_frames_from_sequence_enumerates(self):
+        """A plain sequence of elements is enumerated 0, 1, 2 … and is animatable (IN-12)."""
+        m = InteractiveMap().frames([hv.Points([(0, 0)]), hv.Points([(1, 1)])])
+        assert len(m._animatable_layers()) == 1, (
+            "an enumerated frame sequence must animate"
+        )
+
+    def test_frames_vector_layer_plays_end_to_end(self):
+        """play() drives a frames() vector layer exactly like a time cube — the point of IN-12."""
+        m = InteractiveMap().frames(self._point_frames(), dimension="t")
+        app = m.play(fps=4)
+        players = app.select(pn.widgets.DiscretePlayer)
+        assert players and len(players[0].options) == 3, (
+            "a frames() vector layer must play its three frames"
+        )
+
+    def test_frames_save_animation_scrubber(self, tmp_path):
+        """A frames() layer exports to the client-side scrubber HTML (no server, no ffmpeg).
+
+        Args:
+            tmp_path: pytest temp dir.
+        """
+        out = tmp_path / "moving.html"
+        result = InteractiveMap().frames(self._point_frames()).save_animation(str(out))
+        assert result == out and out.exists(), f"scrubber HTML not written: {result}"
+
+    def test_frames_empty_raises(self):
+        """An empty frame set has nothing to animate and is refused (IN-12)."""
+        with pytest.raises(ValueError, match="at least one frame"):
+            InteractiveMap().frames({})
