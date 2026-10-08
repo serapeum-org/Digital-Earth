@@ -138,6 +138,10 @@
       if (mini[handler] && mini[handler].disable) mini[handler].disable();
     }
 
+    // The view rectangle is a plain lon/lat box from the main map's bounds. Known limitation: when the
+    // main view crosses the antimeridian (west > east) the box wraps the wrong way and the overview
+    // draws a near-global rectangle. Acceptable for a convenience locator overview; a correct fix would
+    // split the polygon at ±180°.
     function viewRect() {
       const b = main.getBounds();
       const w = b.getWest();
@@ -257,6 +261,9 @@
       for (const f of fc.features) {
         const g = f.geometry;
         if (g.type === "LineString") dist += lineLength(g.coordinates);
+        // Outer ring only (coordinates[0]); a holed polygon would over-report. MapboxDraw does not
+        // produce holed polygons, and this readout is a convenience — the authoritative measure is
+        // WebMap.drawn_features() through pyramids — so inner rings are deliberately not subtracted.
         else if (g.type === "Polygon") area += ringArea(g.coordinates[0]);
       }
       const parts = [];
