@@ -1153,29 +1153,33 @@ class DashboardMixin(_MixinBase):
             chosen, {"alpha": op}, basemap, basemap_context="layer_control basemap"
         )
 
-    def attribute_table(self, features: Any, *, linked: bool = False) -> Any:
-        """Build a read-only ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13).
+    def attribute_table(
+        self, features: Any, *, linked: bool = False, source: Any = None
+    ) -> Any:
+        """Build a ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13 / IN-5).
 
-        The table is a **read-only view** of the attributes, not a selection-linked companion to the map:
-        two-way linking needs a ``holoviews.link_selections`` (or a selection stream) shared with the map's
-        elements, which is roadmap IN-5 / DE-13. ``linked=True`` is refused rather than accepted and
-        ignored.
+        With ``linked=False`` (the default) the table is a **read-only view** of the attributes. With
+        ``linked=True`` it is a **two-way selection companion** to the map: a ``Selection1D`` stream is
+        shared between the table's row selection and a map layer's element, so selecting rows highlights the
+        matching geometry and brushing the map selects the matching rows. Either way the cells are
+        ``disabled`` so the view cannot be edited into disagreeing with the data.
 
         Args:
             features: A pyramids ``FeatureCollection`` (or GeoDataFrame) whose non-geometry columns
                 populate the table.
-            linked: Must stay ``False``; ``True`` raises ``NotImplementedError``. It used to
-                default to ``True`` and do nothing, which read as "linking is on" when no
-                selection was ever shared with the map.
+            linked: When ``True`` (IN-5), wire a two-way selection link to ``source`` — the table becomes
+                row-selectable and its selection mirrors the map's, in both directions, through one shared
+                ``Selection1D`` stream (a re-entrancy guard stops the echo). Needs a live kernel to
+                round-trip a *gesture*, but the Python link itself is live immediately.
+            source: The map layer the link listens on; defaults to the layer added last. Ignored when
+                ``linked=False``.
 
         Returns:
-            A ``panel.widgets.Tabulator`` of the attribute columns — paginated, and ``disabled`` so
-            the view cannot be edited into disagreeing with the data on the map.
+            A ``panel.widgets.Tabulator`` of the attribute columns — paginated and ``disabled``; row-
+            selectable and selection-linked to the map when ``linked=True``.
 
         Raises:
-            NotImplementedError: when ``linked=True`` is passed — two-way selection linking
-                is not implemented (roadmap IN-5 / DE-13), and the flag is refused rather
-                than accepted and ignored.
+            ValueError: when ``linked=True`` but the map has no layer to link to.
 
         Examples:
             - The geometry column is dropped; what is left is the attributes, unchanged:
@@ -1190,40 +1194,96 @@ class DashboardMixin(_MixinBase):
                 True
 
                 ```
-            - The view is read-only by construction — a viewer cannot edit a cell into disagreeing
-              with the map:
+            - ``linked=True`` returns a row-selectable table whose selection drives the map and back:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> InteractiveMap().attribute_table(fc).disabled              # doctest: +SKIP
-                True
-
-                ```
-            - ``linked=True`` is refused: nothing shares a selection with the map's elements yet,
-              and the table is ``disabled``, so it could not emit one either:
-                ```python
-                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> try:                                                       # doctest: +SKIP
-                ...     InteractiveMap().attribute_table(fc, linked=True)
-                ... except NotImplementedError as error:
-                ...     print(str(error).split(" — ")[0])
-                attribute_table(linked=True) is not implemented
+                >>> m = InteractiveMap().points(fc)                           # doctest: +SKIP
+                >>> table = m.attribute_table(fc, linked=True)                 # doctest: +SKIP
+                >>> table.selection = [0, 2]        # selecting rows ...        # doctest: +SKIP
+                >>> m._table_links[-1][1].index     # ... drives the stream     # doctest: +SKIP
+                [0, 2]
 
                 ```
         """
-        if linked:
-            raise NotImplementedError(
-                "attribute_table(linked=True) is not implemented — this Tabulator is disabled=True, so it "
-                "cannot emit a selection. For brushing that links the map to its data use "
-                "cross_filter(...), whose link_selections instance carries selection_expr back into Python, "
-                "or annotate(...) for an editable attribute table over a drawn layer. Pass linked=False "
-                "(the default) for the read-only attribute view."
-            )
         pn = _require_panel()
         pn.extension("tabulator")
         frame = features.drop(columns=[features.geometry.name], errors="ignore")
-        return pn.widgets.Tabulator(
-            frame, disabled=True, pagination="remote", page_size=20
+        if not linked:
+            return pn.widgets.Tabulator(
+                frame, disabled=True, pagination="remote", page_size=20
+            )
+        return self._linked_attribute_table(frame, source=source)
+
+    def _linked_attribute_table(self, frame: Any, *, source: Any = None) -> Any:
+        """Build a row-selectable table two-way-linked to a map layer's selection (IN-5).
+
+        Args:
+            frame: The attribute frame (geometry already dropped) to show.
+            source: The map layer to link to; defaults to the one added last.
+
+        Returns:
+            The ``panel.widgets.Tabulator`` whose selection mirrors the map's, kept alive on the map.
+        """
+        _require_holoviz()
+        from holoviews import streams
+
+        pn = _require_panel()
+        # Resolve the element to link to the way `_source_layer` does, inline so this reads only the shared
+        # state base (the caller's source, else the layer added last) rather than a sibling mixin's method.
+        if source is not None:
+            src = source
+        elif self._last_layer_id is None:
+            raise ValueError(
+                "attribute_table(linked=True) needs a source layer — add a builder call or pass source="
+            )
+        else:
+            src = self.layers[self._last_layer_index("attribute_table")]
+        table = pn.widgets.Tabulator(
+            frame,
+            disabled=True,
+            selectable="checkbox",
+            pagination="remote",
+            page_size=20,
         )
+        stream = streams.Selection1D(source=src)
+        # One guard for both directions: setting one side's selection fires the other side's handler, which
+        # would set this side straight back — the echo that makes a naive two-way link oscillate. While a
+        # handler runs the guard is held, so the mirrored write lands silently and stops there.
+        guard = {"busy": False}
+
+        def _table_to_map(event: Any) -> None:
+            """Push the table's row selection onto the shared stream.
+
+            Args:
+                event: The param event carrying the new selection in ``event.new``.
+            """
+            if guard["busy"]:
+                return
+            guard["busy"] = True
+            try:
+                stream.event(index=list(event.new))
+            finally:
+                guard["busy"] = False
+
+        def _map_to_table(index: Any = None, **_ignore: Any) -> None:
+            """Mirror the map's selection back onto the table's rows.
+
+            Args:
+                index: The selected row indices from the ``Selection1D`` stream.
+                _ignore: Any other stream contents, unused.
+            """
+            if guard["busy"]:
+                return
+            guard["busy"] = True
+            try:
+                table.selection = list(index or [])
+            finally:
+                guard["busy"] = False
+
+        table.param.watch(_table_to_map, "selection")
+        stream.add_subscriber(_map_to_table)
+        self._table_links.append((table, stream))
+        return table
 
     def share(
         self, *, params: Sequence[str] = ("cmap", "extent", "time", "basemap")

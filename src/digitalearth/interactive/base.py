@@ -551,6 +551,10 @@ class InteractiveMapBase:
         # data into a `live()` layer so only the changed glyphs redraw. Empty until a live layer is added;
         # let go on `close()` with the rest of the engine state.
         self._live_streams: dict[str, Any] = {}
+        # Two-way table<->map links (IN-5), one per `attribute_table(linked=True)`: each entry is the
+        # `(Tabulator, Selection1D)` pair whose selections mirror each other, kept alive here so neither the
+        # widget's param watcher nor the stream's subscriber is garbage-collected while the map lives.
+        self._table_links: list[tuple[Any, Any]] = []
         # `(data, value_column, mesh)` while a `trimesh()` call is drawing: the builder builds the mesh to
         # count its faces and hands it to the drawer rather than have it built twice. None outside that call.
         self._built_mesh: tuple | None = None

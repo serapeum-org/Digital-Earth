@@ -681,11 +681,58 @@ class TestInertFlagsAreRefused:
             multi.layer_control().layer_control_panel, pn.viewable.Viewable
         ), "the default call must keep working unchanged"
 
-    def test_attribute_table_linked_true_raises(self, point_fc):
-        """#243 — ``linked=True`` is refused (two-way linking needs link_selections)."""
-        fresh_map = InteractiveMap()
-        with pytest.raises(NotImplementedError, match="linked"):
-            fresh_map.attribute_table(point_fc, linked=True)
+    def test_attribute_table_linked_returns_a_selectable_registered_table(
+        self, point_fc
+    ):
+        """`linked=True` returns a row-selectable table and registers the two-way link (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        assert isinstance(table, pn.widgets.Tabulator), f"got {type(table)}"
+        assert table.selectable, "a linked table must be row-selectable"
+        assert len(linked_map._table_links) == 1, (
+            "the link must be kept alive on the map"
+        )
+
+    def test_linked_table_selection_drives_the_map(self, point_fc):
+        """Selecting rows pushes the indices onto the shared Selection1D stream (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        stream = linked_map._table_links[-1][1]
+        table.selection = [0, 2]
+        assert stream.index == [0, 2], (
+            f"table selection must drive the stream, got {stream.index}"
+        )
+
+    def test_linked_map_selection_drives_the_table(self, point_fc):
+        """A map-side selection mirrors back onto the table's rows, without oscillating (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        table = linked_map.attribute_table(point_fc, linked=True)
+        stream = linked_map._table_links[-1][1]
+        stream.event(index=[1])
+        assert table.selection == [1], (
+            f"the stream must drive the table, got {table.selection}"
+        )
+
+    def test_linked_table_without_a_layer_raises(self, point_fc):
+        """`linked=True` with nothing on the map to link to is refused (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        with pytest.raises(ValueError, match="attribute_table"):
+            InteractiveMap().attribute_table(point_fc, linked=True)
 
     def test_attribute_table_linked_defaults_to_false(self, point_fc):
         """The default must not promise linking, and must still return the read-only table."""
