@@ -17,7 +17,7 @@ builder/render method without it raises an actionable ``ImportError``
 (``pip install 'digitalearth[interactive]'``).
 """
 
-from digitalearth.interactive.layout import panels, swipe, tabs
+from digitalearth.interactive.layout import grid, linked_views, panels, swipe, tabs
 from digitalearth.interactive.map import InteractiveMap
 
-__all__ = ["InteractiveMap", "panels", "swipe", "tabs"]
+__all__ = ["InteractiveMap", "grid", "linked_views", "panels", "swipe", "tabs"]
