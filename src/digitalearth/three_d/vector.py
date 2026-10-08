@@ -141,7 +141,9 @@ def _cap_with_holes(exterior: np.ndarray, interiors: list[np.ndarray]) -> "pv.Po
 
     Args:
         exterior: The ``(M, 2)`` exterior ring.
-        interiors: The ``(K, 2)`` interior (hole) rings; never empty when this is called.
+        interiors: The ``(K, 2)`` interior (hole) rings; may be empty for a plain cap with no holes (the
+            flat-fill and reference-fill drawers pass no interiors for a hole-free polygon), in which case
+            the triangulator fills the single exterior contour.
 
     Returns:
         pyvista.PolyData: the triangulated planar cap with the holes carved out.

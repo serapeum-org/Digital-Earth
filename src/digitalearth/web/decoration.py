@@ -1981,11 +1981,17 @@ class DecorationMixin(_MixinBase):
         over the basemap, under the data — so the fill embeds in a saved page and needs no network. No GIS
         is reimplemented here: the coordinates are read from the shared source and packaged, nothing more.
 
+        **Opaque by default** (``opacity=1.0``): the fills are the ground for a map built *without* a basemap
+        (WB-16 is reference geography without one), so an ``ocean().land()`` pair is a complete flat
+        cartography that replaces the tiles. Pass ``opacity`` below 1 to tint over a basemap instead. Because
+        the fills share one call-ordered band with :meth:`coastlines`/:meth:`borders`, **call the fills before
+        the lines** (and ``ocean()`` before ``land()``) so the opaque fill does not hide them.
+
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``, matching
                 the static tier's spelling.
             color: Fill colour.
-            opacity: Fill opacity in ``[0, 1]``; reference geography sits visually under the data.
+            opacity: Fill opacity in ``[0, 1]``; ``1.0`` (opaque) replaces the basemap, below 1 tints over it.
             name: What a layer switcher calls this layer and the id it carries; ``None`` numbers it from
                 the kind, and a name already on the figure is suffixed ``-2``, ``-3``, ….
             visible: Whether the fill starts drawn.
@@ -1998,11 +2004,11 @@ class DecorationMixin(_MixinBase):
                 ``opacity`` is not a finite number.
 
         Examples:
-            - Land fill under the data, ocean beneath it (needs the ``web`` extra, so the block is skipped
-              without it):
+            - Flat reference cartography with no basemap — ocean beneath, land, then a coastline on top
+              (needs the ``web`` extra, so the block is skipped without it):
                 ```python
                 >>> from digitalearth.web import WebMap        # doctest: +SKIP
-                >>> WebMap().basemap().ocean().land()          # doctest: +SKIP
+                >>> WebMap().ocean().land().coastlines()       # doctest: +SKIP
 
                 ```
 
