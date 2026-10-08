@@ -675,25 +675,37 @@ def _redraw_dem(scene, array):
     scene.terrain(get_source(array), name="dem")
 
 
-def test_record_clim_freezes_the_scale_across_frames(tmp_path):
-    """#210: clim= holds one colour range across frames whose own data ranges differ.
+def test_record_clim_freezes_the_scale_on_every_frame(tmp_path):
+    """#210: clim= holds one colour range on EVERY frame, not merely the last.
 
-    Two frames: elevation ~0..2, then ~0..100. With clim=(0, 50) the drawn mapper stays pinned to (0, 50)
-    rather than following the final frame's ~0..100 — which is what stops the time stack flickering.
+    Two frames whose own data differ (elevation ~0..2, then ~0..100). The range is captured at each
+    ``write_frame``; with clim=(0, 50) every captured range is (0, 50) — including the *first* frame, whose
+    native ~0..2 range a last-frame-only freeze would leave unpinned. That per-frame hold is the anti-flicker
+    guarantee, which a final-state-only assertion cannot distinguish from no freeze.
     """
     low_range = np.add.outer(np.linspace(0.0, 1.0, 8), np.linspace(0.0, 1.0, 8))
     high_range = np.add.outer(np.linspace(0.0, 50.0, 8), np.linspace(0.0, 50.0, 8))
 
     scene = Scene3D(off_screen=True)
     scene.terrain(get_source(low_range), name="dem")
+    per_frame: list[tuple] = []
+    original_write = scene.plotter.write_frame
+
+    def _capture_range():
+        per_frame.append(tuple(scene.actor_of("dem").mapper.scalar_range))
+        return original_write()
+
+    scene.plotter.write_frame = _capture_range
     scene.record(
         [low_range, high_range],
         str(tmp_path / "frozen.gif"),
         _redraw_dem,
         clim=(0.0, 50.0),
     )
-    assert tuple(scene.actor_of("dem").mapper.scalar_range) == (0.0, 50.0)
     scene.close()
+    assert per_frame == [(0.0, 50.0), (0.0, 50.0)], (
+        f"every frame must be frozen to (0, 50): {per_frame}"
+    )
 
 
 def test_record_without_clim_lets_the_range_follow_the_last_frame(tmp_path):
