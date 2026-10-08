@@ -4,7 +4,6 @@
       "absent": [
         "attribution",
         "basemap",
-        "coastline_overlay",
         "domain",
         "fullscreen",
         "layer_switcher",
@@ -35,12 +34,18 @@
         "legend"
       ],
       "kinds": [
+        "choropleth",
         "coastlines",
         "custom:pyvista",
         "extrusion",
         "isosurface",
+        "lines",
         "point_cloud",
+        "points",
+        "polygons",
         "raster",
+        "reference_lines",
+        "streamlines",
         "terrain",
         "text",
         "vectors",
@@ -517,11 +522,7 @@
     "pending": {
       "3d": [
         "add_layer",
-        "choropleth",
         "field",
-        "lines",
-        "points",
-        "polygons",
         "set_bounds"
       ],
       "interactive": [],

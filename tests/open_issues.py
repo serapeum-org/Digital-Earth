@@ -32,7 +32,8 @@ ISSUE_REFERENCE = re.compile(r"#(\d+)")
 #: below answered ``OPEN``.
 KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
     {
-        201: "The 3-D tier cannot draw line geometries — no rivers, roads, tracks or trajectories",
+        # `201` ("The 3-D tier cannot draw line geometries") stood here against the 3-D `lines` row of
+        # `PENDING`. `Scene3D.lines` closed it (PR #429), so nothing names it any more.
         # `226` ("feat(static): add Map.lines for plain line geometry, matching the web tier") stood here
         # against the static `lines` row of `PENDING`. `Map.lines` closed it, so nothing names it any more.
         # `261` ("legend() now has three incompatible shapes, and web still has no colorbar()") stood here
