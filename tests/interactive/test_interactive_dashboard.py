@@ -810,6 +810,32 @@ class TestInertFlagsAreRefused:
             f"table selection must drive the stream, got {stream.index}"
         )
 
+    def test_linked_table_round_trips_an_index_beyond_the_first_page(self):
+        """Under remote pagination the link maps absolute row indices, not per-page ones (review R2-L3).
+
+        The fixture tables have fewer rows than ``page_size=20`` so never paginate; this builds 25 rows and
+        round-trips a selection on page 2 in both directions.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        big = gpd.GeoDataFrame(
+            {"fid": list(range(25))},
+            geometry=[Point(float(i), float(i)) for i in range(25)],
+            crs="EPSG:4326",
+        )
+        linked_map = InteractiveMap().points(big)
+        table = linked_map.attribute_table(big, linked=True)
+        stream = linked_map._table_links[-1][1]
+        table.selection = [22]
+        assert stream.index == [22], (
+            f"a page-2 row must map to absolute index 22, got {stream.index}"
+        )
+        stream.event(index=[23])
+        assert table.selection == [23], (
+            f"the stream must drive the table to absolute 23, got {table.selection}"
+        )
+
     def test_linked_map_selection_drives_the_table(self, point_fc):
         """A map-side selection mirrors back onto the table's rows, without oscillating (IN-5 #431).
 
