@@ -46,12 +46,13 @@ def _render_and_probe(uri: str, probe_js: str):
             pytest.skip(f"Chromium not available for Playwright: {exc}")
         page = browser.new_page(viewport={"width": 900, "height": 600})
         page.on("pageerror", lambda err: page_errors.append(str(err)))
-        page.on(
-            "console",
-            lambda msg: (
-                console_errors.append(msg.text) if msg.type == "error" else None
-            ),
-        )
+
+        def _on_console(msg):
+            if msg.type == "error":
+                loc = msg.location or {}
+                console_errors.append(f"{msg.text} [{loc.get('url', '')}]")
+
+        page.on("console", _on_console)
         page.goto(uri, wait_until="load")
         try:
             page.wait_for_selector("canvas", timeout=20000)
@@ -64,9 +65,29 @@ def _render_and_probe(uri: str, probe_js: str):
 
 
 def _ignore_network_console(errors):
-    """Drop console errors about fetching tiles/fonts — the smoke test is about our JS, not the CDN."""
+    """Drop console errors about fetching tiles/fonts, but never mask a library-CDN load failure.
+
+    The smoke test is about our JS, not CDN tile/font availability, so network-fetch noise for
+    basemap tiles is dropped. A failed load from a *library* host (maplibre-gl / deck.gl /
+    mapbox-gl-draw on unpkg/cdnjs/jsdelivr), however, means the runtime itself could not load — that
+    is kept, so a real library failure cannot hide behind the network-noise filter.
+
+    Args:
+        errors: Console error strings, each suffixed with its resource URL in brackets.
+
+    Returns:
+        The errors that are not tile/font network noise, plus every library-CDN load failure.
+    """
+    library_hosts = ("unpkg.com", "cdnjs.cloudflare.com", "cdn.jsdelivr.net")
     noise = ("tile", "font", "glyph", "sprite", "err_", "failed to load", "net::")
-    return [e for e in errors if not any(n in e.lower() for n in noise)]
+    kept = []
+    for e in errors:
+        low = e.lower()
+        if any(host in low for host in library_hosts):
+            kept.append(e)
+        elif not any(n in low for n in noise):
+            kept.append(e)
+    return kept
 
 
 class TestSwipeRendersInABrowser:
