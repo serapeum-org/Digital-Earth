@@ -1962,6 +1962,237 @@ class DecorationMixin(_MixinBase):
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         return self.add_reference(apply)
 
+    def land(
+        self,
+        resolution: str = "110m",
+        *,
+        color: str = "#e9e4d8",
+        opacity: float = 1.0,
+        name: str | None = None,
+        visible: bool = True,
+    ) -> Self:
+        """Fill Natural-Earth land polygons as reference geography (WB-16).
+
+        The fill counterpart of :meth:`coastlines`: where the shoreline is a line, this paints the land
+        itself. The polygons are **hole-aware** — they come from ``cleopatra.basemap.reference``'s
+        ``natural_earth_polygons``, which returns each part as ``[exterior_ring, *hole_rings]``, so an
+        inland lake is cut out of the fill rather than painted over (cleopatra#384). The rings are packaged
+        as GeoJSON ``Polygon`` features and drawn with a MapLibre ``fill`` layer in the reference band —
+        over the basemap, under the data — so the fill embeds in a saved page and needs no network. No GIS
+        is reimplemented here: the coordinates are read from the shared source and packaged, nothing more.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``, matching
+                the static tier's spelling.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``; reference geography sits visually under the data.
+            name: What a layer switcher calls this layer and the id it carries; ``None`` numbers it from
+                the kind, and a name already on the figure is suffixed ``-2``, ``-3``, ….
+            visible: Whether the fill starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``, or when
+                ``opacity`` is not a finite number.
+
+        Examples:
+            - Land fill under the data, ocean beneath it (needs the ``web`` extra, so the block is skipped
+              without it):
+                ```python
+                >>> from digitalearth.web import WebMap        # doctest: +SKIP
+                >>> WebMap().basemap().ocean().land()          # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.ocean: the complementary fill, drawn beneath.
+            digitalearth.web.decoration.DecorationMixin.coastlines: the shoreline as a line overlay.
+        """
+        return self._reference_fill(
+            "land",
+            "land",
+            resolution,
+            color=color,
+            opacity=opacity,
+            name=name,
+            visible=visible,
+        )
+
+    def ocean(
+        self,
+        resolution: str = "110m",
+        *,
+        color: str = "#aad3df",
+        opacity: float = 1.0,
+        name: str | None = None,
+        visible: bool = True,
+    ) -> Self:
+        """Fill Natural-Earth ocean polygons as reference geography (WB-16).
+
+        The same hole-aware fill path as :meth:`land`, for the ocean. The ocean polygon carries one
+        continent-shaped hole per landmass, so the hole-aware ``natural_earth_polygons`` matters most here
+        — a fill from exterior rings alone would paint the sea over every continent. Call it before
+        :meth:`land` so the land fill (and coastlines) draw on top.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``.
+            name: What a layer switcher calls this layer and the id it carries; ``None`` numbers it.
+            visible: Whether the fill starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``, or when
+                ``opacity`` is not a finite number.
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.land: the fill the ocean sits beneath.
+        """
+        return self._reference_fill(
+            "ocean",
+            "ocean",
+            resolution,
+            color=color,
+            opacity=opacity,
+            name=name,
+            visible=visible,
+        )
+
+    def lakes(
+        self,
+        resolution: str = "110m",
+        *,
+        color: str = "#aad3df",
+        opacity: float = 1.0,
+        name: str | None = None,
+        visible: bool = True,
+    ) -> Self:
+        """Fill Natural-Earth lake polygons as reference geography (WB-16).
+
+        The same hole-aware fill path as :meth:`land` and :meth:`ocean`, for inland water. Drawn above
+        land (call it after :meth:`land`) so the lakes read as water over the landmass.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``.
+            name: What a layer switcher calls this layer and the id it carries; ``None`` numbers it.
+            visible: Whether the fill starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``resolution`` is not one of ``"110m"``, ``"50m"`` or ``"10m"``, or when
+                ``opacity`` is not a finite number.
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.land: the fill the lakes sit over.
+        """
+        return self._reference_fill(
+            "lakes",
+            "lakes",
+            resolution,
+            color=color,
+            opacity=opacity,
+            name=name,
+            visible=visible,
+        )
+
+    def _reference_fill(
+        self,
+        source_layer: str,
+        prefix: str,
+        resolution: str,
+        *,
+        color: str,
+        opacity: float,
+        name: str | None,
+        visible: bool,
+    ) -> Self:
+        """Add one Natural-Earth polygon fill — land, ocean or lakes — to the reference band.
+
+        :meth:`land`, :meth:`ocean` and :meth:`lakes` are one mechanism over three Natural-Earth datasets,
+        so the body lives here. The geometry is read **hole-aware** from
+        ``cleopatra.basemap.reference.natural_earth_polygons`` as ``[exterior_ring, *hole_rings]`` per part
+        and packaged into GeoJSON ``Polygon`` features (the first ring the exterior, the rest holes, each
+        closed if the source left it open); the MapLibre source and ``fill`` layer are added through a
+        queued closure (the shape :meth:`~digitalearth.web.base.WebMapBase.add_reference` takes), so a
+        figure written down keeps the embedded fill even offline.
+
+        Args:
+            source_layer: The Natural-Earth polygon dataset — ``"land"``, ``"ocean"`` or ``"lakes"``.
+            prefix: The id prefix the fill is numbered under — the same three names.
+            resolution: One of ``"110m"``, ``"50m"`` or ``"10m"``.
+            color: Fill colour.
+            opacity: Fill opacity in ``[0, 1]``.
+            name: The caller's name for the layer, or ``None`` to number it.
+            visible: Whether the fill starts drawn.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: for an unknown resolution, or a non-finite opacity.
+        """
+        call = f"WebMap.{prefix}()"
+        if resolution not in _NATURAL_EARTH_RESOLUTIONS:
+            raise ValueError(
+                f"{call} resolution={resolution!r} must be one of "
+                f"{sorted(_NATURAL_EARTH_RESOLUTIONS)} — the resolutions Natural Earth publishes"
+            )
+        opacity = as_finite(opacity, "opacity", call)
+        layer_cls, layer_types = _require_layer_api()
+        from cleopatra.basemap.reference import natural_earth_polygons
+
+        # Read the reference geometry hole-aware and package each part as a GeoJSON Polygon: the first ring
+        # is the exterior, the rest are holes. A ring with fewer than three vertices is not an area, so the
+        # whole part is dropped when its exterior is degenerate, and a degenerate hole is skipped. GeoJSON
+        # wants each ring closed (first == last), so a ring the source left open is closed here.
+        features = []
+        for rings in natural_earth_polygons(source_layer, resolution):
+            if not rings or len(rings[0]) < 3:
+                continue
+            polygon = []
+            for ring in rings:
+                if len(ring) < 3:
+                    continue
+                seq = [[float(x), float(y)] for x, y in ring]
+                if seq[0] != seq[-1]:
+                    seq.append(seq[0])
+                polygon.append(seq)
+            features.append(
+                {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {"type": "Polygon", "coordinates": polygon},
+                }
+            )
+        collection = {"type": "FeatureCollection", "features": features}
+        layer_id = self._layer_id(prefix, name)
+        source_id = f"{layer_id}-src"
+        layout = None if visible else {"visibility": "none"}
+
+        def apply(widget: Any) -> None:
+            widget.add_source(source_id, {"type": "geojson", "data": collection})
+            widget.add_layer(
+                layer_cls(
+                    id=layer_id,
+                    type=layer_types.FILL,
+                    source=source_id,
+                    paint={"fill-color": color, "fill-opacity": float(opacity)},
+                    layout=layout,
+                )
+            )
+
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        return self.add_reference(apply)
+
     def navigation(
         self,
         *,
