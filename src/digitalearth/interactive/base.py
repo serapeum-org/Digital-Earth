@@ -1847,6 +1847,14 @@ class InteractiveMapBase:
         """
         _require_holoviz()  # called for its actionable ImportError; no module name is needed here
         style = self._style_record(common, bokeh)
+        # Validate the raw `**opts` surface against what this element actually takes, so a misspelt keyword
+        # is refused with a did-you-mean rather than splatted unchecked into `.opts()` (IN-13 #437). This is
+        # the single chokepoint every builder's options pass through, and the element type is known here.
+        from digitalearth.interactive.style_fold import validate_opts
+
+        element_name = type(element).__name__
+        validate_opts(style["common"], element_name)
+        validate_opts(style["bokeh"], element_name)
         if style["common"]:
             element = element.opts(**style["common"])
         element = element.opts(backend="bokeh", **style["bokeh"])

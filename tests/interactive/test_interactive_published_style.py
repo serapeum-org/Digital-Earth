@@ -663,3 +663,22 @@ class TestTheTiersOwnDefaultIsPublishedWhenItWasAskedFor:
         assert portable_encodings(held) == {}, (
             "a description that records no ask published something it merely holds"
         )
+
+
+class TestOptsValidation:
+    """The raw ``**opts`` surface is validated against the element, with a did-you-mean (IN-13 #437)."""
+
+    def test_misspelt_option_is_refused_with_a_suggestion(self):
+        """A near-miss keyword raises before HoloViews, naming the option it meant."""
+        with pytest.raises(ValueError, match="did you mean.*width"):
+            InteractiveMap().field(_dem(), widht=600)
+
+    def test_a_valid_option_still_passes(self):
+        """A keyword the element accepts is applied, not refused."""
+        scene = InteractiveMap().field(_dem(), width=500)
+        assert scene.layers, "a valid option must not block the layer"
+
+    def test_unknown_option_on_points_is_refused(self):
+        """The guard covers vector builders too, not just rasters."""
+        with pytest.raises(ValueError, match="not an option"):
+            InteractiveMap().points(_points(), nonsense_option=1)

@@ -49,6 +49,7 @@ __all__ = [
     "portable_encodings",
     "route_flat_style",
     "split_guide_options",
+    "validate_opts",
 ]
 
 #: The flat keywords the interactive builders accept, each declared once. A keyword that drives a visual
@@ -798,6 +799,57 @@ def fold_symbology(
         for group, options in grouped.items()
         if options or group in ("style", "plot")
     }, unsupported
+
+
+def validate_opts(
+    opts: Mapping[str, Any], element: str, *, backend: str = "bokeh"
+) -> None:
+    """Refuse any raw ``**opts`` keyword the element does not accept, with a did-you-mean (IN-13 #437).
+
+    The ``**opts`` a builder splats straight into ``element.opts(**opts)`` never passed through the option
+    schema the way a declared :class:`~digitalearth.base.spec.Symbology` does via :func:`fold_symbology`, so a
+    misspelt keyword reached HoloViews unchecked (``colour`` for ``color``, ``colorbar`` on a Points layer).
+    This folds that surface into the same engine-checked guard: a keyword accepted by the element in *any*
+    option group passes; anything else raises with :func:`INTERACTIVE_STYLE_SCHEMA.suggest`'s closest match.
+
+    Args:
+        opts: The raw keyword options recorded for a layer.
+        element: The element type they will be applied to, as HoloViews names it (``type(e).__name__``).
+        backend: The backend to check against; the interactive tier renders through Bokeh.
+
+    Raises:
+        ValueError: for a keyword the element does not take, naming the closest option it does.
+
+    Examples:
+        - A misspelt option is refused before it reaches HoloViews:
+            ```python
+            >>> from digitalearth.interactive.style_fold import validate_opts
+            >>> validate_opts({"colour": "red"}, "Points")
+            Traceback (most recent call last):
+            ValueError: 'colour' is not an option Points takes on the bokeh backend; did you mean [...]?
+
+            ```
+        - An element HoloViews does not know is left alone (nothing to check it against):
+            ```python
+            >>> from digitalearth.interactive.style_fold import validate_opts
+            >>> validate_opts({"anything": 1}, "NotAnElement")  # no raise
+
+            ```
+    """
+    if not opts:
+        return
+    try:
+        allowed = allowed_options(element, backend)
+    except KeyError:
+        # An element type HoloViews' Store does not know (an overlay, a tile source without an entry): there
+        # is nothing to validate against, so leave the options alone rather than refuse them blindly.
+        return
+    known: frozenset[str] = (
+        frozenset().union(*allowed.values()) if allowed else frozenset()
+    )
+    for key in opts:
+        if key not in known:
+            raise ValueError(_refusal(key, element, backend))
 
 
 def _named_fields(value: Any) -> list:
