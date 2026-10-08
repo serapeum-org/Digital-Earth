@@ -64,6 +64,28 @@ def test_the_ocean_fill_is_hole_aware():
     scene.close()
 
 
+def test_a_degenerate_polygon_skips_the_layer(monkeypatch):
+    """A part with too few vertices is dropped; with nothing left to fill, the layer is skipped.
+
+    Test scenario:
+        Natural Earth always returns real polygons, so the degenerate/empty path is exercised with a stub:
+        a single two-vertex part is not an area, so it is dropped and the non-strict scene skips the layer
+        (returns ``None``, nothing added) rather than drawing an empty mesh.
+
+    Args:
+        monkeypatch: Replaces ``natural_earth_polygons`` with the degenerate stub.
+    """
+    import cleopatra.basemap.reference as ref
+
+    monkeypatch.setattr(
+        ref, "natural_earth_polygons", lambda dataset, resolution: [[np.zeros((2, 2))]]
+    )
+    scene = Scene3D(off_screen=True)
+    assert scene.ocean() is None
+    assert "ocean" not in scene.layer_ids
+    scene.close()
+
+
 def test_an_unknown_resolution_is_refused():
     """An unknown Natural-Earth resolution is refused by name, before any download."""
     scene = Scene3D(off_screen=True)
