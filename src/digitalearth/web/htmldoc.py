@@ -1,6 +1,6 @@
 """HtmlDocument — Digital-Earth's own standalone-HTML export for the web tier (WB-13/17/20).
 
-py-maplibregl's ``Map.to_html`` renders through a sealed bundle that hardcodes one container id,
+py-maplibregl's own ``to_html`` renders through a sealed bundle that hardcodes one container id,
 never exposes the map object, and keeps maplibre-gl internal — so a split/swipe export, a synced
 minimap, and a live measure readout are all impossible through it. This module emits our **own**
 page instead: it loads maplibre-gl from a CDN, ships our small runtime (:mod:`srcjs/de_maplibre.js`)
