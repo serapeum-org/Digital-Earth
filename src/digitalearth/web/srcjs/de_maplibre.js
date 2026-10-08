@@ -98,6 +98,13 @@
       options = options || {};
       this._key = options.apiKey;
       this._placeholder = options.placeholder || "Search";
+      // Honour the recorded geocoder options rather than silently degrading: the widget serialises
+      // language/country/limit/flyTo, so the standalone control applies them too (flyTo defaults to
+      // true, matching the widget, and is only disabled when explicitly recorded as false).
+      this._language = options.language;
+      this._country = options.country;
+      this._limit = options.limit != null ? options.limit : 5;
+      this._flyTo = options.flyTo !== false;
     }
     onAdd(map) {
       this._map = map;
@@ -120,12 +127,15 @@
     _search(query, results) {
       if (!query || !this._key) return;
       const map = this._map;
-      const url =
+      let url =
         "https://api.maptiler.com/geocoding/" +
         encodeURIComponent(query) +
         ".json?key=" +
         encodeURIComponent(this._key) +
-        "&limit=5";
+        "&limit=" +
+        encodeURIComponent(this._limit);
+      if (this._language) url += "&language=" + encodeURIComponent(this._language);
+      if (this._country) url += "&country=" + encodeURIComponent(this._country);
       fetch(url)
         .then((r) => r.json())
         .then((data) => {
@@ -135,13 +145,16 @@
             row.className = "de-geocoder-row";
             row.textContent = f.place_name || f.text || "";
             row.addEventListener("click", () => {
-              if (f.bbox) {
-                map.fitBounds([
-                  [f.bbox[0], f.bbox[1]],
-                  [f.bbox[2], f.bbox[3]],
-                ]);
-              } else if (f.center) {
-                map.flyTo({ center: f.center, zoom: 12 });
+              // Only move the camera when flyTo is on (the widget's fly_to); otherwise just clear.
+              if (self._flyTo) {
+                if (f.bbox) {
+                  map.fitBounds([
+                    [f.bbox[0], f.bbox[1]],
+                    [f.bbox[2], f.bbox[3]],
+                  ]);
+                } else if (f.center) {
+                  map.flyTo({ center: f.center, zoom: 12 });
+                }
               }
               results.innerHTML = "";
             });

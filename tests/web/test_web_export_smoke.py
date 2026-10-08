@@ -344,6 +344,74 @@ class TestDeckAndGeocoderInABrowser:
         assert _ignore_network_console(console_errors) == [], console_errors
         assert probe["has_box"], "the reimplemented geocoder search box did not render"
 
+    def test_geocoder_honours_recorded_language_country_limit_and_fly_to(self):
+        """The standalone geocoder applies the recorded options instead of silently degrading (L1).
+
+        Test scenario:
+            ``geocoder(language='nl', country='nl', limit=1, fly_to=False)`` must send
+            ``language``/``country``/``limit`` on the MapTiler query and must NOT move the camera on
+            pick. The MapTiler request is intercepted (no real network), and the map centre is read
+            before and after the pick to prove ``fly_to=False`` is honoured.
+        """
+        from playwright.sync_api import sync_playwright
+
+        before = (
+            WebMap()
+            .basemap()
+            .geocoder(api_key="demo-key", language="nl", country="nl", limit=1, fly_to=False)
+        )
+        html = swipe_html(before, WebMap().basemap(), title="geo-opts")
+        captured: list = []
+        page_errors: list = []
+        fake = (
+            '{"features": [{"place_name": "Amsterdam", "center": [4.9, 52.4], '
+            '"bbox": [4.7, 52.3, 5.0, 52.5]}]}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "geo-opts.html"
+            path.write_text(html, encoding="utf-8")
+            with sync_playwright() as play:
+                try:
+                    browser = play.chromium.launch()
+                except Exception as exc:  # browser not installed -> skip
+                    pytest.skip(f"Chromium not available for Playwright: {exc}")
+                page = browser.new_page(viewport={"width": 900, "height": 600})
+                page.on("pageerror", lambda err: page_errors.append(str(err)))
+
+                def _route(route):
+                    captured.append(route.request.url)
+                    route.fulfill(
+                        status=200,
+                        content_type="application/json",
+                        body=fake,
+                    )
+
+                page.route("**api.maptiler.com/**", _route)
+                page.goto(path.as_uri(), wait_until="load")
+                page.wait_for_timeout(4000)
+                center_before = page.evaluate(
+                    "() => window.DE.maps['de-map-before'].getCenter()"
+                )
+                page.fill(".de-geocoder-input", "amsterdam")
+                page.press(".de-geocoder-input", "Enter")
+                page.wait_for_timeout(600)
+                page.click(".de-geocoder-row")
+                page.wait_for_timeout(600)
+                center_after = page.evaluate(
+                    "() => window.DE.maps['de-map-before'].getCenter()"
+                )
+                browser.close()
+
+        assert page_errors == [], f"uncaught JS error(s): {page_errors}"
+        assert captured, "the geocoder never issued a MapTiler request"
+        url = captured[0]
+        assert "limit=1" in url, f"limit not passed through: {url}"
+        assert "language=nl" in url, f"language not passed through: {url}"
+        assert "country=nl" in url, f"country not passed through: {url}"
+        assert abs(center_after["lng"] - center_before["lng"]) < 1e-6 and (
+            abs(center_after["lat"] - center_before["lat"]) < 1e-6
+        ), f"fly_to=False must not move the camera: {center_before} -> {center_after}"
+
     def test_a_nested_deck_accessor_is_refused(self):
         """A deck layer carrying a nested ``@@`` accessor is refused loudly, not silently mis-rendered.
 
