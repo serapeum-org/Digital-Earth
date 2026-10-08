@@ -161,6 +161,37 @@ class TestMalformedCallsAreRefused:
             web_map.ocean(opacity=nan)
 
 
+class TestDegeneratePartsAreDropped:
+    """A part with too few vertices is dropped; the web tier still emits a (possibly empty) fill layer."""
+
+    def test_all_degenerate_parts_emit_an_empty_fill_without_crashing(
+        self, monkeypatch
+    ):
+        """Every part being degenerate leaves no features, but the fill layer is still registered.
+
+        Test scenario:
+            Natural Earth always returns real polygons, so the degenerate path is exercised with a stub: a
+            single two-vertex part is below the 3-vertex minimum and is dropped, leaving no features. Unlike
+            the 3-D tier (which ``_skip_empty``s), the web tier still registers the source and ``fill`` layer
+            — a harmless empty ``FeatureCollection`` — which this pins.
+
+        Args:
+            monkeypatch: Replaces ``natural_earth_polygons`` with the degenerate stub.
+        """
+        import cleopatra.basemap.reference as ref
+
+        monkeypatch.setattr(
+            ref,
+            "natural_earth_polygons",
+            lambda layer, resolution: [[[(0.0, 0.0), (1.0, 1.0)]]],
+        )
+        layers, sources = _recorded(WebMap().ocean())
+        assert sources[0]["data"]["features"] == []
+        assert any(layer.type == "fill" for layer in layers), [
+            layer.type for layer in layers
+        ]
+
+
 class TestItRenders:
     """The queued closure adds the source and fill layer when the widget is built."""
 

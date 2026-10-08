@@ -2191,12 +2191,17 @@ class DecorationMixin(_MixinBase):
                     id=layer_id,
                     type=layer_types.FILL,
                     source=source_id,
-                    paint={"fill-color": color, "fill-opacity": float(opacity)},
+                    paint={"fill-color": color, "fill-opacity": opacity},
                     layout=layout,
                 )
             )
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        # The web fills join the *reference* band (over the basemap, under the data), not the `underlay`
+        # band the 3-D/static/interactive `land`/`ocean`/`lakes` kinds use. That is deliberate and tier-
+        # specific: an underlay here sits beneath the opaque basemap tiles, where the fill could never be
+        # seen — defeating WB-16's "reference geography over/instead of a basemap". The lines share this
+        # band; see the `land()` docstring for the call-order rule that keeps an opaque fill off the lines.
         return self.add_reference(apply)
 
     def navigation(
