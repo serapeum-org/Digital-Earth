@@ -169,6 +169,70 @@ class TestRasterize:
         assert isinstance(m.layers[0], hv.Image), f"got {type(m.layers[0])}"
 
 
+class TestDatashadeFrozenScale:
+    """``datashade``/``trajectory`` can pin a colour span so they do not re-autorange per frame (IN-4)."""
+
+    def test_datashade_with_a_span_renders_without_the_eq_hist_trap(
+        self, m, big_points
+    ):
+        """A `clim` span defaults `cnorm` to linear, so the shade does not hit Datashader's eq_hist+span error.
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.datashade(
+            big_points,
+            column="value",
+            clim=(0.0, 20.0),
+            dynamic=False,
+            width=60,
+            height=40,
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
+    def test_datashade_records_the_span_and_norm(self, m, big_points):
+        """The span travels as a plain pair and the chosen `cnorm` is recorded.
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.datashade(
+            big_points,
+            column="value",
+            clim=(1.0, 9.0),
+            cnorm="log",
+            dynamic=False,
+            width=40,
+            height=30,
+        )
+        props = m.figure_spec.layers.get(m.layer_ids[0]).symbology.props
+        assert tuple(props["clim"]) == (1.0, 9.0), props["clim"]
+        assert props["cnorm"] == "log", props
+
+    def test_trajectory_takes_a_frozen_span_too(self, m, big_points):
+        """The trajectory path honours `clim`/`cnorm` the same way (IN-4).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture (its ``cls`` column groups the tracks).
+        """
+        m.trajectory(
+            big_points,
+            track_column="cls",
+            clim=(0.0, 5.0),
+            dynamic=False,
+            width=60,
+            height=40,
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
+
 class TestDatashade:
     """``datashade`` — shaded RGB, categorical color_key (DI.2a)."""
 

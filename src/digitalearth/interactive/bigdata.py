@@ -198,6 +198,16 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         op_kwargs["color_key"] = _color_key(color_key)
     else:
         op_kwargs["cmap"] = props.get("cmap")
+    # Frozen colour scale (IN-4): a recorded `clim` becomes the shade `clims` (span), and `cnorm` its
+    # normalisation — defaulting to "linear" because Datashader refuses a span under eq-hist (X-4). Without a
+    # `clim` the shade re-autoranges per frame, HoloViews' default, so neither key is passed then.
+    clim = _engine_pair(props.get("clim"))
+    cnorm = props.get("cnorm")
+    if clim is not None:
+        op_kwargs["clims"] = clim
+        op_kwargs["cnorm"] = cnorm or "linear"
+    elif cnorm is not None:
+        op_kwargs["cnorm"] = cnorm
     shaded = _datashade(
         element,
         aggregator=_resolve_aggregator(props.get("aggregator"), column),
@@ -242,6 +252,14 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
             op_kwargs["color_key"] = _color_key(color_key)
     else:
         op_kwargs["cmap"] = props.get("cmap")
+    # Frozen colour scale (IN-4), as in draw_datashade: clims=span, cnorm defaults to "linear" under a span.
+    traj_clim = _engine_pair(props.get("clim"))
+    traj_cnorm = props.get("cnorm")
+    if traj_clim is not None:
+        op_kwargs["clims"] = traj_clim
+        op_kwargs["cnorm"] = traj_cnorm or "linear"
+    elif traj_cnorm is not None:
+        op_kwargs["cnorm"] = traj_cnorm
     shaded = _datashade(path, dynamic=props.get("dynamic", True), **op_kwargs)
     if props.get("dynspread"):
         shaded = _dynspread(shaded)
@@ -381,6 +399,8 @@ class BigDataMixin(_MixinBase):
         aggregator: Any = "count",
         column: str | None = None,
         dynamic: bool = True,
+        clim: tuple[float, float] | None = None,
+        cnorm: str | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
@@ -401,6 +421,11 @@ class BigDataMixin(_MixinBase):
                 ``count_cat`` when the aggregator is left at ``"count"``.
             column: The value/category column.
             dynamic: Re-shade on every viewport change; ``False`` bakes a static RGB.
+            clim: Frozen ``(vmin, vmax)`` colour span (IN-4). ``None`` (default) re-autoranges per frame;
+                a pair pins the shade's domain (passed to the shade operation as ``clims``).
+            cnorm: Shade normalisation — ``"linear"`` / ``"log"`` / ``"eq_hist"``. ``None`` leaves
+                HoloViews' default, but **defaults to ``"linear"`` when ``clim`` is set**, because
+                Datashader refuses a span under ``eq_hist`` (the X-4 trap).
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -440,6 +465,8 @@ class BigDataMixin(_MixinBase):
                     "canvas": canvas,
                     "color_key": describe(held, "color_key", color_key),
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "clim": describe(held, "clim", _travelling_pair(clim)),
+                    "cnorm": cnorm,
                     "common": {},
                     "opts": described_opts,
                 }
@@ -456,6 +483,8 @@ class BigDataMixin(_MixinBase):
         cmap: str = "viridis",
         color_key: Any | None = None,
         dynamic: bool = True,
+        clim: tuple[float, float] | None = None,
+        cnorm: str | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
@@ -502,6 +531,8 @@ class BigDataMixin(_MixinBase):
             held=held,
             symbology=Symbology(
                 props={
+                    "clim": describe(held, "clim", _travelling_pair(clim)),
+                    "cnorm": cnorm,
                     "via": "trajectory",
                     "track_column": track_column,
                     "by": by,
