@@ -494,7 +494,7 @@ class VectorMixin(_MixinBase):
         n_points: int = 100,
         source_center: tuple[float, float, float] | None = None,
         source_radius: float | None = None,
-        max_time: float | None = None,
+        max_length: float | None = None,
         tube_radius: float | None = None,
         cmap: str = "viridis",
         **kwargs: Any,
@@ -513,7 +513,7 @@ class VectorMixin(_MixinBase):
             source_center: World ``(x, y, z)`` centre of the seed sphere; ``None`` uses the grid's centre.
             source_radius: Radius of the seed sphere; ``None`` uses a quarter of the grid's diagonal, which
                 seeds the interior rather than a single point.
-            max_time: Maximum integration time per streamline; ``None`` lets VTK choose from the grid size.
+            max_length: Maximum integration length per streamline; ``None`` lets VTK choose from the grid size.
             tube_radius: If given, render each streamline as a tube of this radius (world units) so it reads
                 against the scene; ``None`` draws one-pixel polylines.
             cmap: Colormap for the speed (vector magnitude) the streamlines are coloured by.
@@ -551,7 +551,7 @@ class VectorMixin(_MixinBase):
             n_points=n_points,
             source_center=source_center,
             source_radius=source_radius,
-            max_time=max_time,
+            max_length=max_length,
             tube_radius=tube_radius,
             cmap=cmap,
             **kwargs,
@@ -831,7 +831,7 @@ def draw_streamlines(scene: Any, data: Any, layer: LayerSpec) -> Any:
     n_points = int(props.pop("n_points", 100))
     source_center = props.pop("source_center", None)
     source_radius = props.pop("source_radius", None)
-    max_time = props.pop("max_time", None)
+    max_length = props.pop("max_length", None)
     tube_radius = props.pop("tube_radius", None)
     cmap = props.pop("cmap", "viridis")
 
@@ -860,8 +860,8 @@ def draw_streamlines(scene: Any, data: Any, layer: LayerSpec) -> Any:
         if source_radius is not None
         else float(grid.length) / 4.0,
     }
-    if max_time is not None:
-        seed["max_time"] = float(max_time)
+    if max_length is not None:
+        seed["max_length"] = float(max_length)
     streams = grid.streamlines(_FLOW, **seed)
 
     if streams.n_points == 0:

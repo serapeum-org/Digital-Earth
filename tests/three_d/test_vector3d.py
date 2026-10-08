@@ -245,6 +245,30 @@ def test_streamlines_integrate_and_render():
     scene.close()
 
 
+def test_streamlines_honour_max_length():
+    """max_length= reaches the integrator (a bounded trace still renders).
+
+    Guards the PyVista-0.48 rename: the filter dropped ``max_time`` for ``max_length`` and raises a
+    DeprecationError on the old name, so the builder must pass the current one.
+    """
+    scene = Scene3D(off_screen=True)
+    actor = scene.streamlines(
+        _rotational_field(), n_points=30, max_length=5.0, tube_radius=0.02
+    )
+    assert actor is not None
+    assert scene.layers[0][0].n_points > 0
+    scene.close()
+
+
+def test_lines_flat_colour_and_opacity_reach_the_mesh():
+    """Without a column, a flat color= and opacity= are forwarded to the line render."""
+    scene = Scene3D(off_screen=True)
+    actor = scene.lines(_rivers(), color="#ff0000", opacity=0.5, width=3.0)
+    assert actor is not None
+    assert actor.prop.opacity == pytest.approx(0.5)
+    scene.close()
+
+
 def test_streamlines_reject_a_non_vector_field():
     """streamlines() refuses an array that is not (nz, ny, nx, 3)."""
     scene = Scene3D(off_screen=True)
