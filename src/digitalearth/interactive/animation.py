@@ -122,7 +122,8 @@ class AnimationMixin(_MixinBase):
             )
         if not animatable:
             raise ValueError(
-                "no time cube to animate — call timecube(collection) before play()/save_animation()"
+                "no time cube to animate — call timecube(collection) or frames(...) before "
+                "play()/save_animation()"
             )
         return animatable[0][1]
 

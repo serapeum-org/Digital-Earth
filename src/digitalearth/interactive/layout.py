@@ -228,8 +228,8 @@ def grid(*maps: Any, cols: int = 2) -> Any:
             >>> from digitalearth.interactive import InteractiveMap             # doctest: +SKIP
             >>> from digitalearth.interactive.layout import grid                # doctest: +SKIP
             >>> gs = grid(m1, m2, m3, m4, cols=2)                               # doctest: +SKIP
-            >>> len(gs)                                                         # doctest: +SKIP
-            4
+            >>> sorted(gs.keys())                                               # doctest: +SKIP
+            [(0, 0), (0, 1), (1, 0), (1, 1)]
 
             ```
     """
