@@ -162,3 +162,12 @@ class TestGrid:
         """
         with pytest.raises(ValueError, match="two or more"):
             grid(maps[0])
+
+    def test_cols_below_one_is_refused(self, maps):
+        """A grid narrower than one column is refused (IN-7 #433).
+
+        Args:
+            maps: The two-map fixture.
+        """
+        with pytest.raises(ValueError, match="at least 1"):
+            grid(*maps, cols=0)

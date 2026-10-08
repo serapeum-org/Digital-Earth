@@ -731,6 +731,20 @@ class TestInertFlagsAreRefused:
             "the link must be kept alive on the map"
         )
 
+    def test_linked_table_accepts_an_explicit_source(self, point_fc):
+        """`source=` links the table to a named layer rather than the last one added (IN-5 #431).
+
+        Args:
+            point_fc: The point FeatureCollection fixture.
+        """
+        linked_map = InteractiveMap().points(point_fc)
+        target = linked_map.layers[-1]
+        table = linked_map.attribute_table(point_fc, linked=True, source=target)
+        assert linked_map._table_links[-1][1].source is target, (
+            "an explicit source must be the stream's source"
+        )
+        assert isinstance(table, pn.widgets.Tabulator), f"got {type(table)}"
+
     def test_linked_table_selection_drives_the_map(self, point_fc):
         """Selecting rows pushes the indices onto the shared Selection1D stream (IN-5 #431).
 
@@ -765,8 +779,9 @@ class TestInertFlagsAreRefused:
         Args:
             point_fc: The point FeatureCollection fixture.
         """
+        bare = InteractiveMap()
         with pytest.raises(ValueError, match="attribute_table"):
-            InteractiveMap().attribute_table(point_fc, linked=True)
+            bare.attribute_table(point_fc, linked=True)
 
     def test_attribute_table_linked_defaults_to_false(self, point_fc):
         """The default must not promise linking, and must still return the read-only table."""

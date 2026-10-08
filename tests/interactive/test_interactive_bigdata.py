@@ -232,6 +232,39 @@ class TestDatashadeFrozenScale:
             f"expected a shaded RGB, got {type(m.layers[0])}"
         )
 
+    def test_datashade_cnorm_without_a_span(self, m, big_points):
+        """A `cnorm` without a `clim` sets only the normalisation, not a span (IN-4).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.datashade(
+            big_points, column="value", cnorm="log", dynamic=False, width=40, height=30
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
+    def test_trajectory_cnorm_without_a_span(self, m, big_points):
+        """The trajectory path also takes a bare `cnorm` with no span (IN-4).
+
+        Args:
+            m: The map fixture.
+            big_points: The 20k-point fixture.
+        """
+        m.trajectory(
+            big_points,
+            track_column="cls",
+            cnorm="linear",
+            dynamic=False,
+            width=60,
+            height=40,
+        )
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected a shaded RGB, got {type(m.layers[0])}"
+        )
+
 
 class TestDatashade:
     """``datashade`` — shaded RGB, categorical color_key (DI.2a)."""
