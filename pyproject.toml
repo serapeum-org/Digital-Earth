@@ -553,7 +553,13 @@ numpy = "<2.5"
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 notebook = { features = ["notebook"], solve-group = "default" }
-docs = { features = ["docs"], solve-group = "docs" }
+# The docs env carries **every** rendering tier, not just mkdocs: the mkdocs-deploy action executes every
+# notebook under docs/examples/ before the build (notebooks-path), and the pyvista / interactive / web
+# notebooks import VTK, the HoloViz stack and MapLibre. A lean docs env would fail those on import and
+# publish whatever outputs happened to be committed. `numba-numpy` rides along because the interactive
+# feature needs numpy <2.5 (see the note on that feature). Its own solve-group, so resolving four stacks
+# together can never move the single-backend envs' versions.
+docs = { features = ["docs", "3d", "interactive", "web", "numba-numpy"], solve-group = "docs" }
 # 3D tier (PyVista). Uses the `3d` feature that pixi derives from the `[3d]` optional-dependencies extra.
 # Separate solve-group so VTK stays out of the lean default/dev envs. Run: pixi run -e viz3d test-3d
 viz3d = { features = ["dev", "3d"], solve-group = "viz3d" }

@@ -18,6 +18,11 @@ on:
     workflows: ['github-release']
     types: [completed]
 
+# The docs build EXECUTES every notebook under docs/examples/ before rendering (notebooks-path), so the
+# published pages show freshly-run outputs instead of whatever was committed. That is why the `docs` pixi
+# env carries all three rendering tiers - see the comment on it in pyproject.toml. The action caches
+# executed notebooks in .jupyter_cache, keyed on the notebooks plus src/**/*.py and pyproject.toml, so a
+# source change re-runs the whole set on the next deploy.
 jobs:
   deploy-pr:
       if: github.event_name == 'pull_request'
@@ -33,6 +38,15 @@ jobs:
           package-manager: 'pixi'
           package-manager-version: 'v0.73.0'
           install-groups: 'docs'
+          notebooks-path: 'docs/examples'
+          # Notebooks that pull data off the network at run time are rendered from their
+          # committed outputs instead of being re-executed, so a docs deploy never depends
+          # on a third-party host or tile service being up.
+          notebooks-exclude: |
+            11_global_data_on_globe.ipynb
+            12_animated_globe.ipynb
+            18_global_decorations.ipynb
+            web/web_maps.ipynb
           deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
   deploy-main:
@@ -48,6 +62,15 @@ jobs:
         package-manager: 'pixi'
         package-manager-version: 'v0.73.0'
         install-groups: 'docs'
+        notebooks-path: 'docs/examples'
+        # Notebooks that pull data off the network at run time are rendered from their
+        # committed outputs instead of being re-executed, so a docs deploy never depends
+        # on a third-party host or tile service being up.
+        notebooks-exclude: |
+          11_global_data_on_globe.ipynb
+          12_animated_globe.ipynb
+          18_global_decorations.ipynb
+          web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
   deploy-release:
@@ -80,6 +103,15 @@ jobs:
         package-manager: 'pixi'
         package-manager-version: 'v0.73.0'
         install-groups: "docs"
+        notebooks-path: 'docs/examples'
+        # Notebooks that pull data off the network at run time are rendered from their
+        # committed outputs instead of being re-executed, so a docs deploy never depends
+        # on a third-party host or tile service being up.
+        notebooks-exclude: |
+          11_global_data_on_globe.ipynb
+          12_animated_globe.ipynb
+          18_global_decorations.ipynb
+          web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
         release-tag: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
         mike-alias: 'latest'
