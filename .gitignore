@@ -147,6 +147,12 @@ examples/data/DEM100_Rhine.tif
 # documents that — git already keeps tracking it, which is why it survived this rule in the first place.
 examples/data/global/*
 !examples/data/global/ersstv5.nc
+# Same reasoning for the half-degree WorldClim and ETOPO rasters: notebooks 11 and 12 read these
+# from the checkout instead of downloading 53 MB from WorldClim and NOAA ERDDAP, so the docs build
+# executes them offline. 4.6 MB for all fourteen. The full-resolution originals stay ignored.
+!examples/data/global/worldclim_tavg_*.tif
+!examples/data/global/worldclim_elev.tif
+!examples/data/global/etopo_relief.tif
 docs/examples/examples/
 
 # Claude Code files (kept local only, never tracked)

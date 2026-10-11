@@ -39,12 +39,11 @@ jobs:
           package-manager-version: 'v0.73.0'
           install-groups: 'docs'
           notebooks-path: 'docs/examples'
-          # Notebooks that pull data off the network at run time are rendered from their
+          # basemap() pulls XYZ tiles from a live service, so there is no artifact to commit for
+# these two; they are rendered from their
           # committed outputs instead of being re-executed, so a docs deploy never depends
           # on a third-party host or tile service being up.
           notebooks-exclude: |
-            11_global_data_on_globe.ipynb
-            12_animated_globe.ipynb
             18_global_decorations.ipynb
             web/web_maps.ipynb
           deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
@@ -63,12 +62,11 @@ jobs:
         package-manager-version: 'v0.73.0'
         install-groups: 'docs'
         notebooks-path: 'docs/examples'
-        # Notebooks that pull data off the network at run time are rendered from their
+        # basemap() pulls XYZ tiles from a live service, so there is no artifact to commit for
+# these two; they are rendered from their
         # committed outputs instead of being re-executed, so a docs deploy never depends
         # on a third-party host or tile service being up.
         notebooks-exclude: |
-          11_global_data_on_globe.ipynb
-          12_animated_globe.ipynb
           18_global_decorations.ipynb
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
@@ -104,12 +102,11 @@ jobs:
         package-manager-version: 'v0.73.0'
         install-groups: "docs"
         notebooks-path: 'docs/examples'
-        # Notebooks that pull data off the network at run time are rendered from their
+        # basemap() pulls XYZ tiles from a live service, so there is no artifact to commit for
+# these two; they are rendered from their
         # committed outputs instead of being re-executed, so a docs deploy never depends
         # on a third-party host or tile service being up.
         notebooks-exclude: |
-          11_global_data_on_globe.ipynb
-          12_animated_globe.ipynb
           18_global_decorations.ipynb
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
