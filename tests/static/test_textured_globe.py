@@ -2633,6 +2633,51 @@ class TestAnimateAStack:
             globe.animate([], shape=(90, 180))
         globe.close()
 
+    def test_a_one_sided_clim_measures_the_other_end(self, mocker):
+        """Giving only `vmin` fixes that end and measures the top across the stack.
+
+        Test scenario:
+            The docstring promises either bound alone is honoured. With `vmin=0` and nothing else, the
+            measured top is 1.0, so 0 and 1 still land at opposite ends of the ramp — where pinning both wide
+            collapses them. Branch coverage is satisfied by the two-sided cases, so this scenario needs its
+            own test to exist at all.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        textures = self._frame_textures(globe, frames, mocker, vmin=0.0)
+        distinct = {texture.tobytes() for texture in textures}
+        assert len(distinct) > 1, (
+            "with only vmin pinned the top should still be measured across the stack, which separates "
+            "0 from 1; one texture means the measurement was skipped"
+        )
+        globe.close()
+
+    def test_each_frame_keeps_the_globes_own_glyph_options(self, mocker):
+        """A frame's glyph is built with the tilt and mesh the globe was constructed with.
+
+        Test scenario:
+            Each frame rebuilds the glyph, because cleopatra's `texture` is read-only. A rebuild that
+            dropped the constructor's options would silently change the tilt or the mesh density partway
+            through an animation — visible as a jump, with nothing failing.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = TexturedGlobe.from_dataset(
+            frames[0], shape=(90, 180), n_lon=18, n_lat=9, tilt_deg=11.5
+        )
+        spy = mocker.spy(textured_globe, "TexturedGlobeGlyph")
+        anim = globe.animate(frames, shape=(90, 180), interval=100)
+        for index in range(len(frames)):
+            anim._func(index)
+        built = [call.kwargs for call in spy.call_args_list]
+        assert built, "each frame should construct a glyph"
+        assert all(
+            kwargs.get("n_lon") == 18
+            and kwargs.get("n_lat") == 9
+            and kwargs.get("tilt_deg") == 11.5
+            for kwargs in built
+        ), f"every frame's glyph should carry the globe's options, got {built}"
+        globe.close()
+
     def test_spin_still_turns_the_camera(self):
         """The rotation kept its behaviour under its own name."""
         frames = self._frames([0.0])
