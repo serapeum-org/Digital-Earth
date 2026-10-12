@@ -28,7 +28,7 @@ layer/colorbar lifecycle, none of which applies to a textured sphere.
 import inspect
 import os
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +52,7 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band, ring_runs
+from digitalearth.base.clim import stack_scale
 from digitalearth.base.crs import source_epsg
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.static.animation import save_animation
@@ -981,6 +982,13 @@ class TexturedGlobe(WatermarkMixin):
                 is out of contract (a zero-length ``sun``, an ``ambient`` outside ``[0, 1]``).
         """
         self.glyph = TexturedGlobeGlyph(texture, **kwargs)
+        #: The glyph options, so a frame of :meth:`animate` can rebuild the glyph around a new texture and
+        #: be identical in every other respect. cleopatra's ``texture`` is a read-only property, so a
+        #: stack is stepped by constructing a glyph per frame rather than by assigning to the one we hold;
+        #: ``fig``/``ax`` are dropped because a frame draws on the axes the animation already owns.
+        self._glyph_kwargs: dict[str, Any] = {
+            key: value for key, value in kwargs.items() if key not in ("fig", "ax")
+        }
         #: A glyph of the same tilt carrying no texture, whose ``transform`` places the overlays. They
         #: cannot hold the drawing glyph's own method: that keeps its texture alive for as long as the
         #: artist lives, and drags it into anything the figure is pickled or copied into — one marker took
@@ -1101,6 +1109,54 @@ class TexturedGlobe(WatermarkMixin):
     # ------------------------------------------------------------------ constructors
 
     @classmethod
+    def _global_values(
+        cls,
+        dataset: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        shape: tuple[int, int] = DEFAULT_TEXTURE_SHAPE,
+        resampling: str = "nearest",
+    ) -> np.ndarray:
+        """Read one band onto the global EPSG:4326 texture grid, nodata masked to ``NaN``.
+
+        The step :meth:`from_dataset` and :meth:`animate` share: pyramids aligns the raster onto the
+        template, which reprojects it, resamples it and settles the longitude frame in one call, and the band
+        is then read with nodata masked. Factored out so a stack's frames are placed exactly as a single
+        raster is — a frame measured on one grid and drawn on another is the drift worth not having.
+
+        Args:
+            dataset: A pyramids ``Dataset`` carrying a CRS.
+            band: 1-based index of the band to read.
+            shape: The ``(rows, cols)`` of the global grid to align onto.
+            resampling: The pyramids resampling method for the align.
+
+        Returns:
+            The ``(rows, cols)`` float array of that band on the global grid, nodata as ``NaN``.
+
+        Raises:
+            ValueError: If ``dataset`` has no CRS, or ``band`` is outside its band count.
+        """
+        rows, cols = shape
+        # `epsg` is None both for a raster with no CRS and for one whose CRS carries no EPSG authority code
+        # (geostationary, Mollweide, a bare ESRI code). Only the first is unplaceable; the second reprojects
+        # fine, so the presence of a CRS — not of a code — is what decides. Read the attribute rather than
+        # resolving the code: source_epsg() parses the CRS, which raises on one stored as a bare string.
+        epsg = getattr(dataset, "epsg", None)
+        if epsg is None and not getattr(dataset, "crs", None):
+            raise ValueError(
+                "from_dataset needs a dataset with a CRS to place it on the globe; this one has none. "
+                "Set dataset.crs / dataset.epsg first."
+            )
+        if not 1 <= band <= dataset.band_count:
+            raise ValueError(
+                f"band index {band} is out of range for a {dataset.band_count}-band dataset "
+                f"(valid 1..{dataset.band_count})."
+            )
+        source = dataset.select_bands([band]) if dataset.band_count > 1 else dataset
+        aligned = source.align(cls._global_template(rows, cols), method=resampling)
+        return read_masked_band(aligned, band=1)
+
+    @classmethod
     def from_dataset(
         cls,
         dataset: Any,
@@ -1193,25 +1249,11 @@ class TexturedGlobe(WatermarkMixin):
         # (geostationary, Mollweide, a bare ESRI code). Only the first is unplaceable; the second reprojects
         # fine, so the presence of a CRS — not of a code — is what decides.
         epsg = getattr(dataset, "epsg", None)
-        if epsg is None and not getattr(dataset, "crs", None):
-            raise ValueError(
-                "from_dataset needs a dataset with a CRS to place it on the globe; this one has none. "
-                "Set dataset.crs / dataset.epsg first."
-            )
-        # pyramids owns the regrid: align() reprojects to the template's CRS and resamples onto its grid,
-        # which also settles the longitude frame (0-360 or antimeridian-crossing) and any non-uniform or
-        # single-row source. Doing it here would be re-implementing GIS.
-        # Validate here rather than leaning on select_bands, which the single-band shortcut below skips.
-        if not 1 <= band <= dataset.band_count:
-            raise ValueError(
-                f"band index {band} is out of range for a {dataset.band_count}-band dataset "
-                f"(valid 1..{dataset.band_count})."
-            )
-        # Select the wanted band first: align warps every band it is given, and only one is drawn.
-        source = dataset.select_bands([band]) if dataset.band_count > 1 else dataset
-        aligned = source.align(cls._global_template(rows, cols), method=resampling)
-
-        values = read_masked_band(aligned, band=1)
+        # pyramids owns the regrid and _global_values owns the call, so animate()'s frames are placed
+        # exactly as a single raster is.
+        values = cls._global_values(
+            dataset, band=band, shape=shape, resampling=resampling
+        )
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
         texture = _as_byte_texture(rgba)
         if not (texture[..., 3] > 0).any():
@@ -2148,8 +2190,191 @@ class TexturedGlobe(WatermarkMixin):
             geometry = geometry.to_crs(_TEXTURE_EPSG)
         return geometry.x.to_numpy(), geometry.y.to_numpy()
 
-    def animate(self, ax: Any = None, **kwargs: Any) -> FuncAnimation:
-        """Animate a full rotation, returning a matplotlib ``FuncAnimation``.
+    def animate(
+        self,
+        stack: Any,
+        *,
+        ax: Any = None,
+        band: int = DEFAULT_BAND,
+        cmap: Any = "viridis",
+        vmin: float | None = None,
+        vmax: float | None = None,
+        shape: tuple[int, int] = DEFAULT_TEXTURE_SHAPE,
+        resampling: str = "nearest",
+        titles: Sequence[Any] | None = None,
+        spin: float | None = None,
+        interval: float = _DEFAULT_INTERVAL_MS,
+        **kwargs: Any,
+    ) -> FuncAnimation:
+        """Step a series of rasters across the globe, returning a matplotlib ``FuncAnimation``.
+
+        The globe counterpart of :meth:`~digitalearth.static.maps.animation.AnimationMixin.animate` on the
+        2-D tier: the camera holds still and the **data** changes, which is what a time series of a global
+        field — sea-surface temperature, sea ice, an anomaly field — wants. To turn the viewpoint around one
+        fixed texture instead, use :meth:`spin`.
+
+        **One colour scale across the whole stack.** Every frame is measured before any is drawn and they all
+        share the resulting domain, so a change on screen is a change in the data. Per-frame normalisation
+        would make a constant field shimmer and an outlier frame rescale the rest; pass ``vmin``/``vmax`` to
+        pin the scale yourself, and either one alone fixes that end and measures the other.
+
+        **Overlays come along.** Anything added with :meth:`points`, :meth:`coastlines`, :meth:`borders` or
+        :meth:`land` is re-placed on every frame, so a coastline stays registered to the ground while the
+        field beneath it changes. That is the whole reason this is a method rather than something a caller
+        assembles: stepping the texture by hand means rebuilding the globe per frame, and clearing the axes
+        to do so throws the overlays away.
+
+        Each frame is read through :meth:`_global_values`, the same path :meth:`from_dataset` takes, so a
+        frame is placed exactly as a single raster would be. cleopatra's ``texture`` is a read-only property,
+        so each frame builds a glyph around its own texture from the options this globe was constructed with.
+
+        Args:
+            stack: The rasters to step, one per frame — a sequence of pyramids ``Dataset`` objects, or
+                anything iterable that yields them (a ``DatasetCollection`` indexes the same way).
+            ax: An existing ``Axes3D`` to animate on. When omitted, the constructor's axes is used if one was
+                given, and only otherwise is a new figure created.
+            band: 1-based index of the band to read from every frame.
+            cmap: Colormap name or object, resolved by cleopatra for all frames alike.
+            vmin: Low end of the shared colour scale; ``None`` (default) measures it across the stack.
+            vmax: High end of the shared colour scale; ``None`` (default) measures it across the stack.
+            shape: The ``(rows, cols)`` global texture grid every frame is aligned onto.
+            resampling: The pyramids resampling method for that align.
+            titles: One title per frame, set on the axes as it is drawn; ``None`` (default) leaves the title
+                alone.
+            spin: The spin to hold the camera at, in degrees; ``None`` (default) keeps the globe where it
+                already is, so a decorated globe animates from the view it was drawn at.
+            interval: Milliseconds between frames.
+            **kwargs: Forwarded to the glyph's ``draw`` on every frame (``sun``, ``ambient``, and the render
+                options). ``figsize`` sizes the figure created here, or resizes the one the globe already
+                owns, and is ignored when ``ax`` is given.
+
+        Returns:
+            The ``FuncAnimation`` over the stack. It is also kept on ``self._animation`` so it is not
+            garbage-collected before you save or display it.
+
+        Raises:
+            ValueError: If ``stack`` yields no frames, ``titles`` does not have one entry per frame,
+                ``interval`` is not a positive number of milliseconds, a frame has no CRS or too few bands,
+                or a render option or lighting argument is out of contract.
+
+        Examples:
+            - Step a two-frame stack; the colour scale is measured across both, so the second frame being
+                warmer is visible rather than normalised away:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import TexturedGlobe
+                >>> ref = GeoReference(geo=(-180.0, 2.0, 0.0, 90.0, 0.0, -2.0), epsg=4326)
+                >>> cool = Dataset.from_array(np.zeros((90, 180), "float32"), geo_ref=ref)
+                >>> warm = Dataset.from_array(np.ones((90, 180), "float32"), geo_ref=ref)
+                >>> globe = TexturedGlobe.from_dataset(cool, shape=(90, 180), n_lon=16, n_lat=8)
+                >>> anim = globe.animate([cool, warm], shape=(90, 180), interval=100)
+                >>> len(list(anim.new_frame_seq()))
+                2
+
+                ```
+            - A stack with a title per frame:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import TexturedGlobe
+                >>> ref = GeoReference(geo=(-180.0, 2.0, 0.0, 90.0, 0.0, -2.0), epsg=4326)
+                >>> frames = [
+                ...     Dataset.from_array(np.full((90, 180), v, "float32"), geo_ref=ref)
+                ...     for v in (1.0, 2.0)
+                ... ]
+                >>> globe = TexturedGlobe.from_dataset(frames[0], shape=(90, 180), n_lon=16, n_lat=8)
+                >>> _ = globe.animate(frames, shape=(90, 180), titles=["Jan", "Feb"], interval=100)
+                >>> globe.ax.get_title()
+                'Jan'
+
+                ```
+        """
+        frames = list(stack)
+        if not frames:
+            raise ValueError(
+                "animate needs at least one raster to step; the stack yielded none. Pass a sequence of "
+                "pyramids Datasets, or use spin() to turn the camera around the texture already drawn."
+            )
+        if titles is not None and len(titles) != len(frames):
+            raise ValueError(
+                f"titles must have one entry per frame; got {len(titles)} for {len(frames)} frames."
+            )
+        if interval <= 0:
+            raise ValueError(
+                f"interval must be a positive number of milliseconds, got {interval!r}"
+            )
+        values = [
+            self._global_values(frame, band=band, shape=shape, resampling=resampling)
+            for frame in frames
+        ]
+        # Measure before drawing: every frame shares one domain, so what moves on screen is the data.
+        measured = (
+            stack_scale(values).as_limits()
+            if (vmin is None or vmax is None)
+            else (0.0, 1.0)
+        )
+        low = measured[0] if vmin is None else float(vmin)
+        high = measured[1] if vmax is None else float(vmax)
+        textures = [
+            _as_byte_texture(self._colorize(frame, cmap=cmap, vmin=low, vmax=high))
+            for frame in values
+        ]
+        at_spin = self._spin if spin is None else float(spin)
+
+        supplied = not (ax is None or self._is_ours(ax)) or self._caller_supplied_axes
+        if ax is None:
+            ax = self._ctor_ax
+        ax = self._reuse_own_axes(ax, kwargs)
+        if ax is None:
+            figsize = kwargs.pop(
+                "figsize", self.glyph.default_options.get("figsize", (6, 6))
+            )
+            ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
+
+        def _show(index: int) -> None:
+            """Draw one frame: its own texture, the held spin, and the overlays turned to match."""
+            self.glyph = TexturedGlobeGlyph(textures[index], **self._glyph_kwargs)
+            self.glyph.draw(ax, spin=at_spin, **kwargs)
+            self._spin = at_spin
+            self._turn_overlays(ax, at_spin)
+            if titles is not None:
+                ax.set_title(str(titles[index]))
+
+        # The first frame is drawn now, as spin() does it: a bad render option is refused at this call
+        # rather than from inside the frame loop.
+        _show(0)
+        self._bind(ax, owns=not supplied)
+        self._warn_if_finer_than_the_mesh(textures[0])
+
+        def _frame(index: int) -> tuple[Any, ...]:
+            _show(index)
+            return (self.glyph.surface,)
+
+        anim = FuncAnimation(
+            _root_figure(ax),
+            _frame,
+            frames=len(frames),
+            interval=interval,
+            blit=False,
+        )
+        self._animation = (
+            anim  # keep a strong reference so it survives until save/display
+        )
+        self._animation_fps = 1000.0 / interval
+        return anim
+
+    def spin(self, ax: Any = None, **kwargs: Any) -> FuncAnimation:
+        """Animate a full rotation of the camera, returning a matplotlib ``FuncAnimation``.
+
+        This turns the **viewpoint** around one fixed texture. To step a **series of rasters** instead,
+        holding the camera still, use :meth:`animate` — the two are deliberately separate, because
+        spinning while stepping time conflates them and a viewer cannot tell whether a change on screen
+        is the data or the vantage point.
 
         When no ``ax`` is given the 3-D axes is created here rather than inside the glyph, so :attr:`fig` and
         :attr:`ax` are known without reaching into the animation's internals — which is what lets
@@ -2191,7 +2416,7 @@ class TexturedGlobe(WatermarkMixin):
                 >>> import numpy as np
                 >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
-                >>> anim = globe.animate(n_frames=4, interval=100)
+                >>> anim = globe.spin(n_frames=4, interval=100)
                 >>> globe.ax.name
                 '3d'
                 >>> globe.fig is globe.ax.get_figure()
@@ -2207,7 +2432,7 @@ class TexturedGlobe(WatermarkMixin):
                 >>> import matplotlib.pyplot as plt
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> ax = plt.figure().add_subplot(projection="3d")
-                >>> anim = globe.animate(ax, n_frames=2, interval=200)
+                >>> anim = globe.spin(ax, n_frames=2, interval=200)
                 >>> globe.ax is ax
                 True
 
@@ -2349,7 +2574,7 @@ class TexturedGlobe(WatermarkMixin):
                 >>> import tempfile
                 >>> from pathlib import Path
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
-                >>> anim = globe.animate(n_frames=2, interval=200)
+                >>> anim = globe.spin(n_frames=2, interval=200)
                 >>> out = Path(tempfile.mkdtemp()) / "globe.gif"
                 >>> written = globe.save_animation(str(out))
                 >>> Path(written).exists()

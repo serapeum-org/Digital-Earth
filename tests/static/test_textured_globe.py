@@ -22,6 +22,7 @@ from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.static import TexturedGlobe
+from digitalearth.static import textured_globe
 from digitalearth.static.textured_globe import (
     _clip_ring,
     _interior_is_left,
@@ -899,12 +900,12 @@ class TestOverlaysFollowTheSpin:
         """Every rendered frame turns the overlay to the spin the sphere is drawn at.
 
         Test scenario:
-            The defect was that animate() recorded only the start spin, so markers added afterwards stayed
+            The defect was that spin() recorded only the start spin, so markers added afterwards stayed
             frozen while the sphere turned. Four frames over one revolution must turn the overlay through
             0, 90, 180 and 270 degrees. Consecutive repeats are collapsed: matplotlib primes the first
             frame before its save loop.
         """
-        globe.animate(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
+        globe.spin(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
         globe.points([120.0, 130.0], lat=[10.0, -10.0], s=20, c="red")
         spy = mocker.spy(TexturedGlobe, "_turn_overlays")
         globe._animation.save(str(tmp_path / "spin.gif"), writer=PillowWriter(fps=2))
@@ -944,7 +945,7 @@ class TestOverlaysFollowTheSpin:
             Three frames over a revolution end at 240 degrees, a spin where the two directions of turn
             disagree.
         """
-        globe.animate(n_frames=3, interval=100, figsize=(3, 3), start_spin=0.0)
+        globe.spin(n_frames=3, interval=100, figsize=(3, 3), start_spin=0.0)
         scatter = globe.points([30.0], lat=[10.0], hide_far_side=False)
         globe._animation.save(str(tmp_path / "ground.gif"), writer=PillowWriter(fps=2))
         expected = globe.project([30.0], [10.0], spin=240.0, altitude=0.01)
@@ -959,7 +960,7 @@ class TestOverlaysFollowTheSpin:
         Test scenario:
             The overlay is one persistent artist, so the caller's handle is live for the whole animation.
         """
-        globe.animate(n_frames=2, interval=100, figsize=(3, 3), start_spin=0.0)
+        globe.spin(n_frames=2, interval=100, figsize=(3, 3), start_spin=0.0)
         scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
         start = self._offsets(scatter)
         globe._animation.save(str(tmp_path / "half.gif"), writer=PillowWriter(fps=2))
@@ -978,7 +979,7 @@ class TestOverlaysFollowTheSpin:
             Counts every collection on the axes other than the sphere, not only the ones the globe tracks,
             so an implementation that left a copy behind each frame would fail here.
         """
-        globe.animate(n_frames=8, interval=100, figsize=(3, 3))
+        globe.spin(n_frames=8, interval=100, figsize=(3, 3))
         globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
         globe._animation.save(str(tmp_path / "stack.gif"), writer=PillowWriter(fps=2))
         overlays = self._overlays_on(globe.ax, globe)
@@ -994,7 +995,7 @@ class TestOverlaysFollowTheSpin:
             Driving the rotation by hand is the documented escape hatch, so a caller who names a spin must
             keep the markers exactly there while the sphere turns beneath them.
         """
-        globe.animate(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
+        globe.spin(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
         scatter = globe.points(
             [120.0], lat=[0.0], spin=0.0, s=20, c="red", hide_far_side=False
         )
@@ -1016,17 +1017,17 @@ class TestOverlaysFollowTheSpin:
         globe.draw(ax)
         scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
         start = self._offsets(scatter)
-        globe.animate(ax, n_frames=2, interval=100, start_spin=0.0)
+        globe.spin(ax, n_frames=2, interval=100, start_spin=0.0)
         globe._animation.save(str(tmp_path / "before.gif"), writer=PillowWriter(fps=2))
         assert not np.allclose(self._offsets(scatter), start), (
-            "an overlay added before animate() on the same axes should follow the rotation"
+            "an overlay added before spin() on the same axes should follow the rotation"
         )
         plt.close(ax.get_figure())
 
     def test_a_bare_animate_keeps_the_overlays_of_the_globe_it_owns(
         self, globe, tmp_path
     ):
-        """draw, decorate, then animate() carries the overlays into the animation.
+        """draw, decorate, then spin() carries the overlays into the animation.
 
         Test scenario:
             Every overlay method needs a drawn globe, so this is the natural order to write. Opening a
@@ -1034,7 +1035,7 @@ class TestOverlaysFollowTheSpin:
         """
         globe.draw(figsize=(3, 3))
         scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
-        globe.animate(n_frames=2, interval=100, start_spin=0.0)
+        globe.spin(n_frames=2, interval=100, start_spin=0.0)
         globe._animation.save(str(tmp_path / "kept.gif"), writer=PillowWriter(fps=2))
         assert scatter in globe.ax.collections, (
             "the marker should still be on the animated globe"
@@ -1065,7 +1066,7 @@ class TestOverlaysFollowTheSpin:
         """A draw() at another spin on the same axes turns an overlay already on it.
 
         Test scenario:
-            draw() turns the sphere for the same reason animate() does, so the overlay turns with it.
+            draw() turns the sphere for the same reason spin() does, so the overlay turns with it.
         """
         ax = self._axes()
         globe.draw(ax, spin=0.0)
@@ -1398,7 +1399,7 @@ class TestOverlaysFollowTheSpin:
 
     def test_a_globe_with_no_overlays_is_untouched(self, globe, tmp_path):
         """A bare globe animates with nothing but its surface on the axes."""
-        globe.animate(n_frames=3, interval=100, figsize=(3, 3))
+        globe.spin(n_frames=3, interval=100, figsize=(3, 3))
         globe._animation.save(str(tmp_path / "bare.gif"), writer=PillowWriter(fps=2))
         assert self._overlays_on(globe.ax, globe) == [], "no overlay should appear"
         globe.close()
@@ -2160,11 +2161,11 @@ class TestRenderLifecycle:
         assert globe.ax is ax, "draw() should record the axes"
         assert ax.name == "3d", f"expected a 3-D axes, got {ax.name}"
 
-    def test_animate_records_the_figure_axes_and_rate(self, globe):
-        anim = globe.animate(n_frames=2, interval=100)
+    def test_spin_records_the_figure_axes_and_rate(self, globe):
+        anim = globe.spin(n_frames=2, interval=100)
         assert anim is not None
-        assert globe.ax is not None, "animate() should record the axes"
-        assert globe.fig is not None, "animate() should record the figure"
+        assert globe.ax is not None, "spin() should record the axes"
+        assert globe.fig is not None, "spin() should record the figure"
         assert globe._animation_fps == pytest.approx(10.0)
 
     def test_close_releases_the_figure(self, globe):
@@ -2218,16 +2219,16 @@ class TestRenderLifecycle:
             f"only the caller's figure should remain, got {plt.get_fignums()}"
         )
 
-    def test_animate_works_when_the_constructor_supplied_the_axes(self, flat_texture):
-        """A bare animate() must reuse the ctor's axes, not crash on a None it never created."""
+    def test_spin_works_when_the_constructor_supplied_the_axes(self, flat_texture):
+        """A bare spin() must reuse the ctor's axes, not crash on a None it never created."""
         plt.close("all")
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
         globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4, fig=fig, ax=ax)
-        assert globe.animate(n_frames=2, interval=100) is not None, (
-            "animate() should return the animation"
+        assert globe.spin(n_frames=2, interval=100) is not None, (
+            "spin() should return the animation"
         )
-        assert globe.ax is ax, "animate() should have used the constructor's axes"
+        assert globe.ax is ax, "spin() should have used the constructor's axes"
 
     def test_redrawing_onto_the_same_figure_does_not_close_it(self, globe):
         """Rebinding to another axes on the figure we are already drawing on must keep it open."""
@@ -2238,12 +2239,12 @@ class TestRenderLifecycle:
         assert plt.fignum_exists(fig.number), "the figure being drawn on was closed"
 
     def test_animating_onto_a_caller_axes_releases_our_figure(self, globe):
-        """The release-on-rebind rule has to apply to animate(), not only to draw()."""
+        """The release-on-rebind rule has to apply to spin(), not only to draw()."""
         plt.close("all")
         globe.draw()
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
-        globe.animate(ax, n_frames=2, interval=100)
+        globe.spin(ax, n_frames=2, interval=100)
         globe.close()
         assert plt.get_fignums() == [fig.number], (
             f"only the caller's figure should remain, got {plt.get_fignums()}"
@@ -2253,7 +2254,7 @@ class TestRenderLifecycle:
         plt.close("all")
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
-        globe.animate(ax, n_frames=2, interval=100)
+        globe.spin(ax, n_frames=2, interval=100)
         globe.close()
         assert plt.fignum_exists(fig.number), (
             "a caller-supplied figure must survive close()"
@@ -2278,7 +2279,7 @@ class TestRenderLifecycle:
         """
         figure = plt.figure(figsize=(3, 3))
         panel = figure.subfigures(1, 1)
-        globe.animate(panel.add_subplot(projection="3d"), n_frames=2, interval=100)
+        globe.spin(panel.add_subplot(projection="3d"), n_frames=2, interval=100)
         out = tmp_path / "subfigure.gif"
         globe.save_animation(str(out), fps=2)
         assert out.stat().st_size > 0, "the animation should have been written"
@@ -2335,23 +2336,23 @@ class TestRenderLifecycle:
         )
 
     def test_animating_twice_does_not_leak_the_first_figure(self, globe):
-        """animate() creates its own figure when given no axes, so the previous one must be released."""
+        """spin() creates its own figure when given no axes, so the previous one must be released."""
         plt.close("all")
-        globe.animate(n_frames=2, interval=100)
-        globe.animate(n_frames=2, interval=100)
+        globe.spin(n_frames=2, interval=100)
+        globe.spin(n_frames=2, interval=100)
         assert len(plt.get_fignums()) == 1, (
             f"expected 1 open figure, got {len(plt.get_fignums())}"
         )
 
-    def test_animate_records_its_starting_spin(self, globe):
-        """Otherwise an overlay added after animate() is placed at whatever spin draw() last used."""
-        globe.animate(n_frames=2, interval=100, start_spin=42.0)
+    def test_spin_records_its_starting_spin(self, globe):
+        """Otherwise an overlay added after spin() is placed at whatever spin draw() last used."""
+        globe.spin(n_frames=2, interval=100, start_spin=42.0)
         assert globe._spin == pytest.approx(42.0)
 
     def test_a_zero_animation_interval_is_refused(self, globe):
         """interval=0 used to raise ZeroDivisionError from the frame-rate bookkeeping."""
         with pytest.raises(ValueError, match="positive number of milliseconds"):
-            globe.animate(n_frames=2, interval=0)
+            globe.spin(n_frames=2, interval=0)
 
     @pytest.mark.parametrize("frames", [0, -3], ids=["zero", "negative"])
     def test_an_animation_with_no_frames_is_refused(self, globe, frames):
@@ -2361,7 +2362,7 @@ class TestRenderLifecycle:
             frames: A frame count below one.
         """
         with pytest.raises(ValueError, match="n_frames must be at least 1"):
-            globe.animate(n_frames=frames, interval=100)
+            globe.spin(n_frames=frames, interval=100)
 
     def test_saving_before_drawing_is_refused(self, globe, tmp_path):
         destination = str(tmp_path / "globe.png")
@@ -2387,7 +2388,7 @@ class TestRenderLifecycle:
             "digitalearth.static.textured_globe.save_animation",
             lambda anim, path, **kw: seen.update(anim=anim, path=path, **kw) or path,
         )
-        globe.animate(n_frames=2, interval=125)
+        globe.spin(n_frames=2, interval=125)
         globe.save_animation("globe.mp4", gif="globe.gif")
         assert seen["path"] == "globe.mp4", "the video path should be forwarded"
         assert seen["gif"] == "globe.gif", "the gif path should be forwarded"
@@ -2398,13 +2399,13 @@ class TestRenderLifecycle:
     def test_save_animation_defaults_to_the_animations_own_rate(
         self, globe, monkeypatch
     ):
-        """interval=125 ms is 8 fps; the saved clip should match what animate() was built for."""
+        """interval=125 ms is 8 fps; the saved clip should match what spin() was built for."""
         seen = {}
         monkeypatch.setattr(
             "digitalearth.static.textured_globe.save_animation",
             lambda anim, path, **kw: seen.update(kw) or path,
         )
-        globe.animate(n_frames=2, interval=125)
+        globe.spin(n_frames=2, interval=125)
         globe.save_animation("globe.mp4")
         assert seen["fps"] == pytest.approx(8.0), (
             f"expected 8 fps from a 125 ms interval, got {seen['fps']}"
@@ -2416,15 +2417,15 @@ class TestRenderLifecycle:
             "digitalearth.static.textured_globe.save_animation",
             lambda anim, path, **kw: seen.update(kw) or path,
         )
-        globe.animate(n_frames=2, interval=125)
+        globe.spin(n_frames=2, interval=125)
         globe.save_animation("globe.mp4", fps=24)
         assert seen["fps"] == 24, f"an explicit fps must win, got {seen['fps']}"
 
-    def test_animate_accepts_an_existing_axes(self, globe):
+    def test_spin_accepts_an_existing_axes(self, globe):
         """Passing an axes must reuse it rather than opening a second figure."""
         fig = plt.figure(figsize=(3, 3))
         ax = fig.add_subplot(projection="3d")
-        globe.animate(ax, n_frames=2, interval=100)
+        globe.spin(ax, n_frames=2, interval=100)
         assert globe.ax is ax, "the supplied axes should be adopted"
         assert globe.fig is fig, "fig should follow the supplied axes"
 
@@ -2438,3 +2439,207 @@ class TestRenderLifecycle:
         before = len(fig.axes)
         globe.stamp(np.full((8, 8, 4), 255, dtype=np.uint8), frac=0.1, shadow=False)
         assert len(fig.axes) == before + 1
+
+
+class TestAnimateAStack:
+    """`animate` steps a series of rasters while the camera holds still (#173)."""
+
+    @staticmethod
+    def _frames(values):
+        """A stack of constant global rasters, one per value in `values`.
+
+        Args:
+            values: One constant value per frame.
+
+        Returns:
+            list: A pyramids `Dataset` per value, all on the same 2-degree global grid.
+        """
+        ref = GeoReference(geo=(-180.0, 2.0, 0.0, 90.0, 0.0, -2.0), epsg=4326)
+        return [
+            Dataset.from_array(np.full((90, 180), float(v), "float32"), geo_ref=ref)
+            for v in values
+        ]
+
+    @staticmethod
+    def _rendered(globe, tmp_path, name="stack.gif"):
+        """Render every frame and read the pixels back.
+
+        Args:
+            globe: The globe holding the animation.
+            tmp_path: pytest's temporary directory.
+            name: File name to write under it.
+
+        Returns:
+            list: One `(H, W, 3)` int16 array per GIF frame.
+        """
+        from PIL import Image, ImageSequence
+
+        out = tmp_path / name
+        globe._animation.save(str(out), writer=PillowWriter(fps=2))
+        return [
+            np.asarray(frame.convert("RGB"), dtype=np.int16)
+            for frame in ImageSequence.Iterator(Image.open(out))
+        ]
+
+    def _globe(self, frames):
+        """A small globe built from the first frame, ready to animate the rest."""
+        return TexturedGlobe.from_dataset(
+            frames[0], shape=(90, 180), n_lon=24, n_lat=12
+        )
+
+    def test_one_frame_per_raster(self, tmp_path):
+        """The animation has exactly as many frames as the stack has rasters."""
+        frames = self._frames([0.0, 1.0, 2.0])
+        globe = self._globe(frames)
+        anim = globe.animate(frames, shape=(90, 180), interval=100)
+        assert len(list(anim.new_frame_seq())) == len(frames), (
+            f"a {len(frames)}-raster stack should animate in {len(frames)} frames"
+        )
+        globe.close()
+
+    def test_the_colour_scale_is_shared_across_the_stack(self, tmp_path):
+        """Two constant frames render differently, because one domain spans both.
+
+        Test scenario:
+            This is the regression guard for the whole feature. Each frame is constant, so a scale measured
+            per frame would map both to the same colour and the clip would sit there unchanging — the exact
+            failure that makes an animation look broken. One domain across the stack puts 0.0 at the bottom
+            of the ramp and 1.0 at the top.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        globe.animate(frames, shape=(90, 180), interval=100)
+        first, second = self._rendered(globe, tmp_path)[:2]
+        changed = int((np.abs(second - first).sum(axis=2) > 12).sum())
+        assert changed > 0, (
+            "frames of a shared-scale stack should differ; identical frames mean the scale was measured "
+            "per frame instead of across the stack"
+        )
+        globe.close()
+
+    @staticmethod
+    def _frame_textures(globe, frames, mocker, **kwargs):
+        """Drive every frame and return the texture each one was built around.
+
+        Args:
+            globe: The globe to animate.
+            frames: The stack to step.
+            mocker: pytest-mock's fixture, used to record the glyph constructions.
+            **kwargs: Forwarded to `animate`.
+
+        Returns:
+            list: One texture array per glyph built while the frames were drawn.
+        """
+        spy = mocker.spy(textured_globe, "TexturedGlobeGlyph")
+        anim = globe.animate(frames, shape=(90, 180), interval=100, **kwargs)
+        for index in range(len(frames)):
+            anim._func(index)
+        return [call.args[0] for call in spy.call_args_list]
+
+    def test_an_explicit_clim_overrides_the_measurement(self, mocker):
+        """Pinning vmin/vmax far outside the data puts every frame at the same end of the ramp.
+
+        Test scenario:
+            0 and 1 against a 0..1000 scale are the same colour, where the measured scale separates them —
+            so identical textures prove the pin was honoured rather than the stack re-measured.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        textures = self._frame_textures(globe, frames, mocker, vmin=0.0, vmax=1000.0)
+        distinct = {texture.tobytes() for texture in textures}
+        assert len(distinct) == 1, (
+            f"0 and 1 on a 0..1000 scale should give one texture, got {len(distinct)}"
+        )
+        globe.close()
+
+    def test_the_measured_scale_separates_the_frames(self, mocker):
+        """Without a pin, the measured domain spans the stack and the frames differ."""
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        textures = self._frame_textures(globe, frames, mocker)
+        distinct = {texture.tobytes() for texture in textures}
+        assert len(distinct) > 1, (
+            "a measured scale should separate 0 from 1; one texture means it was measured per frame"
+        )
+        globe.close()
+
+    def test_overlays_survive_the_stack(self, tmp_path):
+        """A coastline added before the animation is still there after every frame has drawn.
+
+        Test scenario:
+            The reason this is a method rather than something a caller assembles: stepping the texture by
+            hand means rebuilding the globe per frame, and clearing the axes to do that throws the overlays
+            away.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        globe.draw()
+        globe.coastlines(linewidths=0.5)
+        before = len(globe._overlays)
+        globe.animate(frames, shape=(90, 180), interval=100)
+        self._rendered(globe, tmp_path, "overlay.gif")
+        assert len(globe._overlays) == before == 1, (
+            f"the coastline should survive the stack, had {before} before and "
+            f"{len(globe._overlays)} after"
+        )
+        globe.close()
+
+    def test_titles_are_set_per_frame(self):
+        """Each frame puts its own title on the axes."""
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        globe.animate(frames, shape=(90, 180), titles=["Jan", "Feb"], interval=100)
+        assert globe.ax.get_title() == "Jan", (
+            f"the first frame should carry the first title, got {globe.ax.get_title()!r}"
+        )
+        globe.close()
+
+    def test_the_camera_holds_still(self):
+        """`spin=` fixes the viewpoint, so only the data moves."""
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        globe.animate(frames, shape=(90, 180), spin=45.0, interval=100)
+        assert globe._spin == 45.0, (
+            f"the camera should hold at the spin asked for, got {globe._spin}"
+        )
+        globe.close()
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"titles": ["only one"]}, "one entry per frame"),
+            ({"interval": 0}, "positive number of milliseconds"),
+            ({"band": 7}, "out of range"),
+        ],
+        ids=["titles-length", "interval", "band"],
+    )
+    def test_refusals(self, kwargs, match):
+        """Each out-of-contract argument is refused at the call, not inside the frame loop.
+
+        Args:
+            kwargs: The offending argument.
+            match: Text the message must carry.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        with pytest.raises(ValueError, match=match):
+            globe.animate(frames, shape=(90, 180), **kwargs)
+        globe.close()
+
+    def test_an_empty_stack_is_refused_and_points_at_spin(self):
+        """Nothing to step is an error, and the message names the method that turns the camera."""
+        frames = self._frames([0.0])
+        globe = self._globe(frames)
+        with pytest.raises(ValueError, match="at least one raster"):
+            globe.animate([], shape=(90, 180))
+        globe.close()
+
+    def test_spin_still_turns_the_camera(self):
+        """The rotation kept its behaviour under its own name."""
+        frames = self._frames([0.0])
+        globe = self._globe(frames)
+        anim = globe.spin(n_frames=3, interval=100)
+        assert len(list(anim.new_frame_seq())) == 3, (
+            "spin() should still sweep the camera over the frames asked for"
+        )
+        globe.close()
