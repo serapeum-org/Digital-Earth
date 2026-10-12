@@ -21,8 +21,7 @@ from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
-from digitalearth.static import TexturedGlobe
-from digitalearth.static import textured_globe
+from digitalearth.static import TexturedGlobe, textured_globe
 from digitalearth.static.textured_globe import (
     _clip_ring,
     _interior_is_left,
