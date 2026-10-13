@@ -52,7 +52,7 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band, ring_runs
-from digitalearth.base.clim import stack_scale
+from digitalearth.base.clim import DEFAULT_CLIM_SCAN_CAP, sample_evenly, stack_scale
 from digitalearth.base.crs import source_epsg
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.static.animation import save_animation
@@ -937,8 +937,8 @@ class TexturedGlobe(WatermarkMixin):
 
     Attributes:
         glyph: The underlying cleopatra ``TexturedGlobeGlyph``.
-        fig: The matplotlib figure, once :meth:`draw` or :meth:`animate` has run (``None`` before).
-        ax: The matplotlib ``Axes3D``, once :meth:`draw` or :meth:`animate` has run (``None`` before).
+        fig: The matplotlib figure, once :meth:`draw`, :meth:`spin` or :meth:`animate` has run (``None`` before).
+        ax: The matplotlib ``Axes3D``, once :meth:`draw`, :meth:`spin` or :meth:`animate` has run (``None`` before).
 
     Examples:
         - Build a globe from a two-tone synthetic texture and draw it:
@@ -2213,10 +2213,17 @@ class TexturedGlobe(WatermarkMixin):
         field — sea-surface temperature, sea ice, an anomaly field — wants. To turn the viewpoint around one
         fixed texture instead, use :meth:`spin`.
 
-        **One colour scale across the whole stack.** Every frame is measured before any is drawn and they all
-        share the resulting domain, so a change on screen is a change in the data. Per-frame normalisation
-        would make a constant field shimmer and an outlier frame rescale the rest; pass ``vmin``/``vmax`` to
-        pin the scale yourself, and either one alone fixes that end and measures the other.
+        **One colour scale across the whole stack.** The scale is settled before any frame is drawn and they
+        all share it, so a change on screen is a change in the data. Per-frame normalisation would make a
+        constant field shimmer and an outlier frame rescale the rest; pass ``vmin``/``vmax`` to pin the scale
+        yourself, and either one alone fixes that end and measures the other. The scale is measured from an
+        evenly-spread sample of at most ``DEFAULT_CLIM_SCAN_CAP`` (24) frames, as the 2-D tier measures its
+        own — a long series does not read every frame into memory just to find its limits.
+
+        **Memory is bounded by one frame, not the stack.** Frames are read and colourised one at a time, as
+        each is drawn, never all held at once; a 624-band series animates in roughly the footprint of a
+        single frame. The default ``shape`` is a 1440x2880 texture (~17 MB each), so a coarser ``shape=`` is
+        worth passing when the output is small.
 
         **Overlays come along.** Anything added with :meth:`points`, :meth:`coastlines`, :meth:`borders` or
         :meth:`land` is re-placed on every frame, so a coastline stays registered to the ground while the
@@ -2241,7 +2248,9 @@ class TexturedGlobe(WatermarkMixin):
             resampling: The pyramids resampling method for that align.
             titles: One title per frame, set on the axes as it is drawn; ``None`` (default) leaves the title
                 alone.
-            spin: The spin to hold the camera at, in degrees; ``None`` (default) keeps the globe where it
+            spin: The spin to hold the camera at, in degrees — the same ``spin=`` that :meth:`draw` and the
+                glyph take, named to match them rather than the :meth:`spin` method. ``None`` (default) keeps
+                the globe where it
                 already is, so a decorated globe animates from the view it was drawn at.
             interval: Milliseconds between frames.
             **kwargs: Forwarded to the glyph's ``draw`` on every frame (``sun``, ``ambient``, and the render
@@ -2300,30 +2309,57 @@ class TexturedGlobe(WatermarkMixin):
                 "animate needs at least one raster to step; the stack yielded none. Pass a sequence of "
                 "pyramids Datasets, or use spin() to turn the camera around the texture already drawn."
             )
+        if isinstance(titles, str):
+            # A bare string is iterable, so len() "works" and the per-frame indexing below would hand each
+            # frame one character. Refuse it rather than silently captioning a two-frame stack "a", "b".
+            raise ValueError(
+                f"titles must be one title per frame, not a single string; got {titles!r}"
+            )
         if titles is not None and len(titles) != len(frames):
             raise ValueError(
                 f"titles must have one entry per frame; got {len(titles)} for {len(frames)} frames."
             )
-        if interval <= 0:
+        try:
+            interval_ms = float(
+                interval
+            )  # coerce first, so a non-number hits the one message below
+        except (TypeError, ValueError):
+            interval_ms = (
+                0.0  # fall through rather than surface float()'s generic message
+            )
+        if interval_ms <= 0:
             raise ValueError(
                 f"interval must be a positive number of milliseconds, got {interval!r}"
             )
-        values = [
-            self._global_values(frame, band=band, shape=shape, resampling=resampling)
-            for frame in frames
-        ]
-        # Measure before drawing: every frame shares one domain, so what moves on screen is the data.
-        measured = (
-            stack_scale(values).as_limits()
-            if (vmin is None or vmax is None)
-            else (0.0, 1.0)
-        )
+        interval = interval_ms
+        # Settle the shared colour scale from a bounded, evenly-spread sample of the stack rather than
+        # from all of it: a 624-band series would otherwise read every band into memory just to find its
+        # limits. Only the sample is read here, and it is released immediately; the frames themselves are
+        # read one at a time as each is drawn (see _texture), so the whole stack is never held at once.
+        if vmin is None or vmax is None:
+            sample = [
+                self._global_values(
+                    frame, band=band, shape=shape, resampling=resampling
+                )
+                for frame in sample_evenly(frames, cap=DEFAULT_CLIM_SCAN_CAP)
+            ]
+            # Validate the caller's ORIGINAL bounds against the sampled data, before substituting the
+            # measured ends. A one-sided vmin/vmax must raise the same "nothing to colour" message
+            # from_dataset gives — not the "vmax must be greater than vmin" that resolving both first forces.
+            self._validate_colour_bounds(
+                np.concatenate([finite(v) for v in sample])
+                if sample
+                else np.array([], dtype=float),
+                vmin,
+                vmax,
+            )
+            measured = stack_scale(sample).as_limits()
+            del sample
+        else:
+            self._validate_colour_bounds(np.array([], dtype=float), vmin, vmax)
+            measured = (0.0, 1.0)
         low = measured[0] if vmin is None else float(vmin)
         high = measured[1] if vmax is None else float(vmax)
-        textures = [
-            _as_byte_texture(self._colorize(frame, cmap=cmap, vmin=low, vmax=high))
-            for frame in values
-        ]
         at_spin = self._spin if spin is None else float(spin)
 
         supplied = not (ax is None or self._is_ours(ax)) or self._caller_supplied_axes
@@ -2336,9 +2372,35 @@ class TexturedGlobe(WatermarkMixin):
             )
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
 
-        def _show(index: int) -> None:
+        if titles is not None and ax.get_title():
+            # The globe's counterpart of the 2-D tier's titles-vs-set_title warning: a per-frame caption
+            # paints over whatever heading the axes already carries, so the two would disagree for the clip.
+            warnings.warn(
+                f"titles= captions each frame, painting over the title already on the axes "
+                f"({ax.get_title()!r}); drop one of the two.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        def _texture(index: int) -> np.ndarray:
+            """Read one frame onto the global grid and colourise it against the settled scale.
+
+            Reading here, as the frame is drawn, is the other half of keeping a long stack out of memory:
+            only the frame on screen is alive, never the whole series. It costs one align per draw, which
+            is what the 2-D tier's in-place animation does too.
+            """
+            grid = self._global_values(
+                frames[index], band=band, shape=shape, resampling=resampling
+            )
+            return _as_byte_texture(
+                self._colorize(grid, cmap=cmap, vmin=low, vmax=high)
+            )
+
+        def _show(index: int, texture: np.ndarray | None = None) -> None:
             """Draw one frame: its own texture, the held spin, and the overlays turned to match."""
-            self.glyph = TexturedGlobeGlyph(textures[index], **self._glyph_kwargs)
+            self.glyph = TexturedGlobeGlyph(
+                _texture(index) if texture is None else texture, **self._glyph_kwargs
+            )
             self.glyph.draw(ax, spin=at_spin, **kwargs)
             self._spin = at_spin
             self._turn_overlays(ax, at_spin)
@@ -2346,10 +2408,11 @@ class TexturedGlobe(WatermarkMixin):
                 ax.set_title(str(titles[index]))
 
         # The first frame is drawn now, as spin() does it: a bad render option is refused at this call
-        # rather than from inside the frame loop.
-        _show(0)
+        # rather than from inside the frame loop. Its texture is read once here and reused for the draw.
+        first_texture = _texture(0)
+        _show(0, first_texture)
         self._bind(ax, owns=not supplied)
-        self._warn_if_finer_than_the_mesh(textures[0])
+        self._warn_if_finer_than_the_mesh(first_texture)
 
         def _frame(index: int) -> tuple[Any, ...]:
             _show(index)
@@ -2547,7 +2610,7 @@ class TexturedGlobe(WatermarkMixin):
         gif: str | None = None,
         **kwargs: Any,
     ) -> Any:
-        """Save the rotation built by :meth:`animate`, optionally also deriving a GIF from it.
+        """Save the animation built by :meth:`spin` or :meth:`animate`, optionally also deriving a GIF.
 
         A textured globe is exactly the case the derive-a-GIF path exists for: every frame is a full 3-D
         surface redraw, so encoding twice off one render is far cheaper than rendering twice.
@@ -2562,7 +2625,7 @@ class TexturedGlobe(WatermarkMixin):
             The written path, or a ``(video, gif)`` pair when ``gif`` was requested.
 
         Raises:
-            RuntimeError: if no animation has been built yet — call :meth:`animate` first.
+            RuntimeError: if no animation has been built yet — call :meth:`spin` or :meth:`animate` first.
 
         Examples:
             - Animate, then write the rotation straight to a GIF:
@@ -2588,7 +2651,7 @@ class TexturedGlobe(WatermarkMixin):
                 ```
         """
         if self._animation is None:
-            raise RuntimeError("no animation to save; call animate() first")
+            raise RuntimeError("no animation to save; call spin() or animate() first")
         anim = self._animation
         rate = fps if fps is not None else self._animation_fps
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
@@ -2596,7 +2659,7 @@ class TexturedGlobe(WatermarkMixin):
     def close(self) -> None:
         """Close the globe's figure, drop the animation reference, and forget the overlays.
 
-        Every :meth:`draw` or :meth:`animate` that is not handed an existing axes creates a pyplot figure,
+        Every :meth:`draw`, :meth:`spin` or :meth:`animate` that is not handed an existing axes creates a pyplot figure,
         and pyplot keeps a reference to it forever. A loop that builds many globes therefore grows without
         bound and eventually trips matplotlib's open-figure warning. Closing releases both the figure and the
         retained animation.

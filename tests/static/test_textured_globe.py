@@ -2739,6 +2739,103 @@ class TestAnimateAStack:
         )
         globe.close()
 
+    def test_the_scale_scan_is_capped(self, mocker):
+        """A long stack settles its colour scale from a bounded sample, not from every frame.
+
+        Test scenario:
+            The regression guard for the memory bug: a 624-band ERSST series must not read all 624 bands
+            into memory just to find the clim. The scan reads at most DEFAULT_CLIM_SCAN_CAP frames (plus the
+            one first frame drawn to refuse bad options at the call), the way the 2-D tier bounds its own.
+        """
+        from digitalearth.base.clim import DEFAULT_CLIM_SCAN_CAP
+
+        frames = self._frames([float(v) for v in range(40)])
+        globe = self._globe(frames)
+        spy = mocker.spy(globe, "_global_values")
+        globe.animate(frames, shape=(90, 180), interval=100)
+        assert spy.call_count <= DEFAULT_CLIM_SCAN_CAP + 1, (
+            f"the scale scan should read at most {DEFAULT_CLIM_SCAN_CAP} of 40 frames (+1 first draw), "
+            f"read {spy.call_count}"
+        )
+        globe.close()
+
+    def test_frames_are_read_lazily_one_at_a_time(self, mocker):
+        """Drawing a frame reads exactly that frame, so the whole stack is never held at once.
+
+        Test scenario:
+            The other half of the memory fix. Before it, animate built a list of every frame's float grid
+            AND a list of every frame's texture up front, both alive together. Now each frame is read and
+            colourised only as it is drawn, so one draw triggers one read.
+        """
+        frames = self._frames([0.0, 1.0, 2.0])
+        globe = self._globe(frames)
+        globe.animate(frames, shape=(90, 180), interval=100)
+        spy = mocker.spy(globe, "_global_values")
+        globe._animation._func(1)
+        assert spy.call_count == 1, (
+            f"drawing one frame should read exactly one frame, read {spy.call_count}"
+        )
+        globe.close()
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"vmax": -5.0}, "at or below"),
+            ({"vmin": 99.0}, "at or above"),
+        ],
+        ids=["vmax-below", "vmin-above"],
+    )
+    def test_a_one_sided_clim_outside_the_stack_is_refused_like_from_dataset(
+        self, kwargs, match
+    ):
+        """A single out-of-range bound raises the same "nothing to colour" message from_dataset gives.
+
+        Args:
+            kwargs: The one-sided bound.
+            match: Text the message must carry.
+
+        Test scenario:
+            Resolving both ends before validating forced every refusal through the "vmax must be greater
+            than vmin" branch, naming a bound the caller never passed. The two entry points the refactor
+            unified must refuse identically.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        with pytest.raises(ValueError, match=match):
+            globe.animate(frames, shape=(90, 180), interval=100, **kwargs)
+        globe.close()
+
+    def test_a_string_of_titles_is_refused(self):
+        """`titles="ab"` is a mistake, not two one-character captions.
+
+        Test scenario:
+            A bare string is iterable, so len() and indexing both "work" and a two-frame stack would be
+            captioned 'a', 'b' with no error. Refuse it at the call.
+        """
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        with pytest.raises(ValueError, match="not a single string"):
+            globe.animate(frames, shape=(90, 180), titles="ab", interval=100)
+        globe.close()
+
+    def test_a_non_numeric_interval_is_a_value_error(self):
+        """`interval` is coerced first, so a non-number is the documented ValueError, not a TypeError."""
+        frames = self._frames([0.0])
+        globe = self._globe(frames)
+        with pytest.raises(ValueError, match="positive number of milliseconds"):
+            globe.animate(frames, shape=(90, 180), interval="abc")
+        globe.close()
+
+    def test_titles_over_an_existing_heading_warns(self):
+        """Per-frame titles over a heading already on the axes warn, as the 2-D tier does."""
+        frames = self._frames([0.0, 1.0])
+        globe = self._globe(frames)
+        globe.draw()
+        globe.ax.set_title("pre-set heading")
+        with pytest.warns(RuntimeWarning, match="painting over the title"):
+            globe.animate(frames, shape=(90, 180), titles=["Jan", "Feb"], interval=100)
+        globe.close()
+
     def test_spin_still_turns_the_camera(self):
         """The rotation kept its behaviour under its own name."""
         frames = self._frames([0.0])
