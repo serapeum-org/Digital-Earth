@@ -40,26 +40,35 @@ columns the notebooks teach from; `lanes` and `maxspeed` coerced to numbers.
 records. Each record is one dated observation; `uncertainty_m` is the recorded coordinate uncertainty.
 
 - Source: **GBIF** (Global Biodiversity Information Facility), <https://www.gbif.org/>
-- Licence: per-record; this extract contains only openly-licensed records (CC0 / CC-BY).
-- Citation: GBIF.org (2023) *GBIF Occurrence Download*. Honour the per-record `license` field when
-  redistributing.
+- Licence: per-record upstream. This extract was filtered to openly-licensed records
+  (CC0 / CC-BY / CC-BY-NC) at download time; the per-record `license` field is not
+  carried in the committed file, so re-download from GBIF if you need it.
+- Citation: GBIF.org (2023) *GBIF Occurrence Download*. Cite GBIF and the contributing datasets
+  when redistributing.
 
-## `global/worldclim_tavg_01..12.tif`, `global/worldclim_elev.tif` — climate and elevation
+## `global/ncep_tavg_01..12.tif` — monthly mean air temperature
 
-WorldClim 2.1, 10-arc-minute monthly mean temperature and elevation, resampled to a 0.5-degree grid
-(360 x 720) and written as GeoTIFF so notebooks 11 and 12 read them from the checkout instead of
-downloading 41 MB. The full-resolution originals (`wc2.1_10m_*`) stay gitignored.
+NCEP/NCAR Reanalysis 1 surface-air-temperature long-term monthly means (1991-2020 climatology, read from the file's own
+climatology_bounds), read
+from NOAA PSL as a single 0.6 MB NetCDF and written as twelve GeoTIFFs (0.48 MB in total) so notebooks
+11, 12 and 14 read them from the checkout instead of fetching anything. Native resolution is 2.5
+degrees (73 x 144); the committed grids are aligned onto a clean -180..180 / -90..90 global grid
+(72 x 144), which both settles the 0-360 longitude frame the source uses and clips the source's
+out-of-range +/-91.25 latitude rows. Values are degrees Celsius, nodata -9999, and coverage is global
+— ocean as well as land.
 
-- Source: **WorldClim 2.1**, <https://www.worldclim.org/data/worldclim21.html>
-- Licence: free for academic and other non-commercial use.
-- Citation: Fick, S.E. and Hijmans, R.J. (2017) *WorldClim 2: new 1-km spatial resolution climate
-  surfaces for global land areas.* International Journal of Climatology 37(12): 4302-4315.
+- Source: **NOAA PSL, NCEP/NCAR Reanalysis 1**,
+  <https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.derived.surface.html>
+- Licence: US Government work, public domain.
+- Citation: Kalnay, E. et al. (1996) *The NCEP/NCAR 40-Year Reanalysis Project.* Bulletin of the
+  American Meteorological Society 77(3): 437-471.
 
 ## `global/etopo_relief.tif` — global relief
 
 ETOPO180 altitude, read from NOAA's ERDDAP griddap service as an ESRI-ASCII grid at stride 10, then
 resampled to 0.5 degrees and written as GeoTIFF (12.2 MB of ASCII becomes 0.58 MB). Covers both ocean
-bathymetry and land elevation, which is why notebook 11 uses it rather than the WorldClim elevation.
+bathymetry and land elevation, so notebook 11 drapes it whole and also derives a land-only
+elevation grid from it by masking everything at or below sea level.
 
 - Source: **NOAA NGDC ETOPO1 / ETOPO180**, via <https://coastwatch.pfeg.noaa.gov/erddap/>
 - Licence: US Government work, public domain.
