@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -2109,7 +2109,7 @@
   <span class="md-ellipsis">
     
   
-    Plot gallery
+    Static gallery
   
 
     
@@ -2125,7 +2125,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Plot gallery
+    Static gallery
   
 
           </label>
@@ -5850,10 +5850,10 @@ static however well it is drawn — and that is a fact about the data, not the p
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">steps</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">arrays</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">arrays</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">arrays</span><span class="p">))]</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'largest month-to-month SST change: </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1"> to </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1"> degC'</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'peak month-to-month SST change: </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1"> degC (per-step peaks range </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1">)'</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-8">steps = [float(np.nanmax(np.abs(arrays[i] - arrays[i - 1]))) for i in range(1, len(arrays))]
-print(f'largest month-to-month SST change: {min(steps):.1f} to {max(steps):.1f} degC')</div>
+print(f'peak month-to-month SST change: {max(steps):.1f} degC (per-step peaks range {min(steps):.1f}-{max(steps):.1f})')</div>
 </div>
 </div>
 </div>
@@ -5865,7 +5865,7 @@ print(f'largest month-to-month SST change: {min(steps):.1f} to {max(steps):.1f} 
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>largest month-to-month SST change: 3.0 to 8.9 degC
+<pre>peak month-to-month SST change: 8.9 degC (per-step peaks range 3.0-8.9)
 </pre>
 </div>
 </div>
