@@ -27,6 +27,7 @@ from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import read_masked_band
+from digitalearth.base.captions import caption
 from digitalearth.base.clim import frozen_scale, measure_clim
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.raster_classes import (
@@ -34,6 +35,7 @@ from digitalearth.base.raster_classes import (
     code_edges,
     raster_categories,
 )
+from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static.map import Map
@@ -41,7 +43,7 @@ from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["facet", "grid", "shared_colorbar"]
+__all__ = ["facet", "grid", "quickpanels", "shared_colorbar"]
 
 #: The render each ``facet(kind=)`` names, as ``(Map method, keywords it is called with)``.
 _FACET_KINDS: dict[str, tuple[str, dict[str, Any]]] = {
@@ -1089,4 +1091,86 @@ def facet(
         )
     elif colorbar:
         shared_colorbar(fig, drawn, maps, label=cbar_label)
+    return fig, maps
+
+
+def quickpanels(
+    fields: Any,
+    *,
+    cols: int = 2,
+    kind: str = "field",
+    band: int = DEFAULT_BAND,
+    crs: Any = 3857,
+    globe: bool = False,
+    figsize: tuple[float, float] | None = None,
+    colorbar: bool = True,
+    titles: Sequence[Any] | None = None,
+    suptitle: str | None = None,
+    **style: Any,
+) -> tuple[Figure, list[Map]]:
+    """Draw several **different** fields, one auto-captioned panel each, every panel on its own scale.
+
+    The heterogeneous-fields counterpart of :func:`facet`. ``facet`` draws one *variable* across frames and
+    shares a single colour scale and colorbar, because small multiples are read against each other.
+    ``quickpanels`` is for the other case — a handful of *distinct* fields (temperature, pressure, wind) laid
+    out together — so each panel is styled, scaled and keyed on its own, and titled from its own metadata.
+
+    Each panel is drawn with the same auto-styling :meth:`~digitalearth.static.maps.raster.RasterMixin.field`
+    applies to any raster (so a recognised variable picks its canonical colormap), and captioned by
+    :func:`~digitalearth.base.captions.caption`: the title is the field's human name, and the colorbar label
+    is that name with its units. Pass ``titles=`` to override the auto titles, or ``suptitle=`` for one
+    heading over the figure. The grid is ``cols`` wide and as many rows as the fields need; any trailing
+    empty cell is hidden.
+
+    Args:
+        fields: The fields to draw — the same shapes :func:`facet` takes: a sequence of pyramids
+            ``Dataset`` objects, a ``DatasetCollection``, or a single multi-band ``Dataset`` whose bands
+            become the panels.
+        cols: Number of panel columns; the row count follows from the field count.
+        kind: The raster render for every panel — ``"field"`` (default), ``"pcolormesh"``, ``"contourf"``
+            or ``"contour"``.
+        band: 1-based band read from each field (ignored where a multi-band dataset is split into one
+            panel per band).
+        crs: Display CRS for every panel.
+        globe: When True, every panel is a globe.
+        figsize: Figure size in inches; ``None`` uses the matplotlib default.
+        colorbar: When True (default), each panel gets its own colorbar, labelled from its metadata.
+        titles: One title per field, overriding the auto captions; ``None`` (default) titles each panel
+            from its own metadata.
+        suptitle: One heading over the whole figure (``None`` adds none).
+        **style: Forwarded to every panel's render (e.g. ``cmap``, ``levels``), overriding the auto-style.
+
+    Returns:
+        ``(fig, maps)`` — the shared figure and the list of :class:`Map` panels, one per field in order.
+
+    Raises:
+        ValueError: if ``fields`` yields no field, if ``kind`` is not a raster render, or if ``titles`` is
+            given with a length other than the number of fields.
+    """
+    if kind not in _FACET_KINDS:
+        renders = ", ".join(repr(name) for name in sorted(_FACET_KINDS))
+        raise ValueError(f"kind={kind!r} is not a panel render; use one of {renders}")
+    frames, bands, _ = _panels_of(fields, band)
+    if not frames:
+        raise ValueError(
+            "quickpanels needs at least one field to draw; none were given"
+        )
+    if titles is not None and len(titles) != len(frames):
+        raise ValueError(
+            f"titles must have one entry per field; got {len(titles)} for {len(frames)} fields"
+        )
+    method, fixed = _FACET_KINDS[kind]
+    ncols = min(max(cols, 1), len(frames))
+    nrows = math.ceil(len(frames) / ncols)
+    fig, maps = grid(
+        nrows, ncols, crs=crs, globe=globe, figsize=figsize, suptitle=suptitle
+    )
+    for index, (panel, frame, frame_band) in enumerate(zip(maps, frames, bands)):
+        getattr(panel, method)(frame, band=frame_band, **fixed, **style)
+        cap = caption(get_source(frame, band=frame_band))
+        panel.set_title(str(titles[index]) if titles is not None else cap.title)
+        if colorbar:
+            panel.colorbar(label=cap.label)
+    for spare in maps[len(frames) :]:
+        spare.ax.set_visible(False)
     return fig, maps
