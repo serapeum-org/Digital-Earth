@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -5202,13 +5202,13 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="12-animating-data-on-the-globe">12 — Animating data on the globe<a class="anchor-link" href="#12-animating-data-on-the-globe">¶</a></h1><p>The globe is a static frame, but a <strong>stack of rasters</strong> can be animated over it. Digital-Earth ships two globe-animation methods on <code>Map</code>:</p>
 <ul>
-<li><strong><code>Map.animate(stack, ...)</code></strong> — step a stack of grids (here the 12 monthly WorldClim temperature fields) frame by frame.</li>
+<li><strong><code>Map.animate(stack, ...)</code></strong> — step a stack of grids (here the 12 monthly NCEP/NCAR mean-temperature fields) frame by frame.</li>
 <li><strong><code>Map.rotate(dataset, ...)</code></strong> — keep one field and sweep the orthographic centre longitude to spin the Earth.</li>
 </ul>
 <p>A committed global NetCDF (<code>ersstv5.nc</code>) runs section 4 with <strong>no network</strong>, and shows the two traps that make a global grid come out as a flat disc.</p>
 <p>Both return a <code>matplotlib.animation.FuncAnimation</code>. The <strong>first</strong> frame is a full <code>Map(globe=True)</code> draw — <strong>pyramids</strong> reprojects, <strong>cleopatra</strong> renders, and the projection frame is applied — so frames get coastlines, graticule, and limb-clipping for free. Every frame after it keeps the axes and gives the image the next frame's values, so the decoration, the projection frame and the view are drawn once instead of per frame (<code>update=</code> picks the path). <code>blit=True</code> goes a step further and repaints only that one image, but it is <strong>not</strong> available wherever the in-place path is. It is refused alongside the per-frame <code>titles=</code> the next cell passes, because matplotlib blits the axes box while a title is drawn above it, so every frame would show the first frame's; and it is refused for a stack whose frames are not all drawn on one grid, which clears the axes mid-clip. <code>rotate</code> warps into a new view each frame, so it redraws every one.</p>
 <blockquote>
-<p>The GIFs are written to a temp file and embedded into the notebook output, so nothing extra is committed. WorldClim downloads on first run (cached, git-ignored).</p>
+<p>The GIFs are written to a temp file and embedded into the notebook output, so nothing extra is committed. NCEP downloads on first run (cached, git-ignored).</p>
 </blockquote>
 </div>
 </div>
@@ -5220,7 +5220,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="setup-data">Setup &amp; data<a class="anchor-link" href="#setup-data">¶</a></h2><p>The monthly temperature stack and the global elevation grid are <strong>committed</strong> under
+<h2 id="setup-data">Setup &amp; data<a class="anchor-link" href="#setup-data">¶</a></h2><p>The monthly temperature stack and the global relief grid are <strong>committed</strong> under
 <code>examples/data/global/</code>, so every section here runs with no network.</p>
 </div>
 </div>
@@ -5252,18 +5252,18 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">projections</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.glyphs.base.animation</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_gif</span>   <span class="c1"># cleopatra 0.13.0: FuncAnimation -&gt; GIF</span>
 
-<span class="c1"># The half-degree global rasters are committed under examples/data/global/, so this notebook</span>
-<span class="c1"># runs offline. They are WorldClim 2.1 10-arc-minute tavg/elev and NOAA ETOPO180, resampled to</span>
-<span class="c1"># 0.5 deg (360 x 720) - the same grid the bundled ersstv5.nc uses, and finer than a page-sized</span>
-<span class="c1"># globe resolves. See examples/data/ATTRIBUTION.md for the sources and licences.</span>
+<span class="c1"># The global rasters are committed under examples/data/global/, so this notebook runs offline:</span>
+<span class="c1"># the NCEP/NCAR 2.5 deg monthly temperature climatology and NOAA ETOPO180 relief resampled to</span>
+<span class="c1"># 0.5 deg. Both are US-Government public domain - see examples/data/ATTRIBUTION.md for the</span>
+<span class="c1"># sources, resolutions and citations.</span>
 <span class="n">CACHE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'../../examples/data/global'</span><span class="p">)</span>
 
 <span class="n">MONTHS</span> <span class="o">=</span> <span class="p">[</span><span class="s1">'Jan'</span><span class="p">,</span> <span class="s1">'Feb'</span><span class="p">,</span> <span class="s1">'Mar'</span><span class="p">,</span> <span class="s1">'Apr'</span><span class="p">,</span> <span class="s1">'May'</span><span class="p">,</span> <span class="s1">'Jun'</span><span class="p">,</span>
           <span class="s1">'Jul'</span><span class="p">,</span> <span class="s1">'Aug'</span><span class="p">,</span> <span class="s1">'Sep'</span><span class="p">,</span> <span class="s1">'Oct'</span><span class="p">,</span> <span class="s1">'Nov'</span><span class="p">,</span> <span class="s1">'Dec'</span><span class="p">]</span>
-<span class="n">tavg</span> <span class="o">=</span> <span class="p">[</span><span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">CACHE</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">'worldclim_tavg_*.tif'</span><span class="p">))]</span>
-<span class="n">elevation</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">CACHE</span> <span class="o">/</span> <span class="s1">'worldclim_elev.tif'</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="s1">'stack:'</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tavg</span><span class="p">),</span> <span class="s1">'monthly grids; elevation:'</span><span class="p">,</span>
-      <span class="n">elevation</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="s1">'x'</span><span class="p">,</span> <span class="n">elevation</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+<span class="n">tavg</span> <span class="o">=</span> <span class="p">[</span><span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">CACHE</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">'ncep_tavg_*.tif'</span><span class="p">))]</span>
+<span class="n">relief</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">CACHE</span> <span class="o">/</span> <span class="s1">'etopo_relief.tif'</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'stack:'</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tavg</span><span class="p">),</span> <span class="s1">'monthly grids; relief:'</span><span class="p">,</span>
+      <span class="n">relief</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="s1">'x'</span><span class="p">,</span> <span class="n">relief</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">%matplotlib inline
 from pathlib import Path
@@ -5273,18 +5273,18 @@ from pyramids.dataset import Dataset
 from digitalearth.static import Map, projections
 from cleopatra.glyphs.base.animation import embed_gif   # cleopatra 0.13.0: FuncAnimation -&gt; GIF
 
-# The half-degree global rasters are committed under examples/data/global/, so this notebook
-# runs offline. They are WorldClim 2.1 10-arc-minute tavg/elev and NOAA ETOPO180, resampled to
-# 0.5 deg (360 x 720) - the same grid the bundled ersstv5.nc uses, and finer than a page-sized
-# globe resolves. See examples/data/ATTRIBUTION.md for the sources and licences.
+# The global rasters are committed under examples/data/global/, so this notebook runs offline:
+# the NCEP/NCAR 2.5 deg monthly temperature climatology and NOAA ETOPO180 relief resampled to
+# 0.5 deg. Both are US-Government public domain - see examples/data/ATTRIBUTION.md for the
+# sources, resolutions and citations.
 CACHE = Path('../../examples/data/global')
 
 MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-tavg = [Dataset.read_file(str(p)) for p in sorted(CACHE.glob('worldclim_tavg_*.tif'))]
-elevation = Dataset.read_file(str(CACHE / 'worldclim_elev.tif'))
-print('stack:', len(tavg), 'monthly grids; elevation:',
-      elevation.rows, 'x', elevation.columns)</div>
+tavg = [Dataset.read_file(str(p)) for p in sorted(CACHE.glob('ncep_tavg_*.tif'))]
+relief = Dataset.read_file(str(CACHE / 'etopo_relief.tif'))
+print('stack:', len(tavg), 'monthly grids; relief:',
+      relief.rows, 'x', relief.columns)</div>
 </div>
 </div>
 </div>
@@ -5296,7 +5296,7 @@ print('stack:', len(tavg), 'monthly grids; elevation:',
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>stack: 12 monthly grids; elevation: 360 x 720
+<pre>stack: 12 monthly grids; relief: 360 x 720
 </pre>
 </div>
 </div>
@@ -5416,9 +5416,9 @@ gif</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.2</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">))</span>
 <span class="n">anim</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span>
-    <span class="n">elevation</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">relief</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
     <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gist_earth'</span><span class="p">,</span>
-    <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">,</span>
+    <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="s1">'elevation / depth (m)'</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="n">gif</span> <span class="o">=</span> <span class="n">embed_gif</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
@@ -5426,9 +5426,9 @@ gif</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">m = Map(crs=projections.orthographic(lon=0, lat=15), globe=True, figsize=(6.2, 5.5))
 anim = m.rotate(
-    elevation, lat=15, n_frames=24, fps=8,
+    relief, lat=15, n_frames=24, fps=8,
     ocean=True, coastlines=True, cmap='gist_earth',
-    colorbar=True, cbar_label='elevation (m)',
+    colorbar=True, cbar_label='elevation / depth (m)',
 )
 gif = embed_gif(anim, 8)
 plt.close(m.fig)
@@ -5502,10 +5502,12 @@ B = third — so hue reads as <em>how the season moved</em> and brightness as ho
 <span class="k">def</span><span class="w"> </span><span class="nf">seasonal_composite</span><span class="p">(</span><span class="n">months</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Stack three monthly grids into one 3-band raster (R, G, B = the three months).</span>
 
-<span class="sd">    The WorldClim tifs mark missing cells with their own sentinel (-3.4e38) and hold no NaN at</span>
-<span class="sd">    all, so nan_to_num alone would leave that sentinel in the array while the Dataset declared a</span>
-<span class="sd">    different one. Both have to land on NODATA -- otherwise -3.4e38 is inside the composite's</span>
-<span class="sd">    2-98% stretch and every real temperature saturates to white.</span>
+<span class="sd">    Every cell that is not a real temperature has to land on the SAME value the Dataset</span>
+<span class="sd">    declares as its nodata. A scan skips the declared nodata, but it cannot skip a sentinel it</span>
+<span class="sd">    was never told about: leave a foreign one (a -3.4e38, or a NaN where -9999 was declared) in</span>
+<span class="sd">    the array and it enters the composite's 2-98% stretch, which crushes every real temperature</span>
+<span class="sd">    into one end of the ramp. Measured on this stack: declared -9999 scans to -61.7..39.2 C,</span>
+<span class="sd">    while the same arrays carrying an undeclared -3.4e38 scan to -3.4e38..39.2.</span>
 <span class="sd">    """</span>
     <span class="n">bands</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">months</span><span class="p">:</span>
@@ -5538,10 +5540,12 @@ NODATA = -9999.0
 def seasonal_composite(months):
     """Stack three monthly grids into one 3-band raster (R, G, B = the three months).
 
-    The WorldClim tifs mark missing cells with their own sentinel (-3.4e38) and hold no NaN at
-    all, so nan_to_num alone would leave that sentinel in the array while the Dataset declared a
-    different one. Both have to land on NODATA -- otherwise -3.4e38 is inside the composite's
-    2-98% stretch and every real temperature saturates to white.
+    Every cell that is not a real temperature has to land on the SAME value the Dataset
+    declares as its nodata. A scan skips the declared nodata, but it cannot skip a sentinel it
+    was never told about: leave a foreign one (a -3.4e38, or a NaN where -9999 was declared) in
+    the array and it enters the composite's 2-98% stretch, which crushes every real temperature
+    into one end of the ramp. Measured on this stack: declared -9999 scans to -61.7..39.2 C,
+    while the same arrays carrying an undeclared -3.4e38 scan to -3.4e38..39.2.
     """
     bands = []
     for m in months:
@@ -5589,11 +5593,10 @@ gif
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets">4. A committed global stack — and the two traps a 0/360 NetCDF sets<a class="anchor-link" href="#4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets">¶</a></h2><p>Every section above downloads WorldClim at run time. The repo also ships one global stack outright —
-<code>examples/data/global/ersstv5.nc</code>, <strong>624 monthly sea-surface-temperature grids</strong> from NOAA's ERSST v5 — so this
-section needs no network at all.</p>
-<p>It is also the section worth reading most carefully, because a global NetCDF sets two traps that each produce the
-same symptom: a globe that is one flat colour while only the title changes.</p>
+<h2 id="4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets">4. A committed global stack — and the two traps a 0/360 NetCDF sets<a class="anchor-link" href="#4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets">¶</a></h2><p>Every grid in this notebook is committed, so nothing here downloads. This section reaches for a different one —
+<code>examples/data/global/ersstv5.nc</code>, <strong>624 monthly sea-surface-temperature grids</strong> from NOAA's ERSST v5 — because a
+global <strong>NetCDF</strong> sets two traps that a GeoTIFF does not, and each produces the same symptom: a globe that is one
+flat colour while only the title changes.</p>
 <table>
 <thead>
 <tr>
@@ -5609,12 +5612,18 @@ same symptom: a globe that is one flat colour while only the title changes.</p>
 <td><code>Dataset.wrap_longitude()</code></td>
 </tr>
 <tr>
-<td><strong>nodata</strong> is inside the colour scale</td>
+<td>the array's sentinel <strong>does not match</strong> the declared nodata</td>
 <td>every real value is crushed into one end of the ramp</td>
-<td>pass explicit <code>vmin</code>/<code>vmax</code></td>
+<td>declare the sentinel the array actually carries</td>
 </tr>
 </tbody>
 </table>
+<p>The second one is worth stating precisely, because the obvious diagnosis is wrong. A colour scan <strong>does</strong> skip the
+nodata a dataset declares — measured on the monthly stack above, declaring <code>-9999</code> scans to <code>-61.7..39.2 °C</code> even
+though the arrays are full of <code>-9999</code>. What it cannot skip is a sentinel nobody told it about: put an undeclared
+<code>-3.4e38</code> in those same arrays and the scan returns <code>-3.4e38..39.2</code>, and every real temperature collapses to one
+colour. So the fix is to make the declaration and the array agree — not to paper over it with explicit
+<code>vmin</code>/<code>vmax</code>, which hides the mismatch while leaving it in the data.</p>
 </div>
 </div>
 </div>
@@ -5871,7 +5880,7 @@ print(f'largest month-to-month SST change: {min(steps):.1f} to {max(steps):.1f} 
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h3 id="the-animation">The animation<a class="anchor-link" href="#the-animation">¶</a></h3><p>With the grid in the right frame and the scale pinned to the real range, <code>Map.animate</code> steps the stack the same
-way it stepped the WorldClim months in section 1.</p>
+way it stepped the NCEP months in section 1.</p>
 </div>
 </div>
 </div>
