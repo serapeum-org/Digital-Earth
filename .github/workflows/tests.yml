@@ -195,10 +195,10 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
-  # The notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env, minus the two
-  # network-heavy notebooks the step below names. Without this job nothing in CI executes those notebooks at
-  # all: the tier jobs below each run only their own tier's task, and the docs build renders with
-  # mkdocs-jupyter `execute: false`.
+  # The notebook gallery (docs/examples, incl. static/ and presets/), rendered in the dev env. This job and
+  # the docs deploy are the two places CI executes these notebooks; the tier jobs below each run only their
+  # own tier's task. 11 and 12 used to be skipped here because they fetched WorldClim/ETOPO over the network,
+  # but both now read committed data, so they run with the rest.
   notebooks:
     runs-on: ubuntu-latest
     permissions:
@@ -219,14 +219,9 @@ jobs:
         # The gallery skip-list is declared once, as the `notebooks` task's ignore-globs. The pre-commit
         # notebook-check hook restates it as a regex because a hook filters paths, not pytest arguments;
         # tests/test_pixi_task_references.py asserts the two select exactly the same notebooks, so the
-        # restatement cannot drift. The two globs below are neither of those: they are a CI-only delta,
-        # appended to the task rather than forking it, because the reason is CI-specific — 11 and 12 each
-        # download ~50 MB of WorldClim/ETOPO from real endpoints on every run (examples/data/global/ holds
-        # only the tracked ersstv5.nc). The lint-and-doctests job name-checks those two instead.
-        run: >
-          pixi run -e dev notebooks
-          --ignore-glob='docs/examples/11_global_data_on_globe.ipynb'
-          --ignore-glob='docs/examples/12_animated_globe.ipynb'
+        # restatement cannot drift. No CI-only delta is appended any more: 11 and 12 read committed data now,
+        # so the task's own skip-list is the whole story.
+        run: pixi run -e dev notebooks
 
   # The 3-D (PyVista) notebook needs VTK + the viz3d extra, so it is excluded from the default `notebooks`
   # task and validated here in the viz3d env. One Linux runner is enough — PyVista renders headless via OSMesa.

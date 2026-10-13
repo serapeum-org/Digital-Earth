@@ -39,12 +39,14 @@ jobs:
           package-manager-version: 'v0.73.0'
           install-groups: 'docs'
           notebooks-path: 'docs/examples'
-          # Excluded from the execution, so these render from their committed outputs. basemap() pulls
-# XYZ tiles from a live service, and PyVista needs a GPU or OSMesa that a Linux runner has
-# neither of - VTK dies with 'bad X server connection' and takes the kernel with it. So for
-# these two; they are rendered from their
-          # committed outputs instead of being re-executed, so a docs deploy never depends
-          # on a third-party host or tile service being up.
+          # Excluded from the execution, so these render from their committed outputs:
+          #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+          #     'bad X server connection' and takes the kernel with it.
+          #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
+          #   - web/web_maps is a MapLibre page whose committed HTML output is the artifact.
+          # Everything else executes. The one other notebook that reaches a tile service,
+          # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
+          # never blocked by a third-party host being down.
           notebooks-exclude: |
             18_global_decorations.ipynb
             pyvista/**
@@ -65,12 +67,14 @@ jobs:
         package-manager-version: 'v0.73.0'
         install-groups: 'docs'
         notebooks-path: 'docs/examples'
-        # Excluded from the execution, so these render from their committed outputs. basemap() pulls
-# XYZ tiles from a live service, and PyVista needs a GPU or OSMesa that a Linux runner has
-# neither of - VTK dies with 'bad X server connection' and takes the kernel with it. So for
-# these two; they are rendered from their
-        # committed outputs instead of being re-executed, so a docs deploy never depends
-        # on a third-party host or tile service being up.
+        # Excluded from the execution, so these render from their committed outputs:
+        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+        #     'bad X server connection' and takes the kernel with it.
+        #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
+        #   - web/web_maps is a MapLibre page whose committed HTML output is the artifact.
+        # Everything else executes. The one other notebook that reaches a tile service,
+        # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
+        # never blocked by a third-party host being down.
         notebooks-exclude: |
           18_global_decorations.ipynb
           pyvista/**
@@ -108,12 +112,14 @@ jobs:
         package-manager-version: 'v0.73.0'
         install-groups: "docs"
         notebooks-path: 'docs/examples'
-        # Excluded from the execution, so these render from their committed outputs. basemap() pulls
-# XYZ tiles from a live service, and PyVista needs a GPU or OSMesa that a Linux runner has
-# neither of - VTK dies with 'bad X server connection' and takes the kernel with it. So for
-# these two; they are rendered from their
-        # committed outputs instead of being re-executed, so a docs deploy never depends
-        # on a third-party host or tile service being up.
+        # Excluded from the execution, so these render from their committed outputs:
+        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+        #     'bad X server connection' and takes the kernel with it.
+        #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
+        #   - web/web_maps is a MapLibre page whose committed HTML output is the artifact.
+        # Everything else executes. The one other notebook that reaches a tile service,
+        # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
+        # never blocked by a third-party host being down.
         notebooks-exclude: |
           18_global_decorations.ipynb
           pyvista/**
