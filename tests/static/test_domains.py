@@ -7,7 +7,7 @@ a re-export and is covered by `tests/base/test_domains_shim.py`.
 
 import pytest
 
-from digitalearth.base.domains import DOMAINS, resolve_domain
+from digitalearth.base.domains import DOMAINS, resolve_domain, union_domains
 from digitalearth.static import Map
 
 
@@ -35,6 +35,37 @@ class TestResolveDomain:
         """A bbox that is not length-4 raises ValueError."""
         with pytest.raises(ValueError, match="west, south, east, north"):
             resolve_domain([0, 1, 2])
+
+    def test_alias_resolves_to_canonical(self):
+        """A shorthand alias resolves to the same bbox as its canonical name."""
+        assert resolve_domain("UK") == resolve_domain("united-kingdom")
+        assert resolve_domain("usa") == DOMAINS["united-states"]
+
+    def test_country_domains_present(self):
+        """The catalogue now carries country-level regions, not just continents."""
+        for name in ("germany", "japan", "brazil", "australia"):
+            west, south, east, north = resolve_domain(name)
+            assert west < east and south < north, f"{name} bbox is degenerate"
+
+    def test_union_via_resolve_domain(self):
+        """A sequence of names resolves to the single enclosing bbox."""
+        assert resolve_domain(["iberia", "france"]) == (-10.0, 36.0, 9.6, 51.1)
+
+    def test_union_encloses_every_part(self):
+        """union_domains covers each member region on all four sides."""
+        box = union_domains("germany", "italy", "spain")
+        for name in ("germany", "italy", "spain"):
+            w, s, e, n = DOMAINS[name]
+            assert box[0] <= w and box[1] <= s and box[2] >= e and box[3] >= n
+
+    def test_union_of_one_returns_itself(self):
+        """A single-member union is just that region."""
+        assert union_domains("japan") == DOMAINS["japan"]
+
+    def test_empty_union_raises(self):
+        """A union with no members is an error, not an empty box."""
+        with pytest.raises(ValueError, match="at least one domain"):
+            union_domains()
 
 
 class TestSetDomain:
