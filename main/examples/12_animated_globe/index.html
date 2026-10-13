@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -970,6 +970,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. A committed global stack — and the two traps a 0/360 NetCDF sets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. A committed global stack — and the two traps a 0/360 NetCDF sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trap-1-the-longitude-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trap 1 — the longitude frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trap-2-keeping-nodata-out-of-the-colour-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trap 2 — keeping nodata out of the colour scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1051,6 +1101,118 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../15_layer_management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15 — Managing layers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../16_framing_and_insets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    16 — Framing, viewports and locator insets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../17_multi_panel_figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    17 — Multi-panel figures: , ,
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../18_global_decorations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    18 — Global decorations: night, distortion and tiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -1063,10 +1225,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_19" >
         
           
-          <label class="md-nav__link" for="__nav_4_15" id="__nav_4_15_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_19" id="__nav_4_19_label" tabindex="0">
             
   
   
@@ -1084,8 +1246,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1261,10 +1423,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_16" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_20" >
         
           
-          <label class="md-nav__link" for="__nav_4_16" id="__nav_4_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_20" id="__nav_4_20_label" tabindex="0">
             
   
   
@@ -1282,8 +1444,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1571,10 +1733,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_17" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_21" >
         
           
-          <label class="md-nav__link" for="__nav_4_17" id="__nav_4_17_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_21" id="__nav_4_21_label" tabindex="0">
             
   
   
@@ -1592,8 +1754,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_17_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_17">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_21">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1937,17 +2099,17 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22" >
         
           
-          <label class="md-nav__link" for="__nav_4_18" id="__nav_4_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22" id="__nav_4_22_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Plot gallery
+    Static gallery
   
 
     
@@ -1958,12 +2120,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Plot gallery
+    Static gallery
   
 
           </label>
@@ -1987,10 +2149,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_1" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_1" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_1" id="__nav_4_18_1_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_1" id="__nav_4_22_1_label" tabindex="0">
             
   
   
@@ -2008,8 +2170,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_1">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_1">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2026,7 +2188,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/01_imshow/" class="md-nav__link">
+      <a href="../static/01_imshow/" class="md-nav__link">
         
   
   
@@ -2054,7 +2216,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/02_contourf/" class="md-nav__link">
+      <a href="../static/02_contourf/" class="md-nav__link">
         
   
   
@@ -2082,7 +2244,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/03_contour/" class="md-nav__link">
+      <a href="../static/03_contour/" class="md-nav__link">
         
   
   
@@ -2110,7 +2272,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/04_pcolormesh/" class="md-nav__link">
+      <a href="../static/04_pcolormesh/" class="md-nav__link">
         
   
   
@@ -2138,7 +2300,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/05_block/" class="md-nav__link">
+      <a href="../static/05_block/" class="md-nav__link">
         
   
   
@@ -2185,10 +2347,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_2" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_2" id="__nav_4_18_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_2" id="__nav_4_22_2_label" tabindex="0">
             
   
   
@@ -2206,8 +2368,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_2">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2224,7 +2386,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/06_grid_points/" class="md-nav__link">
+      <a href="../static/06_grid_points/" class="md-nav__link">
         
   
   
@@ -2252,7 +2414,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/07_scatter/" class="md-nav__link">
+      <a href="../static/07_scatter/" class="md-nav__link">
         
   
   
@@ -2280,7 +2442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/08_grid_cells/" class="md-nav__link">
+      <a href="../static/08_grid_cells/" class="md-nav__link">
         
   
   
@@ -2327,10 +2489,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_3" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_3" id="__nav_4_18_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_3" id="__nav_4_22_3_label" tabindex="0">
             
   
   
@@ -2348,8 +2510,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_3">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2366,7 +2528,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/09_quiver/" class="md-nav__link">
+      <a href="../static/09_quiver/" class="md-nav__link">
         
   
   
@@ -2394,7 +2556,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/10_streamplot/" class="md-nav__link">
+      <a href="../static/10_streamplot/" class="md-nav__link">
         
   
   
@@ -2422,7 +2584,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/11_barbs/" class="md-nav__link">
+      <a href="../static/11_barbs/" class="md-nav__link">
         
   
   
@@ -2469,10 +2631,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_4" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_4" id="__nav_4_18_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_4" id="__nav_4_22_4_label" tabindex="0">
             
   
   
@@ -2490,8 +2652,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_4">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2508,7 +2670,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/12_tricontourf/" class="md-nav__link">
+      <a href="../static/12_tricontourf/" class="md-nav__link">
         
   
   
@@ -2536,7 +2698,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/13_tricontour/" class="md-nav__link">
+      <a href="../static/13_tricontour/" class="md-nav__link">
         
   
   
@@ -2564,7 +2726,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/14_tripcolor/" class="md-nav__link">
+      <a href="../static/14_tripcolor/" class="md-nav__link">
         
   
   
@@ -2611,10 +2773,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_5" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_5" id="__nav_4_18_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_5" id="__nav_4_22_5_label" tabindex="0">
             
   
   
@@ -2632,8 +2794,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_5">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2650,7 +2812,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/15_rgb_composite/" class="md-nav__link">
+      <a href="../static/15_rgb_composite/" class="md-nav__link">
         
   
   
@@ -2678,7 +2840,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/16_hsv_composite/" class="md-nav__link">
+      <a href="../static/16_hsv_composite/" class="md-nav__link">
         
   
   
@@ -2725,10 +2887,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_6" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_6" id="__nav_4_18_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_6" id="__nav_4_22_6_label" tabindex="0">
             
   
   
@@ -2746,8 +2908,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_6">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2764,7 +2926,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/17_choropleth/" class="md-nav__link">
+      <a href="../static/17_choropleth/" class="md-nav__link">
         
   
   
@@ -2792,7 +2954,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/18_shapes/" class="md-nav__link">
+      <a href="../static/18_shapes/" class="md-nav__link">
         
   
   
@@ -2800,6 +2962,34 @@
     
   
     18 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/31_cartogram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    31 —
   
 
     
@@ -2839,10 +3029,380 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_7" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_7" id="__nav_4_18_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_7" id="__nav_4_22_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Point aggregation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Point aggregation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/27_voronoi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    27 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/28_quadtree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    28 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/29_hexbin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    29 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/30_kde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    30 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_22_8" id="__nav_4_22_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lines & flows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Lines & flows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/32_lines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    32 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/33_sankey/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    33 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_22_9" id="__nav_4_22_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Annotation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Annotation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static/34_labels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    34 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_22_10" id="__nav_4_22_10_label" tabindex="0">
             
   
   
@@ -2860,8 +3420,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_7">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2878,7 +3438,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/19_spaghetti/" class="md-nav__link">
+      <a href="../static/19_spaghetti/" class="md-nav__link">
         
   
   
@@ -2906,7 +3466,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/20_envelope/" class="md-nav__link">
+      <a href="../static/20_envelope/" class="md-nav__link">
         
   
   
@@ -2934,7 +3494,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/21_quantile_band/" class="md-nav__link">
+      <a href="../static/21_quantile_band/" class="md-nav__link">
         
   
   
@@ -2962,7 +3522,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/22_boxplot/" class="md-nav__link">
+      <a href="../static/22_boxplot/" class="md-nav__link">
         
   
   
@@ -2990,7 +3550,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/23_multiboxplot/" class="md-nav__link">
+      <a href="../static/23_multiboxplot/" class="md-nav__link">
         
   
   
@@ -3018,7 +3578,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/24_stripes/" class="md-nav__link">
+      <a href="../static/24_stripes/" class="md-nav__link">
         
   
   
@@ -3065,10 +3625,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_18_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22_11" >
         
           
-          <label class="md-nav__link" for="__nav_4_18_8" id="__nav_4_18_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_22_11" id="__nav_4_22_11_label" tabindex="0">
             
   
   
@@ -3086,8 +3646,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_18_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_18_8">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_22_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22_11">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3104,7 +3664,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/25_timeseries/" class="md-nav__link">
+      <a href="../static/25_timeseries/" class="md-nav__link">
         
   
   
@@ -3132,7 +3692,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/26_climatology/" class="md-nav__link">
+      <a href="../static/26_climatology/" class="md-nav__link">
         
   
   
@@ -3816,6 +4376,56 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. A committed global stack — and the two traps a 0/360 NetCDF sets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. A committed global stack — and the two traps a 0/360 NetCDF sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trap-1-the-longitude-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trap 1 — the longitude frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trap-2-keeping-nodata-out-of-the-colour-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trap 2 — keeping nodata out of the colour scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4592,12 +5202,13 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="12-animating-data-on-the-globe">12 — Animating data on the globe<a class="anchor-link" href="#12-animating-data-on-the-globe">¶</a></h1><p>The globe is a static frame, but a <strong>stack of rasters</strong> can be animated over it. Digital-Earth ships two globe-animation methods on <code>Map</code>:</p>
 <ul>
-<li><strong><code>Map.animate(stack, ...)</code></strong> — step a stack of grids (here the 12 monthly WorldClim temperature fields) frame by frame.</li>
+<li><strong><code>Map.animate(stack, ...)</code></strong> — step a stack of grids (here the 12 monthly NCEP/NCAR mean-temperature fields) frame by frame.</li>
 <li><strong><code>Map.rotate(dataset, ...)</code></strong> — keep one field and sweep the orthographic centre longitude to spin the Earth.</li>
 </ul>
+<p>A committed global NetCDF (<code>ersstv5.nc</code>) runs section 4 with <strong>no network</strong>, and shows the two traps that make a global grid come out as a flat disc.</p>
 <p>Both return a <code>matplotlib.animation.FuncAnimation</code>. The <strong>first</strong> frame is a full <code>Map(globe=True)</code> draw — <strong>pyramids</strong> reprojects, <strong>cleopatra</strong> renders, and the projection frame is applied — so frames get coastlines, graticule, and limb-clipping for free. Every frame after it keeps the axes and gives the image the next frame's values, so the decoration, the projection frame and the view are drawn once instead of per frame (<code>update=</code> picks the path). <code>blit=True</code> goes a step further and repaints only that one image, but it is <strong>not</strong> available wherever the in-place path is. It is refused alongside the per-frame <code>titles=</code> the next cell passes, because matplotlib blits the axes box while a title is drawn above it, so every frame would show the first frame's; and it is refused for a stack whose frames are not all drawn on one grid, which clears the axes mid-clip. <code>rotate</code> warps into a new view each frame, so it redraws every one.</p>
 <blockquote>
-<p>The GIFs are written to a temp file and embedded into the notebook output, so nothing extra is committed. WorldClim downloads on first run (cached, git-ignored).</p>
+<p>The GIFs are written to a temp file and embedded into the notebook output, so nothing extra is committed. NCEP downloads on first run (cached, git-ignored).</p>
 </blockquote>
 </div>
 </div>
@@ -4609,7 +5220,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="setup-data">Setup &amp; data<a class="anchor-link" href="#setup-data">¶</a></h2><p>Download the monthly temperature stack and the global elevation grid (cached).</p>
+<h2 id="setup-data">Setup &amp; data<a class="anchor-link" href="#setup-data">¶</a></h2><p>The monthly temperature stack and the global relief grid are <strong>committed</strong> under
+<code>examples/data/global/</code>, so every section here runs with no network.</p>
 </div>
 </div>
 </div>
@@ -4633,62 +5245,46 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">io</span><span class="o">,</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">zipfile</span><span class="o">,</span><span class="w"> </span><span class="nn">urllib.request</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">u</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">projections</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.glyphs.base.animation</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_gif</span>   <span class="c1"># cleopatra 0.13.0: FuncAnimation -&gt; inline GIF</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.glyphs.base.animation</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_gif</span>   <span class="c1"># cleopatra 0.13.0: FuncAnimation -&gt; GIF</span>
 
-<span class="n">CACHE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'../../examples/data/global'</span><span class="p">);</span> <span class="n">CACHE</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">BASE</span> <span class="o">=</span> <span class="s1">'https://geodata.ucdavis.edu/climate/worldclim/2_1/base/'</span>
+<span class="c1"># The global rasters are committed under examples/data/global/, so this notebook runs offline:</span>
+<span class="c1"># the NCEP/NCAR 2.5 deg monthly temperature climatology and NOAA ETOPO180 relief resampled to</span>
+<span class="c1"># 0.5 deg. Both are US-Government public domain - see examples/data/ATTRIBUTION.md for the</span>
+<span class="c1"># sources, resolutions and citations.</span>
+<span class="n">CACHE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'../../examples/data/global'</span><span class="p">)</span>
 
-<span class="k">def</span><span class="w"> </span><span class="nf">fetch</span><span class="p">(</span><span class="n">product</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Download+unzip a WorldClim 10m product, returning the sorted cached GeoTIFF paths."""</span>
-    <span class="n">tifs</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">CACHE</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">product</span><span class="si">}</span><span class="s1">*.tif'</span><span class="p">))</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">tifs</span><span class="p">:</span>
-        <span class="n">blob</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Request</span><span class="p">(</span><span class="n">BASE</span> <span class="o">+</span> <span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">product</span><span class="si">}</span><span class="s1">.zip'</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="p">{</span><span class="s1">'User-Agent'</span><span class="p">:</span> <span class="s1">'Mozilla/5.0'</span><span class="p">}),</span>
-                         <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
-        <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">blob</span><span class="p">))</span> <span class="k">as</span> <span class="n">z</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">z</span><span class="o">.</span><span class="n">namelist</span><span class="p">():</span>
-                <span class="k">if</span> <span class="n">n</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.tif'</span><span class="p">):</span>
-                    <span class="p">(</span><span class="n">CACHE</span> <span class="o">/</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">n</span><span class="p">))</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">z</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
-        <span class="n">tifs</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">CACHE</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">product</span><span class="si">}</span><span class="s1">*.tif'</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">tifs</span>
-
-<span class="n">MONTHS</span> <span class="o">=</span> <span class="p">[</span><span class="s1">'Jan'</span><span class="p">,</span> <span class="s1">'Feb'</span><span class="p">,</span> <span class="s1">'Mar'</span><span class="p">,</span> <span class="s1">'Apr'</span><span class="p">,</span> <span class="s1">'May'</span><span class="p">,</span> <span class="s1">'Jun'</span><span class="p">,</span> <span class="s1">'Jul'</span><span class="p">,</span> <span class="s1">'Aug'</span><span class="p">,</span> <span class="s1">'Sep'</span><span class="p">,</span> <span class="s1">'Oct'</span><span class="p">,</span> <span class="s1">'Nov'</span><span class="p">,</span> <span class="s1">'Dec'</span><span class="p">]</span>
-<span class="n">tavg</span> <span class="o">=</span> <span class="p">[</span><span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">fetch</span><span class="p">(</span><span class="s1">'wc2.1_10m_tavg'</span><span class="p">)]</span>   <span class="c1"># 12-grid stack</span>
-<span class="n">elevation</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">fetch</span><span class="p">(</span><span class="s1">'wc2.1_10m_elev'</span><span class="p">)[</span><span class="mi">0</span><span class="p">]))</span>
-<span class="nb">print</span><span class="p">(</span><span class="s1">'stack:'</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tavg</span><span class="p">),</span> <span class="s1">'monthly grids; elevation:'</span><span class="p">,</span> <span class="n">elevation</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="s1">'x'</span><span class="p">,</span> <span class="n">elevation</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+<span class="n">MONTHS</span> <span class="o">=</span> <span class="p">[</span><span class="s1">'Jan'</span><span class="p">,</span> <span class="s1">'Feb'</span><span class="p">,</span> <span class="s1">'Mar'</span><span class="p">,</span> <span class="s1">'Apr'</span><span class="p">,</span> <span class="s1">'May'</span><span class="p">,</span> <span class="s1">'Jun'</span><span class="p">,</span>
+          <span class="s1">'Jul'</span><span class="p">,</span> <span class="s1">'Aug'</span><span class="p">,</span> <span class="s1">'Sep'</span><span class="p">,</span> <span class="s1">'Oct'</span><span class="p">,</span> <span class="s1">'Nov'</span><span class="p">,</span> <span class="s1">'Dec'</span><span class="p">]</span>
+<span class="n">tavg</span> <span class="o">=</span> <span class="p">[</span><span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">CACHE</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">'ncep_tavg_*.tif'</span><span class="p">))]</span>
+<span class="n">relief</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">CACHE</span> <span class="o">/</span> <span class="s1">'etopo_relief.tif'</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'stack:'</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tavg</span><span class="p">),</span> <span class="s1">'monthly grids; relief:'</span><span class="p">,</span>
+      <span class="n">relief</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="s1">'x'</span><span class="p">,</span> <span class="n">relief</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">%matplotlib inline
-import io, os, zipfile, urllib.request as u
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 from pyramids.dataset import Dataset
 from digitalearth.static import Map, projections
-from cleopatra.glyphs.base.animation import embed_gif   # cleopatra 0.13.0: FuncAnimation -&gt; inline GIF
+from cleopatra.glyphs.base.animation import embed_gif   # cleopatra 0.13.0: FuncAnimation -&gt; GIF
 
-CACHE = Path('../../examples/data/global'); CACHE.mkdir(parents=True, exist_ok=True)
-BASE = 'https://geodata.ucdavis.edu/climate/worldclim/2_1/base/'
+# The global rasters are committed under examples/data/global/, so this notebook runs offline:
+# the NCEP/NCAR 2.5 deg monthly temperature climatology and NOAA ETOPO180 relief resampled to
+# 0.5 deg. Both are US-Government public domain - see examples/data/ATTRIBUTION.md for the
+# sources, resolutions and citations.
+CACHE = Path('../../examples/data/global')
 
-def fetch(product):
-    """Download+unzip a WorldClim 10m product, returning the sorted cached GeoTIFF paths."""
-    tifs = sorted(CACHE.glob(f'{product}*.tif'))
-    if not tifs:
-        blob = u.urlopen(u.Request(BASE + f'{product}.zip', headers={'User-Agent': 'Mozilla/5.0'}),
-                         timeout=300).read()
-        with zipfile.ZipFile(io.BytesIO(blob)) as z:
-            for n in z.namelist():
-                if n.endswith('.tif'):
-                    (CACHE / os.path.basename(n)).write_bytes(z.read(n))
-        tifs = sorted(CACHE.glob(f'{product}*.tif'))
-    return tifs
-
-MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-tavg = [Dataset.read_file(str(p)) for p in fetch('wc2.1_10m_tavg')]   # 12-grid stack
-elevation = Dataset.read_file(str(fetch('wc2.1_10m_elev')[0]))
-print('stack:', len(tavg), 'monthly grids; elevation:', elevation.rows, 'x', elevation.columns)</div>
+MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+tavg = [Dataset.read_file(str(p)) for p in sorted(CACHE.glob('ncep_tavg_*.tif'))]
+relief = Dataset.read_file(str(CACHE / 'etopo_relief.tif'))
+print('stack:', len(tavg), 'monthly grids; relief:',
+      relief.rows, 'x', relief.columns)</div>
 </div>
 </div>
 </div>
@@ -4700,7 +5296,7 @@ print('stack:', len(tavg), 'monthly grids; elevation:', elevation.rows, 'x', ele
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>stack: 12 monthly grids; elevation: 1080 x 2160
+<pre>stack: 12 monthly grids; relief: 360 x 720
 </pre>
 </div>
 </div>
@@ -4820,9 +5416,9 @@ gif</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.2</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">))</span>
 <span class="n">anim</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span>
-    <span class="n">elevation</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">relief</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
     <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gist_earth'</span><span class="p">,</span>
-    <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="s1">'elevation (m)'</span><span class="p">,</span>
+    <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="s1">'elevation / depth (m)'</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="n">gif</span> <span class="o">=</span> <span class="n">embed_gif</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
@@ -4830,9 +5426,9 @@ gif</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">m = Map(crs=projections.orthographic(lon=0, lat=15), globe=True, figsize=(6.2, 5.5))
 anim = m.rotate(
-    elevation, lat=15, n_frames=24, fps=8,
+    relief, lat=15, n_frames=24, fps=8,
     ocean=True, coastlines=True, cmap='gist_earth',
-    colorbar=True, cbar_label='elevation (m)',
+    colorbar=True, cbar_label='elevation / depth (m)',
 )
 gif = embed_gif(anim, 8)
 plt.close(m.fig)
@@ -4874,6 +5470,7 @@ to set them yourself.</p>
 rather than answered with a meaningless bar.</p>
 <p>Below, each frame is one season built from its three monthly temperature grids — R = first month, G = second,
 B = third — so hue reads as <em>how the season moved</em> and brightness as how warm it was.</p>
+<p><strong>Mind the sentinel.</strong> The stretch is computed over the stack's values, so a nodata sentinel left in the array goes into it. These tifs use <code>-3.4e38</code> and contain no <code>NaN</code>, so <code>np.nan_to_num(..., nan=NODATA)</code> is a no-op on them: the stretch would run from <code>-3.4e38</code> to about 26 °C and map every real temperature to pure white, identically in every frame — a white globe whose title is the only thing that moves. The helper below maps <code>NaN</code> <strong>and</strong> anything below <code>-1e30</code> onto the <code>NODATA</code> the <code>Dataset</code> declares. Section 4 is the same trap on a colormapped stack.</p>
 </div>
 </div>
 </div>
@@ -4903,8 +5500,19 @@ B = third — so hue reads as <em>how the season moved</em> and brightness as ho
 <span class="n">NODATA</span> <span class="o">=</span> <span class="o">-</span><span class="mf">9999.0</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">seasonal_composite</span><span class="p">(</span><span class="n">months</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Stack three monthly grids into one 3-band raster (R, G, B = the three months)."""</span>
-    <span class="n">bands</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">nan_to_num</span><span class="p">(</span><span class="n">tavg</span><span class="p">[</span><span class="n">m</span><span class="p">]</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">),</span> <span class="n">nan</span><span class="o">=</span><span class="n">NODATA</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">months</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">"""Stack three monthly grids into one 3-band raster (R, G, B = the three months).</span>
+
+<span class="sd">    Every cell that is not a real temperature has to land on the SAME value the Dataset</span>
+<span class="sd">    declares as its nodata. A scan skips the declared nodata, but it cannot skip a sentinel it</span>
+<span class="sd">    was never told about: leave a foreign one (a -3.4e38, or a NaN where -9999 was declared) in</span>
+<span class="sd">    the array and it enters the composite's 2-98% stretch, which crushes every real temperature</span>
+<span class="sd">    into one end of the ramp. Measured on this stack: declared -9999 scans to -61.7..39.2 C,</span>
+<span class="sd">    while the same arrays carrying an undeclared -3.4e38 scan to -3.4e38..39.2.</span>
+<span class="sd">    """</span>
+    <span class="n">bands</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">months</span><span class="p">:</span>
+        <span class="n">band</span> <span class="o">=</span> <span class="n">tavg</span><span class="p">[</span><span class="n">m</span><span class="p">]</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">)</span>
+        <span class="n">bands</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">band</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">band</span> <span class="o">&gt;</span> <span class="o">-</span><span class="mf">1e30</span><span class="p">),</span> <span class="n">band</span><span class="p">,</span> <span class="n">NODATA</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
         <span class="n">arr</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">bands</span><span class="p">),</span>
         <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">tavg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">tavg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">epsg</span><span class="p">),</span>
@@ -4930,8 +5538,19 @@ SEASONS = {'DJF': (11, 0, 1), 'MAM': (2, 3, 4), 'JJA': (5, 6, 7), 'SON': (8, 9, 
 NODATA = -9999.0
 
 def seasonal_composite(months):
-    """Stack three monthly grids into one 3-band raster (R, G, B = the three months)."""
-    bands = [np.nan_to_num(tavg[m].read_array(band=0).astype('float32'), nan=NODATA) for m in months]
+    """Stack three monthly grids into one 3-band raster (R, G, B = the three months).
+
+    Every cell that is not a real temperature has to land on the SAME value the Dataset
+    declares as its nodata. A scan skips the declared nodata, but it cannot skip a sentinel it
+    was never told about: leave a foreign one (a -3.4e38, or a NaN where -9999 was declared) in
+    the array and it enters the composite's 2-98% stretch, which crushes every real temperature
+    into one end of the ramp. Measured on this stack: declared -9999 scans to -61.7..39.2 C,
+    while the same arrays carrying an undeclared -3.4e38 scan to -3.4e38..39.2.
+    """
+    bands = []
+    for m in months:
+        band = tavg[m].read_array(band=0).astype('float32')
+        bands.append(np.where(np.isfinite(band) &amp; (band &gt; -1e30), band, NODATA))
     return Dataset.from_array(
         arr=np.stack(bands),
         geo_ref=GeoReference(geo=tavg[0].geotransform, epsg=tavg[0].epsg),
@@ -4968,6 +5587,379 @@ gif
 </div>
 </div>
 </div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d8cc6ad4">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets">4. A committed global stack — and the two traps a 0/360 NetCDF sets<a class="anchor-link" href="#4-a-committed-global-stack-and-the-two-traps-a-0360-netcdf-sets">¶</a></h2><p>Every grid in this notebook is committed, so nothing here downloads. This section reaches for a different one —
+<code>examples/data/global/ersstv5.nc</code>, <strong>624 monthly sea-surface-temperature grids</strong> from NOAA's ERSST v5 — because a
+global <strong>NetCDF</strong> sets two traps that a GeoTIFF does not, and each produces the same symptom: a globe that is one
+flat colour while only the title changes.</p>
+<table>
+<thead>
+<tr>
+<th>trap</th>
+<th>symptom</th>
+<th>fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the grid is on a <strong>0–360</strong> longitude frame</td>
+<td>data sits off the visible hemisphere; you see only the <code>ocean</code> fill</td>
+<td><code>Dataset.wrap_longitude()</code></td>
+</tr>
+<tr>
+<td>the array's sentinel <strong>does not match</strong> the declared nodata</td>
+<td>every real value is crushed into one end of the ramp</td>
+<td>declare the sentinel the array actually carries</td>
+</tr>
+</tbody>
+</table>
+<p>The second one is worth stating precisely, because the obvious diagnosis is wrong. A colour scan <strong>does</strong> skip the
+nodata a dataset declares — measured on the monthly stack above, declaring <code>-9999</code> scans to <code>-61.7..39.2 °C</code> even
+though the arrays are full of <code>-9999</code>. What it cannot skip is a sentinel nobody told it about: put an undeclared
+<code>-3.4e38</code> in those same arrays and the scan returns <code>-3.4e38..39.2</code>, and every real temperature collapses to one
+colour. So the fix is to make the declaration and the array agree — not to paper over it with explicit
+<code>vmin</code>/<code>vmax</code>, which hides the mismatch while leaving it in the data.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c28b93bd">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h3 id="trap-1-the-longitude-frame">Trap 1 — the longitude frame<a class="anchor-link" href="#trap-1-the-longitude-frame">¶</a></h3><p>Most climate NetCDFs number longitude from 0 to 360, not −180 to 180. Read the variable and look at its bounds
+before plotting anything: ERSST's run from −1 to <strong>359</strong>, so an orthographic globe centred anywhere in the
+Atlantic sees almost none of it.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=1fa6b960">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [5]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-5">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">SST_NC</span> <span class="o">=</span> <span class="n">CACHE</span> <span class="o">/</span> <span class="s1">'ersstv5.nc'</span>
+<span class="n">raw</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="sa">f</span><span class="s1">'NETCDF:"</span><span class="si">{</span><span class="n">SST_NC</span><span class="si">}</span><span class="s1">":sst'</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'bands: '</span><span class="p">,</span> <span class="n">raw</span><span class="o">.</span><span class="n">band_count</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'bounds:'</span><span class="p">,</span> <span class="n">raw</span><span class="o">.</span><span class="n">bounds</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">bounds</span><span class="p">)</span>   <span class="c1"># (-1, -89, 359, 89) -&gt; the 0/360 frame</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-5">SST_NC = CACHE / 'ersstv5.nc'
+raw = Dataset.read_file(f'NETCDF:"{SST_NC}":sst')
+print('bands: ', raw.band_count)
+print('bounds:', raw.bounds.geometry.iloc[0].bounds)   # (-1, -89, 359, 89) -&gt; the 0/360 frame</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>bands:  624
+bounds: (-1.0, -89.0, 359.0, 89.0)
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=307d2a81">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><code>Dataset.wrap_longitude()</code> rolls the columns into the −180/180 frame and moves the geotransform's origin with
+them. It is a pure column roll — no resampling, so no pixel values change — and for a file-backed source it is
+lazy, costing nothing until the data is read.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=4dfa0904">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [6]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-6">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">sst</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">wrap_longitude</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'bounds after wrap_longitude:'</span><span class="p">,</span> <span class="n">sst</span><span class="o">.</span><span class="n">bounds</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">bounds</span><span class="p">)</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-6">sst = raw.wrap_longitude()
+print('bounds after wrap_longitude:', sst.bounds.geometry.iloc[0].bounds)</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>bounds after wrap_longitude: (-181.0, -89.0, 179.0, 89.0)
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f8bfa4fc">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h3 id="trap-2-keeping-nodata-out-of-the-colour-scale">Trap 2 — keeping nodata out of the colour scale<a class="anchor-link" href="#trap-2-keeping-nodata-out-of-the-colour-scale">¶</a></h3><p>ERSST marks land as <code>NaN</code>. A <code>Dataset</code> needs a real sentinel, so the usual move is <code>np.nan_to_num(a, nan=-9999)</code> plus <code>no_data_value=-9999</code> — exactly what the composite section above does. The catch is that the
+sentinel is a <em>number</em>, and if it reaches the colour-scale scan then <code>vmin</code> becomes −9999 and all the real
+values (−2 … 35 °C) collapse into the top sliver of the ramp. The result is a uniformly dark globe.</p>
+<p>So measure the range from the <strong>finite</strong> values and pass it explicitly.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=b39733bc">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [7]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-7">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">NODATA_SST</span> <span class="o">=</span> <span class="o">-</span><span class="mf">9999.0</span>
+<span class="n">ref</span> <span class="o">=</span> <span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">sst</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">sst</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+
+<span class="n">arrays</span> <span class="o">=</span> <span class="p">[</span><span class="n">sst</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">)</span>
+          <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">sst</span><span class="o">.</span><span class="n">band_count</span> <span class="o">-</span> <span class="mi">12</span><span class="p">,</span> <span class="n">sst</span><span class="o">.</span><span class="n">band_count</span><span class="p">)]</span>   <span class="c1"># the last 12 months</span>
+<span class="n">sst_stack</span> <span class="o">=</span> <span class="p">[</span><span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan_to_num</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">nan</span><span class="o">=</span><span class="n">NODATA_SST</span><span class="p">),</span> <span class="n">geo_ref</span><span class="o">=</span><span class="n">ref</span><span class="p">,</span>
+                                <span class="n">no_data_value</span><span class="o">=</span><span class="n">NODATA_SST</span><span class="p">)</span>
+             <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">arrays</span><span class="p">]</span>
+
+<span class="n">finite</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">a</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">a</span><span class="p">)]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">arrays</span><span class="p">])</span>
+<span class="n">SST_MIN</span><span class="p">,</span> <span class="n">SST_MAX</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">finite</span><span class="o">.</span><span class="n">min</span><span class="p">())),</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">finite</span><span class="o">.</span><span class="n">max</span><span class="p">()))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sst_stack</span><span class="p">)</span><span class="si">}</span><span class="s1"> monthly grids | real SST range </span><span class="si">{</span><span class="n">SST_MIN</span><span class="si">}</span><span class="s1"> to </span><span class="si">{</span><span class="n">SST_MAX</span><span class="si">}</span><span class="s1"> degC'</span><span class="p">)</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-7">NODATA_SST = -9999.0
+ref = GeoReference(geo=sst.geotransform, epsg=sst.epsg)
+
+arrays = [sst.read_array(band=i).astype('float32')
+          for i in range(sst.band_count - 12, sst.band_count)]   # the last 12 months
+sst_stack = [Dataset.from_array(np.nan_to_num(a, nan=NODATA_SST), geo_ref=ref,
+                                no_data_value=NODATA_SST)
+             for a in arrays]
+
+finite = np.concatenate([a[np.isfinite(a)] for a in arrays])
+SST_MIN, SST_MAX = float(np.floor(finite.min())), float(np.ceil(finite.max()))
+print(f'{len(sst_stack)} monthly grids | real SST range {SST_MIN} to {SST_MAX} degC')</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>12 monthly grids | real SST range -2.0 to 35.0 degC
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a1ec7d03">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Before animating, check there is something to see. If consecutive grids barely differ, the animation will look
+static however well it is drawn — and that is a fact about the data, not the plot.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=232434db">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [8]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-8">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">steps</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">arrays</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">arrays</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">arrays</span><span class="p">))]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'peak month-to-month SST change: </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1"> degC (per-step peaks range </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1">)'</span><span class="p">)</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-8">steps = [float(np.nanmax(np.abs(arrays[i] - arrays[i - 1]))) for i in range(1, len(arrays))]
+print(f'peak month-to-month SST change: {max(steps):.1f} degC (per-step peaks range {min(steps):.1f}-{max(steps):.1f})')</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>peak month-to-month SST change: 8.9 degC (per-step peaks range 3.0-8.9)
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=17530aad">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h3 id="the-animation">The animation<a class="anchor-link" href="#the-animation">¶</a></h3><p>With the grid in the right frame and the scale pinned to the real range, <code>Map.animate</code> steps the stack the same
+way it stepped the NCEP months in section 1.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=0f0a8de2">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [9]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-9">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">20</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">6.2</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">))</span>
+<span class="n">anim</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span>
+    <span class="n">sst_stack</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">'imshow'</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+    <span class="n">titles</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s1">'Global SST — month </span><span class="si">{</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s1"> of 12'</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sst_stack</span><span class="p">))],</span>
+    <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span>
+    <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="s1">'sea-surface temperature (degC)'</span><span class="p">,</span>
+    <span class="n">vmin</span><span class="o">=</span><span class="n">SST_MIN</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">SST_MAX</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">gif</span> <span class="o">=</span> <span class="n">embed_gif</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">fig</span><span class="p">)</span>
+<span class="n">gif</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-9">m = Map(crs=projections.orthographic(lon=-40, lat=20), globe=True, figsize=(6.2, 5.5))
+anim = m.animate(
+    sst_stack, kind='imshow', fps=4,
+    titles=[f'Global SST — month {i + 1} of 12' for i in range(len(sst_stack))],
+    ocean=True, coastlines=True, cmap='RdYlBu_r',
+    colorbar=True, cbar_label='sea-surface temperature (degC)',
+    vmin=SST_MIN, vmax=SST_MAX,
+)
+gif = embed_gif(anim, 4)
+plt.close(m.fig)
+gif</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child jp-OutputArea-executeResult">
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[9]:</div>
+<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
+<pre>&lt;IPython.core.display.Image object&gt;</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2382f696">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>The seasonal cycle is the thing to watch: the northern hemisphere's warm band builds and retreats while the
+southern tropics stay broadly steady. Land is transparent because it is nodata, so the <code>ocean=True</code> disc shows
+through it.</p>
+<p>Compare this against what the same call produces with either trap left in place — a dark disc with a moving
+title — and the lesson is that an animation which <em>runs</em> is not yet an animation which <em>shows</em> anything. Check
+the frames, not the file size.</p>
+</div>
+</div>
+</div>
+</div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=dc94887a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
@@ -4979,6 +5971,7 @@ gif
 <li><strong>Cost.</strong> Each frame is a full reproject + frame, so animations are heavier than a single map — keep the frame count and figure size modest. A composite costs more again: the frozen stretch is derived by warping and measuring a sample of the stack (capped) before a single frame is drawn, so those frames are reprojected twice in all.</li>
 <li><strong>Colorbar.</strong> <code>colorbar=True</code> adds a single static colorbar (drawn once, not per frame); pass <code>cbar_label</code> for its label. If <code>vmin</code>/<code>vmax</code> are omitted they are computed from the stack so the colours and the bar stay stable across frames.</li>
 <li><strong>Composites.</strong> <code>kind='rgb_composite'</code> / <code>'hsv_composite'</code> animate a stack of <em>multiband</em> rasters. The 2–98 % stretch is frozen once over the stack so brightness changes you see are real ones; <code>limits=[(lo, hi), ...]</code> overrides it, and <code>colorbar=True</code> is refused because an RGB image has no single colour scale.</li>
+<li><strong>Global NetCDFs.</strong> Check <code>bounds</code> before plotting: a 0/360 longitude frame needs <code>Dataset.wrap_longitude()</code> first, and a nodata sentinel left inside the colour scale flattens the globe. Both are shown in section 4.</li>
 </ul>
 </div>
 </div>
