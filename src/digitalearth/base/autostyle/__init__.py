@@ -104,7 +104,7 @@ def list_styles() -> list[str]:
     The user-facing discovery half of the library: the sorted group names a caller can name — the bundled
     groups plus anything a ``digitalearth.styles`` plugin or :func:`temporary_style_library` has merged in.
     (The richer per-variable ECMWF Magics entries are a separate operational table, reached through
-    :func:`load_magics_library`, and are not listed here.)
+    ``load_magics_library``, and are not listed here.)
 
     Returns:
         The sorted style-group names, e.g. ``["default", "temperature", ...]``.

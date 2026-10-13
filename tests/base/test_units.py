@@ -72,8 +72,9 @@ class TestConvertArray:
         )
 
     def test_cross_family_raises(self):
+        values = np.array([1.0])
         with pytest.raises(ValueError, match="different"):
-            convert_array(np.array([1.0]), "m/s", "Pa")
+            convert_array(values, "m/s", "Pa")
 
 
 class TestCanConvert:
