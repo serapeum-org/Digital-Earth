@@ -39,12 +39,15 @@ jobs:
           package-manager-version: 'v0.73.0'
           install-groups: 'docs'
           notebooks-path: 'docs/examples'
-          # basemap() pulls XYZ tiles from a live service, so there is no artifact to commit for
+          # Excluded from the execution, so these render from their committed outputs. basemap() pulls
+# XYZ tiles from a live service, and PyVista needs a GPU or OSMesa that a Linux runner has
+# neither of - VTK dies with 'bad X server connection' and takes the kernel with it. So for
 # these two; they are rendered from their
           # committed outputs instead of being re-executed, so a docs deploy never depends
           # on a third-party host or tile service being up.
           notebooks-exclude: |
             18_global_decorations.ipynb
+            pyvista/**
             web/web_maps.ipynb
           deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
@@ -62,12 +65,15 @@ jobs:
         package-manager-version: 'v0.73.0'
         install-groups: 'docs'
         notebooks-path: 'docs/examples'
-        # basemap() pulls XYZ tiles from a live service, so there is no artifact to commit for
+        # Excluded from the execution, so these render from their committed outputs. basemap() pulls
+# XYZ tiles from a live service, and PyVista needs a GPU or OSMesa that a Linux runner has
+# neither of - VTK dies with 'bad X server connection' and takes the kernel with it. So for
 # these two; they are rendered from their
         # committed outputs instead of being re-executed, so a docs deploy never depends
         # on a third-party host or tile service being up.
         notebooks-exclude: |
           18_global_decorations.ipynb
+          pyvista/**
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
@@ -102,12 +108,15 @@ jobs:
         package-manager-version: 'v0.73.0'
         install-groups: "docs"
         notebooks-path: 'docs/examples'
-        # basemap() pulls XYZ tiles from a live service, so there is no artifact to commit for
+        # Excluded from the execution, so these render from their committed outputs. basemap() pulls
+# XYZ tiles from a live service, and PyVista needs a GPU or OSMesa that a Linux runner has
+# neither of - VTK dies with 'bad X server connection' and takes the kernel with it. So for
 # these two; they are rendered from their
         # committed outputs instead of being re-executed, so a docs deploy never depends
         # on a third-party host or tile service being up.
         notebooks-exclude: |
           18_global_decorations.ipynb
+          pyvista/**
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
         release-tag: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
