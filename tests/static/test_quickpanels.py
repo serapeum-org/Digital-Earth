@@ -55,6 +55,12 @@ class TestQuickpanels:
         assert maps[3].ax.get_visible() is False, "the spare cell is hidden"
         plt.close(fig)
 
+    def test_colorbar_can_be_turned_off(self, dataset):
+        """colorbar=False draws the panels without a colour key."""
+        fig, maps = quickpanels([dataset, dataset], colorbar=False)
+        assert len(maps) == 2
+        plt.close(fig)
+
     def test_a_bad_kind_is_refused(self, dataset):
         """A render that is not a panel kind is refused by name."""
         with pytest.raises(ValueError, match="not a panel render"):
