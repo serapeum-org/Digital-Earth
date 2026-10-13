@@ -152,7 +152,7 @@ repos:
         # The dev env only runs the core gallery. The interactive/web/pyvista(3-D) notebooks need the
         # interactive/web/viz3d envs, and the dask-lazy / lazy-complete / stac-cloud ones hit live
         # endpoints — exclude those trees (mirrors the `notebooks` pixi task's ignore-globs).
-        exclude: ^docs/examples/(interactive/|web/|pyvista/|.*_3d_.*\.ipynb|.*dask-lazy-.*\.ipynb|.*lazy-.*-complete\.ipynb|.*stac-cloud-.*\.ipynb)
+        exclude: ^docs/examples/(interactive/|web/|threed/|.*_3d_.*\.ipynb|.*dask-lazy-.*\.ipynb|.*lazy-.*-complete\.ipynb|.*stac-cloud-.*\.ipynb)
         # One pytest session for every notebook. Otherwise pre-commit splits files across concurrent
         # processes, letting notebooks that write into docs/examples/ collide.
         require_serial: true
