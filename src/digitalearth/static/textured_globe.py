@@ -1134,9 +1134,19 @@ class TexturedGlobe(WatermarkMixin):
             The ``(rows, cols)`` float array of that band on the global grid, nodata as ``NaN``.
 
         Raises:
-            ValueError: If ``dataset`` has no CRS, or ``band`` is outside its band count.
+            ValueError: If ``shape`` is not a coercible ``(rows, columns)`` pair of at least
+                ``(2, 2)``, if ``dataset`` has no CRS, or if ``band`` is outside its band count.
+                Validating here rather than in each caller is what lets :meth:`animate` inherit the
+                same refusals.
         """
-        rows, cols = shape
+        try:
+            rows, cols = (int(v) for v in shape)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"shape must be a (rows, columns) pair of integers, got {shape!r}"
+            ) from exc
+        if rows < 2 or cols < 2:
+            raise ValueError(f"shape must be at least (2, 2), got {shape!r}")
         # `epsg` is None both for a raster with no CRS and for one whose CRS carries no EPSG authority code
         # (geostationary, Mollweide, a bare ESRI code). Only the first is unplaceable; the second reprojects
         # fine, so the presence of a CRS — not of a code — is what decides. Read the attribute rather than
@@ -1144,7 +1154,7 @@ class TexturedGlobe(WatermarkMixin):
         epsg = getattr(dataset, "epsg", None)
         if epsg is None and not getattr(dataset, "crs", None):
             raise ValueError(
-                "from_dataset needs a dataset with a CRS to place it on the globe; this one has none. "
+                "a dataset needs a CRS to be placed on the globe; this one has none. "
                 "Set dataset.crs / dataset.epsg first."
             )
         if not 1 <= band <= dataset.band_count:
@@ -1236,24 +1246,14 @@ class TexturedGlobe(WatermarkMixin):
 
                 ```
         """
-        try:
-            rows, cols = (int(v) for v in shape)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"shape must be a (rows, columns) pair of integers, got {shape!r}"
-            ) from exc
-        if rows < 2 or cols < 2:
-            raise ValueError(f"shape must be at least (2, 2), got {shape!r}")
-
-        # `epsg` is None both for a raster with no CRS and for one whose CRS carries no EPSG authority code
-        # (geostationary, Mollweide, a bare ESRI code). Only the first is unplaceable; the second reprojects
-        # fine, so the presence of a CRS — not of a code — is what decides.
-        epsg = getattr(dataset, "epsg", None)
-        # pyramids owns the regrid and _global_values owns the call, so animate()'s frames are placed
-        # exactly as a single raster is.
+        # pyramids owns the regrid and _global_values owns the call — including validating `shape` and the
+        # CRS, so animate() inherits the same refusals. The grid comes back off the result rather than being
+        # coerced again here: coercing in one place and passing the raw pair on is what silently dropped the
+        # int() and broke shape=(h / 2, w / 2).
         values = cls._global_values(
             dataset, band=band, shape=shape, resampling=resampling
         )
+        rows, cols = values.shape
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
         texture = _as_byte_texture(rgba)
         if not (texture[..., 3] > 0).any():

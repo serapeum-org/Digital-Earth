@@ -443,6 +443,26 @@ class TestFromDataset:
         with pytest.raises(ValueError, match="rows, columns"):
             TexturedGlobe.from_dataset(dataset, shape=shape)
 
+    @pytest.mark.parametrize(
+        "shape", [(90.0, 180.0), ("90", "180")], ids=["floats", "strings"]
+    )
+    def test_a_coercible_shape_is_accepted(self, dataset, shape):
+        """A shape that is not literally ints still works, as it did before the refactor.
+
+        Args:
+            dataset: The raster fixture.
+            shape: A (rows, columns) pair that needs int() to become a grid.
+
+        Test scenario:
+            `shape=(h / 2, w / 2)` is ordinary Python 3 - the division yields floats. from_dataset
+            coerces the pair to validate it, so the coerced values must be the ones that reach the grid;
+            passing the raw pair on instead reaches np.zeros and dies with a TypeError.
+        """
+        globe = TexturedGlobe.from_dataset(dataset, shape=shape)
+        assert globe.glyph.texture.shape == (90, 180, 4), (
+            f"a coercible shape should build a 90x180 texture, got {globe.glyph.texture.shape}"
+        )
+
     def test_a_degenerate_shape_is_refused(self, dataset):
         with pytest.raises(ValueError, match="at least"):
             TexturedGlobe.from_dataset(dataset, shape=(1, 1))
@@ -2676,6 +2696,47 @@ class TestAnimateAStack:
             and kwargs.get("tilt_deg") == 11.5
             for kwargs in built
         ), f"every frame's glyph should carry the globe's options, got {built}"
+        globe.close()
+
+    @pytest.mark.parametrize(
+        ("shape", "match"),
+        [((1, 1), "at least"), ((1, 2, 3), "rows, columns")],
+        ids=["degenerate", "malformed"],
+    )
+    def test_animate_refuses_a_bad_shape_the_way_from_dataset_does(self, shape, match):
+        """`animate` validates `shape` itself instead of letting the grid maths fail.
+
+        Args:
+            shape: The offending shape.
+            match: Text the message must carry.
+
+        Test scenario:
+            Both callers read their frames through one helper, so both should refuse the same arguments the
+            same way. Without the check, a degenerate shape reaches the template maths and surfaces as
+            ZeroDivisionError or a GDAL RuntimeError - neither of which names the argument at fault.
+        """
+        frames = self._frames([0.0])
+        globe = self._globe(frames)
+        with pytest.raises(ValueError, match=match):
+            globe.animate(frames, shape=shape)
+        globe.close()
+
+    def test_the_no_crs_refusal_does_not_name_one_caller(self, mocker):
+        """The shared helper's CRS refusal names neither `from_dataset` nor `animate`.
+
+        Test scenario:
+            The message was lifted verbatim out of from_dataset when the helper was extracted, so
+            animate() told callers to fix a method they had not called.
+        """
+        frames = self._frames([0.0])
+        globe = self._globe(frames)
+        mocker.patch.object(type(frames[0]), "epsg", None)
+        mocker.patch.object(type(frames[0]), "crs", None)
+        with pytest.raises(ValueError, match="CRS") as excinfo:
+            globe.animate(frames, shape=(90, 180))
+        assert "from_dataset" not in str(excinfo.value), (
+            f"the shared refusal should not name one caller, got {excinfo.value}"
+        )
         globe.close()
 
     def test_spin_still_turns_the_camera(self):
