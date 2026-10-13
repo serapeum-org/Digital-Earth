@@ -62,6 +62,18 @@ class Caption:
     Attributes:
         title: The panel heading — the field's human name, plus a time stamp when the source carries one.
         label: The value label for a colorbar/legend — the name with its units in brackets when known.
+
+    Examples:
+        - Build a caption and read its two parts:
+            ```python
+            >>> from digitalearth.base.captions import Caption
+            >>> cap = Caption(title="2 metre temperature", label="2 metre temperature [°C]")
+            >>> cap.title
+            '2 metre temperature'
+            >>> cap.label
+            '2 metre temperature [°C]'
+
+            ```
     """
 
     title: str

@@ -1146,6 +1146,28 @@ def quickpanels(
     Raises:
         ValueError: if ``fields`` yields no field, if ``kind`` is not a raster render, or if ``titles`` is
             given with a length other than the number of fields.
+
+    Examples:
+        - Lay out two fields, one panel each, and read their auto titles — then override them:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import quickpanels
+            >>> ref = GeoReference(geo=(-10.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326)
+            >>> rising = Dataset.from_array(np.arange(400.0).reshape(20, 20), geo_ref=ref)
+            >>> falling = Dataset.from_array(np.arange(400.0).reshape(20, 20)[::-1], geo_ref=ref)
+            >>> fig, maps = quickpanels([rising, falling], cols=2)
+            >>> len(maps)
+            2
+            >>> maps[0].ax.get_title()
+            'Band 1'
+            >>> fig, maps = quickpanels([rising, falling], titles=["Rising", "Falling"])
+            >>> [panel.ax.get_title() for panel in maps]
+            ['Rising', 'Falling']
+
+            ```
     """
     if kind not in _FACET_KINDS:
         renders = ", ".join(repr(name) for name in sorted(_FACET_KINDS))
