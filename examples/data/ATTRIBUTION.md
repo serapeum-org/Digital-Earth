@@ -31,8 +31,8 @@ road hierarchy (`motorway` through `living_street`, dropping footways, paths and
 columns the notebooks teach from; `lanes` and `maxspeed` coerced to numbers.
 
 - Source: **OpenStreetMap contributors**, via the Overpass API
-- Licence: **ODbL 1.0** — <https://www.openstreetmap.org/copyright>. Any derived map must credit
-  "© OpenStreetMap contributors".
+- Licence: **ODbL 1.0** — <https://www.openstreetmap.org/copyright>. Every figure drawn from these
+  roads carries a “© OpenStreetMap contributors” credit, and any redistributed map must keep it.
 
 ## `heidelberg_birds_2023.geojson` — bird occurrence records
 

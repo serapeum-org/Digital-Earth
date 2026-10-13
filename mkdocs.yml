@@ -194,7 +194,7 @@ nav:
     # read like deleted method spellings are not stale (review N4): they are not being read as methods.
     # Renaming them would mix two vocabularies inside one numbered set, force `contour`/`contourf` to share
     # one word, and change published URLs. The labels below are where the method names belong.
-    - Plot gallery:
+    - Static gallery:
       - Fields:
         - field: examples/static/01_imshow.ipynb
         - contours (filled): examples/static/02_contourf.ipynb

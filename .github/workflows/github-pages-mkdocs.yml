@@ -43,7 +43,8 @@ jobs:
           #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
           #     'bad X server connection' and takes the kernel with it.
           #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
-          #   - web/web_maps is a MapLibre page whose committed HTML output is the artifact.
+          #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
+          #     deploy does not execute a browser-dependent page that is not published anyway.
           # Everything else executes. The one other notebook that reaches a tile service,
           # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
           # never blocked by a third-party host being down.
@@ -71,7 +72,8 @@ jobs:
         #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
         #     'bad X server connection' and takes the kernel with it.
         #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
-        #   - web/web_maps is a MapLibre page whose committed HTML output is the artifact.
+        #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
+        #     deploy does not execute a browser-dependent page that is not published anyway.
         # Everything else executes. The one other notebook that reaches a tile service,
         # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
         # never blocked by a third-party host being down.
@@ -116,7 +118,8 @@ jobs:
         #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
         #     'bad X server connection' and takes the kernel with it.
         #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
-        #   - web/web_maps is a MapLibre page whose committed HTML output is the artifact.
+        #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
+        #     deploy does not execute a browser-dependent page that is not published anyway.
         # Everything else executes. The one other notebook that reaches a tile service,
         # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
         # never blocked by a third-party host being down.
