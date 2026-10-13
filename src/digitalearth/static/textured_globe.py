@@ -2190,6 +2190,129 @@ class TexturedGlobe(WatermarkMixin):
             geometry = geometry.to_crs(_TEXTURE_EPSG)
         return geometry.x.to_numpy(), geometry.y.to_numpy()
 
+    def _animate_frames(
+        self, stack: Any, titles: Sequence[Any] | None, interval: float
+    ) -> tuple[list[Any], float]:
+        """Materialise the stack and validate the per-call arguments shared by every frame.
+
+        Args:
+            stack: The rasters to step.
+            titles: One title per frame, or ``None``.
+            interval: Milliseconds between frames, before coercion.
+
+        Returns:
+            The stack as a list and the interval coerced to ``float``.
+
+        Raises:
+            ValueError: If ``stack`` is empty, ``titles`` is a string or the wrong length, or ``interval``
+                is not a positive number of milliseconds.
+        """
+        frames = list(stack)
+        if not frames:
+            raise ValueError(
+                "animate needs at least one raster to step; the stack yielded none. Pass a sequence of "
+                "pyramids Datasets, or use spin() to turn the camera around the texture already drawn."
+            )
+        if isinstance(titles, str):
+            # A bare string is iterable, so len() "works" and the per-frame indexing would hand each frame
+            # one character. Refuse it rather than silently captioning a two-frame stack "a", "b".
+            raise ValueError(
+                f"titles must be one title per frame, not a single string; got {titles!r}"
+            )
+        if titles is not None and len(titles) != len(frames):
+            raise ValueError(
+                f"titles must have one entry per frame; got {len(titles)} for {len(frames)} frames."
+            )
+        try:
+            interval_ms = float(
+                interval
+            )  # coerce first, so a non-number hits the one message below
+        except (TypeError, ValueError):
+            interval_ms = (
+                0.0  # fall through rather than surface float()'s generic message
+            )
+        if interval_ms <= 0:
+            raise ValueError(
+                f"interval must be a positive number of milliseconds, got {interval!r}"
+            )
+        return frames, interval_ms
+
+    def _animate_scale(
+        self,
+        frames: Sequence[Any],
+        *,
+        vmin: float | None,
+        vmax: float | None,
+        band: int,
+        shape: tuple[int, int],
+        resampling: str,
+    ) -> tuple[float, float]:
+        """Settle the ``(low, high)`` colour scale shared across the whole stack.
+
+        Measured from a bounded, evenly-spread sample rather than from all of it: a 624-band series would
+        otherwise read every band into memory just to find its limits. The sample is released here; the
+        frames are read one at a time as each is drawn, so the whole stack is never held at once.
+
+        Args:
+            frames: The stack to measure across.
+            vmin: Low end, or ``None`` to measure it.
+            vmax: High end, or ``None`` to measure it.
+            band: 1-based band index read from each frame.
+            shape: The ``(rows, cols)`` global grid each frame is aligned onto.
+            resampling: The pyramids resampling method for that align.
+
+        Returns:
+            The ``(low, high)`` limits: the caller's bounds where given, measured ends otherwise.
+
+        Raises:
+            ValueError: If the caller's bounds leave nothing to colour (see :meth:`_validate_colour_bounds`).
+        """
+        if vmin is None or vmax is None:
+            sample = [
+                self._global_values(
+                    frame, band=band, shape=shape, resampling=resampling
+                )
+                for frame in sample_evenly(frames, cap=DEFAULT_CLIM_SCAN_CAP)
+            ]
+            # Validate the caller's ORIGINAL bounds against the sampled data, before substituting the
+            # measured ends. A one-sided vmin/vmax must raise the same "nothing to colour" message
+            # from_dataset gives — not the "vmax must be greater than vmin" that resolving both forces.
+            self._validate_colour_bounds(
+                np.concatenate([finite(v) for v in sample])
+                if sample
+                else np.array([], dtype=float),
+                vmin,
+                vmax,
+            )
+            measured = stack_scale(sample).as_limits()
+        else:
+            self._validate_colour_bounds(np.array([], dtype=float), vmin, vmax)
+            measured = (0.0, 1.0)
+        low = measured[0] if vmin is None else float(vmin)
+        high = measured[1] if vmax is None else float(vmax)
+        return low, high
+
+    def _animate_axes(self, ax: Any, kwargs: dict[str, Any]) -> tuple[Any, bool]:
+        """Resolve the axes to animate on, and whether the caller supplied it.
+
+        Args:
+            ax: The axes the caller passed, or ``None``.
+            kwargs: The forwarded draw options; ``figsize`` is consumed here if a new figure is made.
+
+        Returns:
+            The resolved ``Axes3D`` and a flag that is ``True`` when the caller owns it.
+        """
+        supplied = not (ax is None or self._is_ours(ax)) or self._caller_supplied_axes
+        if ax is None:
+            ax = self._ctor_ax
+        ax = self._reuse_own_axes(ax, kwargs)
+        if ax is None:
+            figsize = kwargs.pop(
+                "figsize", self.glyph.default_options.get("figsize", (6, 6))
+            )
+            ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
+        return ax, supplied
+
     def animate(
         self,
         stack: Any,
@@ -2303,75 +2426,12 @@ class TexturedGlobe(WatermarkMixin):
 
                 ```
         """
-        frames = list(stack)
-        if not frames:
-            raise ValueError(
-                "animate needs at least one raster to step; the stack yielded none. Pass a sequence of "
-                "pyramids Datasets, or use spin() to turn the camera around the texture already drawn."
-            )
-        if isinstance(titles, str):
-            # A bare string is iterable, so len() "works" and the per-frame indexing below would hand each
-            # frame one character. Refuse it rather than silently captioning a two-frame stack "a", "b".
-            raise ValueError(
-                f"titles must be one title per frame, not a single string; got {titles!r}"
-            )
-        if titles is not None and len(titles) != len(frames):
-            raise ValueError(
-                f"titles must have one entry per frame; got {len(titles)} for {len(frames)} frames."
-            )
-        try:
-            interval_ms = float(
-                interval
-            )  # coerce first, so a non-number hits the one message below
-        except (TypeError, ValueError):
-            interval_ms = (
-                0.0  # fall through rather than surface float()'s generic message
-            )
-        if interval_ms <= 0:
-            raise ValueError(
-                f"interval must be a positive number of milliseconds, got {interval!r}"
-            )
-        interval = interval_ms
-        # Settle the shared colour scale from a bounded, evenly-spread sample of the stack rather than
-        # from all of it: a 624-band series would otherwise read every band into memory just to find its
-        # limits. Only the sample is read here, and it is released immediately; the frames themselves are
-        # read one at a time as each is drawn (see _texture), so the whole stack is never held at once.
-        if vmin is None or vmax is None:
-            sample = [
-                self._global_values(
-                    frame, band=band, shape=shape, resampling=resampling
-                )
-                for frame in sample_evenly(frames, cap=DEFAULT_CLIM_SCAN_CAP)
-            ]
-            # Validate the caller's ORIGINAL bounds against the sampled data, before substituting the
-            # measured ends. A one-sided vmin/vmax must raise the same "nothing to colour" message
-            # from_dataset gives — not the "vmax must be greater than vmin" that resolving both first forces.
-            self._validate_colour_bounds(
-                np.concatenate([finite(v) for v in sample])
-                if sample
-                else np.array([], dtype=float),
-                vmin,
-                vmax,
-            )
-            measured = stack_scale(sample).as_limits()
-            del sample
-        else:
-            self._validate_colour_bounds(np.array([], dtype=float), vmin, vmax)
-            measured = (0.0, 1.0)
-        low = measured[0] if vmin is None else float(vmin)
-        high = measured[1] if vmax is None else float(vmax)
+        frames, interval = self._animate_frames(stack, titles, interval)
+        low, high = self._animate_scale(
+            frames, vmin=vmin, vmax=vmax, band=band, shape=shape, resampling=resampling
+        )
         at_spin = self._spin if spin is None else float(spin)
-
-        supplied = not (ax is None or self._is_ours(ax)) or self._caller_supplied_axes
-        if ax is None:
-            ax = self._ctor_ax
-        ax = self._reuse_own_axes(ax, kwargs)
-        if ax is None:
-            figsize = kwargs.pop(
-                "figsize", self.glyph.default_options.get("figsize", (6, 6))
-            )
-            ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
-
+        ax, supplied = self._animate_axes(ax, kwargs)
         if titles is not None and ax.get_title():
             # The globe's counterpart of the 2-D tier's titles-vs-set_title warning: a per-frame caption
             # paints over whatever heading the axes already carries, so the two would disagree for the clip.
