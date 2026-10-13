@@ -23,8 +23,10 @@ from digitalearth.base.sources.source import Source
 
 __all__ = [
     "auto_style",
+    "list_styles",
     "load_library",
     "load_magics_library",
+    "load_style",
     "magics_style",
     "register_style_library",
     "temporary_style_library",
@@ -94,6 +96,71 @@ def load_library() -> dict[str, dict]:
         load_magics_library: The richer ECMWF Magics operational library (loaded separately).
     """
     return {**_bundled_library(), **_PLUGIN_LIBRARY}
+
+
+def list_styles() -> list[str]:
+    """Return the names of the style groups available to :func:`load_style` and :func:`auto_style`.
+
+    The user-facing discovery half of the library: the sorted group names a caller can name — the bundled
+    groups plus anything a ``digitalearth.styles`` plugin or :func:`temporary_style_library` has merged in.
+    (The richer per-variable ECMWF Magics entries are a separate operational table, reached through
+    :func:`load_magics_library`, and are not listed here.)
+
+    Returns:
+        The sorted style-group names, e.g. ``["default", "temperature", ...]``.
+
+    Examples:
+        - The shipped library's groups:
+            ```python
+            >>> from digitalearth.base.autostyle import list_styles
+            >>> list_styles()
+            ['default', 'discharge', 'elevation', 'precipitation', 'pressure', 'temperature', 'wind']
+
+            ```
+    """
+    return sorted(load_library())
+
+
+def load_style(name: str) -> dict[str, Any]:
+    """Return a copy of one named style group's cleopatra parameters.
+
+    The fetch half of the discovery API: hand it a name from :func:`list_styles` and get that group's style
+    parameters (``cmap``, ``levels``, ``units``, …) to pass to a glyph or merge into a call. The ``match``
+    key — the library's own variable-matching hint — is stripped, as :func:`auto_style` strips it.
+
+    Args:
+        name: A style-group name, as listed by :func:`list_styles`.
+
+    Returns:
+        A fresh dict of that group's parameters, safe to mutate.
+
+    Raises:
+        KeyError: If ``name`` is not a registered style group.
+
+    Examples:
+        - Fetch a group's colormap:
+            ```python
+            >>> from digitalearth.base.autostyle import load_style
+            >>> load_style("temperature")["cmap"]
+            'coolwarm'
+
+            ```
+        - An unknown name is rejected, pointing at the discovery call:
+            ```python
+            >>> from digitalearth.base.autostyle import load_style
+            >>> load_style("nope")
+            Traceback (most recent call last):
+                ...
+            KeyError: "unknown style 'nope'; call list_styles() to see what is available"
+
+            ```
+    """
+    library = load_library()
+    if name not in library:
+        raise KeyError(
+            f"unknown style {name!r}; call list_styles() to see what is available"
+        )
+    return {key: value for key, value in library[name].items() if key != "match"}
 
 
 def register_style_library(library: Mapping[str, dict]) -> None:

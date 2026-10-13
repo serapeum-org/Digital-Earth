@@ -9,7 +9,9 @@ from pyramids.dataset import GeoReference
 from digitalearth.base import autostyle
 from digitalearth.base.autostyle import (
     auto_style,
+    list_styles,
     load_library,
+    load_style,
     register_style_library,
     temporary_style_library,
 )
@@ -226,3 +228,39 @@ class TestPluginLibraryRegistration:
         assert "scratch_var" not in load_library(), (
             "the scoped group must not outlive the block that registered it"
         )
+
+
+class TestStyleDiscovery:
+    """list_styles / load_style — the user-facing discovery API over the style library."""
+
+    def test_list_styles_names_the_bundled_groups(self):
+        """Every bundled group is listed, sorted."""
+        names = list_styles()
+        assert names == sorted(names), "list_styles should be sorted"
+        for group in ("default", "temperature", "precipitation", "wind"):
+            assert group in names, f"{group} missing from list_styles()"
+
+    def test_load_style_returns_a_group_copy(self):
+        """load_style returns the named group's params, and a mutable copy."""
+        style = load_style("temperature")
+        assert style["cmap"] == "coolwarm"
+        style["cmap"] = "mangled"
+        assert load_style("temperature")["cmap"] == "coolwarm", (
+            "load_style must copy, not alias"
+        )
+
+    def test_load_style_strips_the_match_hint(self):
+        """The library's variable-matching hint is not a style parameter, so it is dropped."""
+        assert "match" not in load_style("temperature")
+
+    def test_load_style_unknown_points_at_list_styles(self):
+        """An unknown name raises, pointing the caller at the discovery call."""
+        with pytest.raises(KeyError, match="list_styles"):
+            load_style("no-such-style")
+
+    def test_a_registered_group_shows_up_in_both(self):
+        """A temporarily merged group is listed and loadable while in scope."""
+        with temporary_style_library({"scratch": {"cmap": "magma"}}):
+            assert "scratch" in list_styles()
+            assert load_style("scratch")["cmap"] == "magma"
+        assert "scratch" not in list_styles()
