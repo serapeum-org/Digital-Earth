@@ -164,6 +164,9 @@ docs = [
     "mkdocs-mermaid2-plugin  >=1.2.3",
     "jupyter-contrib-nbextensions  >=0.7.0",
     "mkdocs-panzoom-plugin",
+    # The gallery moved from examples/plots/ to examples/static/; this serves the 26 old
+    # URLs that mike has already published, so external links keep working.
+    "mkdocs-redirects >=1.2.2",
     "notebook<7.0",
 ]
 notebook = [

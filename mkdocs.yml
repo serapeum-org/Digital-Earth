@@ -67,6 +67,40 @@ plugins:
             show_root_heading: true
             heading_level: 2
             docstring_style: google
+  # The plot gallery moved from examples/plots/ to examples/static/ in this release. Every version
+  # mike has published carries the old paths, so each one is redirected to its new home rather
+  # than left to 404. Only the 26 pages that were actually published are listed; the notebooks
+  # added in the same release never had an old URL. The source key is the OLD url as a .md path
+  # (plugin maps 'a/b.md' -> a/b/index.html, the directory-url shape these pages were served at);
+  # the target stays .ipynb because that is the real page mkdocs-jupyter registers.
+  - redirects:
+      redirect_maps:
+        'examples/plots/01_imshow.md': 'examples/static/01_imshow.ipynb'
+        'examples/plots/02_contourf.md': 'examples/static/02_contourf.ipynb'
+        'examples/plots/03_contour.md': 'examples/static/03_contour.ipynb'
+        'examples/plots/04_pcolormesh.md': 'examples/static/04_pcolormesh.ipynb'
+        'examples/plots/05_block.md': 'examples/static/05_block.ipynb'
+        'examples/plots/06_grid_points.md': 'examples/static/06_grid_points.ipynb'
+        'examples/plots/07_scatter.md': 'examples/static/07_scatter.ipynb'
+        'examples/plots/08_grid_cells.md': 'examples/static/08_grid_cells.ipynb'
+        'examples/plots/09_quiver.md': 'examples/static/09_quiver.ipynb'
+        'examples/plots/10_streamplot.md': 'examples/static/10_streamplot.ipynb'
+        'examples/plots/11_barbs.md': 'examples/static/11_barbs.ipynb'
+        'examples/plots/12_tricontourf.md': 'examples/static/12_tricontourf.ipynb'
+        'examples/plots/13_tricontour.md': 'examples/static/13_tricontour.ipynb'
+        'examples/plots/14_tripcolor.md': 'examples/static/14_tripcolor.ipynb'
+        'examples/plots/15_rgb_composite.md': 'examples/static/15_rgb_composite.ipynb'
+        'examples/plots/16_hsv_composite.md': 'examples/static/16_hsv_composite.ipynb'
+        'examples/plots/17_choropleth.md': 'examples/static/17_choropleth.ipynb'
+        'examples/plots/18_shapes.md': 'examples/static/18_shapes.ipynb'
+        'examples/plots/19_spaghetti.md': 'examples/static/19_spaghetti.ipynb'
+        'examples/plots/20_envelope.md': 'examples/static/20_envelope.ipynb'
+        'examples/plots/21_quantile_band.md': 'examples/static/21_quantile_band.ipynb'
+        'examples/plots/22_boxplot.md': 'examples/static/22_boxplot.ipynb'
+        'examples/plots/23_multiboxplot.md': 'examples/static/23_multiboxplot.ipynb'
+        'examples/plots/24_stripes.md': 'examples/static/24_stripes.ipynb'
+        'examples/plots/25_timeseries.md': 'examples/static/25_timeseries.ipynb'
+        'examples/plots/26_climatology.md': 'examples/static/26_climatology.ipynb'
   - table-reader
   - tags
   - mike:
