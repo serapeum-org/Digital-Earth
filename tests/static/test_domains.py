@@ -45,7 +45,8 @@ class TestResolveDomain:
         """The catalogue now carries country-level regions, not just continents."""
         for name in ("germany", "japan", "brazil", "australia"):
             west, south, east, north = resolve_domain(name)
-            assert west < east and south < north, f"{name} bbox is degenerate"
+            assert west < east, f"{name} has non-increasing longitude bounds"
+            assert south < north, f"{name} has non-increasing latitude bounds"
 
     def test_union_via_resolve_domain(self):
         """A sequence of names resolves to the single enclosing bbox."""
@@ -56,7 +57,10 @@ class TestResolveDomain:
         box = union_domains("germany", "italy", "spain")
         for name in ("germany", "italy", "spain"):
             w, s, e, n = DOMAINS[name]
-            assert box[0] <= w and box[1] <= s and box[2] >= e and box[3] >= n
+            assert box[0] <= w, f"union west {box[0]} does not cover {name} west {w}"
+            assert box[1] <= s, f"union south {box[1]} does not cover {name} south {s}"
+            assert box[2] >= e, f"union east {box[2]} does not cover {name} east {e}"
+            assert box[3] >= n, f"union north {box[3]} does not cover {name} north {n}"
 
     def test_union_of_one_returns_itself(self):
         """A single-member union is just that region."""

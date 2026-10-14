@@ -43,9 +43,8 @@ class TestQuickpanels:
     def test_suptitle_sets_a_figure_heading(self, dataset):
         """suptitle headings the figure, distinct from the per-panel titles."""
         fig, maps = quickpanels([dataset, dataset], suptitle="A pair of fields")
-        assert (
-            fig._suptitle is not None and fig._suptitle.get_text() == "A pair of fields"
-        )
+        assert fig._suptitle is not None
+        assert fig._suptitle.get_text() == "A pair of fields"
         plt.close(fig)
 
     def test_a_trailing_empty_cell_is_hidden(self, dataset):

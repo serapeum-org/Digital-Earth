@@ -71,11 +71,9 @@ class TestConvertArray:
     def test_nan_is_preserved(self):
         """A masked nodata cell stays NaN rather than becoming a number."""
         out, _ = convert_array(np.array([273.15, np.nan, 373.15]), "K", "celsius")
-        assert (
-            round(float(out[0]), 6) == 0.0
-            and np.isnan(out[1])
-            and round(float(out[2]), 6) == 100.0
-        )
+        assert round(float(out[0]), 6) == 0.0
+        assert np.isnan(out[1])
+        assert round(float(out[2]), 6) == 100.0
 
     def test_cross_family_raises(self):
         values = np.array([1.0])
