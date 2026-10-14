@@ -17,6 +17,12 @@ class TestNormalize:
         assert normalize_units("m s-1") == "m/s"
         assert normalize_units("mbar") == "hpa"
 
+    def test_space_separated_long_forms(self):
+        """Spaced CF long forms fold like their underscore spellings."""
+        assert normalize_units("degrees celsius") == "celsius"
+        assert normalize_units("degree Celsius") == "celsius"
+        assert normalize_units("degrees fahrenheit") == "fahrenheit"
+
     def test_unknown_is_returned_lowercased(self):
         """An unknown unit comes back as-given (lower-cased), not mangled."""
         assert normalize_units("Widgets") == "widgets"
