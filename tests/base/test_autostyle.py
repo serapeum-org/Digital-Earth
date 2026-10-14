@@ -258,6 +258,22 @@ class TestStyleDiscovery:
         with pytest.raises(KeyError, match="list_styles"):
             load_style("no-such-style")
 
+    def test_load_style_does_not_share_nested_containers(self):
+        """A nested container in a loaded style is a copy, so mutating it cannot corrupt the library.
+
+        Test scenario:
+            load_style promises a dict "safe to mutate". A shallow copy would share a nested levels list by
+            reference, so appending to load_style(name)["levels"] would mutate the shared library group.
+        """
+        with temporary_style_library(
+            {"heat": {"levels": [1, 2, 3], "cmap": "inferno"}}
+        ):
+            loaded = load_style("heat")
+            loaded["levels"].append(99)
+            assert load_style("heat")["levels"] == [1, 2, 3], (
+                f"mutating a loaded style corrupted the library: {load_style('heat')['levels']}"
+            )
+
     def test_a_registered_group_shows_up_in_both(self):
         """A temporarily merged group is listed and loadable while in scope."""
         with temporary_style_library({"scratch": {"cmap": "magma"}}):

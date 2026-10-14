@@ -10,6 +10,7 @@ colormap *and* contour levels for common meteorological fields; :func:`auto_styl
 falls back to the lighter substring library (``variables.yml``) for everything else.
 """
 
+import copy
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from functools import lru_cache
@@ -160,7 +161,17 @@ def load_style(name: str) -> dict[str, Any]:
         raise KeyError(
             f"unknown style {name!r}; call list_styles() to see what is available"
         )
-    return {key: value for key, value in library[name].items() if key != "match"}
+    # Copy nested containers so a caller mutating e.g. ``load_style(name)["levels"]`` cannot corrupt the
+    # shared library. Scalars and any live style object (a Colormap, a ColorScale, a callable a plugin
+    # contributed) are shared by reference, not deep-copied — an unconditional deepcopy raises on such a
+    # value, which is the trap load_library documents.
+    return {
+        key: copy.deepcopy(value)
+        if isinstance(value, (list, dict, set, tuple))
+        else value
+        for key, value in library[name].items()
+        if key != "match"
+    }
 
 
 def register_style_library(library: Mapping[str, dict]) -> None:
