@@ -1094,6 +1094,33 @@ def facet(
     return fig, maps
 
 
+def _unique_titles(titles: list[str]) -> list[str]:
+    """Make colliding titles distinct by numbering the repeats, leaving unique ones untouched.
+
+    Two metadata-less single-band datasets both caption as ``"Band 1"``; numbering the repeats
+    (``"Band 1 (1)"``, ``"Band 1 (2)"``) keeps the panels of :func:`quickpanels` distinguishable.
+
+    Args:
+        titles: One title per panel, in order.
+
+    Returns:
+        The titles with every repeated value suffixed ``" (n)"`` by its 1-based occurrence; a title that
+        appears once is returned unchanged.
+    """
+    from collections import Counter
+
+    counts = Counter(titles)
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for title in titles:
+        if counts[title] > 1:
+            seen[title] = seen.get(title, 0) + 1
+            out.append(f"{title} ({seen[title]})")
+        else:
+            out.append(title)
+    return out
+
+
 def quickpanels(
     fields: Any,
     *,
@@ -1163,8 +1190,8 @@ def quickpanels(
             >>> fig, maps = quickpanels([rising, falling], cols=2)
             >>> len(maps)
             2
-            >>> maps[0].ax.get_title()
-            'Band 1'
+            >>> maps[0].ax.get_title()  # two bare datasets both caption 'Band 1', so disambiguated
+            'Band 1 (1)'
             >>> fig, maps = quickpanels([rising, falling], titles=["Rising", "Falling"])
             >>> [panel.ax.get_title() for panel in maps]
             ['Rising', 'Falling']
@@ -1184,6 +1211,24 @@ def quickpanels(
             f"titles must have one entry per field; got {len(titles)} for {len(frames)} fields"
         )
     method, fixed = _FACET_KINDS[kind]
+    # Caption only when something uses it: the panel titles (unless the caller gave them all) or the
+    # colorbar labels. With explicit titles and colorbar=False, neither is read, so the metadata work is
+    # skipped. Captions are built before grid() so a metadata error cannot leak a half-built figure.
+    need_caption = titles is None or colorbar
+    captions = (
+        [caption(get_source(f, band=b)) for f, b in zip(frames, bands)]
+        if need_caption
+        else None
+    )
+    if titles is not None:
+        panel_titles = [str(title) for title in titles]
+    else:
+        # A bare single-band Dataset carries no CF name, so two of them both caption as "Band 1";
+        # disambiguate colliding auto-titles positionally so the panels stay distinguishable.
+        assert (
+            captions is not None
+        )  # titles is None implies need_caption, so captions was built
+        panel_titles = _unique_titles([cap.title for cap in captions])
     ncols = min(max(cols, 1), len(frames))
     nrows = math.ceil(len(frames) / ncols)
     fig, maps = grid(
@@ -1195,10 +1240,9 @@ def quickpanels(
             # kind="contourf" fixes filled=True, but an explicit filled=False overrides it) rather than
             # colliding into a "multiple values for keyword" TypeError.
             getattr(panel, method)(frame, band=frame_band, **{**fixed, **style})
-            cap = caption(get_source(frame, band=frame_band))
-            panel.set_title(str(titles[index]) if titles is not None else cap.title)
-            if colorbar:
-                panel.colorbar(label=cap.label)
+            panel.set_title(panel_titles[index])
+            if colorbar and captions is not None:
+                panel.colorbar(label=captions[index].label)
         for spare in maps[len(frames) :]:
             spare.ax.set_visible(False)
     except Exception:

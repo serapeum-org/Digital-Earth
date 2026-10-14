@@ -89,6 +89,36 @@ class TestQuickpanels:
             "quickpanels leaked a figure on the error path"
         )
 
+    def test_metadataless_fields_get_distinct_titles(self, dataset):
+        """Two datasets that both resolve to 'Band 1' are disambiguated, not left identical.
+
+        Test scenario:
+            quickpanels is documented as laying out distinct fields; a bare single-band Dataset has no CF
+            metadata, so caption() names it 'Band 1' for both panels. The auto-titles must be made unique so
+            the panels are distinguishable, rather than both reading 'Band 1'.
+        """
+        fig, maps = quickpanels([dataset, dataset])
+        first, second = maps[0].ax.get_title(), maps[1].ax.get_title()
+        assert first != second, f"panels should be distinguishable; both are {first!r}"
+        plt.close(fig)
+
+    def test_caption_not_computed_when_titles_given_and_no_colorbar(
+        self, dataset, mocker
+    ):
+        """With explicit titles and no colorbar, the metadata caption is never computed.
+
+        Test scenario:
+            A caller passing titles= for every panel with colorbar=False uses neither cap.title nor
+            cap.label, so the get_source + caption work is wasted; it must be skipped.
+        """
+        mocker.patch(
+            "digitalearth.static.figure.caption",
+            side_effect=AssertionError("caption computed though it was discarded"),
+        )
+        fig, maps = quickpanels([dataset, dataset], titles=["A", "B"], colorbar=False)
+        assert [m.ax.get_title() for m in maps] == ["A", "B"]
+        plt.close(fig)
+
     def test_a_bad_kind_is_refused(self, dataset):
         """A render that is not a panel kind is refused by name."""
         with pytest.raises(ValueError, match="not a panel render"):
