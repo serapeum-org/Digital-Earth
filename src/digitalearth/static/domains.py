@@ -5,6 +5,12 @@ region name is data, and keeping it here meant ``base`` could not read it withou
 Import from ``digitalearth.base.domains`` in new code; this module stays so existing imports keep working.
 """
 
-from digitalearth.base.domains import DOMAINS, DomainLike, resolve_domain
+from digitalearth.base.domains import (
+    ALIASES,
+    DOMAINS,
+    DomainLike,
+    resolve_domain,
+    union_domains,
+)
 
-__all__ = ["DOMAINS", "DomainLike", "resolve_domain"]
+__all__ = ["ALIASES", "DOMAINS", "DomainLike", "resolve_domain", "union_domains"]

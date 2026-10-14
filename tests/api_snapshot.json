@@ -665,6 +665,7 @@
     "projections",
     "quantile_band",
     "quickmap",
+    "quickpanels",
     "quickplot",
     "scatter",
     "shared_colorbar",

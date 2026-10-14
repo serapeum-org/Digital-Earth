@@ -27,6 +27,7 @@ from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import read_masked_band
+from digitalearth.base.captions import caption
 from digitalearth.base.clim import frozen_scale, measure_clim
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.raster_classes import (
@@ -34,6 +35,7 @@ from digitalearth.base.raster_classes import (
     code_edges,
     raster_categories,
 )
+from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static.map import Map
@@ -41,7 +43,7 @@ from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["facet", "grid", "shared_colorbar"]
+__all__ = ["facet", "grid", "quickpanels", "shared_colorbar"]
 
 #: The render each ``facet(kind=)`` names, as ``(Map method, keywords it is called with)``.
 _FACET_KINDS: dict[str, tuple[str, dict[str, Any]]] = {
@@ -1089,4 +1091,162 @@ def facet(
         )
     elif colorbar:
         shared_colorbar(fig, drawn, maps, label=cbar_label)
+    return fig, maps
+
+
+def _unique_titles(titles: list[str]) -> list[str]:
+    """Make colliding titles distinct by numbering the repeats, leaving unique ones untouched.
+
+    Two metadata-less single-band datasets both caption as ``"Band 1"``; numbering the repeats
+    (``"Band 1 (1)"``, ``"Band 1 (2)"``) keeps the panels of :func:`quickpanels` distinguishable.
+
+    Args:
+        titles: One title per panel, in order.
+
+    Returns:
+        The titles with every repeated value suffixed ``" (n)"`` by its 1-based occurrence; a title that
+        appears once is returned unchanged.
+    """
+    from collections import Counter
+
+    counts = Counter(titles)
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for title in titles:
+        if counts[title] > 1:
+            seen[title] = seen.get(title, 0) + 1
+            out.append(f"{title} ({seen[title]})")
+        else:
+            out.append(title)
+    return out
+
+
+def quickpanels(
+    fields: Any,
+    *,
+    cols: int = 2,
+    kind: str = "field",
+    band: int = DEFAULT_BAND,
+    crs: Any = 3857,
+    globe: bool = False,
+    figsize: tuple[float, float] | None = None,
+    colorbar: bool = True,
+    titles: Sequence[Any] | None = None,
+    suptitle: str | None = None,
+    **style: Any,
+) -> tuple[Figure, list[Map]]:
+    """Draw several **different** fields, one auto-captioned panel each, every panel on its own scale.
+
+    The heterogeneous-fields counterpart of :func:`facet`. ``facet`` draws one *variable* across frames and
+    shares a single colour scale and colorbar, because small multiples are read against each other.
+    ``quickpanels`` is for the other case — a handful of *distinct* fields (temperature, pressure, wind) laid
+    out together — so each panel is styled, scaled and keyed on its own, and titled from its own metadata.
+
+    Each panel is drawn with the same auto-styling :meth:`~digitalearth.static.maps.raster.RasterMixin.field`
+    applies to any raster (so a recognised variable picks its canonical colormap), and captioned by
+    :func:`~digitalearth.base.captions.caption`: the title is the field's human name, and the colorbar label
+    is that name with its units. Pass ``titles=`` to override the auto titles, or ``suptitle=`` for one
+    heading over the figure. The grid is ``cols`` wide and as many rows as the fields need; any trailing
+    empty cell is hidden.
+
+    Args:
+        fields: The fields to draw — the same shapes :func:`facet` takes: a sequence of pyramids
+            ``Dataset`` objects, a ``DatasetCollection``, or a single multi-band ``Dataset`` whose bands
+            become the panels.
+        cols: Number of panel columns; the row count follows from the field count. Clamped to
+            ``[1, len(fields)]`` — a request wider than there are fields uses one column per field,
+            and a value below 1 becomes 1.
+        kind: The raster render for every panel — ``"field"`` (default), ``"pcolormesh"``, ``"contourf"``
+            or ``"contour"``.
+        band: 1-based band read from each field (ignored where a multi-band dataset is split into one
+            panel per band).
+        crs: Display CRS for every panel.
+        globe: When True, every panel is a globe.
+        figsize: Figure size in inches; ``None`` uses the matplotlib default.
+        colorbar: When True (default), each panel gets its own colorbar, labelled from its metadata.
+        titles: One title per field, overriding the auto captions; ``None`` (default) titles each panel
+            from its own metadata.
+        suptitle: One heading over the whole figure (``None`` adds none).
+        **style: Forwarded to every panel's render (e.g. ``cmap``, ``levels``), overriding the auto-style.
+
+    Returns:
+        ``(fig, maps)`` — the shared figure and the list of :class:`Map` panels, one per field in order.
+
+    Raises:
+        ValueError: if ``fields`` yields no field, if ``kind`` is not a raster render, or if ``titles`` is
+            given with a length other than the number of fields.
+
+    Examples:
+        - Lay out two fields, one panel each, and read their auto titles — then override them:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import quickpanels
+            >>> ref = GeoReference(geo=(-10.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326)
+            >>> rising = Dataset.from_array(np.arange(400.0).reshape(20, 20), geo_ref=ref)
+            >>> falling = Dataset.from_array(np.arange(400.0).reshape(20, 20)[::-1], geo_ref=ref)
+            >>> fig, maps = quickpanels([rising, falling], cols=2)
+            >>> len(maps)
+            2
+            >>> maps[0].ax.get_title()  # two bare datasets both caption 'Band 1', so disambiguated
+            'Band 1 (1)'
+            >>> fig, maps = quickpanels([rising, falling], titles=["Rising", "Falling"])
+            >>> [panel.ax.get_title() for panel in maps]
+            ['Rising', 'Falling']
+
+            ```
+    """
+    if kind not in _FACET_KINDS:
+        renders = ", ".join(repr(name) for name in sorted(_FACET_KINDS))
+        raise ValueError(f"kind={kind!r} is not a panel render; use one of {renders}")
+    frames, bands, _ = _panels_of(fields, band)
+    if not frames:
+        raise ValueError(
+            "quickpanels needs at least one field to draw; none were given"
+        )
+    if titles is not None and len(titles) != len(frames):
+        raise ValueError(
+            f"titles must have one entry per field; got {len(titles)} for {len(frames)} fields"
+        )
+    method, fixed = _FACET_KINDS[kind]
+    # Caption only when something uses it: the panel titles (unless the caller gave them all) or the
+    # colorbar labels. With explicit titles and colorbar=False, neither is read, so the metadata work is
+    # skipped. Captions are built before grid() so a metadata error cannot leak a half-built figure.
+    need_caption = titles is None or colorbar
+    captions = (
+        [caption(get_source(f, band=b)) for f, b in zip(frames, bands)]
+        if need_caption
+        else None
+    )
+    if titles is not None:
+        panel_titles = [str(title) for title in titles]
+    else:
+        # A bare single-band Dataset carries no CF name, so two of them both caption as "Band 1";
+        # disambiguate colliding auto-titles positionally so the panels stay distinguishable.
+        assert (
+            captions is not None
+        )  # titles is None implies need_caption, so captions was built
+        panel_titles = _unique_titles([cap.title for cap in captions])
+    ncols = min(max(cols, 1), len(frames))
+    nrows = math.ceil(len(frames) / ncols)
+    fig, maps = grid(
+        nrows, ncols, crs=crs, globe=globe, figsize=figsize, suptitle=suptitle
+    )
+    try:
+        for index, (panel, frame, frame_band) in enumerate(zip(maps, frames, bands)):
+            # `{**fixed, **style}` so a caller's option wins over the kind's fixed one (e.g.
+            # kind="contourf" fixes filled=True, but an explicit filled=False overrides it) rather than
+            # colliding into a "multiple values for keyword" TypeError.
+            getattr(panel, method)(frame, band=frame_band, **{**fixed, **style})
+            panel.set_title(panel_titles[index])
+            if colorbar and captions is not None:
+                panel.colorbar(label=captions[index].label)
+        for spare in maps[len(frames) :]:
+            spare.ax.set_visible(False)
+    except Exception:
+        # grid() already built the figure; close it so a mid-loop render error does not leak it.
+        plt.close(fig)
+        raise
     return fig, maps
