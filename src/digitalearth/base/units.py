@@ -223,6 +223,10 @@ def convert_array(
             "physical quantities"
         )
     array = np.asarray(values, dtype=float)
+    if normalize_units(source) == normalize_units(target):
+        # Identical units: return a plain float copy rather than the affine round-trip, which for an offset
+        # family (celsius/fahrenheit) would drift — x + 273.15 - 273.15 != x in float64.
+        return array.copy(), normalize_units(target)
     in_base = array * src_scale + src_offset
     converted = (in_base - dst_offset) / dst_scale
     return converted, normalize_units(target)

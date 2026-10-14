@@ -76,6 +76,18 @@ class TestConvertArray:
         with pytest.raises(ValueError, match="different"):
             convert_array(values, "m/s", "Pa")
 
+    def test_offset_family_identity_is_exact(self):
+        """celsius->celsius returns the values unchanged, not an affine round-trip that drifts.
+
+        Test scenario:
+            x + 273.15 - 273.15 != x in float64, so a full round-trip would drift; the docstring promises
+            the values come back unchanged, which must hold for an offset family too, not just offset-0.
+        """
+        values = np.array([0.1, 20.0, -5.3])
+        out, units = convert_array(values, "celsius", "celsius")
+        assert np.array_equal(out, values), f"identity drifted: {out} != {values}"
+        assert units == "celsius"
+
 
 class TestCanConvert:
     """can_convert() tests a pair without converting."""
