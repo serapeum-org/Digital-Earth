@@ -342,6 +342,7 @@ if TYPE_CHECKING:
         facet,
         grid,
         projections,
+        quickpanels,
         shared_colorbar,
     )
     from digitalearth.static.charts import (
