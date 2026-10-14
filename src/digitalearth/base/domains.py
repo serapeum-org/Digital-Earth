@@ -100,8 +100,7 @@ def _resolve_name(name: str) -> tuple[float, float, float, float]:
     key = ALIASES.get(key, key)
     if key not in DOMAINS:
         raise KeyError(
-            f"unknown domain {name!r}; see digitalearth.base.domains.DOMAINS for the catalogue, "
-            "or pass an explicit (west, south, east, north) bbox"
+            f"unknown domain {name!r}; not a registered region — see digitalearth.base.domains.DOMAINS"
         )
     return DOMAINS[key]
 
@@ -158,7 +157,7 @@ def resolve_domain(
             >>> resolve_domain("atlantis")
             Traceback (most recent call last):
                 ...
-            KeyError: "unknown domain 'atlantis'; see digitalearth.base.domains.DOMAINS for the catalogue, or pass an explicit (west, south, east, north) bbox"
+            KeyError: "unknown domain 'atlantis'; not a registered region — see digitalearth.base.domains.DOMAINS"
 
             ```
     """
