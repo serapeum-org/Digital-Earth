@@ -1126,7 +1126,9 @@ def quickpanels(
         fields: The fields to draw — the same shapes :func:`facet` takes: a sequence of pyramids
             ``Dataset`` objects, a ``DatasetCollection``, or a single multi-band ``Dataset`` whose bands
             become the panels.
-        cols: Number of panel columns; the row count follows from the field count.
+        cols: Number of panel columns; the row count follows from the field count. Clamped to
+            ``[1, len(fields)]`` — a request wider than there are fields uses one column per field,
+            and a value below 1 becomes 1.
         kind: The raster render for every panel — ``"field"`` (default), ``"pcolormesh"``, ``"contourf"``
             or ``"contour"``.
         band: 1-based band read from each field (ignored where a multi-band dataset is split into one
@@ -1187,12 +1189,20 @@ def quickpanels(
     fig, maps = grid(
         nrows, ncols, crs=crs, globe=globe, figsize=figsize, suptitle=suptitle
     )
-    for index, (panel, frame, frame_band) in enumerate(zip(maps, frames, bands)):
-        getattr(panel, method)(frame, band=frame_band, **fixed, **style)
-        cap = caption(get_source(frame, band=frame_band))
-        panel.set_title(str(titles[index]) if titles is not None else cap.title)
-        if colorbar:
-            panel.colorbar(label=cap.label)
-    for spare in maps[len(frames) :]:
-        spare.ax.set_visible(False)
+    try:
+        for index, (panel, frame, frame_band) in enumerate(zip(maps, frames, bands)):
+            # `{**fixed, **style}` so a caller's option wins over the kind's fixed one (e.g.
+            # kind="contourf" fixes filled=True, but an explicit filled=False overrides it) rather than
+            # colliding into a "multiple values for keyword" TypeError.
+            getattr(panel, method)(frame, band=frame_band, **{**fixed, **style})
+            cap = caption(get_source(frame, band=frame_band))
+            panel.set_title(str(titles[index]) if titles is not None else cap.title)
+            if colorbar:
+                panel.colorbar(label=cap.label)
+        for spare in maps[len(frames) :]:
+            spare.ax.set_visible(False)
+    except Exception:
+        # grid() already built the figure; close it so a mid-loop render error does not leak it.
+        plt.close(fig)
+        raise
     return fig, maps

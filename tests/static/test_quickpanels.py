@@ -61,6 +61,34 @@ class TestQuickpanels:
         assert len(maps) == 2
         plt.close(fig)
 
+    def test_caller_filled_overrides_the_fixed_contour_kwarg(self, dataset):
+        """kind="contourf" with an explicit filled= overrides the fixed value instead of colliding.
+
+        Test scenario:
+            _FACET_KINDS["contourf"] fixes filled=True; forwarding **style raw alongside it raised
+            "multiple values for keyword 'filled'". The caller's value must win, as the docstring says.
+        """
+        fig, maps = quickpanels([dataset, dataset], kind="contourf", filled=False)
+        assert len(maps) == 2
+        plt.close(fig)
+
+    def test_figure_is_closed_if_a_panel_raises(self, dataset, mocker):
+        """A render error mid-loop closes the figure rather than leaking it.
+
+        Test scenario:
+            grid() builds the figure before the draw loop; an unguarded loop that raises would leave the
+            figure open in plt.get_fignums(). The loop must close it on the error path and re-raise.
+        """
+        mocker.patch(
+            "digitalearth.static.figure.caption", side_effect=RuntimeError("boom")
+        )
+        before = set(plt.get_fignums())
+        with pytest.raises(RuntimeError, match="boom"):
+            quickpanels([dataset, dataset])
+        assert set(plt.get_fignums()) == before, (
+            "quickpanels leaked a figure on the error path"
+        )
+
     def test_a_bad_kind_is_refused(self, dataset):
         """A render that is not a panel kind is refused by name."""
         with pytest.raises(ValueError, match="not a panel render"):
