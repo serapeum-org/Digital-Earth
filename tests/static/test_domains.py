@@ -75,10 +75,22 @@ class TestResolveDomain:
             used to route into union_domains, where list(True) raised TypeError. It must raise the clear
             (west, south, east, north) message instead.
         """
-        import numpy as np
-
         with pytest.raises(ValueError, match="west, south, east, north"):
             resolve_domain([True, 40, 20, 60])
+
+    def test_decimal_bbox_is_accepted(self):
+        """A Decimal bbox resolves, as the pre-PR float() path accepted (no silent narrowing).
+
+        Test scenario:
+            Decimal is numbers.Number but not numbers.Real, so a Real-only gate would reject a bbox the old
+            tuple(float(v) ...) path accepted. _is_number must admit it (while still excluding bool/complex).
+        """
+        from decimal import Decimal
+
+        box = resolve_domain(
+            [Decimal("0"), Decimal("40"), Decimal("20"), Decimal("60")]
+        )
+        assert box == (0.0, 40.0, 20.0, 60.0), f"Decimal bbox should resolve, got {box}"
 
     def test_numpy_scalar_bbox_is_accepted(self):
         """A bbox of numpy scalars resolves like a plain-float one (Windows np.int64 is not int)."""

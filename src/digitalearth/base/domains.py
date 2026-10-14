@@ -87,11 +87,13 @@ DomainLike = str | Sequence[float]
 def _is_number(value: object) -> bool:
     """True for any real number (``numpy`` scalars included) but not a bool.
 
-    ``bool`` is excluded because ``True`` would otherwise read as the longitude ``1``; ``numbers.Real``
-    (rather than ``(int, float)``) is used so a numpy ``int64``/``float64`` bbox resolves on every platform
-    — on Windows ``np.int64`` is not a Python ``int`` subclass.
+    ``bool`` and ``complex`` are excluded — ``True`` would otherwise read as the longitude ``1``, and a
+    longitude is real. ``numbers.Number`` (rather than ``(int, float)`` or ``numbers.Real``) is used so a
+    numpy ``int64``/``float64`` bbox resolves on every platform (on Windows ``np.int64`` is not a Python
+    ``int``) and a ``Decimal`` bbox still resolves as it did through the pre-PR ``float()`` path — ``Decimal``
+    is a ``numbers.Number`` but not a ``numbers.Real``.
     """
-    return isinstance(value, numbers.Real) and not isinstance(value, bool)
+    return isinstance(value, numbers.Number) and not isinstance(value, (bool, complex))
 
 
 def _resolve_name(name: str) -> tuple[float, float, float, float]:
@@ -167,8 +169,8 @@ def resolve_domain(
         return _resolve_name(domain)
     parts = list(domain)
     if parts and all(_is_number(v) for v in parts):
-        numbers = cast("list[float]", parts)
-        bbox = tuple(float(v) for v in numbers)
+        numeric = cast("list[float]", parts)
+        bbox = tuple(float(v) for v in numeric)
         if len(bbox) != 4:
             raise ValueError(
                 f"a bbox domain must be (west, south, east, north); got {domain!r}"
