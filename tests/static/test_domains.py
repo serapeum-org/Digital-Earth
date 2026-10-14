@@ -67,6 +67,26 @@ class TestResolveDomain:
         with pytest.raises(ValueError, match="at least one domain"):
             union_domains()
 
+    def test_bool_in_bbox_gives_the_bbox_message(self):
+        """A bool in a 4-number bbox is refused with the bbox message, not a cryptic TypeError.
+
+        Test scenario:
+            _is_number excludes bool (so True is not read as 1); the sequence is then not all-numbers and
+            used to route into union_domains, where list(True) raised TypeError. It must raise the clear
+            (west, south, east, north) message instead.
+        """
+        import numpy as np
+
+        with pytest.raises(ValueError, match="west, south, east, north"):
+            resolve_domain([True, 40, 20, 60])
+
+    def test_numpy_scalar_bbox_is_accepted(self):
+        """A bbox of numpy scalars resolves like a plain-float one (Windows np.int64 is not int)."""
+        import numpy as np
+
+        box = resolve_domain([np.int64(0), np.int64(40), np.int64(20), np.int64(60)])
+        assert box == (0.0, 40.0, 20.0, 60.0), f"numpy bbox should resolve, got {box}"
+
 
 class TestSetDomain:
     """Tests for Map.set_domain."""

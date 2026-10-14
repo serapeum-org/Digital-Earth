@@ -18,6 +18,7 @@ Three ways to name a region:
   :func:`union_domains` (or by passing the sequence straight to :func:`resolve_domain`).
 """
 
+import numbers
 from collections.abc import Sequence
 from typing import cast
 
@@ -84,8 +85,13 @@ DomainLike = str | Sequence[float]
 
 
 def _is_number(value: object) -> bool:
-    """True for a real int/float but not a bool (``True`` would otherwise read as ``1``)."""
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    """True for any real number (``numpy`` scalars included) but not a bool.
+
+    ``bool`` is excluded because ``True`` would otherwise read as the longitude ``1``; ``numbers.Real``
+    (rather than ``(int, float)``) is used so a numpy ``int64``/``float64`` bbox resolves on every platform
+    — on Windows ``np.int64`` is not a Python ``int`` subclass.
+    """
+    return isinstance(value, numbers.Real) and not isinstance(value, bool)
 
 
 def _resolve_name(name: str) -> tuple[float, float, float, float]:
@@ -169,7 +175,14 @@ def resolve_domain(
                 f"a bbox domain must be (west, south, east, north); got {domain!r}"
             )
         return bbox
-    # anything else is a union of names/bboxes
+    # A union's members are names (str) or bboxes (sub-sequences). A scalar member that _is_number did not
+    # accept — a bool, or a number type it does not recognise — means this was meant to be a bbox, so give
+    # the bbox message rather than routing the scalar into union_domains where list() would raise a cryptic
+    # TypeError.
+    if any(not isinstance(v, (str, Sequence)) for v in parts):
+        raise ValueError(
+            f"a bbox domain must be (west, south, east, north); got {domain!r}"
+        )
     return union_domains(*cast("list[DomainLike]", parts))
 
 
