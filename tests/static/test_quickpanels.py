@@ -79,9 +79,9 @@ class TestQuickpanels:
             grid() builds the figure before the draw loop; an unguarded loop that raises would leave the
             figure open in plt.get_fignums(). The loop must close it on the error path and re-raise.
         """
-        mocker.patch(
-            "digitalearth.static.figure.caption", side_effect=RuntimeError("boom")
-        )
+        from digitalearth.static import Map
+
+        mocker.patch.object(Map, "field", side_effect=RuntimeError("boom"))
         before = set(plt.get_fignums())
         with pytest.raises(RuntimeError, match="boom"):
             quickpanels([dataset, dataset])
@@ -133,3 +133,14 @@ class TestQuickpanels:
         """A titles list of the wrong length is refused, like animate's."""
         with pytest.raises(ValueError, match="one entry per field"):
             quickpanels([dataset, dataset], titles=["only one"])
+
+
+class TestUniqueTitles:
+    """_unique_titles numbers only the repeats, leaving unique titles untouched."""
+
+    def test_repeats_are_numbered_uniques_untouched(self):
+        """A colliding title is suffixed per occurrence; a title appearing once is returned as-is."""
+        from digitalearth.static.figure import _unique_titles
+
+        assert _unique_titles(["a", "a", "b"]) == ["a (1)", "a (2)", "b"]
+        assert _unique_titles(["x", "y", "z"]) == ["x", "y", "z"]
