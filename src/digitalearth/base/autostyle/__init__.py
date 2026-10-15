@@ -358,14 +358,16 @@ def auto_style(source: Source) -> dict[str, Any]:
             return _with_source_units(style, source)
 
     # Otherwise fall back to the lighter variables.yml substring library (case-insensitive, first match wins).
-    haystack = " ".join(candidates).lower()
+    # Match each candidate on its own rather than a space-joined blob, so a multi-token pattern can never match
+    # across the gap between two candidates (e.g. "Band_1" + "msl" reading as one string).
+    lowered = [candidate.lower() for candidate in candidates]
     for name, params in library.items():
         if name == "default":
             continue
         patterns = params.get("match", [])
         if isinstance(patterns, str):
             patterns = [patterns]
-        if any(p.lower() in haystack for p in patterns):
+        if any(p.lower() in hay for p in patterns for hay in lowered):
             style.update({k: v for k, v in params.items() if k != "match"})
             break
     return _with_source_units(style, source)

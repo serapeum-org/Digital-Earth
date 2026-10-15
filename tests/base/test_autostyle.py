@@ -167,6 +167,31 @@ class TestAutoStyle:
         )
         assert auto_style(_source("siconc"))["cmap"] == "Blues_r"
 
+    def test_substring_match_does_not_span_candidate_boundary(self, mocker):
+        """A multi-token pattern must not match across the gap between two separate name candidates.
+
+        Test scenario:
+            The variable and the GRIB short_name are two candidates. Joining them into one blob let a pattern
+            like "foo bar" match "foo" + "bar2" across the boundary; matching each candidate on its own must
+            not, so the group is not selected and the default colormap stands.
+        """
+        mocker.patch(
+            "digitalearth.base.autostyle.load_library",
+            return_value={
+                "default": {"cmap": "viridis"},
+                "cross": {"match": ["foo bar"], "cmap": "magma"},
+            },
+        )
+        src = Source(
+            DimensionInfo(np.zeros((2, 2)), "z"),
+            DimensionInfo(np.array([0.0]), "x"),
+            DimensionInfo(np.array([0.0]), "y"),
+            metadata={"variable": "foo", "short_name": "bar2"},
+        )
+        assert auto_style(src)["cmap"] == "viridis", (
+            "pattern matched across the candidate boundary"
+        )
+
 
 def test_field_uses_auto_style_cmap(dataset):
     """A field method with no explicit cmap picks up the auto-style default for the variable."""
