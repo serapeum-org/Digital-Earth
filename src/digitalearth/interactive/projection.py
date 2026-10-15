@@ -10,6 +10,7 @@ The trade is deliberate and documented: the matplotlib path is **static** (no li
 basemaps auto-disable under a non-Mercator projection (a tile call raises via the Web-Mercator guard).
 """
 
+import warnings
 from collections.abc import Sequence
 from math import isfinite
 from typing import TYPE_CHECKING, Any, Self
@@ -31,6 +32,14 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: **symmetric** (the same spacing in longitude and latitude) — so anything else is refused rather than
 #: silently rounded to the nearest shipped layer.
 _GRATICULE_STEPS = (1, 5, 10, 15, 20, 30)
+
+#: The spacing :meth:`ProjectionMixin.graticule` draws when the caller names no step — the same default the
+#: static tier's :data:`~digitalearth.static.maps.projection.DEFAULT_GRATICULE_STEP` takes. It is a named
+#: constant rather than a literal in the signature so the two tiers' defaults cannot drift apart unnoticed
+#: (a parity probe holds them equal), and so ``lon_step``/``lat_step`` can default to ``None`` — which is what
+#: lets a step the caller wrote be told from one they did not, so ``spacing=`` can warn when it discards one
+#: (#336).
+DEFAULT_GRATICULE_STEP: float = 30.0
 
 
 def _padded(box: Bounds, fraction: float) -> Bounds:
@@ -378,8 +387,8 @@ class ProjectionMixin(_MixinBase):
 
     def graticule(
         self,
-        lon_step: float = 30.0,
-        lat_step: float = 30.0,
+        lon_step: float | None = None,
+        lat_step: float | None = None,
         *,
         spacing: float | None = None,
         name: str | None = None,
@@ -395,13 +404,17 @@ class ProjectionMixin(_MixinBase):
         ``lon_step == lat_step``. Any other request raises instead of being quietly ignored.
 
         Args:
-            lon_step: Meridian spacing in degrees; one of :data:`_GRATICULE_STEPS`.
-            lat_step: Parallel spacing in degrees; must equal ``lon_step``.
+            lon_step: Meridian spacing in degrees; one of :data:`_GRATICULE_STEPS`. ``None`` (default)
+                means :data:`DEFAULT_GRATICULE_STEP` — a named constant, not a literal, so a step the
+                caller wrote can be told from one they did not (#336).
+            lat_step: Parallel spacing in degrees; must equal ``lon_step``. ``None`` (default) means
+                :data:`DEFAULT_GRATICULE_STEP`, the same way round.
             spacing: One step for both, for a caller who wants a square grid; it overrides the two
-                above. The same **keyword** the static and web tiers take, so one call draws one grid on
-                every tier that draws a graticule at all (#324) — but its **value** domain is this
-                engine's, not theirs: only the shipped steps listed above are honoured, so
-                ``spacing=7.5`` raises here while it draws on both of them (review R-L10).
+                above, and **warns** when it does, because a call that names all three has had two of its
+                own arguments thrown away (#336). The same **keyword** the static and web tiers take, so
+                one call draws one grid on every tier that draws a graticule at all (#324) — but its
+                **value** domain is this engine's, not theirs: only the shipped steps listed above are
+                honoured, so ``spacing=7.5`` raises here while it draws on both of them (review R-L10).
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -412,6 +425,11 @@ class ProjectionMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Warns:
+            UserWarning: when ``spacing`` is given beside ``lon_step`` or ``lat_step``, which discards the
+                step — the same report the static tier makes, so the two tiers answer the over-specified
+                call the same way (#336).
 
         Raises:
             ValueError: when ``lon_step`` and ``lat_step`` differ, or when the step is not one of the
@@ -432,7 +450,26 @@ class ProjectionMixin(_MixinBase):
         # `draw_graticule` from exactly what this records, so the figure describes the graticule rather
         # than holding one somebody else built.
         if spacing is not None:
+            # `spacing` names both steps by definition, so it overrides `lon_step`/`lat_step` — but a call
+            # that named them too has had two of its own arguments thrown away, which used to happen in
+            # silence (the static tier's R2-L3 defect, on this tier; #336). Warn naming them, matching the
+            # static tier's wording, then let `spacing` win.
+            if lon_step is not None or lat_step is not None:
+                warnings.warn(
+                    f"graticule() was given spacing={spacing!r} together with "
+                    f"lon_step={lon_step!r}/lat_step={lat_step!r}; spacing sets both, so those two are "
+                    "discarded. Pass one or the other.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             lon_step = lat_step = spacing
+        else:
+            # A step the caller did not name falls back to the shared default — a named constant, not a
+            # literal, so the two tiers cannot drift (#336).
+            if lon_step is None:
+                lon_step = DEFAULT_GRATICULE_STEP
+            if lat_step is None:
+                lat_step = DEFAULT_GRATICULE_STEP
         step = self._graticule_step(lon_step, lat_step)
         held: dict = {}
         described_opts = describe_opts(held, opts)

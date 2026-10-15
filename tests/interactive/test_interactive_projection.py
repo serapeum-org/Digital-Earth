@@ -250,23 +250,27 @@ class TestGraticuleSpacing:
             interactive_step,
         ), (props, interactive_step)
 
-    def test_only_the_static_tier_defaults_its_steps_to_a_sentinel(self):
-        """The divergence itself, pinned exactly, so it can neither widen nor close unnoticed.
+    def test_both_tiers_default_their_steps_to_a_sentinel(self):
+        """Both 2-D tiers default their steps to ``None``, and to the same spacing (#336).
 
         Test scenario:
-            The two tiers spell "the caller named no step" differently, and only one of them needs to.
-            The static tier reports a discarded step, so it has to see that a step was written; the
-            interactive tier makes no such report, so it keeps the literal. Stating that here — rather
-            than deleting the comparison that caught it — is what keeps the divergence tracked, the same
-            shape as `KEYWORD_SHORTFALLS` in `tests/test_contract_names.py`: the pair is compared
-            exactly, so this fails the moment either tier changes its mind, including the day the
-            interactive tier grows the same report and takes `None` too.
+            The divergence this probe used to pin is closed. The static tier defaulted its steps to
+            `None` so it could tell a step the caller wrote from one they did not and warn when `spacing=`
+            discarded one (review R2-L3); the interactive tier kept a literal `30.0` and said nothing,
+            which was the same defect one tier over (#336). It now takes the same `None` sentinel and
+            makes the same report, so the two signatures match again.
 
-            It would grow it for a reason: `InteractiveMap.graticule` discards `lon_step`/`lat_step`
-            under `spacing=` exactly as the static tier did, and says nothing. That is the same defect on
-            the other tier, and it is out of R2-L3's scope, which names the static module alone.
+            The pair is still compared exactly — the same shape as `KEYWORD_SHORTFALLS` in
+            `tests/test_contract_names.py` — so this fails the moment either tier changes its mind. The
+            two tiers' named defaults are held equal as well, so neither can move its spacing without the
+            other and reopen the drift the named constant exists to prevent.
         """
-        from digitalearth.static.maps.projection import DEFAULT_GRATICULE_STEP
+        from digitalearth.interactive.projection import (
+            DEFAULT_GRATICULE_STEP as INTERACTIVE_DEFAULT,
+        )
+        from digitalearth.static.maps.projection import (
+            DEFAULT_GRATICULE_STEP as STATIC_DEFAULT,
+        )
 
         interactive, static = _graticule_parameters()
         sentinels = {
@@ -274,9 +278,44 @@ class TestGraticuleSpacing:
             for name in ("lon_step", "lat_step")
         }
         assert sentinels == {
-            "lon_step": (DEFAULT_GRATICULE_STEP, None),
-            "lat_step": (DEFAULT_GRATICULE_STEP, None),
+            "lon_step": (None, None),
+            "lat_step": (None, None),
         }, sentinels
+        assert INTERACTIVE_DEFAULT == STATIC_DEFAULT, (
+            INTERACTIVE_DEFAULT,
+            STATIC_DEFAULT,
+        )
+
+    def test_spacing_beside_a_named_step_warns_and_wins(self):
+        """``spacing=`` overrides ``lon_step``/``lat_step`` and warns that it discarded them (#336).
+
+        Test scenario:
+            A call that names all three has two of its arguments thrown away. The static tier reports
+            that; the interactive tier used to discard them in silence. It now warns with the static
+            tier's wording, and `spacing` still wins — the grid drawn is the one `spacing` named.
+        """
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            m = InteractiveMap().graticule(lon_step=10, lat_step=10, spacing=30)
+        discards = [
+            str(w.message)
+            for w in caught
+            if issubclass(w.category, UserWarning) and "discarded" in str(w.message)
+        ]
+        assert discards, [str(w.message) for w in caught]
+        assert "spacing=30" in discards[0] and "lon_step=10" in discards[0], discards[0]
+        assert m.layers[-1].data.name == "graticules_30", m.layers[-1].data.name
+
+    def test_spacing_alone_is_silent(self):
+        """``spacing=`` with no step named is the ordinary square-grid call, and warns nothing (#336)."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            InteractiveMap().graticule(spacing=30)
+        assert [str(w.message) for w in caught if "discarded" in str(w.message)] == []
 
     def test_asymmetric_spacing_raises(self, m):
         """Natural Earth ships symmetric graticules only — say so, do not ignore the request."""
