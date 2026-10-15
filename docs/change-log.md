@@ -1,5 +1,14 @@
 # Change log
 
+## 0.13.0 (2026-10-08)
+
+### Feat
+
+- **three_d**: freeze the colour scale across animation frames with record(clim=) (#448)
+- **interactive**: complete the eight partial HoloViz capability rows (#447)
+- **three_d**: clear the unblocked 3-D capability backlog (#429)
+- **web**: add the web tier's own standalone-HTML export (swipe, minimap, measure) (#427)
+
 ## 0.12.0 (2026-10-07)
 
 ### Feat

@@ -16,8 +16,9 @@ repos:
       - id: check-added-large-files
         name: "[file -  check] large file"
         args: [ --maxkb=2000 ]
-        # digitalearth renders committed notebook outputs (mkdocs-jupyter execute:false), so the example
-        # notebooks/data are legitimately multi-MB. Exclude those trees; real source stays capped at 2 MB.
+        # The example notebooks ship committed outputs and bundled data (the docs build re-executes most
+        # of them, but some render from what is committed), so those trees are legitimately multi-MB.
+        # Exclude them; real source stays capped at 2 MB.
         exclude: ^(docs/examples/|examples/)
       - id: check-docstring-first
         name: "[py   -  check] docstring first"

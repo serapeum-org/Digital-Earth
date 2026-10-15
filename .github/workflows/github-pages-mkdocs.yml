@@ -18,6 +18,11 @@ on:
     workflows: ['github-release']
     types: [completed]
 
+# The docs build EXECUTES every notebook under docs/examples/ before rendering (notebooks-path), so the
+# published pages show freshly-run outputs instead of whatever was committed. That is why the `docs` pixi
+# env carries all three rendering tiers - see the comment on it in pyproject.toml. The action caches
+# executed notebooks in .jupyter_cache, keyed on the notebooks plus src/**/*.py and pyproject.toml, so a
+# source change re-runs the whole set on the next deploy.
 jobs:
   deploy-pr:
       if: github.event_name == 'pull_request'
@@ -33,6 +38,20 @@ jobs:
           package-manager: 'pixi'
           package-manager-version: 'v0.73.0'
           install-groups: 'docs'
+          notebooks-path: 'docs/examples'
+          # Excluded from the execution, so these render from their committed outputs:
+          #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+          #     'bad X server connection' and takes the kernel with it.
+          #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
+          #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
+          #     deploy does not execute a browser-dependent page that is not published anyway.
+          # Everything else executes. The one other notebook that reaches a tile service,
+          # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
+          # never blocked by a third-party host being down.
+          notebooks-exclude: |
+            18_global_decorations.ipynb
+            pyvista/**
+            web/web_maps.ipynb
           deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
   deploy-main:
@@ -48,6 +67,20 @@ jobs:
         package-manager: 'pixi'
         package-manager-version: 'v0.73.0'
         install-groups: 'docs'
+        notebooks-path: 'docs/examples'
+        # Excluded from the execution, so these render from their committed outputs:
+        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+        #     'bad X server connection' and takes the kernel with it.
+        #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
+        #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
+        #     deploy does not execute a browser-dependent page that is not published anyway.
+        # Everything else executes. The one other notebook that reaches a tile service,
+        # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
+        # never blocked by a third-party host being down.
+        notebooks-exclude: |
+          18_global_decorations.ipynb
+          pyvista/**
+          web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
   deploy-release:
@@ -80,6 +113,20 @@ jobs:
         package-manager: 'pixi'
         package-manager-version: 'v0.73.0'
         install-groups: "docs"
+        notebooks-path: 'docs/examples'
+        # Excluded from the execution, so these render from their committed outputs:
+        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+        #     'bad X server connection' and takes the kernel with it.
+        #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
+        #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
+        #     deploy does not execute a browser-dependent page that is not published anyway.
+        # Everything else executes. The one other notebook that reaches a tile service,
+        # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
+        # never blocked by a third-party host being down.
+        notebooks-exclude: |
+          18_global_decorations.ipynb
+          pyvista/**
+          web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
         release-tag: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
         mike-alias: 'latest'
