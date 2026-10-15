@@ -13,6 +13,7 @@ from numbers import Integral
 from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
+from cleopatra.glyphs.base.glyph import ColorScaling
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
 from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
 from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
@@ -330,23 +331,25 @@ def _require_column(features: Any, column: str, argument: str, caller: str) -> N
 
 
 def _refuse_colour_norm(color: Any, caller: str, remedy: str) -> None:
-    """Refuse a ``Normalize`` under ``color=`` when the call has no values for it to scale (#380).
+    """Refuse a colour *scaling* under ``color=`` when the call has no values for it to scale (#380).
 
-    ``color=`` given a matplotlib ``Normalize`` is the colour *scaling* of the values a layer colours by, not
-    a constant colour. Where a layer colours by nothing — no column, or a uniform fill — the norm has nothing
-    to act on and was silently dropped, drawing a plausible map in the default colour. Refuse it by name, the
-    way :meth:`facet` refuses an inapplicable ``k`` and :meth:`hexbin` an inapplicable ``gridsize``, pointing
-    at what to pass instead.
+    ``color=`` given a matplotlib ``Normalize`` — or the cleopatra ``ColorScaling`` the builders' docstrings
+    call its equivalent — is the colour *scaling* of the values a layer colours by, not a constant colour.
+    Where a layer colours by nothing — no column, or a uniform fill — the scaling has nothing to act on and
+    was silently dropped, drawing a plausible map in the default colour. Refuse it by name, the way
+    :meth:`facet` refuses an inapplicable ``k`` and :meth:`hexbin` an inapplicable ``gridsize``, pointing at
+    what to pass instead.
 
     Args:
-        color: The caller's ``color=`` value; only a :class:`matplotlib.colors.Normalize` is refused here.
+        color: The caller's ``color=`` value; only a :class:`matplotlib.colors.Normalize` or a
+            :class:`cleopatra.glyphs.base.glyph.ColorScaling` is refused here — a plain colour passes through.
         caller: The public call, for the message.
         remedy: One sentence naming what to pass instead (a column to scale, or a constant colour).
 
     Raises:
-        ValueError: when ``color`` is a :class:`~matplotlib.colors.Normalize` and nothing is set to scale.
+        ValueError: when ``color`` is a ``Normalize``/``ColorScaling`` and nothing is set to scale.
     """
-    if isinstance(color, Normalize):
+    if isinstance(color, (Normalize, ColorScaling)):
         raise ValueError(
             f"{caller}: color= is a {type(color).__name__}, a colour *scaling* rather than a colour, but "
             f"this call has no values for it to scale. {remedy}"

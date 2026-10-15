@@ -151,3 +151,17 @@ class TestColourNormWithoutValuesRefused:
         """A plain colour string is still a constant colour, not refused."""
         artist = Map(crs=4326).lines(lines_fc, color="steelblue").artist()
         assert artist is not None
+
+    def test_colorscaling_also_refused(self, lines_fc, polygons_fc):
+        """A cleopatra ColorScaling (the docstring-equivalent of Normalize) is refused the same way.
+
+        Test scenario:
+            lines' / polygons' color docstrings call a built ColorScaling equivalent to a Normalize as the
+            colour scaling. The guard must refuse it too when there is nothing to scale, not only Normalize.
+        """
+        from cleopatra.glyphs.base.glyph import ColorScaling
+
+        with pytest.raises(ValueError, match=r"Map\.lines\(\): color= is a ColorScaling"):
+            Map(crs=4326).lines(lines_fc, color=ColorScaling())
+        with pytest.raises(ValueError, match=r"polygons\(\): color= is a ColorScaling"):
+            Map(crs=4326).polygons(polygons_fc, color=ColorScaling())
