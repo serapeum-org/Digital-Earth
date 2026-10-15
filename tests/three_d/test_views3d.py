@@ -539,6 +539,25 @@ class TestViewAngles:
             f"a zero-span scene should fall back to distance 1.0, got {distance}"
         )
 
+    def test_straight_down_and_up_frame_the_poles_without_crashing(self):
+        """elevation=+/-90 frames straight down/up via a horizontal view_up at the poles, not a ValueError."""
+        scene = _dem_scene()
+        down = scene.view_angles(0.0, 90.0).camera
+        assert down.position[2] > down.focal_point[2], (
+            f"straight-down camera should sit above the focal point: {down.position} vs {down.focal_point}"
+        )
+        assert down.position[0] == pytest.approx(down.focal_point[0]), (
+            "straight-down camera should sit over focal x"
+        )
+        assert down.position[1] == pytest.approx(down.focal_point[1]), (
+            "straight-down camera should sit over focal y"
+        )
+        up = scene.view_angles(0.0, -90.0).camera
+        assert up.position[2] < up.focal_point[2], (
+            f"straight-up camera should sit below the focal point: {up.position} vs {up.focal_point}"
+        )
+        scene.close()
+
 
 class TestResetCamera:
     """reset_camera() refits the view to the whole scene or one layer."""
