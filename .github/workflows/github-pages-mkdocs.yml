@@ -40,7 +40,7 @@ jobs:
           install-groups: 'docs'
           notebooks-path: 'docs/examples'
           # Excluded from the execution, so these render from their committed outputs:
-          #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+          #   - threed/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
           #     'bad X server connection' and takes the kernel with it.
           #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
           #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
@@ -50,7 +50,7 @@ jobs:
           # never blocked by a third-party host being down.
           notebooks-exclude: |
             18_global_decorations.ipynb
-            pyvista/**
+            threed/**
             web/web_maps.ipynb
           deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
@@ -69,7 +69,7 @@ jobs:
         install-groups: 'docs'
         notebooks-path: 'docs/examples'
         # Excluded from the execution, so these render from their committed outputs:
-        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+        #   - threed/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
         #     'bad X server connection' and takes the kernel with it.
         #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
         #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
@@ -79,7 +79,7 @@ jobs:
         # never blocked by a third-party host being down.
         notebooks-exclude: |
           18_global_decorations.ipynb
-          pyvista/**
+          threed/**
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
@@ -115,7 +115,7 @@ jobs:
         install-groups: "docs"
         notebooks-path: 'docs/examples'
         # Excluded from the execution, so these render from their committed outputs:
-        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
+        #   - threed/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
         #     'bad X server connection' and takes the kernel with it.
         #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
         #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
@@ -125,7 +125,7 @@ jobs:
         # never blocked by a third-party host being down.
         notebooks-exclude: |
           18_global_decorations.ipynb
-          pyvista/**
+          threed/**
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
         release-tag: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
