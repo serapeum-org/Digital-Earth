@@ -13,6 +13,7 @@ from numbers import Integral
 from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
+from cleopatra.glyphs.base.glyph import ColorScaling
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
 from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
 from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
@@ -20,7 +21,7 @@ from cleopatra.glyphs.primitives.polygon_glyph import PolygonGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.glyphs.stats.hexbin_glyph import HexbinGlyph
 from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
-from matplotlib.colors import is_color_like, to_hex
+from matplotlib.colors import Normalize, is_color_like, to_hex
 from matplotlib.path import Path as MplPath
 from matplotlib.patheffects import withStroke
 from pyramids.dataset import Dataset
@@ -83,6 +84,17 @@ _LINES_CALLER = "Map.lines()"
 #: The same, for the hexbin layer: its lattice is checked at the call and its ``column=`` when the features
 #: are read, and both say ``hexbin()``.
 _HEXBIN_CALLER = "hexbin()"
+
+#: How the remaining column-reading builders name themselves in a missing-column refusal. They use the same
+#: ``name():`` form the other :func:`_require_column` callers already do (``hexbin()``, ``Map.lines()``,
+#: ``Map.points()``), so one wrong column name reads the same whichever of these builders raised it (#379).
+#: (This differs from each drawer's own geometry/empty ``ValueError``s, which use a bare ``name:`` prefix.)
+_CHOROPLETH_CALLER = "choropleth()"
+_POLYGONS_CALLER = "polygons()"
+_VORONOI_CALLER = "voronoi()"
+_CARTOGRAM_CALLER = "cartogram()"
+_QUADTREE_CALLER = "quadtree()"
+_SANKEY_CALLER = "sankey()"
 
 #: Keywords :meth:`VectorMixin.labels` refuses in ``**opts``, each with what to write instead. Two of them are
 #: matplotlib's own spelling of something this builder already declares, and forwarding either would have the
@@ -319,6 +331,76 @@ def _require_column(features: Any, column: str, argument: str, caller: str) -> N
     )
 
 
+def _refuse_colour_norm(color: Any, caller: str, remedy: str) -> None:
+    """Refuse a colour *scaling* under ``color=`` when the call has no values for it to scale (#380).
+
+    ``color=`` given a matplotlib ``Normalize`` — or the cleopatra ``ColorScaling`` the builders' docstrings
+    call its equivalent — is the colour *scaling* of the values a layer colours by, not a constant colour.
+    Where a layer colours by nothing — no column, or a uniform fill — the scaling has nothing to act on and
+    was silently dropped, drawing a plausible map in the default colour. Refuse it by name, the way
+    :meth:`facet` refuses an inapplicable ``k`` and :meth:`hexbin` an inapplicable ``gridsize``, pointing at
+    what to pass instead.
+
+    Args:
+        color: The caller's ``color=`` value; only a :class:`matplotlib.colors.Normalize` or a
+            :class:`cleopatra.glyphs.base.glyph.ColorScaling` is refused here — a plain colour passes through.
+        caller: The public call, for the message.
+        remedy: One sentence naming what to pass instead (a column to scale, or a constant colour).
+
+    Raises:
+        ValueError: when ``color`` is a ``Normalize``/``ColorScaling`` and nothing is set to scale.
+    """
+    if isinstance(color, (Normalize, ColorScaling)):
+        raise ValueError(
+            f"{caller}: color= is a {type(color).__name__}, a colour *scaling* rather than a colour, but "
+            f"this call has no values for it to scale. {remedy}"
+        )
+
+
+def _resolve_line_colour(color: Any, column: str | None, opts: dict) -> str | None:
+    """Resolve ``lines``' ``color=`` to a constant line colour, or stash a scaling in ``opts``.
+
+    The three ways ``color=`` is read, lifted out of :meth:`VectorMixin.lines` so the builder stays within
+    its cognitive-complexity budget: a colour *scaling* (``Normalize``/``ColorScaling``) with no ``column`` to
+    scale is refused (#380); a matplotlib colour becomes the constant line colour (hex); anything else — a
+    scaling paired with a ``column``, chiefly — is left in ``opts`` for the glyph to apply.
+
+    Args:
+        color: The caller's ``color=`` value.
+        column: The ``column`` the lines are coloured by, or ``None`` for a constant colour.
+        opts: The glyph options, mutated in place when ``color`` is a scaling the glyph should apply.
+
+    Returns:
+        The constant line colour as a hex string, or ``None`` when the colour is left to ``opts``/the glyph.
+
+    Raises:
+        ValueError: if ``color`` is a colour *scaling* with no ``column`` to scale (#380), or a string that
+            is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a column.
+    """
+    if column is None:
+        _refuse_colour_norm(
+            color,
+            _LINES_CALLER,
+            "Pass column= to choose the values to scale, or a matplotlib colour for one "
+            "constant line colour.",
+        )
+    if isinstance(color, str) or (color is not None and is_color_like(color)):
+        # `color=` and `column=` sit next to each other in the signature, so a column name under `color=` is a
+        # plausible slip — and `to_hex` answered it with matplotlib's "Invalid RGBA argument", which names
+        # neither this method nor either keyword (review L4).
+        try:
+            return to_hex(color, keep_alpha=True)
+        except (ValueError, TypeError):
+            raise ValueError(
+                f"{_LINES_CALLER} needs color= as one matplotlib colour for every line, and "
+                f"{color!r} is not one. To colour the lines by a column's values instead, pass "
+                f"column={color!r}"
+            ) from None
+    if color is not None:
+        opts["color"] = color
+    return None
+
+
 def _numeric_column(gdf: Any, column: str, argument: str, caller: str) -> np.ndarray:
     """Read one feature column as floats, refusing one that holds something a ramp cannot read.
 
@@ -470,7 +552,18 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # empty-guard; any geometry (centroid fallback) OK
     fc = scene._vector_input(data, name="points")
     src = get_source(fc)
+    if src.z is None:
+        # points colours by the features' own numeric value; with none, a color= Normalize has nothing to
+        # scale and was silently dropped (#380). Refuse it by name rather than draw in the default colour.
+        _refuse_colour_norm(
+            opts.get("color"),
+            _POINTS_CALLER,
+            "points() colours by the features' own numeric values and this collection carries none; give "
+            "them a numeric column to scale, or pass a matplotlib colour for one constant marker colour.",
+        )
     size_column = layer.symbology.props.get("size_column")
+    if size_column is not None:
+        _require_column(fc, size_column, "size_column", _POINTS_CALLER)
     sizes = (
         np.asarray(fc[size_column], dtype=float) if size_column is not None else None
     )
@@ -856,6 +949,7 @@ def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         name="choropleth",
         geom_label="polygon",
     )
+    _require_column(gdf, props["column"], "column", _CHOROPLETH_CALLER)
     polygons, repeats = scene._polygon_vertices(gdf.geometry)
     values = np.repeat(gdf[props["column"]].to_numpy(), repeats)
     # drop far-side polygons on a globe
@@ -914,6 +1008,8 @@ def draw_voronoi(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         data, geom_types=("Point",), name="voronoi", geom_label="point"
     )
     geom = gdf.geometry
+    if column is not None:
+        _require_column(gdf, column, "column", _VORONOI_CALLER)
     col_vals = gdf[column].to_numpy() if column is not None else None
     # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS); ordered=True
     # then keeps cell i aligned with input point i, so values map by position.
@@ -952,9 +1048,8 @@ def draw_cartogram(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         name="cartogram",
         geom_label="polygon",
     )
-    factors = scene._scale_factors(
-        gdf[props["scale"]].to_numpy(dtype=float), tuple(props["limits"])
-    )
+    scale_values = _numeric_column(gdf, props["scale"], "scale", _CARTOGRAM_CALLER)
+    factors = scene._scale_factors(scale_values, tuple(props["limits"]))
     scaled = [
         affine_scale(g, xfact=f, yfact=f, origin="centroid")
         for g, f in zip(gdf.geometry, factors)
@@ -964,6 +1059,7 @@ def draw_cartogram(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     if column is None:
         polygons, _ = scene._finite_polygons(polygons)
         return scene._polygon_layer(polygons, **opts)
+    _require_column(gdf, column, "column", _CARTOGRAM_CALLER)
     values = np.repeat(gdf[column].to_numpy(), repeats)
     polygons, values = scene._finite_polygons(polygons, values)
     return scene._polygon_layer(polygons, values, **opts)
@@ -1002,7 +1098,11 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         data, geom_types=("Point",), name="quadtree", geom_label="point"
     )
     # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
-    col_vals_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+    col_vals_full = (
+        _numeric_column(gdf, column, "column", _QUADTREE_CALLER)
+        if column is not None
+        else None
+    )
     xs, ys, col_vals = scene._finite_point_xy(gdf.geometry, col_vals_full)
     if xs.size == 0:
         raise ValueError("quadtree: no finite points in the display CRS")
@@ -1231,8 +1331,21 @@ def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     paths, rep = _line_parts(gdf)
     column, scale = props["column"], props["scale"]
-    values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
-    widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
+    # Both colour (`column`) and width (`scale`) are numeric ramps — sankey has no scheme=/k= to classify a
+    # categorical column — so read them through _numeric_column, which names the method/keyword/column when a
+    # column exists but holds text (the same guard cartogram's scale and lines' column/width use).
+    col_vals = (
+        _numeric_column(gdf, column, "column", _SANKEY_CALLER)
+        if column is not None
+        else None
+    )
+    scale_vals = (
+        _numeric_column(gdf, scale, "scale", _SANKEY_CALLER)
+        if scale is not None
+        else None
+    )
+    values = np.repeat(col_vals, rep) if col_vals is not None else None
+    widths = np.repeat(scale_vals, rep) if scale_vals is not None else None
     opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
     plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
     glyph = FlowGlyph(
@@ -1640,6 +1753,13 @@ class VectorMixin(_MixinBase):
             drew nothing, so it is absent from the figure and refused there. See
             :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
+
+        Raises:
+            KeyError: if ``size_column`` names no feature attribute — the refusal names ``Map.points()``
+                and lists the columns the features do have (via :func:`_require_column`).
+            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` but
+                the features carry no numeric value for it to scale; a colour *scaling* needs values, so it
+                is refused rather than dropped.
 
         """
         self._draw(
@@ -2576,6 +2696,10 @@ class VectorMixin(_MixinBase):
             :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
+        Raises:
+            KeyError: if ``column`` names no feature attribute — the refusal names ``choropleth()`` and
+                lists the columns the features do have (via :func:`_require_column`).
+
         Examples:
             - Colour buffered point features by their ``fid`` column and count the drawn polygons:
                 ```python
@@ -2665,7 +2789,18 @@ class VectorMixin(_MixinBase):
             drew nothing, so it is absent from the figure and refused there. See
             :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
+
+        Raises:
+            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` —
+                ``polygons`` draws a uniform fill with no values to scale, so a colour *scaling* is refused;
+                use :meth:`choropleth` to colour polygons by a column.
         """
+        _refuse_colour_norm(
+            opts.get("color"),
+            _POLYGONS_CALLER,
+            "polygons() draws a uniform fill with no values to scale — use choropleth(column=) to "
+            "colour polygons by a column.",
+        )
         self._draw(
             LayerRecord(
                 _polygon_kind(None),  # outlines only, whatever the collection carries
@@ -2767,6 +2902,8 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries.
+            KeyError: if ``column`` names no feature attribute — the refusal names ``voronoi()`` and lists
+                the columns the features do have (via :func:`_require_column`).
 
         Examples:
             - Tessellate the point fixture and colour the cells by ``fid``:
@@ -2863,7 +3000,10 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``features`` contains non-polygon geometry.
+            ValueError: if ``features`` contains non-polygon geometry, or if ``scale`` names a column that
+                does not hold numbers (the sizing factor needs numeric values).
+            KeyError: if ``scale`` or ``column`` names no feature attribute — the refusal names
+                ``cartogram()`` and lists the columns the features do have (via :func:`_require_column`).
 
         Examples:
             - Scale buffered points by ``fid`` and colour them by the same column:
@@ -3009,7 +3149,10 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``features`` is not all single ``Point`` geometries, or ``agg`` is an unknown name.
+            ValueError: if ``features`` is not all single ``Point`` geometries, if ``agg`` is an unknown
+                name, or if ``column`` names a column that does not hold numbers (the aggregate needs them).
+            KeyError: if ``column`` names no feature attribute — the refusal names ``quadtree()`` and lists
+                the columns the features do have (via :func:`_require_column`).
 
         Examples:
             - Aggregate the point fixture into a fine density grid:
@@ -3415,8 +3558,10 @@ class VectorMixin(_MixinBase):
             ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a
                 positive finite number (a line has no negative thickness); if ``color`` is a string that
                 is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a
-                column's name; or if ``column`` or a column ``width`` names a column that does not hold
-                numbers, which a ramp and a width scale both need.
+                column's name; if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra
+                ``ColorScaling`` while ``column`` is ``None`` — a colour *scaling* has no values to act on
+                without a column, so it is refused rather than dropped; or if ``column`` or a column
+                ``width`` names a column that does not hold numbers, which a ramp and a width scale both need.
             KeyError: if ``column`` or a column ``width`` names no feature attribute — the refusal names
                 ``Map.lines()``, the keyword and the column, and lists the columns there are.
 
@@ -3528,22 +3673,7 @@ class VectorMixin(_MixinBase):
                     f"{_LINES_CALLER} needs width= as a positive number of points, or the name of a "
                     f"column to scale the widths by; got {width!r}"
                 )
-        if isinstance(color, str) or (color is not None and is_color_like(color)):
-            # `color=` and `column=` sit next to each other in the signature, so a column name under
-            # `color=` is a plausible slip — and `to_hex` answered it with matplotlib's "Invalid RGBA
-            # argument", which names neither this method nor either keyword (review L4).
-            try:
-                line_color: Any | None = to_hex(color, keep_alpha=True)
-            except (ValueError, TypeError):
-                raise ValueError(
-                    f"{_LINES_CALLER} needs color= as one matplotlib colour for every line, and "
-                    f"{color!r} is not one. To colour the lines by a column's values instead, pass "
-                    f"column={color!r}"
-                ) from None
-        else:
-            line_color = None
-            if color is not None:
-                opts["color"] = color
+        line_color = _resolve_line_colour(color, column, opts)
         if cmap is not None:
             opts["cmap"] = cmap
         if scheme is not None:
@@ -3607,7 +3737,13 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``features`` contains non-line geometry.
+            ValueError: if ``features`` contains non-line geometry; if ``column`` or ``scale`` names a column
+                that does not hold numbers (both are numeric ramps); or if ``color`` is a
+                ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` while ``column`` is ``None`` —
+                a colour *scaling* has no values to act on without a column, so it is refused rather than
+                dropped.
+            KeyError: if ``column`` or ``scale`` names no feature attribute — the refusal names ``sankey()``
+                and lists the columns the features do have (via :func:`_require_column`).
 
         See Also:
             lines: the same geometry as a plain line layer, with line defaults and the Core keywords.
@@ -3634,6 +3770,12 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        if column is None:
+            _refuse_colour_norm(
+                opts.get("color"),
+                _SANKEY_CALLER,
+                "Pass column= to choose the values to scale.",
+            )
         self._draw(
             LayerRecord(
                 "flow",
