@@ -40,17 +40,22 @@ from digitalearth.static.scene import LayerRecord, drawing_style
 #: :meth:`ProjectionMixin.graticule` say when ``spacing=`` has just discarded one (review R2-L3).
 DEFAULT_GRATICULE_STEP: float = 30.0
 
-#: The most gridlines a graticule may draw along one axis, whole-world. The lines span the globe whatever
-#: the view shows — :func:`digitalearth.static.projections.graticule` runs its meridians across the full
-#: ``-180..180`` and its parallels across ``-90..90``, never reading the limits — so the count is a function
-#: of the step alone: ``~360/lon_step`` meridians and ``~180/lat_step`` parallels. A vanishing step draws
-#: millions of them and the call never returns rather than drawing or refusing (the R2-L4 follow-up: a step
-#: that is finite, positive and so clears every other guard, yet ``spacing=1e-4`` builds ~5.4M lines and
+#: The most gridlines a graticule may draw along one axis. The count is ``~span/step`` —
+#: :func:`digitalearth.static.projections.graticule` cuts its lines to the view's ``window`` since #393, so
+#: ``span`` is the degrees that window covers: the whole world (``360`` of longitude, ``180`` of latitude)
+#: for an unframed or global view, and the framed region otherwise. A vanishing step draws millions of lines
+#: and the call never returns rather than drawing or refusing (the R2-L4 follow-up: a step that is finite,
+#: positive and so clears every other guard, yet ``spacing=1e-4`` builds ~5.4M lines across the world and
 #: ran past two minutes). Each line is a 200-point pyramids reprojection at ~0.6 ms, so this ceiling holds
-#: the build near a second where the unbounded one hung. It is far above any readable grid — 30° is 13
-#: meridians, and even a 1° world grid is 361 — so no step a caller would actually want comes near it. The
-#: step cannot be made cheap on a small view without clipping the line *generation* to the limits, which
-#: lives in :func:`~digitalearth.static.projections.graticule` (and pyramids beneath it), not here.
+#: the build near a second where the unbounded one hung. It is far above any readable grid — a 30° world
+#: grid is 13 meridians, and even a 1° one is 361 — so no step a caller would actually want comes near it.
+#:
+#: Because the count now depends on the view, a step cheap on a small view is ruinous once the view is
+#: enlarged, so the ceiling is enforced wherever the lines are generated — :meth:`_Graticule.__init__`, which
+#: every draw passes through — and not only at the :meth:`ProjectionMixin.graticule` entry (review H1). The
+#: clipping that makes a fine step cheap on a small view lives in
+#: :func:`~digitalearth.static.projections.graticule` (and pyramids beneath it); the refusal that bounds it
+#: is :func:`_checked_step`.
 MAX_GRATICULE_LINES: int = 2000
 
 #: How a flat map's grid looks when the caller asks for nothing else, in the **plural** keys a
@@ -846,11 +851,16 @@ def _window_spans(
     Args:
         window: ``(lon_min, lat_min, lon_max, lat_max)``, or ``None`` for the whole world — which is the
             right span to budget an unframed or global view against, so a fine step still refuses there.
+            :data:`_LABEL_WORLD_WINDOW` — what :func:`_view_window` returns for an **unframed** flat map — is
+            treated as the whole world too: its latitude is inset to ``±89.5`` to keep labels off the poles,
+            a span of ``179`` that would otherwise report an unframed refusal as "across this view" when no
+            view has been framed (review L1). The budget is the same either way; only the message differs.
 
     Returns:
-        The longitude and latitude spans in degrees; ``(360, 180)`` for the whole world.
+        The longitude and latitude spans in degrees; ``(360, 180)`` for the whole world, including the
+        unframed world-label window.
     """
-    if window is None:
+    if window is None or window == _LABEL_WORLD_WINDOW:
         return _MERIDIANS.limit * 2.0, _PARALLELS.limit * 2.0
     lon_min, lat_min, lon_max, lat_max = window
     return lon_max - lon_min, lat_max - lat_min
@@ -937,14 +947,23 @@ def _checked_step(
     lines = span / value
     if lines > MAX_GRATICULE_LINES:
         floor = span / MAX_GRATICULE_LINES
-        where = "across the world" if span >= world_span else "across this view"
+        world = span >= world_span
+        where = "across the world" if world else "across this view"
+        # The count is `span / step`, and since #393 `span` is the view's (the world only for an unframed or
+        # global view). So the reason and the advice differ: on the world, framing smaller lets a denser step
+        # through; already framed small and still over budget, only a coarser step will do.
+        reason = (
+            "The lines span the whole globe whatever the map is framed on, so a step this small is that "
+            "many lines even on a small view; frame a smaller region to let a denser grid through, or pass "
+            f"{keyword}>={floor:g}"
+            if world
+            else "The lines are cut to this view, and even across it that step is that many lines; pass "
+            f"{keyword}>={floor:g}, or frame a smaller region"
+        )
         raise ValueError(
             f"graticule() was given {keyword}={value!r}, which would draw about {int(lines)} gridlines "
-            f"{where} — past the {MAX_GRATICULE_LINES}-line budget a reference grid is held to. "
-            "The lines span the whole globe whatever the map is framed on, so a step this small is that "
-            f"many lines even on a small view. Pass {keyword}>={floor:g} (30 is the default), or frame a "
-            "smaller region if a denser grid is what you are after — the line count is the step's, not the "
-            "view's."
+            f"{where} — past the {MAX_GRATICULE_LINES}-line budget a reference grid is held to. {reason} "
+            f"({DEFAULT_GRATICULE_STEP:g} is the default)."
         )
     return value
 
