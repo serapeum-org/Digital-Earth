@@ -85,9 +85,10 @@ _LINES_CALLER = "Map.lines()"
 #: are read, and both say ``hexbin()``.
 _HEXBIN_CALLER = "hexbin()"
 
-#: How the remaining column-reading builders name themselves in a missing-column refusal. Each matches the
-#: bare-name voice its own ``ValueError`` refusals already use (e.g. ``voronoi:`` / ``quadtree:``), so one
-#: wrong column name reads the same whichever of these builders raised it (#379).
+#: How the remaining column-reading builders name themselves in a missing-column refusal. They use the same
+#: ``name():`` form the other :func:`_require_column` callers already do (``hexbin()``, ``Map.lines()``,
+#: ``Map.points()``), so one wrong column name reads the same whichever of these builders raised it (#379).
+#: (This differs from each drawer's own geometry/empty ``ValueError``s, which use a bare ``name:`` prefix.)
 _CHOROPLETH_CALLER = "choropleth()"
 _POLYGONS_CALLER = "polygons()"
 _VORONOI_CALLER = "voronoi()"
@@ -904,8 +905,8 @@ def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         name="choropleth",
         geom_label="polygon",
     )
-    polygons, repeats = scene._polygon_vertices(gdf.geometry)
     _require_column(gdf, props["column"], "column", _CHOROPLETH_CALLER)
+    polygons, repeats = scene._polygon_vertices(gdf.geometry)
     values = np.repeat(gdf[props["column"]].to_numpy(), repeats)
     # drop far-side polygons on a globe
     polygons, values = scene._finite_polygons(polygons, values)
