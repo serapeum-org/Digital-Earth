@@ -135,7 +135,7 @@ def grid(
             4
             >>> all(m.fig is fig for m in maps)
             True
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - Draw on each panel independently (they share the figure):
@@ -148,7 +148,7 @@ def grid(
             >>> _ = maps[1].set_title("right")
             >>> [m.ax.get_title() for m in maps]
             ['left', 'right']
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - Shared axes: framing one panel frames its group, and the redundant tick labels go. In a 2×2
@@ -165,7 +165,7 @@ def grid(
             [False, False, True, True]
             >>> [m.ax.yaxis.get_tick_params(which="major")["labelleft"] for m in maps]
             [True, False, True, False]
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - Sharing per row and per column drops no labels at all, because neither makes a label redundant
@@ -179,7 +179,7 @@ def grid(
             [True, True, True, True]
             >>> [m.ax.yaxis.get_tick_params(which="major")["labelleft"] for m in maps]
             [True, True, True, True]
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - Per-column sharing groups the panels of a column — in a 2×2 that is the row-major pair
@@ -192,7 +192,7 @@ def grid(
             >>> group = maps[0].ax.get_shared_x_axes().get_siblings(maps[0].ax)
             >>> sorted(id(ax) for ax in group) == sorted(id(m.ax) for m in (maps[0], maps[2]))
             True
-            >>> maps[0].close()
+            >>> plt.close(fig)
             >>> import matplotlib.pyplot as plt
             >>> try:
             ...     grid(2, 2, crs=4326, sharex="both")
@@ -211,7 +211,7 @@ def grid(
             >>> _ = maps[0].set_title("January")
             >>> [t.get_text() for t in fig.texts], maps[0].ax.get_title()
             (['rainfall, 2020'], 'January')
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - Both headings are described, each in its own place, so a stored figure keeps them (M4):
@@ -224,7 +224,7 @@ def grid(
             >>> spec = maps[0].figure_spec
             >>> spec.title, spec.panels[0].title
             ('rainfall, 2020', 'January')
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
     """
@@ -281,7 +281,7 @@ def shared_colorbar(
             >>> bar = shared_colorbar(fig, maps[0].artist(maps[0].layer_ids[-1]), maps, label="mm/day")
             >>> len(fig.axes), bar.ax.get_ylabel(), bar.mappable.get_clim()
             (3, 'mm/day', (0.0, 15.0))
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - A panel whose layer drew nothing has no mappable to key, so passing `None` adds no bar and no
@@ -295,7 +295,7 @@ def shared_colorbar(
             None
             >>> len(fig.axes)
             2
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
 
@@ -969,7 +969,7 @@ def facet(
             ['month = Jan', 'month = Feb', 'month = Mar', 'month = Apr']
             >>> {m.layers[-1][1].get_clim() for m in maps}
             {(0.0, 30.0)}
-            >>> maps[0].close()  # one figure holds every panel, so one close is the whole facet
+            >>> plt.close(fig)  # one figure holds every panel, so one close is the whole facet
 
             ```
         - Wrap onto rows of three; the last row's spare slots are hidden:
@@ -987,7 +987,7 @@ def facet(
             >>> fig, maps = facet(frames, crs=4326, col_wrap=3, colorbar=False)
             >>> maps[0].ax.get_subplotspec().get_geometry()[:2], sum(not ax.get_visible() for ax in fig.axes)
             ((2, 3), 2)
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - A categorical stack cuts its classes over every frame, so the second frame's codes carry on the
@@ -1014,7 +1014,7 @@ def facet(
             ['#2ca02c', '#d62728']
             >>> [m.layers[-1][1].get_clim() for m in maps]
             [(0.5, 4.5), (0.5, 4.5)]
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
         - A stack where every cell is nodata still draws its panels, but no colorbar: the figure holds the
@@ -1043,7 +1043,7 @@ def facet(
             ... except ValueError as error:
             ...     print(str(error)[:69])
             facet(k=4) counts the classes a scheme cuts, so it classifies nothing
-            >>> maps[0].close()
+            >>> plt.close(fig)
 
             ```
 
@@ -1279,9 +1279,11 @@ def quickpanels(
             2
             >>> maps[0].ax.get_title()  # two bare datasets both caption 'Band 1', so disambiguated
             'Band 1 (1)'
+            >>> plt.close(fig)
             >>> fig, maps = quickpanels([rising, falling], titles=["Rising", "Falling"])
             >>> [panel.ax.get_title() for panel in maps]
             ['Rising', 'Falling']
+            >>> plt.close(fig)
 
             ```
         - Title each panel from a metadata key instead — a two-band stack keyed by its band number:
@@ -1296,6 +1298,7 @@ def quickpanels(
             >>> fig, maps = quickpanels(stack, cols=2, titles_from="band")
             >>> [panel.ax.get_title() for panel in maps[:2]]
             ['1', '2']
+            >>> plt.close(fig)
 
             ```
     """
