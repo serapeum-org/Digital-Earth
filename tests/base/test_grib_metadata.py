@@ -57,6 +57,18 @@ class TestGribMetadataOnSource:
         steps = [get_source(grib_stack, band=b).metadata("step") for b in (1, 2, 3)]
         assert steps == [21600, 43200, 64800]
 
+    def test_no_long_name_when_the_message_names_nothing(self, grib_dataset_timeonly):
+        """A GRIB band with a time but no comment/short_name/element gets no long_name, yet still surfaces step.
+
+        Test scenario:
+            _from_raster derives long_name from the GRIB comment/short_name/element. When all three are absent
+            (only a valid_time + forecast horizon are present), that derivation must be skipped — no long_name
+            is invented — while the time/step keys still reach the Source.
+        """
+        src = get_source(grib_dataset_timeonly)
+        assert src.metadata("long_name") is None
+        assert src.metadata("step") == 21600
+
 
 class TestNonGribRasterUnaffected:
     """A plain raster gains none of the GRIB keys and pays no decode cost."""
