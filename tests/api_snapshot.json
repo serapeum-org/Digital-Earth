@@ -44,6 +44,7 @@
         "points",
         "polygons",
         "raster",
+        "reference_fill",
         "reference_lines",
         "streamlines",
         "terrain",

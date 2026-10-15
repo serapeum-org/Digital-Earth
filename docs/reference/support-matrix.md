@@ -39,6 +39,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `points` | ✓ | ✓ | ✓ | ✓ |
 | `polygons` | ✓ | ✓ | ✓ | ✓ |
 | `raster` | ✓ | ✓ | ✓ | ✓ |
+| `reference_fill` | — | — | — | ✓ |
 | `reference_lines` | — | — | — | ✓ |
 | `rgb` | ✓ | ✓ | ✓ | — |
 | `rivers` | ✓ | — | ✓ | — |
