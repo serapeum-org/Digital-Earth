@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import pytest
 
-from digitalearth.static import Map, quickpanels
+from digitalearth.static import Map, figure, quickpanels
 
 
 class TestQuickpanels:
@@ -132,6 +132,70 @@ class TestQuickpanels:
         """A titles list of the wrong length is refused, like animate's."""
         with pytest.raises(ValueError, match="one entry per field"):
             quickpanels([dataset, dataset], titles=["only one"])
+
+
+class TestTitlesFrom:
+    """titles_from keys each panel by a metadata field of its own source (e.g. a GRIB forecast step)."""
+
+    def test_titles_come_from_the_named_metadata_key(self, grib_stack):
+        """A forecast stack titled by step reads each band's own step, not the full caption."""
+        fig, maps = quickpanels(grib_stack, cols=3, titles_from="step")
+        assert [m.ax.get_title() for m in maps[:3]] == ["21600", "43200", "64800"]
+        plt.close(fig)
+
+    def test_missing_key_falls_back_to_the_caption_title(self, dataset):
+        """Fields lacking the key fall back to their caption title, never a bare leading-space number."""
+        fig, maps = quickpanels([dataset, dataset], titles_from="no_such_key")
+        titles = [m.ax.get_title() for m in maps[:2]]
+        assert all(titles), f"titles should be non-empty, got {titles}"
+        assert not any(t.startswith(" ") for t in titles), (
+            f"no leading-space titles: {titles}"
+        )
+        assert titles[0] != titles[1], (
+            f"colliding fallbacks must stay disambiguated, got {titles}"
+        )
+        plt.close(fig)
+
+    def test_titles_and_titles_from_are_mutually_exclusive(self, dataset):
+        """Passing both titles= and titles_from= is refused, since each sets the panel titles."""
+        with pytest.raises(ValueError, match="not both"):
+            quickpanels([dataset, dataset], titles=["a", "b"], titles_from="band")
+
+    def test_missing_key_fallback_computes_caption_lazily_without_colorbar(
+        self, dataset
+    ):
+        """With colorbar off (no captions pre-built), a missing-key panel still falls back to its caption.
+
+        Test scenario:
+            colorbar=False builds no captions list, so the missing-key fallback must compute the caption
+            lazily rather than index a list that is None — the title is still the non-blank caption title.
+        """
+        fig, maps = quickpanels(
+            [dataset, dataset], titles_from="no_such_key", colorbar=False
+        )
+        titles = [m.ax.get_title() for m in maps[:2]]
+        assert all(titles), f"titles should be non-empty, got {titles}"
+        assert not any(t.startswith(" ") for t in titles), (
+            f"no leading-space titles: {titles}"
+        )
+        plt.close(fig)
+
+    def test_missing_key_fallback_reuses_the_built_captions(self, dataset, mocker):
+        """With colorbar on, a missing-key fallback reuses the captions already built, not a recompute.
+
+        Test scenario:
+            colorbar=True builds a caption per field for the labels; the titles_from missing-key fallback must
+            reuse that list, not call caption() a second time per field. Two fields missing the key => two
+            caption() calls total (the label build), not four.
+        """
+        spy = mocker.spy(figure, "caption")
+        fig, maps = quickpanels(
+            [dataset, dataset], titles_from="no_such_key", colorbar=True
+        )
+        assert spy.call_count == 2, (
+            f"caption should run once per field, got {spy.call_count}"
+        )
+        plt.close(fig)
 
 
 class TestUniqueTitles:

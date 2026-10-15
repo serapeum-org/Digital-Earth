@@ -160,6 +160,7 @@ nav:
     - Framing, viewports & insets: examples/16_framing_and_insets.ipynb
     - Multi-panel figures: examples/17_multi_panel_figures.ipynb
     - Global decorations (night, Tissot, tiles): examples/18_global_decorations.ipynb
+    - Model-grid fields (HEALPix, Gaussian, ORCA): examples/19_model_grid_fields.ipynb
     - Presets & styling:
       - Preset library gallery: examples/presets/01_preset_gallery.ipynb
       - Domain presets on matching data: examples/presets/02_domain_presets.ipynb
