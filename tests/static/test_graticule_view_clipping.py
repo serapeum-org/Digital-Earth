@@ -112,6 +112,42 @@ class TestTheSameStepIsRefusedWithoutAFramedView:
             scene.close()
 
 
+class TestTheRefusalIsWordedForTheSpanItBudgetedAgainst:
+    """The over-budget message names the world or the framed view, matching the span it used (#393 M2/L1)."""
+
+    def test_a_framed_view_refusal_is_worded_for_the_view(self):
+        """A step over budget even on the small framed view is refused "across this view".
+
+        Test scenario:
+            ``spacing=1e-4`` on a 2-degree view is ~20,000 lines, past the budget — but the view is already
+            small, so the message says the lines are cut to this view (not "span the whole globe") and asks
+            for a coarser step, the wording M2 made conditional on the span.
+        """
+        scene = Map(crs=4326)
+        scene.set_bounds(SMALL_VIEW)
+        try:
+            with pytest.raises(ValueError, match=r"across this view.*cut to this view"):
+                scene.graticule(spacing=1e-4)
+        finally:
+            scene.close()
+
+    def test_an_unframed_lat_step_refusal_is_worded_for_the_world(self):
+        """An unframed too-fine ``lat_step`` is refused "across the world", not "across this view" (L1).
+
+        Test scenario:
+            An unframed flat map windows to :data:`~digitalearth.static.maps.projection._LABEL_WORLD_WINDOW`,
+            whose latitude is inset to +/-89.5 (span 179) so labels clear the poles. Budgeting that inset
+            span would call an unframed refusal "across this view"; ``_window_spans`` treats the world-label
+            window as the true world, so the refusal names the world as it should.
+        """
+        scene = Map(crs=4326)
+        try:
+            with pytest.raises(ValueError, match=r"across the world"):
+                scene.graticule(lat_step=0.05)
+        finally:
+            scene.close()
+
+
 class TestReframingRecutsTheGrid:
     """A grid drawn on one view is re-cut when a later framing call moves the view."""
 
