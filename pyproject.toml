@@ -87,6 +87,15 @@ interactive = [
     "hvplot >=0.12",
     "datashader >=0.19",
     "panel >=1.9",
+    # cartopy is NOT imported by us (see the note above) -- it is declared here only to constrain the version
+    # geoviews pulls in transitively. cartopy 0.26 dropped the default `lon_0` key from
+    # `PlateCarree().proj4_params`, but geoviews 1.15's `project_extents` still indexes `proj4_params['lon_0']`
+    # unconditionally, so materialising any lat/lon (crs=4326) interactive map to a static doc --
+    # `InteractiveMap.save_app` / `dashboard` / serving an embedded app -- raises `KeyError: 'lon_0'`. The two
+    # solve-groups that carry geoviews drifted apart (docs resolved 0.26, interactive 0.25), which is why the
+    # docs build broke while the interactive nbval run passed. Cap it until geoviews guards the lookup
+    # (`proj4_params.get('lon_0', 0)`); this is an upstream geoviews bug, not ours. Lift the cap once it ships.
+    "cartopy <0.26",
 ]
 # Web tier (MapLibre GL JS + deck.gl via their anywidget Python bindings). `maplibre` (py-maplibregl) drives both
 # the MapLibre basemap/vector layers AND deck.gl overlays from one widget. It is not a GIS competitor — it is a
