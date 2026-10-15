@@ -129,6 +129,7 @@ def grid(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326)
             >>> len(maps)
@@ -142,6 +143,7 @@ def grid(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326)
             >>> _ = maps[0].set_title("left")
@@ -156,6 +158,7 @@ def grid(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326, sharex="all", sharey="all")
             >>> _ = maps[0].set_bounds([2.0, 3.0, 8.0, 9.0])
@@ -173,6 +176,7 @@ def grid(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326, sharex="row", sharey="col")
             >>> [m.ax.xaxis.get_tick_params(which="major")["labelbottom"] for m in maps]
@@ -206,6 +210,7 @@ def grid(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
             >>> _ = maps[0].set_title("January")
@@ -218,6 +223,7 @@ def grid(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
             >>> _ = maps[0].set_title("January")
@@ -270,6 +276,7 @@ def shared_colorbar(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> import numpy as np
             >>> from digitalearth.static import grid, shared_colorbar
             >>> fig, maps = grid(1, 2, crs=4326)
@@ -289,6 +296,7 @@ def shared_colorbar(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> from digitalearth.static import grid, shared_colorbar
             >>> fig, maps = grid(1, 2, crs=4326)
             >>> print(shared_colorbar(fig, None, maps))
@@ -956,6 +964,7 @@ def facet(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.static import facet
@@ -976,6 +985,7 @@ def facet(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.static import facet
@@ -995,6 +1005,7 @@ def facet(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> import numpy as np
             >>> from matplotlib.colors import to_hex
             >>> from pyramids.dataset import Dataset, GeoReference
@@ -1023,6 +1034,7 @@ def facet(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.static import facet
@@ -1268,6 +1280,7 @@ def quickpanels(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.static import quickpanels
@@ -1290,6 +1303,7 @@ def quickpanels(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.static import quickpanels
