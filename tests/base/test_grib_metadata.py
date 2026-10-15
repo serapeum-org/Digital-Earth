@@ -89,6 +89,24 @@ class TestGribMetadataThroughCollection:
         assert src.metadata("n_members") == 2
 
 
+class TestGribDecodeCached:
+    """The GRIB decode is cached per dataset, so a stack is not re-decoded once per band."""
+
+    def test_decoder_runs_once_per_dataset_across_bands(self, grib_stack, mocker):
+        """Reading every band of a GRIB stack calls pyramids' decoder once, not once per band.
+
+        Test scenario:
+            grib_band_metadata decodes all bands, so reading an n-band stack band-by-band without a cache
+            calls it n times (quadratic). The per-dataset cache must collapse that to a single decode.
+        """
+        import pyramids.grib as grib_module
+
+        spy = mocker.spy(grib_module, "grib_band_metadata")
+        for band in (1, 2, 3):
+            get_source(grib_stack, band=band)
+        assert spy.call_count == 1, f"expected one decode for the dataset, got {spy.call_count}"
+
+
 class TestNonGribRasterUnaffected:
     """A plain raster gains none of the GRIB keys and pays no decode cost."""
 

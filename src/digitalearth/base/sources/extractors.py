@@ -28,6 +28,7 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
+from weakref import WeakKeyDictionary
 
 import numpy as np
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
@@ -395,13 +396,38 @@ _GRIB_META_KEYS = {
 }
 
 
+#: Per-dataset cache of pyramids' decoded GRIB band metadata. ``grib_band_metadata`` decodes *all* bands, so
+#: reading an n-band GRIB stack band-by-band (as facet/quickpanels do) would call it once per band — quadratic.
+#: Keyed weakly by the ``Dataset``, so a dataset that goes out of scope drops its entry without being pinned.
+_GRIB_DECODE_CACHE: "WeakKeyDictionary[Dataset, list[dict[str, Any]]]" = WeakKeyDictionary()
+
+
+def _is_grib(band_meta: Any) -> bool:
+    """Whether a band's GDAL metadata marks it as GRIB — a cheap ``GRIB_*`` key check, no decode."""
+    return isinstance(band_meta, Mapping) and any(
+        str(key).startswith("GRIB_") for key in band_meta
+    )
+
+
+def _decode_grib(ds: Dataset) -> list[dict[str, Any]]:
+    """Return pyramids' per-band GRIB metadata for ``ds``, decoding once and caching it per dataset."""
+    cached = _GRIB_DECODE_CACHE.get(ds)
+    if cached is None:
+        from pyramids.grib import grib_band_metadata
+
+        cached = grib_band_metadata(ds)
+        _GRIB_DECODE_CACHE[ds] = cached
+    return cached
+
+
 def _grib_identity(ds: Dataset, band_meta: Any, idx: int) -> dict:
     """Decode a GRIB band's NWP metadata through pyramids, when the band carries any.
 
-    Detection is cheap — a GRIB band's GDAL metadata carries ``GRIB_*`` keys — so a non-GRIB raster never pays
-    for the decode. The decoding itself is **pyramids'** (:func:`pyramids.grib.grib_band_metadata`), not
-    reimplemented here: it parses the reference/valid times to timezone-aware datetimes and the forecast
-    horizon to seconds. Only the keys in :data:`_GRIB_META_KEYS` that are present (non-``None``) are returned,
+    Detection is cheap — a GRIB band's GDAL metadata carries ``GRIB_*`` keys (see :func:`_is_grib`) — so a
+    non-GRIB raster never pays for the decode. The decoding itself is **pyramids'**
+    (:func:`pyramids.grib.grib_band_metadata`), not reimplemented here: it parses the reference/valid times to
+    timezone-aware datetimes and the forecast horizon to seconds, and is cached per dataset by
+    :func:`_decode_grib`. Only the keys in :data:`_GRIB_META_KEYS` that are present (non-``None``) are returned,
     with ``forecast_seconds`` surfaced as ``step``, so :func:`~digitalearth.base.captions.caption` can stamp a
     ``valid_time`` and a panel can be keyed by ``step`` / ``element``.
 
@@ -413,13 +439,9 @@ def _grib_identity(ds: Dataset, band_meta: Any, idx: int) -> dict:
     Returns:
         The decoded NWP metadata for the band, or an empty dict when the band is not GRIB.
     """
-    if not isinstance(band_meta, Mapping) or not any(
-        str(key).startswith("GRIB_") for key in band_meta
-    ):
+    if not _is_grib(band_meta):
         return {}
-    from pyramids.grib import grib_band_metadata
-
-    entry = _band_item(grib_band_metadata(ds), idx) or {}
+    entry = _band_item(_decode_grib(ds), idx) or {}
     return {
         out: entry[key]
         for key, out in _GRIB_META_KEYS.items()
