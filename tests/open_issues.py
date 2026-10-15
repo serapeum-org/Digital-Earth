@@ -48,9 +48,6 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
             "refactor(api): tiles() takes a name on one tier and a URL on another, through one "
             "overloaded provider="
         ),
-        331: (
-            "feat(interactive): polygons() cannot classify — no scheme= or k=, unlike the web tier"
-        ),
         332: (
             "refactor(api): static and interactive builders spell opacity and column differently from "
             "the Core contract"

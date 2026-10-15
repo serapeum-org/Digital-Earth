@@ -907,6 +907,8 @@ class VectorMixin(_MixinBase):
         features: Any,
         *,
         column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
         cmap: str = "viridis",
         opacity: float | None = None,
         rasterize: Any = "auto",
@@ -915,7 +917,7 @@ class VectorMixin(_MixinBase):
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Add a polygon layer — outlines only, or filled by an attribute column.
+        """Add a polygon layer — outlines, a continuous fill, or classified by an attribute column.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
@@ -927,12 +929,24 @@ class VectorMixin(_MixinBase):
                 HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
                 ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
                 colormap's own alpha channel in force.
-            column: Optional numeric column filling the polygons (also shown on hover); ``None``
-                draws unfilled outlines.
-            cmap: Colormap used when ``column`` is given.
+            column: Optional column filling the polygons (also shown on hover); ``None`` draws unfilled
+                outlines.
+            scheme: Optional classification of ``column``, spelled and computed the way :meth:`choropleth`
+                and the web tier's ``polygons`` do, so the three answer the same call the same way (#331).
+                ``None`` (default) is a continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts ``column`` into ``k``
+                classes, and ``"categorical"`` gives every distinct value its own colour. It styles
+                ``column``, so naming a scheme without one is refused rather than ignored. A classified
+                polygon layer is described as a ``choropleth`` on this tier, the same as calling
+                :meth:`choropleth` — the class edges land on ``last_breaks`` and the layer's colour scale.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``. ``5`` is the shared cross-tier default (#246).
+            cmap: Colormap used when ``column`` is given (a qualitative map is used for ``"categorical"``
+                when left at the default; sampled once per class for a graduated scheme).
             rasterize: ``"auto"`` (default) routes through Datashader above
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
-                Polygon datashading needs the optional ``spatialpandas`` package.
+                Polygon datashading needs the optional ``spatialpandas`` package. Ignored for a classified
+                layer, which draws raw glyphs so each class keeps its colour.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
                 (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
                 as given, so a path is measured as a string rather than as rows — see the note below.
@@ -968,6 +982,9 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
+            ValueError: if ``scheme`` is given without a ``column`` to classify, or when the column
+                cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit colour list
+                shorter than the class count).
             ImportError: when the layer routes through Datashader (``rasterize=True``, or
                 ``"auto"`` above the threshold) and ``spatialpandas`` is not installed. It is
                 datashader's own polygon backend, not a Digital-Earth dependency, so the tier says
@@ -976,6 +993,31 @@ class VectorMixin(_MixinBase):
         """
         self._require_vector(features, "polygons")
         apply_opacity(opacity, opts)
+        # A classified polygon layer is a choropleth, and goes through the very classifier `choropleth` uses,
+        # so the two builders cut the same column into the same breaks (#331). `rasterize`/`big_data_threshold`
+        # are continuous-ramp concerns and are not forwarded: a datashaded image carries no per-class colour.
+        if scheme is not None:
+            if not column:
+                # A scheme with nothing to classify is a dropped styling request, refused here as `points`
+                # and `choropleth` refuse it rather than drawing plain polygons and saying nothing (#331).
+                raise ValueError(
+                    "InteractiveMap.polygons(): scheme= classifies column=, which was not given; "
+                    "name the column to classify, or drop scheme="
+                )
+            if isinstance(scheme, str) and scheme.lower() == "categorical":
+                return self._categorical_polygons(
+                    features, column, cmap=cmap, name=name, visible=visible, **opts
+                )
+            return self._graduated_polygons(
+                features,
+                column,
+                scheme=scheme,
+                k=k,
+                cmap=cmap,
+                name=name,
+                visible=visible,
+                **opts,
+            )
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, caller="InteractiveMap.polygons()"
         )
