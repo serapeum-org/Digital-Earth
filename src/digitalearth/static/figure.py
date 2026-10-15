@@ -1169,8 +1169,8 @@ def quickpanels(
             from its own metadata. Mutually exclusive with ``titles_from``.
         titles_from: Title each panel from this metadata key of its own source instead of the full caption —
             e.g. ``"valid_time"``, ``"step"`` or ``"element"`` to lay a forecast stack out one panel per step.
-            A field missing the key titles as ``""``; colliding titles are numbered, as the auto ones are.
-            Mutually exclusive with ``titles``.
+            A field missing the key falls back to its caption title; colliding titles are numbered, as the
+            auto ones are. Mutually exclusive with ``titles``.
         suptitle: One heading over the whole figure (``None`` adds none).
         **style: Forwarded to every panel's render (e.g. ``cmap``, ``levels``), overriding the auto-style.
 
@@ -1255,9 +1255,15 @@ def quickpanels(
         assert (
             sources is not None
         )  # titles_from set implies need_source, so sources was built
-        panel_titles = _unique_titles(
-            [str(src.metadata(titles_from, "")) for src in sources]
-        )
+        # Fall back to the field's caption title when it lacks the key, rather than the blank that
+        # _unique_titles would render as a bare " (1)".
+        labels = [
+            str(value)
+            if (value := src.metadata(titles_from)) not in (None, "")
+            else caption(src).title
+            for src in sources
+        ]
+        panel_titles = _unique_titles(labels)
     else:
         # A bare single-band Dataset carries no CF name, so two of them both caption as "Band 1";
         # disambiguate colliding auto-titles positionally so the panels stay distinguishable.

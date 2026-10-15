@@ -143,10 +143,17 @@ class TestTitlesFrom:
         assert [m.ax.get_title() for m in maps[:3]] == ["21600", "43200", "64800"]
         plt.close(fig)
 
-    def test_missing_key_titles_as_empty_then_disambiguated(self, dataset):
-        """Fields lacking the key title as empty strings, which the repeat-numbering then disambiguates."""
+    def test_missing_key_falls_back_to_the_caption_title(self, dataset):
+        """Fields lacking the key fall back to their caption title, never a bare leading-space number."""
         fig, maps = quickpanels([dataset, dataset], titles_from="no_such_key")
-        assert [m.ax.get_title() for m in maps] == [" (1)", " (2)"]
+        titles = [m.ax.get_title() for m in maps[:2]]
+        assert all(titles), f"titles should be non-empty, got {titles}"
+        assert not any(t.startswith(" ") for t in titles), (
+            f"no leading-space titles: {titles}"
+        )
+        assert titles[0] != titles[1], (
+            f"colliding fallbacks must stay disambiguated, got {titles}"
+        )
         plt.close(fig)
 
     def test_titles_and_titles_from_are_mutually_exclusive(self, dataset):
