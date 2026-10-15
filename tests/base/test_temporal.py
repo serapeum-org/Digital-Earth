@@ -59,10 +59,11 @@ class TestGroupByLabel:
 
     def test_length_mismatch_is_refused(self):
         """Labels of a different length from the series are refused by name."""
+        values = np.arange(3.0)
         with pytest.raises(
             ValueError, match=r"labels has 2 entries but the series has 3 values"
         ):
-            group_by_label(np.arange(3.0), ["a", "b"])
+            group_by_label(values, ["a", "b"])
 
 
 class TestEngineNeutral:
