@@ -4,8 +4,11 @@ GPU-friendly renderers for large feature sets:
 
 * ``heatmap`` — a MapLibre ``heatmap`` layer (optionally weighted by a column);
 * ``cluster`` — a MapLibre clustered GeoJSON source with cluster bubbles, count labels and unclustered points;
-* ``deck_scatter`` / ``deck_polygons`` — deck.gl ``GeoJsonLayer`` overlays driven through the maplibre widget's
+* ``deck_scatter`` / ``deck_polygons`` — deck.gl ``GeoJsonLayer`` layers driven through the maplibre widget's
   ``add_deck_layers`` (deck.gl JSON), so millions of features render on the GPU instead of one DOM glyph each.
+  Each owns a ``LayerSpec`` and a queue slot (#396), so it is in ``layer_ids`` and is removable, hideable and
+  reorderable by id — :func:`draw_deck_geojson` rebuilds it from the recorded template, the same way
+  ``point_cloud``/``gltf`` are rebuilt.
 
 Recipe W3 named ``lonboard`` for its zero-copy GeoArrow path, but py-maplibregl's deck integration consumes
 deck.gl **JSON / pydeck** layers, not lonboard widget objects — they cannot be composited into the same
@@ -165,6 +168,52 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
                 paint={"circle-color": color, "circle-radius": 5},
             ),
         ),
+    )
+
+
+def draw_deck_geojson(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the deck.gl ``GeoJsonLayer`` a `deck_scatter` or `deck_polygons` layer describes.
+
+    The big-data counterpart of :func:`~digitalearth.web.threed.draw_point_cloud` and
+    :func:`~digitalearth.web.threed.draw_model`: it rebuilds the deck.gl JSON layer from the template the
+    builder recorded, serialising the layer's own feature collection into its ``data`` field. Because the
+    layer owns a description and a queue slot (#396), it joins the page's one deck overlay from that slot —
+    so it carries the style layer it draws beneath as ``beforeId`` and is addressable by id like every other
+    layer, which is what the single shared :class:`~digitalearth.web.base._DeckOverlay` slot could not give
+    the undescribed routes.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the geometry is placed in.
+        data: The layer's source — the frame the builder already placed, or whatever the figure's reference
+            opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
+        the page composes into its one overlay.
+
+    Raises:
+        ValueError: when the description records no ``deck`` template — the deck.gl layer dict the builder
+            recorded — naming the layer, its kind and what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp places
+            none of its geometry and the map is `strict` — both from :func:`placed_features`.
+    """
+    from maplibre.sources import geopandas_to_geojson
+
+    from digitalearth.web.renderer import DECK_ROUTE, DrawnLayer, required_props
+
+    _require_layer_api()
+    template = required_props(layer, "deck")["deck"]
+    placed = placed_features(web_map, data, layer)
+    return DrawnLayer(
+        source_id=None,
+        source_spec=None,
+        layer={
+            **template,
+            "id": layer.id,
+            "data": geopandas_to_geojson(placed),
+        },
+        route=DECK_ROUTE,
     )
 
 
@@ -415,13 +464,20 @@ class BigDataMixin(_MixinBase):
         return self
 
     def _add_deck_layer(self, layer: dict) -> Self:
-        """Accumulate a deck.gl JSON ``layer`` for the page's one deck overlay.
+        """Accumulate an **undescribed** deck.gl JSON ``layer`` for the page's one deck overlay.
+
+        The last off-tree deck route: `tiles_3d` alone reaches here. `deck_scatter`, `deck_polygons` and the
+        big-data route of `points`/`polygons` were off-tree too until #396 gave each its own `LayerSpec` and
+        queue slot — they now register through
+        :meth:`~digitalearth.web.base.WebMapBase._index_layer` and :func:`draw_deck_geojson`, exactly as
+        `point_cloud`/`model` do, and so are in `layer_ids`, removable and toggleable. `tiles_3d` stays here
+        because its tileset streams from a URL rather than a feature frame this tier can serve.
 
         All deck layers are applied together — deck.gl owns one overlay, and a second ``add_deck_layers``
-        call replaces the first rather than adding to it — so the first deck builder queues the marker that
-        says where this list joins the overlay, and later builders just append to it. The described deck
-        kinds (`point_cloud`, `model`) join the same overlay from their own queue slots, which is what lets
-        `move_layer` reorder them against these.
+        call replaces the first rather than adding to it — so the first undescribed deck builder queues the
+        marker that says where this list joins the overlay, and later ones append to it. The described deck
+        kinds (`point_cloud`, `model`, `deck_scatter`, `deck_polygons`) join the same overlay from their own
+        queue slots, which is what lets `move_layer` reorder them.
 
         Args:
             layer: A deck.gl JSON layer dict (``{"@@type": ..., ...}``).
@@ -430,11 +486,11 @@ class BigDataMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Note:
-            One marker for the whole list is also the limit of what these layers can be told: the marker is a
-            single queue slot, so it cannot say where each of them belongs, and they therefore name no
-            ``beforeId`` and draw **above every style layer** whichever order the builders ran in (review
-            R2-H5). A layer that has to sit under a style layer needs a description to be ordered by — which
-            is what `point_cloud` and `model` have and these do not.
+            One marker for the whole undescribed list is also the limit of what `tiles_3d` can be told: the
+            marker is a single queue slot, so it cannot say where each layer belongs, and these therefore
+            name no ``beforeId`` and draw **above every style layer** whichever order the builders ran in
+            (review R2-H5). A layer that has to sit under a style layer, or be reordered/removed/hidden by id,
+            needs a description to be ordered by — which every deck builder but `tiles_3d` now has.
         """
         from digitalearth.web.base import _DeckOverlay
 
@@ -450,8 +506,18 @@ class BigDataMixin(_MixinBase):
         *,
         fill_color: Sequence[int] = (51, 136, 255, 200),
         size: float = 5.0,
+        name: str | None = None,
+        visible: bool = True,
     ) -> Self:
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
+
+        Since #396 the layer owns a :class:`~digitalearth.base.spec.LayerSpec` and a queue slot, just as
+        `point_cloud` and `gltf` do: it appears in :attr:`~digitalearth.web.base.WebMapBase.layer_ids`, and
+        :meth:`~digitalearth.web.base.WebMapBase.remove_layer`,
+        :meth:`~digitalearth.web.base.WebMapBase.set_visible` and
+        :meth:`~digitalearth.web.base.WebMapBase.move_layer` address it by id. :func:`draw_deck_geojson`
+        rebuilds the deck.gl layer from the recorded template, so a figure that names a path survives
+        :meth:`~digitalearth.web.base.WebMapBase.figure_spec`'s ``to_dict``/``from_dict`` round trip.
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
@@ -465,6 +531,11 @@ class BigDataMixin(_MixinBase):
                 the same number
                 :meth:`~digitalearth.web.vector.VectorMixin.points` hands down when it routes a large
                 layer here.
+            name: What the layer is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``deck-scatter-1``, ``deck-scatter-2``, …
+                as every other unnamed layer is numbered.
+            visible: Whether the layer starts drawn, which is what a layer switcher toggles. A hidden deck
+                layer carries deck.gl's own ``visible: false`` and draws nothing until it is switched on.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -473,7 +544,7 @@ class BigDataMixin(_MixinBase):
             TypeError: when ``features`` is a raster rather than a vector layer.
 
         Examples:
-            - Build the overlay and read back the spec that will be handed to deck.gl (needs the
+            - Build the layer and read back the spec that will be handed to deck.gl (needs the
               ``web`` extra, so the block is skipped without it):
                 ```python
                 >>> import geopandas as gpd                          # doctest: +SKIP
@@ -482,19 +553,16 @@ class BigDataMixin(_MixinBase):
                 >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
                 ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
                 ... )
-                >>> m = WebMap().deck_scatter(gdf, size=7.0)         # doctest: +SKIP
-                >>> layer = m._deck_layers[0]                        # doctest: +SKIP
+                >>> m = WebMap().deck_scatter(gdf, size=7.0, name="obs")  # doctest: +SKIP
+                >>> layer = m.layers[0]                              # doctest: +SKIP
                 >>> layer["@@type"], layer["getPointRadius"]         # doctest: +SKIP
                 ('GeoJsonLayer', 7.0)
 
                 ```
-            - A deck overlay is drawn but is **not** a MapLibre style layer, so it never enters the
-              registry a switcher toggles — which is why
-              :meth:`~digitalearth.web.vector.VectorMixin.points` refuses ``name``/``visible`` when
-              it routes a large table here:
+            - The layer is addressable by the name it was given, like any other:
                 ```python
                 >>> m.layer_ids                                      # doctest: +SKIP
-                []
+                ['obs']
 
                 ```
         See Also:
@@ -502,14 +570,12 @@ class BigDataMixin(_MixinBase):
                 here above ``big_data_threshold``.
             digitalearth.web.bigdata.BigDataMixin.deck_polygons: the polygon counterpart.
         """
-        from maplibre.sources import geopandas_to_geojson
-
         _require_layer_api()
         gdf = self._display_gdf(features, method="deck_scatter")
-        layer = {
+        # The deck.gl layer, as a template without its id and data: `draw_deck_geojson` fills those from the
+        # layer's id and the placed frame. Recorded as values on the symbology so the figure carries it.
+        template = {
             DECK_TYPE_KEY: "GeoJsonLayer",
-            "id": self._uid("deck-scatter"),
-            "data": geopandas_to_geojson(gdf),
             "pointType": "circle",
             "filled": True,
             "getFillColor": list(fill_color),
@@ -517,7 +583,20 @@ class BigDataMixin(_MixinBase):
             "pointRadiusUnits": "pixels",
             "pointRadiusMinPixels": float(size),
         }
-        return self._add_deck_layer(layer)
+        layer_id = self._layer_id("deck-scatter", name)
+        self._index_layer(
+            layer_id,
+            name,
+            kind="deck_scatter",
+            visible=visible,
+            # The caller's own reference is what a figure can be written down with; the placed frame is
+            # handed to the first draw so nothing is warped twice (review H1).
+            source=features,
+            placed=gdf,
+            symbology=Symbology(props={"deck": template}),
+        )
+        self._last_layer_id = layer_id
+        return self
 
     def deck_polygons(
         self,
@@ -525,8 +604,14 @@ class BigDataMixin(_MixinBase):
         *,
         fill_color: Sequence[int] = (51, 136, 255, 180),
         line_color: Sequence[int] = (255, 255, 255, 255),
+        name: str | None = None,
+        visible: bool = True,
     ) -> Self:
         """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
+
+        Since #396 the layer owns a :class:`~digitalearth.base.spec.LayerSpec` and a queue slot, so it is in
+        :attr:`~digitalearth.web.base.WebMapBase.layer_ids` and is removable, hideable and reorderable by id
+        — the polygon counterpart of :meth:`deck_scatter`.
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
@@ -537,25 +622,36 @@ class BigDataMixin(_MixinBase):
                 the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
             line_color: RGBA outline colour (0-255 per channel).
+            name: What the layer is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``deck-polygons-1``, ``deck-polygons-2``, …
+                as every other unnamed layer is numbered.
+            visible: Whether the layer starts drawn, which is what a layer switcher toggles.
 
         Returns:
             The same map instance, so builder calls chain.
         """
-        from maplibre.sources import geopandas_to_geojson
-
         _require_layer_api()
         gdf = self._display_gdf(features, method="deck_polygons")
-        layer = {
+        template = {
             DECK_TYPE_KEY: "GeoJsonLayer",
-            "id": self._uid("deck-polygons"),
-            "data": geopandas_to_geojson(gdf),
             "filled": True,
             "stroked": True,
             "getFillColor": list(fill_color),
             "getLineColor": list(line_color),
             "lineWidthMinPixels": 1,
         }
-        return self._add_deck_layer(layer)
+        layer_id = self._layer_id("deck-polygons", name)
+        self._index_layer(
+            layer_id,
+            name,
+            kind="deck_polygons",
+            visible=visible,
+            source=features,
+            placed=gdf,
+            symbology=Symbology(props={"deck": template}),
+        )
+        self._last_layer_id = layer_id
+        return self
 
     def _threshold(
         self, big_data_threshold: int | None = None, *, caller: str = "WebMap"

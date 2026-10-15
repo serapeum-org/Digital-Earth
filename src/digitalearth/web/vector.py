@@ -1264,13 +1264,7 @@ class VectorMixin(_MixinBase):
                 its scheme.
             FileNotFoundError: when ``features`` is a path that names nothing.
             ValueError: when ``size`` or ``opacity`` is not a finite number, refused at this call
-                because a figure holding NaN or infinity could not be written down; and when the
-                layer routes to a GPU deck.gl overlay — through ``big=True``,
-                or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
-                as well. A deck overlay is not a MapLibre style layer, so the registry cannot
-                address it to rename or hide it, and honouring those arguments silently would
-                be a promise the saved page does not keep. Pass ``big=False`` to force
-                per-feature circles instead.
+                because a figure holding NaN or infinity could not be written down.
 
         Examples:
             - Fixed-colour circles, addressable afterwards by the name they were given. Every
@@ -1335,17 +1329,10 @@ class VectorMixin(_MixinBase):
                     len(gdf),
                     column,
                 )
-            if name is not None or not visible:
-                # A deck.gl overlay is not a MapLibre style layer: the switcher toggles layers with
-                # setLayoutProperty, which cannot reach it, so it has no registry entry to name or hide.
-                # Dropping these silently would change the API contract at 50 000 features.
-                raise ValueError(
-                    f"points() is rendering {len(gdf)} features as a deck.gl overlay"
-                    f"{'' if big else ' (over the ' + str(self._threshold(big_data_threshold)) + '-feature threshold)'}"
-                    ", which the layer registry cannot address — so name= and visible= cannot be "
-                    "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
-                )
-            return self.deck_scatter(gdf, size=size)
+            # Since #396 the deck.gl layer owns a `LayerSpec` and a tree slot, so `name`/`visible` are
+            # honoured here exactly as they are for a per-feature layer — the big-data route is addressable
+            # like the small one, and the old refusal is gone.
+            return self.deck_scatter(gdf, size=size, name=name, visible=visible)
         paint: dict = {"circle-radius": float(size), "circle-opacity": float(opacity)}
         color_encoding: Encoding | None = None
         if column is not None:
@@ -1531,13 +1518,7 @@ class VectorMixin(_MixinBase):
                 no resolver registered for its scheme.
             FileNotFoundError: when ``features`` is a path that names nothing.
             ValueError: when ``opacity`` is not a finite number, refused at this call because a figure
-                holding NaN or infinity could not be written down; and when the
-                layer routes to a GPU deck.gl overlay — through ``big=True``,
-                or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
-                as well. A deck overlay is not a MapLibre style layer, so the registry cannot
-                address it to rename or hide it, and honouring those arguments silently would
-                be a promise the saved page does not keep. Pass ``big=False`` to force
-                per-feature fills instead.
+                holding NaN or infinity could not be written down.
 
         Examples:
             - A flat fill in one colour, named so the switcher can list it (needs the ``web``
@@ -1566,14 +1547,11 @@ class VectorMixin(_MixinBase):
                 ('continuous', [10.0, 15.0, 20.0, 25.0, 30.0])
 
                 ```
-            - Forcing the GPU path while also asking for ``name``/``visible`` is refused,
-              rather than accepted and then quietly dropped from the saved page:
+            - Forcing the GPU path while naming the layer is honoured since #396: the deck.gl
+              layer owns a tree slot, so it is addressable by that name like any other:
                 ```python
-                >>> try:                                             # doctest: +SKIP
-                ...     WebMap().polygons(gdf, big=True, name="p")
-                ... except ValueError as error:
-                ...     print(str(error).split(",")[0])
-                polygons() is rendering 2 features as a deck.gl overlay
+                >>> WebMap().polygons(gdf, big=True, name="p").layer_ids  # doctest: +SKIP
+                ['p']
 
                 ```
 
@@ -1600,17 +1578,9 @@ class VectorMixin(_MixinBase):
                     len(gdf),
                     column,
                 )
-            if name is not None or not visible:
-                # A deck.gl overlay is not a MapLibre style layer: the switcher toggles layers with
-                # setLayoutProperty, which cannot reach it, so it has no registry entry to name or hide.
-                # Dropping these silently would change the API contract at 50 000 features.
-                raise ValueError(
-                    f"polygons() is rendering {len(gdf)} features as a deck.gl overlay"
-                    f"{'' if big else ' (over the ' + str(self._threshold(big_data_threshold)) + '-feature threshold)'}"
-                    ", which the layer registry cannot address — so name= and visible= cannot be "
-                    "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
-                )
-            return self.deck_polygons(gdf)
+            # Since #396 the deck.gl layer owns a `LayerSpec` and a tree slot, so `name`/`visible` are
+            # honoured here exactly as they are for a per-feature fill — the old refusal is gone.
+            return self.deck_polygons(gdf, name=name, visible=visible)
         colour: Any
         color_encoding: Encoding | None = None
         if column is None:

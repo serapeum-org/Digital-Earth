@@ -140,6 +140,11 @@ class DrawnLayer:
 #: none. They are not MapLibre style layers, so each says how the widget takes it through
 #: :attr:`DrawnLayer.route`: a basemap is a raster style layer after all, terrain turns terrain on, and the
 #: two deck.gl kinds are composed into the page's one deck overlay.
+#:
+#: `deck_scatter` and `deck_polygons` joined the same way in #396: the big-data GPU routes used to accumulate
+#: into one shared overlay slot with no layer recorded — so, like the four above before them, they could not
+#: be addressed by id. They are described now, on the deck route, and `tiles_3d` is the one deck builder still
+#: off the tree (its tileset streams from a URL rather than a feature frame this tier can serve).
 DRAWN_KINDS: tuple[str, ...] = (
     "graticule",
     "text",
@@ -155,6 +160,8 @@ DRAWN_KINDS: tuple[str, ...] = (
     "vector_tiles",
     "heatmap",
     "clusters",
+    "deck_scatter",
+    "deck_polygons",
     "extrusion",
     "basemap",
     "terrain",
@@ -666,6 +673,11 @@ def drawer_for(kind: str) -> Any:
         "vector_tiles": vector.draw_vector_tiles,
         "heatmap": bigdata.draw_heatmap,
         "clusters": bigdata.draw_clusters,
+        # The big-data GPU routes, described since #396: one drawer for both, since both are a deck.gl
+        # GeoJsonLayer rebuilt from the template their builder recorded (the way `draw_vector` serves the
+        # vector kinds).
+        "deck_scatter": bigdata.draw_deck_geojson,
+        "deck_polygons": bigdata.draw_deck_geojson,
         "extrusion": threed.draw_extruded_polygons,
         # The four that used to queue their own closure and record nothing. Each draws through a route of
         # its own because none of them is an ordinary MapLibre style layer — bar the basemap, which is one.

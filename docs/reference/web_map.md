@@ -41,9 +41,10 @@ Without a name a layer gets a generated id (`fill-4`), which is what the switche
 name is suffixed (`Population-2`) because two layers cannot share a MapLibre id. `WebMap.layer_ids` lists them,
 and `remove_layer(id)` drops one.
 
-The big-data path is the exception: past `big_data_threshold` features, `points`/`polygons` render a deck.gl
-overlay, which is not a MapLibre style layer and cannot be reached by the switcher — so `name=` and `visible=`
-are refused there rather than silently dropped.
+The big-data path works the same way: past `big_data_threshold` features, `points`/`polygons` render a deck.gl
+layer rather than one MapLibre style layer per feature, but the layer still owns a tree slot, so `name=` and
+`visible=` are honoured and `WebMap.layer_ids`/`remove_layer`/`set_visible`/`move_layer` all reach it like any
+other layer. (`tiles_3d`, whose tileset streams from a URL, is the one deck builder still off the tree.)
 
 ## Drawing order
 

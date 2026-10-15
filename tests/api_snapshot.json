@@ -256,6 +256,8 @@
         "clusters",
         "contours",
         "custom:maplibre",
+        "deck_polygons",
+        "deck_scatter",
         "extrusion",
         "filled_contours",
         "graticule",

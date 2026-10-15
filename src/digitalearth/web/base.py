@@ -360,6 +360,12 @@ class _DeckOverlay:
     describes none of them and they carry no ``beforeId`` at all — deck.gl's own "above every style layer",
     which is where these builders have always drawn (review R2-H5). Only a deck layer with a queue slot of
     its own — one the renderer drew from a `LayerSpec` — is ordered against the style layers.
+
+    Since #396 the only builder that still accumulates here is `tiles_3d`: `deck_scatter`, `deck_polygons`
+    and the big-data routes of `points`/`polygons` each record a `LayerSpec` now (kinds `deck_scatter` /
+    `deck_polygons`, drawn by :func:`~digitalearth.web.bigdata.draw_deck_geojson`), so they own queue slots
+    and are ordered like `point_cloud`/`model`. `tiles_3d` streams its tileset from a URL rather than a
+    feature frame this tier can serve, so it has no description to rebuild from and stays here.
     """
 
 
@@ -1469,20 +1475,20 @@ class WebMapBase:
             re-arranges the queue (:meth:`~digitalearth.web.renderer.Renderer._arrange`) — so what MapLibre
             adds last, and therefore draws on top, follows.
 
-            A deck.gl layer (`point_cloud`, `model`, and the big-data routes — see
-            :attr:`~digitalearth.web.renderer.DrawnLayer.route`) is not a MapLibre style layer, and the page
-            composes all of them into **one** overlay handed over after the whole queue. A **described** one
-            reaches the page all the same: the overlay is interleaved, so it names the style layer it draws
-            beneath and deck.gl inserts it there.
+            A deck.gl layer (`point_cloud`, `model`, `deck_scatter`, `deck_polygons`, and the big-data routes
+            of `points`/`polygons` — see :attr:`~digitalearth.web.renderer.DrawnLayer.route`) is not a
+            MapLibre style layer, and the page composes all of them into **one** overlay handed over after
+            the whole queue. A **described** one reaches the page all the same: the overlay is interleaved,
+            so it names the style layer it draws beneath and deck.gl inserts it there.
 
             Two kinds of layer cannot be ordered at all. A layer a caller wired themselves through
             :meth:`add_layer`/:meth:`add_underlay` with a callable is added inside that callable under ids
             this map never sees, so a deck layer is placed relative to the nearest style layer it *can*
-            name. And the deck builders that record no description — `deck_scatter`, `deck_polygons`,
-            `tiles_3d`, and the route `points` takes above `big_data_threshold` — mint no layer id, so there
-            is nothing here to address them by; they share one slot in the queue and draw above every style
-            layer, whenever they were called (review R2-H5). Name the layer (`point_cloud`, `model`) to place
-            it, or add it after the layers it belongs above.
+            name. And `tiles_3d` — the one deck builder still recording no description, its tileset streaming
+            from a URL rather than a feature frame this tier can serve — mints no layer id, so there is
+            nothing here to address it by; it shares one slot in the queue and draws above every style layer,
+            whenever it was called (review R2-H5). `deck_scatter`, `deck_polygons` and the big-data routes
+            joined the tree in #396, so they are ordered like `point_cloud`/`model`.
 
         Examples:
             - Two labels, reordered by id:

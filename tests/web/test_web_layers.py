@@ -853,21 +853,32 @@ class TestANamedLayerIsAddressableByItsName:
 
 
 class TestTheBigDataPathIsHonestAboutTheRegistry:
-    """M7: a deck.gl overlay is not a MapLibre style layer, so the switcher cannot reach it."""
+    """#396: a deck.gl layer owns a `LayerSpec` now, so the switcher reaches it like any other."""
 
-    @pytest.mark.parametrize("kwargs", [{"name": "Cities"}, {"visible": False}])
-    def test_name_and_visible_are_refused_on_the_deck_path(self, points, kwargs):
-        """Crossing the feature threshold must not silently change what the arguments do.
+    def test_name_is_honoured_on_the_deck_path(self, points):
+        """Crossing to the GPU route keeps the caller's name: the layer is addressable by it.
 
         Args:
             points: The fixture points.
-            kwargs: The argument the deck path cannot honour.
         """
         from digitalearth.web import WebMap
 
-        web_map = WebMap().basemap()
-        with pytest.raises(ValueError, match="deck.gl overlay"):
-            web_map.points(points, big=True, **kwargs)
+        web_map = WebMap().basemap().points(points, big=True, name="Cities")
+        assert "Cities" in web_map.layer_ids, web_map.layer_ids
+        assert web_map.get_layer("Cities").kind == "deck_scatter"
+
+    def test_visible_is_honoured_on_the_deck_path(self, points):
+        """A big-data deck layer built hidden is described hidden and draws nothing until switched on.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = (
+            WebMap().basemap().points(points, big=True, name="Cities", visible=False)
+        )
+        assert web_map._renderer.is_visible("Cities") is False
 
     def test_the_maplibre_builders_do_join_the_registry(self, points):
         """A heatmap or a cluster is a style layer, so a viewer can switch it off.
@@ -1577,11 +1588,15 @@ class TestOneMapsSourcesAreItsOwn:
         assert _data_layer_ids(m) == ["Layer", "Layer-2", "Layer-3"], m.layer_ids
 
 
-class TestTheDeckRefusalNamesTheRealCause:
-    """M7: the message blamed a `big=True` the caller may never have passed."""
+class TestTheBigDataRouteIsAddressableByEitherPath:
+    """#396: both the threshold route and the explicit `big=True` route give an addressable layer.
 
-    def test_the_threshold_route_says_so(self, points, monkeypatch):
-        """Crossing the threshold is the surprising route, so the error has to name it.
+    These used to be refusals that named the surprising cause (a crossed threshold vs the caller's own
+    `big=True`). The deck.gl layer owns a tree slot now, so neither route refuses `name`/`visible`.
+    """
+
+    def test_the_threshold_route_is_addressable(self, points, monkeypatch):
+        """Crossing the threshold still names the layer the caller asked for.
 
         Args:
             points: The fixture points.
@@ -1591,21 +1606,21 @@ class TestTheDeckRefusalNamesTheRealCause:
 
         web_map = WebMap().basemap()
         monkeypatch.setattr(web_map, "big_data_threshold", 1)
-        with pytest.raises(ValueError, match="threshold"):
-            web_map.points(points, name="Cities")
+        web_map.points(points, name="Cities")
+        assert "Cities" in web_map.layer_ids, web_map.layer_ids
+        assert web_map.get_layer("Cities").kind == "deck_scatter"
 
-    def test_the_explicit_route_does_not_mention_a_threshold(self, points):
-        """`big=True` is the caller's own choice, so the threshold is irrelevant to them.
+    def test_the_explicit_route_is_addressable(self, points):
+        """`big=True` with a name gives the deck.gl polygon layer that name.
 
         Args:
             points: The fixture points.
         """
         from digitalearth.web import WebMap
 
-        web_map = WebMap().basemap()
-        with pytest.raises(ValueError, match="deck.gl overlay") as err:
-            web_map.polygons(points, big=True, name="Cities")
-        assert "threshold" not in str(err.value), str(err.value)
+        web_map = WebMap().basemap().polygons(points, big=True, name="Cities")
+        assert "Cities" in web_map.layer_ids, web_map.layer_ids
+        assert web_map.get_layer("Cities").kind == "deck_polygons"
 
 
 class TestACallersOwnLayer:

@@ -562,7 +562,9 @@ class TestForcedBigPolygonsBehaveLikeForcedBigPoints:
         finally:
             logger.remove(sink)
         assert any("styling is dropped" in str(record) for record in records), records
-        assert m.layer_ids == [], "a deck overlay is not a addressable MapLibre layer"
+        # Since #396 the deck.gl layer is addressable, so the forced route still gives an id (just no column).
+        assert m.layer_ids == ["deck-polygons-1"], m.layer_ids
+        assert m.get_layer("deck-polygons-1").kind == "deck_polygons"
 
     def test_a_forced_route_still_draws(self, polygons_gdf, tmp_path):
         """The warning is not a refusal — the features still have to reach the page.
