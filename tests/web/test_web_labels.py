@@ -148,7 +148,8 @@ class TestLabelsCrs:
             {"name": ["x"]}, geometry=[Point(10000.0, 10000.0)], crs=None
         )
         lon, lat = self._point(WebMap().basemap().labels(naive, "name", crs=3857))
-        assert abs(lon - 0.08983) < 1e-3 and abs(lat - 0.08983) < 1e-3, (lon, lat)
+        assert abs(lon - 0.08983) < 1e-3, lon
+        assert abs(lat - 0.08983) < 1e-3, lat
 
     def test_a_self_describing_frame_ignores_crs(self):
         """A frame that already carries a CRS is left alone — ``crs=`` does not override it."""
