@@ -32,6 +32,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Virtual framebuffer + software OpenGL (so the 3-D notebooks render during the build)
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+            Xvfb :99 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+            echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
       - uses: serapeum-org/github-actions/actions/mkdocs-deploy@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # mkdocs/v1.3.1
         with:
           trigger: 'pull_request'
@@ -40,8 +47,6 @@ jobs:
           install-groups: 'docs'
           notebooks-path: 'docs/examples'
           # Excluded from the execution, so these render from their committed outputs:
-          #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
-          #     'bad X server connection' and takes the kernel with it.
           #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
           #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
           #     deploy does not execute a browser-dependent page that is not published anyway.
@@ -50,7 +55,6 @@ jobs:
           # never blocked by a third-party host being down.
           notebooks-exclude: |
             18_global_decorations.ipynb
-            pyvista/**
             web/web_maps.ipynb
           deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
@@ -61,6 +65,13 @@ jobs:
     - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       with:
         fetch-depth: 0
+    - name: Virtual framebuffer + software OpenGL (so the 3-D notebooks render during the build)
+      run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+          Xvfb :99 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
     - uses: serapeum-org/github-actions/actions/mkdocs-deploy@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # mkdocs/v1.3.1
       with:
         trigger: 'main'
@@ -69,8 +80,6 @@ jobs:
         install-groups: 'docs'
         notebooks-path: 'docs/examples'
         # Excluded from the execution, so these render from their committed outputs:
-        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
-        #     'bad X server connection' and takes the kernel with it.
         #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
         #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
         #     deploy does not execute a browser-dependent page that is not published anyway.
@@ -79,7 +88,6 @@ jobs:
         # never blocked by a third-party host being down.
         notebooks-exclude: |
           18_global_decorations.ipynb
-          pyvista/**
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
 
@@ -107,6 +115,13 @@ jobs:
         VERSION=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)"/\1/')
         echo "tag=$VERSION" >> $GITHUB_OUTPUT
 
+    - name: Virtual framebuffer + software OpenGL (so the 3-D notebooks render during the build)
+      run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+          Xvfb :99 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
     - uses: serapeum-org/github-actions/actions/mkdocs-deploy@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # mkdocs/v1.3.1
       with:
         trigger: 'release'
@@ -115,8 +130,6 @@ jobs:
         install-groups: "docs"
         notebooks-path: 'docs/examples'
         # Excluded from the execution, so these render from their committed outputs:
-        #   - pyvista/** need a GPU or OSMesa that a Linux runner has neither of; VTK dies with
-        #     'bad X server connection' and takes the kernel with it.
         #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
         #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
         #     deploy does not execute a browser-dependent page that is not published anyway.
@@ -125,7 +138,6 @@ jobs:
         # never blocked by a third-party host being down.
         notebooks-exclude: |
           18_global_decorations.ipynb
-          pyvista/**
           web/web_maps.ipynb
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
         release-tag: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
