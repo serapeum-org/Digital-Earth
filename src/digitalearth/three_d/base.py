@@ -1887,6 +1887,118 @@ class Scene3DBase:
         self.camera = self._live_camera()
         return self
 
+    def view_angles(
+        self, azimuth: float, elevation: float, *, distance: float | None = None
+    ) -> Self:
+        """Frame the scene from a compass ``azimuth`` and ``elevation`` angle — the terms a GIS user thinks in.
+
+        The pair half of the camera API, beside :meth:`view`'s named presets and :attr:`camera`'s exact
+        placement. The camera looks at the centre of the scene's current bounds from the given direction, the
+        same vocabulary `hillshade` and `orbit` use. This is the convenience over
+        :meth:`~digitalearth.base.spec.Camera.look_at`: it reads the focal point and a sensible viewing
+        distance off the scene instead of making the caller supply them.
+
+        Args:
+            azimuth: Compass bearing in degrees from the focal point to the camera — clockwise from north
+                (north along `+y`, east along `+x`). `225` stands to the south-west.
+            elevation: Angle in degrees above the horizontal; `90` looks straight down, `0` is edge-on.
+            distance: How far back to stand, in scene units. `None` (the default) derives it from the
+                scene's bounding-box diagonal so the whole scene is framed.
+
+        Returns:
+            The scene, so the view chains with the builders.
+
+        Examples:
+            - Look from the south-west at 30 degrees and read the viewpoint back:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(dem))
+                >>> cam = scene.view_angles(azimuth=225.0, elevation=30.0).camera
+                >>> fp, pos = cam.focal_point, cam.position
+                >>> pos[0] < fp[0], pos[1] < fp[1], pos[2] > fp[2]
+                (True, True, True)
+                >>> scene.close()
+
+                ```
+        """
+        lo = self.plotter.bounds
+        centre = ((lo[0] + lo[1]) / 2.0, (lo[2] + lo[3]) / 2.0, (lo[4] + lo[5]) / 2.0)
+        if distance is None:
+            span = (
+                (lo[1] - lo[0]) ** 2 + (lo[3] - lo[2]) ** 2 + (lo[5] - lo[4]) ** 2
+            ) ** 0.5
+            distance = 1.5 * span if span > 0.0 else 1.0
+        # Camera.look_at rejects a view_up parallel to the sightline, which the default vertical (0, 0, 1) only
+        # truly becomes at the exact pole. Switch to a horizontal up perpendicular to the azimuth a little early
+        # (within ~0.6 deg of the pole) as a safety margin, so the documented straight-down (elevation=90) /
+        # straight-up (-90) frame works; that horizontal up is perpendicular to the sightline for any azimuth.
+        # Everywhere else the vertical up reads naturally (terrain "up" is up on screen).
+        az_rad = np.radians(float(azimuth))
+        if abs(float(np.cos(np.radians(float(elevation))))) < 0.01:
+            view_up = (float(np.cos(az_rad)), float(-np.sin(az_rad)), 0.0)
+        else:
+            view_up = (0.0, 0.0, 1.0)
+        self.camera = Camera.look_at(
+            centre,
+            azimuth=azimuth,
+            elevation=elevation,
+            distance=distance,
+            view_up=view_up,
+            vertical_exaggeration=self.vertical_exaggeration,
+        )
+        return self
+
+    def reset_camera(self, layer_id: str | None = None) -> Self:
+        """Re-fit the view to the whole scene, or to a single layer.
+
+        PyVista frames the scene on the first mesh added; once more layers are drawn — or a camera was set and
+        the scene changed — the framing can be stale. This refits it and captures the result, so the new view
+        survives the next render and reads back through :attr:`camera`. Pass a `layer_id` to frame on that
+        one layer's bounds rather than the union of every actor.
+
+        Args:
+            layer_id: The layer to frame on, or `None` to frame the whole scene.
+
+        Returns:
+            The scene, so it chains with the builders.
+
+        Raises:
+            KeyError: if `layer_id` names no layer (the message lists the ids that exist).
+            ValueError: if `layer_id` names a layer that was described but not drawn, so it has no bounds.
+
+        Examples:
+            - Frame the whole scene, then frame on one layer:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(dem), name="dem")
+                >>> scene.reset_camera() is scene
+                True
+                >>> scene.reset_camera("dem") is scene
+                True
+                >>> scene.close()
+
+                ```
+        """
+        if layer_id is None:
+            self.plotter.reset_camera()
+        else:
+            actor = self.actor_of(layer_id)
+            if actor is None:
+                raise ValueError(
+                    f"layer {layer_id!r} was described but not drawn, so it has no bounds to frame on"
+                )
+            self.plotter.reset_camera(bounds=tuple(actor.bounds))
+        self.camera = self._live_camera()
+        return self
+
     def screenshot(self, path: Destination | None = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).
 

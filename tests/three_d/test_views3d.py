@@ -15,6 +15,7 @@ the table fails the same assertion from the other side.
 # without pyvista is the very thing the skip exists to avoid — so E402 is expected throughout.
 # ruff: noqa: E402
 import inspect
+from dataclasses import replace
 
 import pytest
 
@@ -23,7 +24,7 @@ pv = pytest.importorskip("pyvista")
 import numpy as np
 
 from digitalearth.base.sources import get_source
-from digitalearth.base.spec import Camera
+from digitalearth.base.spec import Camera, DataRef
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.views import (
     NAMED_VIEWS,
@@ -459,3 +460,141 @@ class TestAViewCanBeRegisteredForOneBlock:
         assert "" not in view_names(), (
             f"a refused row reached the table: {view_names()}"
         )
+
+
+def _dem_scene():
+    """A headless scene with one DEM terrain named 'dem'."""
+    dem = np.add.outer(np.linspace(0.0, 1.0, 8), np.linspace(0.0, 1.0, 8))
+    scene = Scene3D(off_screen=True)
+    scene.terrain(get_source(dem), name="dem")
+    return scene
+
+
+def _scene_with_a_described_but_undrawn_layer():
+    """Return a scene whose figure names a 'cloud' layer the renderer skipped for having no points.
+
+    A point cloud is built from real points so the figure describes the layer, its source is then
+    re-pointed at an empty table, and the figure is drawn into a fresh scene — the stored-figure whose
+    data became empty, where the layer is described but not drawn. The caller closes the returned scene.
+
+    Returns:
+        A headless `Scene3D` whose `actor_of("cloud")` is `None` while `"cloud"` is in its `layer_ids`.
+    """
+    built = Scene3D(off_screen=True)
+    built.point_cloud(np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]]), name="cloud")
+    figure = built.figure_spec
+    empty_source = DataRef.of(
+        np.empty((0, 3), dtype="float64"), name="undrawn-cloud-source"
+    )
+    emptied = replace(figure, sources={**figure.sources, "cloud": empty_source})
+    built.close()
+    return Scene3D.from_figure(emptied, off_screen=True)
+
+
+class TestViewAngles:
+    """view_angles(azimuth, elevation) frames from the compass vocabulary on the scene's centre."""
+
+    def test_returns_self(self):
+        """view_angles chains like the other view builders."""
+        scene = _dem_scene()
+        assert scene.view_angles(225.0, 30.0) is scene
+        scene.close()
+
+    def test_south_west_elevated_places_the_camera(self):
+        """azimuth=225 stands south-west (-x, -y of the focal point); elevation=30 stands above it."""
+        scene = _dem_scene()
+        cam = scene.view_angles(azimuth=225.0, elevation=30.0).camera
+        fp, pos = cam.focal_point, cam.position
+        assert pos[0] < fp[0], (
+            f"camera should stand west of the focal point: {pos} vs {fp}"
+        )
+        assert pos[1] < fp[1], (
+            f"camera should stand south of the focal point: {pos} vs {fp}"
+        )
+        assert pos[2] > fp[2], (
+            f"camera should stand above the focal point: {pos} vs {fp}"
+        )
+        scene.close()
+
+    def test_distance_pushes_the_camera_further_out(self):
+        """A larger explicit distance stands the camera further from the focal point."""
+        scene = _dem_scene()
+        near = scene.view_angles(90.0, 45.0, distance=2.0).camera
+        far = scene.view_angles(90.0, 45.0, distance=20.0).camera
+        d_near = float(np.linalg.norm(np.subtract(near.position, near.focal_point)))
+        d_far = float(np.linalg.norm(np.subtract(far.position, far.focal_point)))
+        assert d_far > d_near, (
+            f"distance=20 should stand further than distance=2: {d_far} vs {d_near}"
+        )
+        scene.close()
+
+    def test_zero_span_scene_falls_back_to_a_unit_viewing_distance(self):
+        """A single-point scene has a zero-length diagonal, so the derived distance is the 1.0 fallback."""
+        scene = Scene3D(off_screen=True)
+        scene.add_mesh(pv.PolyData(np.array([[2.0, 3.0, 4.0]])))
+        cam = scene.view_angles(90.0, 45.0).camera
+        distance = float(np.linalg.norm(np.subtract(cam.position, cam.focal_point)))
+        scene.close()
+        assert distance == pytest.approx(1.0), (
+            f"a zero-span scene should fall back to distance 1.0, got {distance}"
+        )
+
+    def test_straight_down_and_up_frame_the_poles_without_crashing(self):
+        """elevation=+/-90 frames straight down/up via a horizontal view_up at the poles, not a ValueError."""
+        scene = _dem_scene()
+        down = scene.view_angles(0.0, 90.0).camera
+        assert down.position[2] > down.focal_point[2], (
+            f"straight-down camera should sit above the focal point: {down.position} vs {down.focal_point}"
+        )
+        assert down.position[0] == pytest.approx(down.focal_point[0]), (
+            "straight-down camera should sit over focal x"
+        )
+        assert down.position[1] == pytest.approx(down.focal_point[1]), (
+            "straight-down camera should sit over focal y"
+        )
+        up = scene.view_angles(0.0, -90.0).camera
+        assert up.position[2] < up.focal_point[2], (
+            f"straight-up camera should sit below the focal point: {up.position} vs {up.focal_point}"
+        )
+        scene.close()
+
+
+class TestResetCamera:
+    """reset_camera() refits the view to the whole scene or one layer."""
+
+    def test_returns_self_whole_scene_and_layer(self):
+        """reset_camera chains, for the whole scene and for a named layer."""
+        scene = _dem_scene()
+        assert scene.reset_camera() is scene
+        assert scene.reset_camera("dem") is scene
+        scene.close()
+
+    def test_frames_on_a_layer_refits_a_bad_camera(self):
+        """Framing on a layer pulls back a camera parked far away (the refit changes the viewpoint)."""
+        scene = _dem_scene()
+        before = scene.view_angles(0.0, 0.0, distance=1000.0).camera
+        after = scene.reset_camera("dem").camera
+        assert tuple(after.position) != tuple(before.position), (
+            "reset_camera did not refit the view"
+        )
+        scene.close()
+
+    def test_missing_layer_raises_keyerror(self):
+        """A layer id nothing drew is a KeyError, naming the id."""
+        scene = _dem_scene()
+        with pytest.raises(KeyError, match="nope"):
+            scene.reset_camera("nope")
+        scene.close()
+
+    def test_described_but_not_drawn_layer_raises_valueerror(self):
+        """A layer the figure names but the renderer skipped has no bounds, so framing on it is refused."""
+        scene = _scene_with_a_described_but_undrawn_layer()
+        assert "cloud" in scene.layer_ids, (
+            f"the empty-source layer must stay described: {scene.layer_ids}"
+        )
+        assert scene.actor_of("cloud") is None, (
+            "the empty-source layer must be described but not drawn to exercise the ValueError branch"
+        )
+        with pytest.raises(ValueError, match="described but not drawn"):
+            scene.reset_camera("cloud")
+        scene.close()
