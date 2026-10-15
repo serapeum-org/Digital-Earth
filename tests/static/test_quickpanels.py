@@ -161,6 +161,25 @@ class TestTitlesFrom:
         with pytest.raises(ValueError, match="not both"):
             quickpanels([dataset, dataset], titles=["a", "b"], titles_from="band")
 
+    def test_missing_key_fallback_computes_caption_lazily_without_colorbar(
+        self, dataset
+    ):
+        """With colorbar off (no captions pre-built), a missing-key panel still falls back to its caption.
+
+        Test scenario:
+            colorbar=False builds no captions list, so the missing-key fallback must compute the caption
+            lazily rather than index a list that is None — the title is still the non-blank caption title.
+        """
+        fig, maps = quickpanels(
+            [dataset, dataset], titles_from="no_such_key", colorbar=False
+        )
+        titles = [m.ax.get_title() for m in maps[:2]]
+        assert all(titles), f"titles should be non-empty, got {titles}"
+        assert not any(t.startswith(" ") for t in titles), (
+            f"no leading-space titles: {titles}"
+        )
+        plt.close(fig)
+
     def test_missing_key_fallback_reuses_the_built_captions(self, dataset, mocker):
         """With colorbar on, a missing-key fallback reuses the captions already built, not a recompute.
 
