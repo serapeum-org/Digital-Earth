@@ -483,9 +483,9 @@ class TestViewAngles:
         scene = _dem_scene()
         cam = scene.view_angles(azimuth=225.0, elevation=30.0).camera
         fp, pos = cam.focal_point, cam.position
-        assert pos[0] < fp[0] and pos[1] < fp[1] and pos[2] > fp[2], (
-            f"camera not to the SW-and-up: {pos} vs {fp}"
-        )
+        assert pos[0] < fp[0], f"camera should stand west of the focal point: {pos} vs {fp}"
+        assert pos[1] < fp[1], f"camera should stand south of the focal point: {pos} vs {fp}"
+        assert pos[2] > fp[2], f"camera should stand above the focal point: {pos} vs {fp}"
         scene.close()
 
     def test_distance_pushes_the_camera_further_out(self):

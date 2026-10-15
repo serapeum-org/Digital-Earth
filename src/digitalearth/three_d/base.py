@@ -1887,7 +1887,9 @@ class Scene3DBase:
         self.camera = self._live_camera()
         return self
 
-    def view_angles(self, azimuth: float, elevation: float, *, distance: float | None = None) -> Self:
+    def view_angles(
+        self, azimuth: float, elevation: float, *, distance: float | None = None
+    ) -> Self:
         """Frame the scene from a compass ``azimuth`` and ``elevation`` angle — the terms a GIS user thinks in.
 
         The pair half of the camera API, beside :meth:`view`'s named presets and :attr:`camera`'s exact
@@ -1926,7 +1928,9 @@ class Scene3DBase:
         lo = self.plotter.bounds
         centre = ((lo[0] + lo[1]) / 2.0, (lo[2] + lo[3]) / 2.0, (lo[4] + lo[5]) / 2.0)
         if distance is None:
-            span = ((lo[1] - lo[0]) ** 2 + (lo[3] - lo[2]) ** 2 + (lo[5] - lo[4]) ** 2) ** 0.5
+            span = (
+                (lo[1] - lo[0]) ** 2 + (lo[3] - lo[2]) ** 2 + (lo[5] - lo[4]) ** 2
+            ) ** 0.5
             distance = 1.5 * span if span > 0.0 else 1.0
         self.camera = Camera.look_at(
             centre,
