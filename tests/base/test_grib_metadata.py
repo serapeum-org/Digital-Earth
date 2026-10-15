@@ -70,6 +70,25 @@ class TestGribMetadataOnSource:
         assert src.metadata("step") == 21600
 
 
+class TestGribMetadataThroughCollection:
+    """A DatasetCollection of GRIB members keeps each member's decoded NWP metadata."""
+
+    def test_collection_member_keeps_grib_keys(self, grib_collection):
+        """A collection member's Source carries the GRIB keys + derived long_name, plus its position.
+
+        Test scenario:
+            _from_collection rebuilt the Source and copied forward only a subset of keys, dropping the GRIB
+            metadata _from_raster now surfaces. A collection of GRIB members must keep element / step /
+            long_name so caption/autostyle/quickpanels(titles_from=) work over a per-step forecast stack.
+        """
+        src = get_source(grib_collection)
+        assert src.metadata("element") == "TMP"
+        assert src.metadata("step") == 21600
+        assert src.metadata("long_name") == "Temperature"
+        assert src.metadata("member") == 0
+        assert src.metadata("n_members") == 2
+
+
 class TestNonGribRasterUnaffected:
     """A plain raster gains none of the GRIB keys and pays no decode cost."""
 

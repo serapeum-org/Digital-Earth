@@ -138,6 +138,15 @@ def grib_dataset_timeonly() -> Dataset:
     return _grib_like_dataset(bands=1, named=False)
 
 
+@pytest.fixture
+def grib_collection():
+    """A DatasetCollection of two single-band GRIB members, each carrying its own message metadata."""
+    from pyramids.dataset.collection import DatasetCollection
+
+    members = [_grib_like_dataset(bands=1), _grib_like_dataset(bands=1)]
+    return DatasetCollection(members[0], len(members), datasets=members)
+
+
 @pytest.fixture(scope="module")
 def points() -> GeoDataFrame:
     return gpd.read_file("tests/data/points.geojson")

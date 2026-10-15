@@ -606,24 +606,12 @@ def _from_collection(
         Source: the raster source, with the member's identity carried forward.
     """
     members = dc.datasets
-    src = _from_raster(members[member], band, metadata, crs=crs)
-    standard_name = src.metadata("standard_name")
-    # augment the raster metadata with the collection position
-    return Source(
-        z=src.z,
-        x=src.x,
-        y=src.y,
-        crs=src.crs,
-        units=src.units,
-        metadata={
-            "kind": "raster",
-            "variable": src.metadata("variable", ""),
-            "member": member,
-            "n_members": len(members),
-            **({"standard_name": standard_name} if standard_name else {}),
-            **(metadata or {}),
-        },
-    )
+    # Pass the collection position *through* _from_raster rather than rebuilding the Source afterwards: the
+    # rebuild hand-listed a subset of keys and silently dropped everything else _from_raster derives (the GRIB
+    # message metadata and its long_name). _from_raster merges this dict last (the caller's own values within
+    # it still win), so member/n_members are recorded without losing the member's identity.
+    position = {"member": member, "n_members": len(members), **(metadata or {})}
+    return _from_raster(members[member], band, position, crs=crs)
 
 
 def _from_feature(fc: Any, metadata: dict | None, *, crs: Any = None) -> Source:
