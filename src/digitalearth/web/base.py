@@ -2870,7 +2870,7 @@ class WebMapBase:
             out[name] = series
         return out
 
-    def _display_gdf(self, features: Any, *, method: str) -> Any:
+    def _display_gdf(self, features: Any, *, method: str, crs: Any = None) -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
         The single vector choke point the point/line/polygon builders call, and so the place the tier
@@ -2915,6 +2915,12 @@ class WebMapBase:
                 features = self._placed(features, method=method)
             return self._noted(self._json_safe(features))
         own_crs = getattr(features, "crs", None)
+        # A caller can declare the CRS of a frame that carries none (`crs=`): stamp it (a reinterpretation,
+        # not a warp) so the reprojection below places it, rather than taking an unlabelled frame as already
+        # lon/lat. A frame that already carries a CRS is self-describing, so `crs=` does not override it.
+        if own_crs is None and crs is not None:
+            features = features.set_crs(crs)
+            own_crs = crs
         # A bare GeoDataFrame in another CRS. Compared by meaning, not by EPSG code: a projection with no
         # authority code has none, and was drawn as if its metres were degrees.
         if own_crs is not None and not same_crs(own_crs, self.crs):

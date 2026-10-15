@@ -705,6 +705,7 @@ class VectorMixin(_MixinBase):
         halo_width: float = DEFAULT_LABEL_HALO_WIDTH,
         offset: Any | None = None,
         allow_overlap: bool = False,
+        crs: Any = None,
         name: str | None = None,
         visible: bool = True,
     ) -> Self:
@@ -733,6 +734,9 @@ class VectorMixin(_MixinBase):
             offset: ``(x, y)`` offset in ems, e.g. ``(0, -1.2)`` to lift a label off its point.
             allow_overlap: Whether labels may overlap. ``False`` (the default) lets MapLibre drop labels
                 that collide, which is what keeps a dense layer readable.
+            crs: The CRS the features are in when they carry none themselves — used to place a frame that
+                has no CRS, which would otherwise be taken as lon/lat (EPSG:4326). ``None`` (the default)
+                leaves a self-describing frame alone. Matches the static tier's ``labels(crs=)`` (#265).
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
@@ -765,7 +769,7 @@ class VectorMixin(_MixinBase):
         ask = Ask()
         text_size = as_finite(text_size, "text_size", call)
         halo_width = as_finite(halo_width, "halo_width", call)
-        gdf = self._display_gdf(features, method="labels")
+        gdf = self._display_gdf(features, method="labels", crs=crs)
         if column not in getattr(gdf, "columns", []):
             raise KeyError(
                 f"labels(column={column!r}) is not a property of these features; available: "

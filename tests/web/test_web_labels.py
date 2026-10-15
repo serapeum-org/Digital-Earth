@@ -117,6 +117,48 @@ class TestLabelsFromAColumn:
         assert '"Names"' in payload, "the caller's name never reaches the switcher"
 
 
+class TestLabelsCrs:
+    """``labels(crs=)`` places a frame that carries no CRS of its own (#265)."""
+
+    @staticmethod
+    def _point(web_map):
+        """Return the first point source's coordinates from the built widget."""
+        for name, args in web_map._build_map_widget().to_dict()["calls"]:
+            if (
+                name == "addSource"
+                and isinstance(args[1], dict)
+                and args[1].get("type") == "geojson"
+            ):
+                feats = args[1]["data"].get("features", [])
+                if feats and feats[0]["geometry"]["type"] == "Point":
+                    return feats[0]["geometry"]["coordinates"]
+        raise AssertionError("no point source was added")
+
+    def test_crs_places_a_frame_that_carries_none(self):
+        """A naive frame declared with ``crs=3857`` is reprojected to lon/lat, not taken as degrees.
+
+        Test scenario:
+            A GeoDataFrame with ``crs=None`` and coordinates in Web-Mercator metres (10000, 10000) would,
+            without ``crs=``, either be read as lon/lat 10000° or crash in MapLibre's naive-geometry warp.
+            Declaring ``crs=3857`` reprojects it to ~(0.0898, 0.0898) lon/lat.
+        """
+        from digitalearth.web import WebMap
+
+        naive = gpd.GeoDataFrame(
+            {"name": ["x"]}, geometry=[Point(10000.0, 10000.0)], crs=None
+        )
+        lon, lat = self._point(WebMap().basemap().labels(naive, "name", crs=3857))
+        assert abs(lon - 0.08983) < 1e-3 and abs(lat - 0.08983) < 1e-3, (lon, lat)
+
+    def test_a_self_describing_frame_ignores_crs(self):
+        """A frame that already carries a CRS is left alone — ``crs=`` does not override it."""
+        from digitalearth.web import WebMap
+
+        wgs = gpd.GeoDataFrame({"name": ["y"]}, geometry=[Point(5.0, 52.0)], crs=4326)
+        lon, lat = self._point(WebMap().basemap().labels(wgs, "name", crs=3857))
+        assert (round(lon, 4), round(lat, 4)) == (5.0, 52.0), (lon, lat)
+
+
 class TestASingleAnnotation:
     """The "label this spot" case, which needed a whole GeoDataFrame before."""
 
