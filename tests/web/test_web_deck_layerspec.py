@@ -233,3 +233,43 @@ class TestDeckLayerIsNotTheDefaultPopupTarget:
         m = WebMap()
         m.deck_scatter(points_gdf, name="obs")
         assert m._last_layer_id is None, m._last_layer_id
+
+    def test_an_explicit_popup_on_a_deck_layer_is_refused(self, points_gdf):
+        """`popup(layer="<deck id>")` is refused, not silently queued against an unclickable overlay (M1).
+
+        Test scenario:
+            #396 made deck layers addressable, so an explicit popup/tooltip now passes id validation. A
+            deck.gl overlay is not a MapLibre style layer, so the click binding would never fire — refuse it
+            by name (it used to raise a KeyError when deck layers were off-tree; this keeps the loud failure).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().deck_scatter(points_gdf, name="crowd")
+        with pytest.raises(ValueError, match=r"deck\.gl overlay"):
+            m.popup(layer="crowd")
+
+    def test_default_popup_after_only_a_deck_layer_names_the_real_reason(
+        self, points_gdf
+    ):
+        """A bare `popup()` when the only layer is a deck layer explains it is not a click target (L1).
+
+        Test scenario:
+            A deck layer draws but never becomes `_last_layer_id`, so `popup()` has nothing to bind. The
+            error must say a clickable/vector layer is needed, not the now-false "draw a data layer first".
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points_gdf, big=True)
+        with pytest.raises(ValueError, match=r"clickable layer"):
+            m.popup()
+
+    def test_replace_layer_round_trips_a_deck_layer(self, points_gdf):
+        """`replace_layer` reaches a deck layer by id (the docstring claims it; this pins it) — L2."""
+        from dataclasses import replace
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().deck_scatter(points_gdf, name="obs")
+        m.replace_layer(replace(m.get_layer("obs"), label="Observations"))
+        assert m.get_layer("obs").label == "Observations"
+        assert "obs" in m.layer_ids
