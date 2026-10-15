@@ -8,6 +8,7 @@ from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
 from digitalearth.base.spec import DEFAULT_BAND
+from digitalearth.base.temporal import group_by_label
 from digitalearth.static import series
 from digitalearth.static.temporal.timeseries import TimeSeries
 
@@ -60,17 +61,14 @@ class Climatology:
     def climatology(self) -> tuple[list, np.ndarray, np.ndarray, np.ndarray]:
         """Aggregate the series by group label.
 
+        Delegates the grouping to the engine-neutral
+        :func:`~digitalearth.base.temporal.group_by_label`.
+
         Returns:
             ``(groups, mean, low, high)``: sorted unique group labels and per-group mean / min / max of the
             reduced values.
         """
-        values = self._series.values()
-        labels = np.asarray(self.labels)
-        groups = sorted(set(self.labels))
-        mean = np.array([np.nanmean(values[labels == g]) for g in groups])
-        low = np.array([np.nanmin(values[labels == g]) for g in groups])
-        high = np.array([np.nanmax(values[labels == g]) for g in groups])
-        return groups, mean, low, high
+        return group_by_label(self._series.values(), self.labels)
 
     def plot(self, ax: Axes | None = None, **kwargs) -> Any:
         """Plot the climatology mean line with a min/max spread plume.
