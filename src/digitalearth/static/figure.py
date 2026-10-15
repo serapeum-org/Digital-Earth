@@ -1256,13 +1256,17 @@ def quickpanels(
             sources is not None
         )  # titles_from set implies need_source, so sources was built
         # Fall back to the field's caption title when it lacks the key, rather than the blank that
-        # _unique_titles would render as a bare " (1)".
-        labels = [
-            str(value)
-            if (value := src.metadata(titles_from)) not in (None, "")
-            else caption(src).title
-            for src in sources
-        ]
+        # _unique_titles would render as a bare " (1)". Reuse the captions already built for the colorbar
+        # labels when there are any; only compute one lazily on the colorbar=False path (captions is None).
+        labels = []
+        for index, src in enumerate(sources):
+            value = src.metadata(titles_from)
+            if value not in (None, ""):
+                labels.append(str(value))
+            elif captions is not None:
+                labels.append(captions[index].title)
+            else:
+                labels.append(caption(src).title)
         panel_titles = _unique_titles(labels)
     else:
         # A bare single-band Dataset carries no CF name, so two of them both caption as "Band 1";

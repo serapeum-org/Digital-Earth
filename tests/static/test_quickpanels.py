@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import pytest
 
-from digitalearth.static import Map, quickpanels
+from digitalearth.static import Map, figure, quickpanels
 
 
 class TestQuickpanels:
@@ -160,6 +160,23 @@ class TestTitlesFrom:
         """Passing both titles= and titles_from= is refused, since each sets the panel titles."""
         with pytest.raises(ValueError, match="not both"):
             quickpanels([dataset, dataset], titles=["a", "b"], titles_from="band")
+
+    def test_missing_key_fallback_reuses_the_built_captions(self, dataset, mocker):
+        """With colorbar on, a missing-key fallback reuses the captions already built, not a recompute.
+
+        Test scenario:
+            colorbar=True builds a caption per field for the labels; the titles_from missing-key fallback must
+            reuse that list, not call caption() a second time per field. Two fields missing the key => two
+            caption() calls total (the label build), not four.
+        """
+        spy = mocker.spy(figure, "caption")
+        fig, maps = quickpanels(
+            [dataset, dataset], titles_from="no_such_key", colorbar=True
+        )
+        assert spy.call_count == 2, (
+            f"caption should run once per field, got {spy.call_count}"
+        )
+        plt.close(fig)
 
 
 class TestUniqueTitles:
