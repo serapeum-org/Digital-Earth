@@ -629,6 +629,14 @@ class BigDataMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is a raster rather than a vector layer.
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.polygons: the per-feature path, which routes
+                here above ``big_data_threshold``.
+            digitalearth.web.bigdata.BigDataMixin.deck_scatter: the point counterpart.
         """
         _require_layer_api()
         gdf = self._display_gdf(features, method="deck_polygons")

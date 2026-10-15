@@ -2896,6 +2896,10 @@ class WebMapBase:
                 with (review H1).
             method: The calling builder's name, quoted in the guard's error message. Required, so a
                 new builder cannot silently inherit a generic label.
+            crs: The CRS to interpret ``features`` as when the frame carries none of its own — stamped
+                onto it (a reinterpretation, not a warp) so the reprojection below places it, rather than
+                taking an unlabelled frame as already lon/lat. ``None`` (the default) leaves a
+                self-describing frame alone, and never overrides a CRS the frame already carries.
 
         Returns:
             A GeoDataFrame in the display CRS (EPSG:4326 by default), with date-like columns ISO-encoded,
