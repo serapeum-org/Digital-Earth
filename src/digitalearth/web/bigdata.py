@@ -508,6 +508,7 @@ class BigDataMixin(_MixinBase):
         size: float = 5.0,
         name: str | None = None,
         visible: bool = True,
+        _placed: Any = None,
     ) -> Self:
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
@@ -534,8 +535,11 @@ class BigDataMixin(_MixinBase):
             name: What the layer is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
                 ``remove_layer`` all take it. ``None`` generates ``deck-scatter-1``, ``deck-scatter-2``, …
                 as every other unnamed layer is numbered.
-            visible: Whether the layer starts drawn, which is what a layer switcher toggles. A hidden deck
-                layer carries deck.gl's own ``visible: false`` and draws nothing until it is switched on.
+            visible: Whether the layer starts drawn. A hidden deck layer carries deck.gl's own
+                ``visible: false`` and draws nothing. This is the *initial* state only: a deck.gl overlay is
+                not a MapLibre style layer, so the live layer-switcher toggle (MapLibre ``setLayoutProperty``)
+                does not reach it — the same limitation the other deck kinds (``point_cloud``/``gltf``) have.
+                Hide or show it after the fact from Python (``set_visible``), not from the saved page's switcher.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -571,7 +575,14 @@ class BigDataMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_polygons: the polygon counterpart.
         """
         _require_layer_api()
-        gdf = self._display_gdf(features, method="deck_scatter")
+        # `_placed` is the internal handoff from `points()`: it has already opened and placed the frame, so it
+        # passes it here to avoid a second open (review L1) while `features` stays the caller's own reference
+        # (a path/URL) so the recorded source is portable (review H1). A direct caller leaves it unset.
+        gdf = (
+            _placed
+            if _placed is not None
+            else self._display_gdf(features, method="deck_scatter")
+        )
         # The deck.gl layer, as a template without its id and data: `draw_deck_geojson` fills those from the
         # layer's id and the placed frame. Recorded as values on the symbology so the figure carries it.
         template = {
@@ -595,7 +606,9 @@ class BigDataMixin(_MixinBase):
             placed=gdf,
             symbology=Symbology(props={"deck": template}),
         )
-        self._last_layer_id = layer_id
+        # A deck.gl overlay layer is not a MapLibre style layer, so MapLibre's click handler cannot reach it;
+        # leaving it as `_last_layer_id` would make a default popup()/tooltip() bind to a layer that never
+        # fires (review L2). Deck layers are not click targets, so they do not claim the default binding.
         return self
 
     def deck_polygons(
@@ -606,6 +619,7 @@ class BigDataMixin(_MixinBase):
         line_color: Sequence[int] = (255, 255, 255, 255),
         name: str | None = None,
         visible: bool = True,
+        _placed: Any = None,
     ) -> Self:
         """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
@@ -625,7 +639,9 @@ class BigDataMixin(_MixinBase):
             name: What the layer is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
                 ``remove_layer`` all take it. ``None`` generates ``deck-polygons-1``, ``deck-polygons-2``, …
                 as every other unnamed layer is numbered.
-            visible: Whether the layer starts drawn, which is what a layer switcher toggles.
+            visible: Whether the layer starts drawn (the initial state only). As for :meth:`deck_scatter`,
+                the live layer-switcher toggle does not reach a deck.gl overlay; use ``set_visible`` from
+                Python to change it afterwards.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -639,7 +655,13 @@ class BigDataMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_scatter: the point counterpart.
         """
         _require_layer_api()
-        gdf = self._display_gdf(features, method="deck_polygons")
+        # `_placed` is the internal handoff from `polygons()` (see deck_scatter): the placed frame, so the
+        # frame is not opened twice, while `features` stays the caller's portable reference.
+        gdf = (
+            _placed
+            if _placed is not None
+            else self._display_gdf(features, method="deck_polygons")
+        )
         template = {
             DECK_TYPE_KEY: "GeoJsonLayer",
             "filled": True,
@@ -658,7 +680,7 @@ class BigDataMixin(_MixinBase):
             placed=gdf,
             symbology=Symbology(props={"deck": template}),
         )
-        self._last_layer_id = layer_id
+        # Not a MapLibre style layer, so it does not claim the default popup()/tooltip() binding (review L2).
         return self
 
     def _threshold(

@@ -186,3 +186,50 @@ class TestDeckLayerSurvivesAFigureRoundTrip:
         assert drawn.route == DECK_ROUTE, drawn.route
         assert drawn.layer["@@type"] == "GeoJsonLayer", drawn.layer
         assert drawn.layer["id"] == "zones", drawn.layer
+
+    def test_points_big_route_from_a_path_is_portable(self, points_gdf, tmp_path):
+        """The auto-route `points(path, big=True)` stays portable — `to_dict` records the path, not the frame.
+
+        Test scenario:
+            `points()` opens the path to count features, then routes the big layer to `deck_scatter`. It must
+            hand `deck_scatter` the caller's own path (not the opened frame), so the recorded source is the
+            path and `to_dict()` succeeds — the regression (review H1) was that it passed the opened frame,
+            making the source an `object:` reference `to_dict()` refuses. This is the common way a user
+            reaches the deck path, and the direct-call round-trip above did not cover it.
+        """
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.web import WebMap
+
+        path = self._geojson_path(points_gdf, tmp_path, "routed")
+        built = WebMap().points(path, big=True, name="obs")
+        reloaded = FigureSpec.from_dict(built.figure_spec.to_dict())  # must not raise
+        assert reloaded.layers.get("obs").kind == "deck_scatter"
+        drawn = WebMap()._renderer.draw_layer(reloaded, "obs")
+        assert drawn is not None and drawn.layer["id"] == "obs"
+
+    def test_polygons_big_route_from_a_path_is_portable(self, polygons_gdf, tmp_path):
+        """The polygon counterpart: `polygons(path, big=True)` records the path and survives `to_dict`."""
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.web import WebMap
+
+        path = self._geojson_path(polygons_gdf, tmp_path, "routed_areas")
+        built = WebMap().polygons(path, big=True, name="zones")
+        reloaded = FigureSpec.from_dict(built.figure_spec.to_dict())  # must not raise
+        assert reloaded.layers.get("zones").kind == "deck_polygons"
+
+
+class TestDeckLayerIsNotTheDefaultPopupTarget:
+    """A deck builder does not claim `_last_layer_id`, so a default `popup()` does not bind to it (review L2)."""
+
+    def test_deck_scatter_does_not_become_the_last_layer(self, points_gdf):
+        """After `deck_scatter`, `_last_layer_id` is unchanged — a deck overlay is not a MapLibre click target.
+
+        Test scenario:
+            MapLibre's click handler cannot reach a deck.gl overlay, so a default `popup()`/`tooltip()` bound
+            to it would silently never fire. The deck builders therefore leave `_last_layer_id` as it was.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        m.deck_scatter(points_gdf, name="obs")
+        assert m._last_layer_id is None, m._last_layer_id

@@ -1331,8 +1331,12 @@ class VectorMixin(_MixinBase):
                 )
             # Since #396 the deck.gl layer owns a `LayerSpec` and a tree slot, so `name`/`visible` are
             # honoured here exactly as they are for a per-feature layer — the big-data route is addressable
-            # like the small one, and the old refusal is gone.
-            return self.deck_scatter(gdf, size=size, name=name, visible=visible)
+            # like the small one, and the old refusal is gone. Hand the caller's own `features` reference
+            # (so the recorded source stays portable — a path survives to_dict, review H1) and the frame we
+            # already placed (so it is not opened a second time, review L1).
+            return self.deck_scatter(
+                features, size=size, name=name, visible=visible, _placed=gdf
+            )
         paint: dict = {"circle-radius": float(size), "circle-opacity": float(opacity)}
         color_encoding: Encoding | None = None
         if column is not None:
@@ -1579,8 +1583,10 @@ class VectorMixin(_MixinBase):
                     column,
                 )
             # Since #396 the deck.gl layer owns a `LayerSpec` and a tree slot, so `name`/`visible` are
-            # honoured here exactly as they are for a per-feature fill — the old refusal is gone.
-            return self.deck_polygons(gdf, name=name, visible=visible)
+            # honoured here exactly as they are for a per-feature fill — the old refusal is gone. Hand the
+            # caller's own `features` reference (portable source, review H1) plus the already-placed frame
+            # (not opened twice, review L1).
+            return self.deck_polygons(features, name=name, visible=visible, _placed=gdf)
         colour: Any
         color_encoding: Encoding | None = None
         if column is None:
