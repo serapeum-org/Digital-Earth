@@ -1203,6 +1203,20 @@ def quickpanels(
             ['Rising', 'Falling']
 
             ```
+        - Title each panel from a metadata key instead — a two-band stack keyed by its band number:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import quickpanels
+            >>> ref = GeoReference(geo=(-10.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326)
+            >>> stack = Dataset.from_array(np.arange(800.0).reshape(2, 20, 20), geo_ref=ref)
+            >>> fig, maps = quickpanels(stack, cols=2, titles_from="band")
+            >>> [panel.ax.get_title() for panel in maps[:2]]
+            ['1', '2']
+
+            ```
     """
     if kind not in _FACET_KINDS:
         renders = ", ".join(repr(name) for name in sorted(_FACET_KINDS))
