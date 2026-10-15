@@ -1894,15 +1894,15 @@ class Scene3DBase:
 
         The pair half of the camera API, beside :meth:`view`'s named presets and :attr:`camera`'s exact
         placement. The camera looks at the centre of the scene's current bounds from the given direction, the
-        same vocabulary ``hillshade`` and ``orbit`` use. This is the convenience over
+        same vocabulary `hillshade` and `orbit` use. This is the convenience over
         :meth:`~digitalearth.base.spec.Camera.look_at`: it reads the focal point and a sensible viewing
         distance off the scene instead of making the caller supply them.
 
         Args:
             azimuth: Compass bearing in degrees from the focal point to the camera — clockwise from north
-                (north along ``+y``, east along ``+x``). ``225`` stands to the south-west.
-            elevation: Angle in degrees above the horizontal; ``90`` looks straight down, ``0`` is edge-on.
-            distance: How far back to stand, in scene units. ``None`` (the default) derives it from the
+                (north along `+y`, east along `+x`). `225` stands to the south-west.
+            elevation: Angle in degrees above the horizontal; `90` looks straight down, `0` is edge-on.
+            distance: How far back to stand, in scene units. `None` (the default) derives it from the
                 scene's bounding-box diagonal so the whole scene is framed.
 
         Returns:
@@ -1946,18 +1946,18 @@ class Scene3DBase:
 
         PyVista frames the scene on the first mesh added; once more layers are drawn — or a camera was set and
         the scene changed — the framing can be stale. This refits it and captures the result, so the new view
-        survives the next render and reads back through :attr:`camera`. Pass a ``layer_id`` to frame on that
+        survives the next render and reads back through :attr:`camera`. Pass a `layer_id` to frame on that
         one layer's bounds rather than the union of every actor.
 
         Args:
-            layer_id: The layer to frame on, or ``None`` to frame the whole scene.
+            layer_id: The layer to frame on, or `None` to frame the whole scene.
 
         Returns:
             The scene, so it chains with the builders.
 
         Raises:
-            KeyError: if ``layer_id`` names no layer (the message lists the ids that exist).
-            ValueError: if ``layer_id`` names a layer that was described but not drawn, so it has no bounds.
+            KeyError: if `layer_id` names no layer (the message lists the ids that exist).
+            ValueError: if `layer_id` names a layer that was described but not drawn, so it has no bounds.
 
         Examples:
             - Frame the whole scene, then frame on one layer:
