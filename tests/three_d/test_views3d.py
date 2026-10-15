@@ -459,3 +459,71 @@ class TestAViewCanBeRegisteredForOneBlock:
         assert "" not in view_names(), (
             f"a refused row reached the table: {view_names()}"
         )
+
+
+def _dem_scene():
+    """A headless scene with one DEM terrain named 'dem'."""
+    dem = np.add.outer(np.linspace(0.0, 1.0, 8), np.linspace(0.0, 1.0, 8))
+    scene = Scene3D(off_screen=True)
+    scene.terrain(get_source(dem), name="dem")
+    return scene
+
+
+class TestViewAngles:
+    """view_angles(azimuth, elevation) frames from the compass vocabulary on the scene's centre."""
+
+    def test_returns_self(self):
+        """view_angles chains like the other view builders."""
+        scene = _dem_scene()
+        assert scene.view_angles(225.0, 30.0) is scene
+        scene.close()
+
+    def test_south_west_elevated_places_the_camera(self):
+        """azimuth=225 stands south-west (-x, -y of the focal point); elevation=30 stands above it."""
+        scene = _dem_scene()
+        cam = scene.view_angles(azimuth=225.0, elevation=30.0).camera
+        fp, pos = cam.focal_point, cam.position
+        assert pos[0] < fp[0] and pos[1] < fp[1] and pos[2] > fp[2], (
+            f"camera not to the SW-and-up: {pos} vs {fp}"
+        )
+        scene.close()
+
+    def test_distance_pushes_the_camera_further_out(self):
+        """A larger explicit distance stands the camera further from the focal point."""
+        scene = _dem_scene()
+        near = scene.view_angles(90.0, 45.0, distance=2.0).camera
+        far = scene.view_angles(90.0, 45.0, distance=20.0).camera
+        d_near = float(np.linalg.norm(np.subtract(near.position, near.focal_point)))
+        d_far = float(np.linalg.norm(np.subtract(far.position, far.focal_point)))
+        assert d_far > d_near, (
+            f"distance=20 should stand further than distance=2: {d_far} vs {d_near}"
+        )
+        scene.close()
+
+
+class TestResetCamera:
+    """reset_camera() refits the view to the whole scene or one layer."""
+
+    def test_returns_self_whole_scene_and_layer(self):
+        """reset_camera chains, for the whole scene and for a named layer."""
+        scene = _dem_scene()
+        assert scene.reset_camera() is scene
+        assert scene.reset_camera("dem") is scene
+        scene.close()
+
+    def test_frames_on_a_layer_refits_a_bad_camera(self):
+        """Framing on a layer pulls back a camera parked far away (the refit changes the viewpoint)."""
+        scene = _dem_scene()
+        before = scene.view_angles(0.0, 0.0, distance=1000.0).camera
+        after = scene.reset_camera("dem").camera
+        assert tuple(after.position) != tuple(before.position), (
+            "reset_camera did not refit the view"
+        )
+        scene.close()
+
+    def test_missing_layer_raises_keyerror(self):
+        """A layer id nothing drew is a KeyError, naming the id."""
+        scene = _dem_scene()
+        with pytest.raises(KeyError, match="nope"):
+            scene.reset_camera("nope")
+        scene.close()
