@@ -15,6 +15,7 @@ the table fails the same assertion from the other side.
 # without pyvista is the very thing the skip exists to avoid — so E402 is expected throughout.
 # ruff: noqa: E402
 import inspect
+from dataclasses import replace
 
 import pytest
 
@@ -23,7 +24,7 @@ pv = pytest.importorskip("pyvista")
 import numpy as np
 
 from digitalearth.base.sources import get_source
-from digitalearth.base.spec import Camera
+from digitalearth.base.spec import Camera, DataRef
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.views import (
     NAMED_VIEWS,
@@ -469,6 +470,27 @@ def _dem_scene():
     return scene
 
 
+def _scene_with_a_described_but_undrawn_layer():
+    """Return a scene whose figure names a 'cloud' layer the renderer skipped for having no points.
+
+    A point cloud is built from real points so the figure describes the layer, its source is then
+    re-pointed at an empty table, and the figure is drawn into a fresh scene — the stored-figure whose
+    data became empty, where the layer is described but not drawn. The caller closes the returned scene.
+
+    Returns:
+        A headless `Scene3D` whose `actor_of("cloud")` is `None` while `"cloud"` is in its `layer_ids`.
+    """
+    built = Scene3D(off_screen=True)
+    built.point_cloud(np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]]), name="cloud")
+    figure = built.figure_spec
+    empty_source = DataRef.of(
+        np.empty((0, 3), dtype="float64"), name="undrawn-cloud-source"
+    )
+    emptied = replace(figure, sources={**figure.sources, "cloud": empty_source})
+    built.close()
+    return Scene3D.from_figure(emptied, off_screen=True)
+
+
 class TestViewAngles:
     """view_angles(azimuth, elevation) frames from the compass vocabulary on the scene's centre."""
 
@@ -506,6 +528,17 @@ class TestViewAngles:
         )
         scene.close()
 
+    def test_zero_span_scene_falls_back_to_a_unit_viewing_distance(self):
+        """A single-point scene has a zero-length diagonal, so the derived distance is the 1.0 fallback."""
+        scene = Scene3D(off_screen=True)
+        scene.add_mesh(pv.PolyData(np.array([[2.0, 3.0, 4.0]])))
+        cam = scene.view_angles(90.0, 45.0).camera
+        distance = float(np.linalg.norm(np.subtract(cam.position, cam.focal_point)))
+        scene.close()
+        assert distance == pytest.approx(1.0), (
+            f"a zero-span scene should fall back to distance 1.0, got {distance}"
+        )
+
 
 class TestResetCamera:
     """reset_camera() refits the view to the whole scene or one layer."""
@@ -532,4 +565,17 @@ class TestResetCamera:
         scene = _dem_scene()
         with pytest.raises(KeyError, match="nope"):
             scene.reset_camera("nope")
+        scene.close()
+
+    def test_described_but_not_drawn_layer_raises_valueerror(self):
+        """A layer the figure names but the renderer skipped has no bounds, so framing on it is refused."""
+        scene = _scene_with_a_described_but_undrawn_layer()
+        assert "cloud" in scene.layer_ids, (
+            f"the empty-source layer must stay described: {scene.layer_ids}"
+        )
+        assert scene.actor_of("cloud") is None, (
+            "the empty-source layer must be described but not drawn to exercise the ValueError branch"
+        )
+        with pytest.raises(ValueError, match="described but not drawn"):
+            scene.reset_camera("cloud")
         scene.close()
