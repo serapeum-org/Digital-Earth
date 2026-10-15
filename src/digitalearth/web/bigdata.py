@@ -546,6 +546,8 @@ class BigDataMixin(_MixinBase):
 
         Raises:
             TypeError: when ``features`` is a raster rather than a vector layer.
+            OffLimbError: when the map is ``strict`` and the placed geometry falls off the display
+                (raised as the layer is drawn, through the shared off-limb policy).
 
         Examples:
             - Build the layer and read back the spec that will be handed to deck.gl (needs the
@@ -648,6 +650,8 @@ class BigDataMixin(_MixinBase):
 
         Raises:
             TypeError: when ``features`` is a raster rather than a vector layer.
+            OffLimbError: when the map is ``strict`` and the placed geometry falls off the display
+                (raised as the layer is drawn, through the shared off-limb policy).
 
         See Also:
             digitalearth.web.vector.VectorMixin.polygons: the per-feature path, which routes
