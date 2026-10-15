@@ -454,9 +454,11 @@ class TestTheKeyIsAskedForEitherWay:
     recorded — the "validate before honouring visible=False" rule the four tiers share. Reading it as "skip
     the call entirely" is what left this backend's categorical fill keyed against the caller's wish.
 
-    Switching a key off is two calls rather than one, and that is the point of asserting the sequence
-    instead of a count. `Renderer.draw_guide` takes off the key **it** drew; the swatch legend a categorical
-    glyph draws for itself is not one of those, so the key is taken over first and switched off second.
+    Switching a key off is **one** call since #350, and that is the point of asserting the sequence instead
+    of a count — it went red and said so when the collapse landed. A categorical glyph's own swatch legend
+    is now adopted as the layer's guide (`Renderer._adopt_glyph_legend`), so `ask(visible=False)` both
+    records the decision and takes that legend off; the take-over call that used to draw the key first,
+    only to switch it off second, is gone with the gap that forced it.
     """
 
     def test_the_bar_is_asked_for_with_the_flag_it_was_given(self):
@@ -472,7 +474,7 @@ class TestTheKeyIsAskedForEitherWay:
 
         hidden = _FakeScene(keyed=["layer"])
         qp._add_static_key(hidden, visible=False)
-        assert hidden.asked == [("colorbar", True), ("colorbar", False)], hidden.asked
+        assert hidden.asked == [("colorbar", False)], hidden.asked
 
     def test_the_swatch_legend_is_asked_for_the_same_way(self):
         """And a categorical layer's goes through `legend()`, by the same two steps.
@@ -487,36 +489,55 @@ class TestTheKeyIsAskedForEitherWay:
 
         hidden = _FakeScene(keyed=["zone"], categorical=True)
         qp._add_static_key(hidden, visible=False)
-        assert hidden.asked == [("legend", True), ("legend", False)], hidden.asked
+        assert hidden.asked == [("legend", False)], hidden.asked
 
     @pytest.mark.parametrize(
         ("categorical", "kind"), [(False, "colorbar"), (True, "legend")]
     )
-    def test_a_refusal_from_the_take_over_still_records_the_decision(
+    def test_visible_false_is_one_call_that_cannot_fail_at_the_engine(
         self, categorical, kind
     ):
-        """The take-over draw failing must not cost `quickmap(colorbar=False)` its record.
+        """`visible=False` records the decision in a single call the engine is never reached by (#350).
 
         Args:
             categorical: Whether the keyed layer is coloured by category.
             kind: The method that layer's key goes through.
 
         Test scenario:
-            The take-over call is the **only** one that reaches `colorbar_legend`/`disjoint_legend`, since
-            the second draws nothing — so it is the only one an engine failure can come out of, and one
-            `except UNMAPPABLE` around both meant that failure took the `Guide(show=False)` record with it.
-            The decision is the thing `colorbar=False` exists to record, and the layer resolves and checks
-            identically on both calls, so the second has its own tolerance now (review N1).
-
-            Both kinds are parametrised because the two arms are independent: which key it is, is the
-            layer's property, and a fix to one spelling must not leave the other under a shared `try`.
+            The take-over draw that used to come first — and whose engine failure review N1 had to tolerate
+            separately so it could not cost the `Guide(show=False)` record — is gone: the glyph's own legend
+            is the layer's guide now, so one `ask(visible=False)` both records and takes it off. That call
+            draws nothing, so a scene whose draw raises (`raises_when_drawn`) never reaches the engine and the
+            decision is recorded all the same. Both kinds are parametrised because which key it is, is the
+            layer's property.
         """
         scene = _FakeScene(
             keyed=["zone"], categorical=categorical, raises_when_drawn=True
         )
         qp._add_static_key(scene, visible=False)
-        assert scene.asked == [(kind, True), (kind, False)], (
-            f"the refusal from the take-over draw stopped the call that records the decision: {scene.asked}"
+        assert scene.asked == [(kind, False)], (
+            f"visible=False should be one call that records the decision; got {scene.asked}"
+        )
+
+    @pytest.mark.parametrize(
+        ("categorical", "kind"), [(False, "colorbar"), (True, "legend")]
+    )
+    def test_an_engine_refusal_on_a_shown_key_is_tolerated(self, categorical, kind):
+        """A shown key whose engine refuses is swallowed, so a one-call map still builds.
+
+        Args:
+            categorical: Whether the keyed layer is coloured by category.
+            kind: The method that layer's key goes through.
+
+        Test scenario:
+            `visible=True` is the one call that reaches `colorbar_legend`/`disjoint_legend`, so it is the one
+            an engine failure comes out of; `_add_static_key` wraps it in `except UNMAPPABLE` so a layer with
+            nothing mappable does not take the whole `quickmap` down. The call is still made and recorded.
+        """
+        scene = _FakeScene(keyed=["zone"], categorical=categorical, raises=True)
+        qp._add_static_key(scene, visible=True)
+        assert scene.asked == [(kind, True)], (
+            f"a shown key should be asked for once and its refusal tolerated; got {scene.asked}"
         )
 
 

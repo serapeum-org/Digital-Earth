@@ -1077,6 +1077,9 @@ class Renderer:
                 self._asked[layer_id] = asked
             partial.undo()
             raise
+        # A categorical fill's glyph drew its own swatch legend on its way in, and `draw_guide` does not own
+        # it unless it keyed the layer itself; adopt it as the layer's guide so the lifecycle does (#350).
+        self._adopt_glyph_legend(layer_id)
         # The records agree with the axes' single legend slot now, whoever wrote it during this draw — and
         # a **drawer** writes it too: a categorical fill's cleopatra glyph draws its own swatch legend on
         # its way in. `draw_guide` only reconciles when it made the new legend itself, so on a layer nobody
@@ -1147,6 +1150,43 @@ class Renderer:
             # owning no artist carries it here instead.
             _set_visible(_guide_artist(made), False)
         return made
+
+    def _adopt_glyph_legend(self, layer_id: str) -> None:
+        """Register a categorical glyph's own swatch legend as the layer's guide artist (#350).
+
+        A categorical fill's cleopatra glyph draws its **own** swatch legend on its way in, and that artist
+        was never recorded as the layer's guide: :attr:`DrawnLayer.guides` stayed empty while a colour key
+        the layer's record knew nothing about sat on the axes. So `set_visible` did not hide it, `remove` did
+        not take it off, and `quickmap(colorbar=False)` had to draw the key through the tier's own method
+        first only to take it off again — two calls where one should do.
+
+        Adopting it closes that gap: the glyph's legend becomes the layer's one guide, like any other key, so
+        the whole guide lifecycle — :meth:`set_visible`, :meth:`remove`, a single `legend(visible=False)` —
+        owns it. The derived swatch key a `legend()`/`colorbar()` call draws still **replaces** it (matplotlib
+        holds one legend per axes, and :meth:`draw_guide` records the replacement), which is why this adopts
+        only when :meth:`draw_guide` drew nothing of its own.
+
+        Called from :meth:`draw_layer` after :meth:`draw_guide` and before :meth:`_displaced`, so the adopted
+        legend is in the record before the displacement sweep keeps it (it is the axes' current legend) and
+        before the layer's visibility is applied.
+
+        Args:
+            layer_id: The layer just drawn, whose glyph may carry a ``category_legend``.
+
+        Note:
+            The adoption is the renderer's alone: it records which artist comes off with the layer and leaves
+            the description untouched, so a categorical fill's ``to_dict`` carries exactly what it did before.
+            A derived key the guide path draws is still described by its `Guide`; the glyph's autonomous one
+            is not, and recording it as a guide artist does not make it one.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is None or drawn.guides:
+            # Nothing drawn, or `draw_guide` already keyed the layer — its derived key replaced the glyph's
+            # legend and is the guide, so there is no autonomous legend left to adopt.
+            return
+        legend = getattr(drawn.glyph, "category_legend", None)
+        if legend is not None and self._scene.ax.get_legend() is legend:
+            self._drawn[layer_id] = with_fields(drawn, guides=(legend,))
 
     def _displaced(self, legend: Any, keeper: str | None = None) -> None:
         """Forget every swatch legend but the one the axes now holds, wherever it was recorded.

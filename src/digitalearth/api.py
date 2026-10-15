@@ -484,6 +484,13 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
     way — which is what lets a switcher offer the key back — and keeps the layer resolved and checked before
     the flag is read, the ordering all four tiers share.
 
+    **Since #350 that swatch legend is the layer's guide**, adopted by the renderer when the glyph draws it
+    (:meth:`~digitalearth.static.renderer.Renderer._adopt_glyph_legend`), so a single ``visible=False`` both
+    records the decision and takes the legend off — ``draw_guide`` detaches the layer's recorded guide, which
+    the glyph's legend now is. This used to take **two** calls: draw the key through the tier's own method to
+    make it the layer's, then switch it off. The gap that forced the extra call is closed, so the extra call
+    is gone.
+
     Args:
         scene: The :class:`Map` whose most recent colour-keyed layer the key describes. Which layer that is
             is ``Map.colorbar``/``Map.legend``'s own question since order 24 — the most recent one that
@@ -492,9 +499,8 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
             :meth:`~digitalearth.static.scene.Scene._color_keyed` list those methods resolve through, so the
             layer this branches on and the layer they key cannot differ.
         visible: Whether the key is drawn. ``False`` records the guide switched **off** and takes off the
-            key the builder drew, as ``quickmap(colorbar=False)`` asks for. The two calls that takes are
-            tolerated separately, so an engine failure in the first — the only one that draws anything —
-            cannot cost the second its record of the decision (review N1).
+            key the builder drew, as ``quickmap(colorbar=False)`` asks for — in one call since #350, because
+            the glyph's own swatch legend is now the layer's recorded guide and ``draw_guide`` takes it off.
 
     Returns:
         Nothing. Both methods return the map itself, as the Core declares, so there is no artist to hand
@@ -507,30 +513,11 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
         return
     kind = guide_kind(scene.get_layer(keyed[-1]))
     ask = scene.legend if kind == "legend" else scene.colorbar
-    if not visible:
-        # Take the key over before switching it off. `Renderer.draw_guide` removes the key **it** drew
-        # — `DrawnLayer.guides` — and the swatch legend a categorical glyph draws for itself is not one
-        # of those, so asking for `visible=False` alone recorded the decision and left that legend on
-        # the axes. Drawing the key once through the tier's own method makes it the layer's (matplotlib
-        # holds one legend per axes, so this replaces rather than stacks), and the call below then takes
-        # it off. Both calls resolve and check the layer first, so a refusal still happens before
-        # anything is recorded.
-        #
-        # Tolerated on its own rather than under one `except` with the call below (review N1). This is the
-        # **only** one of the two that reaches `colorbar_legend`/`disjoint_legend`, because the other draws
-        # nothing — so it is the only one an engine failure can come out of, and sharing a guard meant that
-        # failure took the `Guide(show=False)` record with it. The decision is the thing `colorbar=False`
-        # exists to record, and the take-over is housekeeping over a key the builder drew: worth doing,
-        # not worth losing the record over.
-        try:
-            ask()
-        except UNMAPPABLE as error:
-            logger.warning(
-                "quickmap: taking the %s over first skipped — %s: %s",
-                kind,
-                type(error).__name__,
-                error,
-            )
+    # One call, since #350. A categorical glyph's own swatch legend is now adopted as the layer's guide
+    # (`Renderer._adopt_glyph_legend`), so `ask(visible=False)` both records the decision and takes that
+    # legend off — `draw_guide` detaches the layer's recorded guide, which the glyph's legend now is. The
+    # take-over draw that used to be needed first (draw the key through the tier's own method, then switch
+    # it off) is gone with the gap that made it necessary.
     try:
         ask(visible=visible)
     except UNMAPPABLE as error:
