@@ -1287,12 +1287,21 @@ def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     )
     paths, rep = _line_parts(gdf)
     column, scale = props["column"], props["scale"]
-    if column is not None:
-        _require_column(gdf, column, "column", _SANKEY_CALLER)
-    if scale is not None:
-        _require_column(gdf, scale, "scale", _SANKEY_CALLER)
-    values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
-    widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
+    # Both colour (`column`) and width (`scale`) are numeric ramps — sankey has no scheme=/k= to classify a
+    # categorical column — so read them through _numeric_column, which names the method/keyword/column when a
+    # column exists but holds text (the same guard cartogram's scale and lines' column/width use).
+    col_vals = (
+        _numeric_column(gdf, column, "column", _SANKEY_CALLER)
+        if column is not None
+        else None
+    )
+    scale_vals = (
+        _numeric_column(gdf, scale, "scale", _SANKEY_CALLER)
+        if scale is not None
+        else None
+    )
+    values = np.repeat(col_vals, rep) if col_vals is not None else None
+    widths = np.repeat(scale_vals, rep) if scale_vals is not None else None
     opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
     plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
     glyph = FlowGlyph(
@@ -1704,8 +1713,9 @@ class VectorMixin(_MixinBase):
         Raises:
             KeyError: if ``size_column`` names no feature attribute — the refusal names ``Map.points()``
                 and lists the columns the features do have (via :func:`_require_column`).
-            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` but the features carry no numeric
-                value for it to scale; a colour *scaling* needs values, so it is refused rather than dropped.
+            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` but
+                the features carry no numeric value for it to scale; a colour *scaling* needs values, so it
+                is refused rather than dropped.
 
         """
         self._draw(
@@ -2737,9 +2747,9 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` — ``polygons`` draws a uniform
-                fill with no values to scale, so a colour *scaling* is refused; use :meth:`choropleth` to
-                colour polygons by a column.
+            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` —
+                ``polygons`` draws a uniform fill with no values to scale, so a colour *scaling* is refused;
+                use :meth:`choropleth` to colour polygons by a column.
         """
         _refuse_colour_norm(
             opts.get("color"),
@@ -3504,10 +3514,10 @@ class VectorMixin(_MixinBase):
             ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a
                 positive finite number (a line has no negative thickness); if ``color`` is a string that
                 is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a
-                column's name; if ``color`` is a ``matplotlib.colors.Normalize`` while ``column`` is
-                ``None`` — a colour *scaling* has no values to act on without a column, so it is refused
-                rather than dropped; or if ``column`` or a column ``width`` names a column that does not
-                hold numbers, which a ramp and a width scale both need.
+                column's name; if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra
+                ``ColorScaling`` while ``column`` is ``None`` — a colour *scaling* has no values to act on
+                without a column, so it is refused rather than dropped; or if ``column`` or a column
+                ``width`` names a column that does not hold numbers, which a ramp and a width scale both need.
             KeyError: if ``column`` or a column ``width`` names no feature attribute — the refusal names
                 ``Map.lines()``, the keyword and the column, and lists the columns there are.
 
@@ -3705,9 +3715,11 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``features`` contains non-line geometry; or if ``color`` is a
-                ``matplotlib.colors.Normalize`` while ``column`` is ``None`` — a colour *scaling* has no
-                values to act on without a column, so it is refused rather than dropped.
+            ValueError: if ``features`` contains non-line geometry; if ``column`` or ``scale`` names a column
+                that does not hold numbers (both are numeric ramps); or if ``color`` is a
+                ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` while ``column`` is ``None`` —
+                a colour *scaling* has no values to act on without a column, so it is refused rather than
+                dropped.
             KeyError: if ``column`` or ``scale`` names no feature attribute — the refusal names ``sankey()``
                 and lists the columns the features do have (via :func:`_require_column`).
 

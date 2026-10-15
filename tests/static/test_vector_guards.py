@@ -86,6 +86,18 @@ def text_points_fc():
     )
 
 
+@pytest.fixture
+def text_lines_fc():
+    """One line whose only attribute column, ``label``, holds text."""
+    return FeatureCollection(
+        gpd.GeoDataFrame(
+            {"label": ["a"]},
+            geometry=[LineString([(0, 0), (1, 1)])],
+            crs="EPSG:4326",
+        )
+    )
+
+
 class TestMissingColumnIsNamed:
     """#379 — a column a builder cannot find is refused by name, listing the columns that exist."""
 
@@ -164,6 +176,24 @@ class TestNonNumericColumnIsNamed:
             match=r"quadtree\(\) needs column='label' to name a column of numbers",
         ):
             canvas.quadtree(text_points_fc, column="label")
+
+    def test_sankey_scale_non_numeric(self, text_lines_fc):
+        """sankey's width scale holding text is named, not left to numpy's bare conversion error."""
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"sankey\(\) needs scale='label' to name a column of numbers",
+        ):
+            canvas.sankey(text_lines_fc, scale="label")
+
+    def test_sankey_column_non_numeric(self, text_lines_fc):
+        """sankey's colour column holding text is named, not left to numpy's bare ufunc error."""
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"sankey\(\) needs column='label' to name a column of numbers",
+        ):
+            canvas.sankey(text_lines_fc, column="label")
 
 
 class TestColourNormWithoutValuesRefused:
