@@ -144,7 +144,9 @@ class TestGribCacheInvalidation:
             }
         ]
         second = get_source(grib_dataset)
-        assert second.metadata("element") == "PRES", "stale cached identity served after mutation"
+        assert second.metadata("element") == "PRES", (
+            "stale cached identity served after mutation"
+        )
         assert second.units == "Pa", "units should refresh with the identity"
 
 
