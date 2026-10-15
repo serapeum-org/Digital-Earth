@@ -159,6 +159,27 @@ class TestLabelsCrs:
         lon, lat = self._point(WebMap().basemap().labels(wgs, "name", crs=3857))
         assert (round(lon, 4), round(lat, 4)) == (5.0, 52.0), (lon, lat)
 
+    def test_crs_places_a_crs_less_feature_collection(self):
+        """A pyramids ``FeatureCollection`` carrying no CRS is stamped by ``crs=`` too, not just a bare frame.
+
+        Test scenario:
+            A ``FeatureCollection`` takes a different branch in ``_display_gdf`` than a bare GeoDataFrame, so
+            the ``crs=`` stamp has to be applied there as well — otherwise a CRS-less collection is warped
+            unlabelled and ``crs=`` is silently ignored (review M1).
+        """
+        from pyramids.feature import FeatureCollection
+
+        from digitalearth.web import WebMap
+
+        fc = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"name": ["x"]}, geometry=[Point(10000.0, 10000.0)], crs=None
+            )
+        )
+        lon, lat = self._point(WebMap().basemap().labels(fc, "name", crs=3857))
+        assert abs(lon - 0.08983) < 1e-3, lon
+        assert abs(lat - 0.08983) < 1e-3, lat
+
 
 class TestASingleAnnotation:
     """The "label this spot" case, which needed a whole GeoDataFrame before."""

@@ -2921,6 +2921,10 @@ class WebMapBase:
         if hasattr(features, "epsg") and hasattr(
             features, "to_crs"
         ):  # pyramids FeatureCollection (a GeoDataFrame)
+            # Honour `crs=` here too: a FeatureCollection can carry no CRS (`epsg is None`), and without the
+            # stamp `_needs_reproject` would warp it unlabelled — the mis-placement `crs=` exists to prevent.
+            if crs is not None and getattr(features, "crs", None) is None:
+                features = features.set_crs(crs)
             if self._needs_reproject(features):
                 features = self._placed(features, method=method)
             return self._noted(self._json_safe(features))
