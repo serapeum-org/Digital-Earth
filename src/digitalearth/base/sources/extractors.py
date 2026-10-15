@@ -399,7 +399,9 @@ _GRIB_META_KEYS = {
 #: Per-dataset cache of pyramids' decoded GRIB band metadata. ``grib_band_metadata`` decodes *all* bands, so
 #: reading an n-band GRIB stack band-by-band (as facet/quickpanels do) would call it once per band — quadratic.
 #: Keyed weakly by the ``Dataset``, so a dataset that goes out of scope drops its entry without being pinned.
-_GRIB_DECODE_CACHE: "WeakKeyDictionary[Dataset, list[dict[str, Any]]]" = WeakKeyDictionary()
+_GRIB_DECODE_CACHE: "WeakKeyDictionary[Dataset, list[dict[str, Any]]]" = (
+    WeakKeyDictionary()
+)
 
 
 def _is_grib(band_meta: Any) -> bool:
@@ -503,7 +505,9 @@ def _from_raster(
     grib = _grib_identity(ds, band_meta, idx)
     # Gate the GRIB_UNIT fallback on GRIB *detection*, not on the decoded identity being non-empty: a band that
     # decodes to no identity/time keys still declares its unit, and GRIB_UNIT is not matched by the `units` step.
-    grib_unit = _unbracket(_attr(band_meta, "GRIB_UNIT")) if _is_grib(band_meta) else None
+    grib_unit = (
+        _unbracket(_attr(band_meta, "GRIB_UNIT")) if _is_grib(band_meta) else None
+    )
     units = (
         _band_item(ds.band_units, idx)
         or _attr(band_meta, "units")

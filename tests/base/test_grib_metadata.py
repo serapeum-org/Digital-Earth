@@ -114,7 +114,9 @@ class TestGribDecodeCached:
         spy = mocker.spy(grib_module, "grib_band_metadata")
         for band in (1, 2, 3):
             get_source(grib_stack, band=band)
-        assert spy.call_count == 1, f"expected one decode for the dataset, got {spy.call_count}"
+        assert spy.call_count == 1, (
+            f"expected one decode for the dataset, got {spy.call_count}"
+        )
 
 
 class TestNonGribRasterUnaffected:
