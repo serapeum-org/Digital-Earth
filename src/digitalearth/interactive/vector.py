@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.crs import reproject
+from digitalearth.base.guards import reject_raster, require_vector
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import (
     DEFAULT_BAND,
@@ -260,7 +261,7 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     props = held_props(interactive_map, layer)
-    gdf = interactive_map._display_gdf(data)
+    gdf = interactive_map._display_gdf(data, method=layer.kind)
     labels = props.get("labels")
     if labels:
         gdf = _as_labels(gdf, labels["column"], labels["missing"])
@@ -306,7 +307,7 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
-    gdf = interactive_map._display_gdf(data)
+    gdf = interactive_map._display_gdf(data, method="hexbin")
     # Build from explicit display-CRS x/y(/value) arrays, not the geometry GeoDataFrame: GeoViews
     # mis-projects a GeoDataFrame's point geometry at bokeh render time. HoloViews' hex aggregation
     # also needs the reducer as a numpy callable (np.size = count), not a string.
@@ -365,7 +366,7 @@ def draw_kde(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     _, hv = _require_holoviz()
     props = held_props(interactive_map, layer)
-    gdf = interactive_map._display_gdf(data)
+    gdf = interactive_map._display_gdf(data, method="kde")
     element = hv.Bivariate((gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy()))
     common = {"cmap": props.get("cmap"), **dict(props.get("opts") or {})}
     element = interactive_map._styled(
@@ -443,7 +444,7 @@ def _graph_element(interactive_map: Any, nodes: Any, edges: Any, props: dict) ->
     gv, _ = _require_holoviz()
     weight = props.get("weight")
     node_id = props.get("node_id")
-    gdf = interactive_map._display_gdf(nodes)
+    gdf = interactive_map._display_gdf(nodes, method="graph")
     crs = gv.util.process_crs(interactive_map.crs)
     ids = (
         gdf[node_id].to_numpy()
@@ -568,12 +569,57 @@ class VectorMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
-    def _display_gdf(self, features: Any) -> Any:
+    @staticmethod
+    def _require_vector(features: Any, method: str) -> None:
+        """Reject non-vector input before a builder touches it — this tier's share of the #175 guard.
+
+        Delegates to the engine-neutral :func:`~digitalearth.base.guards.require_vector`, naming this tier's
+        own raster entry points (``field`` for a single raster, ``timecube`` for a stack) so a ``Dataset``
+        handed to a vector builder is turned away with that route rather than failing obscurely downstream
+        (``object of type 'Dataset' has no len()`` and the like, #152). A path/URL is *not* rejected here: it
+        is opened and validated when the drawer reads it, so the path a figure records stays a legal input.
+
+        Args:
+            features: The caller's input, expected to be a vector layer (or a path/URL to one).
+            method: The calling builder's name, quoted in the error.
+
+        Raises:
+            TypeError: when ``features`` is a loaded raster, or a table whose geometry was never activated.
+        """
+        if isinstance(features, (str, os.PathLike)):
+            return
+        require_vector(features, method, single="field", stack="timecube")
+
+    @staticmethod
+    def _reject_raster(data: Any, method: str) -> None:
+        """Reject a raster while allowing the non-vector inputs a builder legitimately takes.
+
+        The narrower half of the #175 guard, for :meth:`trimesh` — which accepts a point collection *or* a
+        UGRID mesh that exposes ``node_x``/``node_y`` rather than ``geometry``, so :meth:`_require_vector`
+        would be too strict. Delegates to :func:`~digitalearth.base.guards.reject_raster` with this tier's
+        raster entry points. A path/URL is left for the drawer to open, as in :meth:`_require_vector`.
+
+        Args:
+            data: The caller's input.
+            method: The calling builder's name, quoted in the error.
+
+        Raises:
+            TypeError: when ``data`` is a loaded raster.
+        """
+        if isinstance(data, (str, os.PathLike)):
+            return
+        reject_raster(data, method, single="field", stack="timecube")
+
+    def _display_gdf(self, features: Any, *, method: str) -> Any:
         """Reproject ``features`` to the display CRS through pyramids and return the GeoDataFrame.
 
         Args:
             features: A pyramids ``FeatureCollection`` (or any GeoDataFrame-like with
                 ``epsg``/``to_crs``); plain GeoDataFrames already in the display CRS pass through.
+            method: The calling builder's name, quoted in :meth:`_require_vector`'s error. The drawers that
+                reach this choke point pass the layer's kind, so a raster that was never build-guarded
+                (``lines``/``hexbin``/``kde``/``graph`` record their source and open it here) is still turned
+                away naming the builder that was called.
 
         Reprojection goes through the shared :func:`~digitalearth.base.crs.reproject` helper rather than
         calling ``to_crs`` directly, so a warp that places none of the geometry is reported as an
@@ -582,7 +628,12 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The display-CRS GeoDataFrame (read-only from here on — geometry is never rebuilt).
+
+        Raises:
+            TypeError: when ``features`` is a raster (or a geometry-less table) — the #175 guard, applied
+                before the reprojection so a raster cannot reach ``to_crs``.
         """
+        self._require_vector(features, method)
         if (
             hasattr(features, "epsg")
             and hasattr(features, "to_crs")
@@ -714,6 +765,7 @@ class VectorMixin(_MixinBase):
             _route_through_rasterize,
         )
 
+        self._require_vector(features, "points")
         apply_opacity(opacity, opts)
         if scheme is not None and not column:
             # A scheme with nothing to classify used to draw plain points and say nothing — a dropped
@@ -922,6 +974,7 @@ class VectorMixin(_MixinBase):
                 which package to install — or to pass ``rasterize=False`` and draw raw glyphs —
                 rather than failing deeper inside datashader.
         """
+        self._require_vector(features, "polygons")
         apply_opacity(opacity, opts)
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, caller="InteractiveMap.polygons()"
@@ -1006,7 +1059,7 @@ class VectorMixin(_MixinBase):
             element = (
                 self._vector_element(  # pragma: no cover - needs optional spatialpandas
                     "Polygons",
-                    self._display_gdf(features),
+                    self._display_gdf(features, method=kind),
                     vdims=[column] if column else None,
                 )
             )
@@ -1392,6 +1445,7 @@ class VectorMixin(_MixinBase):
             ValueError: when a graduated ``scheme`` cannot classify ``column`` (unknown scheme name, a
                 constant column, ``k < 1``, …).
         """
+        self._require_vector(features, "choropleth")
         if column not in getattr(features, "columns", [column]):
             raise KeyError(
                 f"choropleth column {column!r} not found in the feature attributes"
@@ -1747,6 +1801,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        self._reject_raster(data, "trimesh")
         gv, _ = _require_holoviz()
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, caller="InteractiveMap.trimesh()"
@@ -1819,7 +1874,7 @@ class VectorMixin(_MixinBase):
             Triangulation,
         )  # matplotlib, not a forbidden GIS engine
 
-        gdf = self._display_gdf(data)
+        gdf = self._display_gdf(data, method="trimesh")
         # The extraction and the non-finite drop are PointArrays' — and it keeps the value column in step
         # with the points it removes, which this site was doing with a second application of the mask.
         column = gdf[value_column].to_numpy() if value_column else None

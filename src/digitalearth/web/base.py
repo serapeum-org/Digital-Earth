@@ -41,6 +41,7 @@ from digitalearth.base.display import (
     needs_reproject,
     to_display_source,
 )
+from digitalearth.base.guards import reject_raster, require_vector
 from digitalearth.base.registry import (
     KIND_BANDS,
     band_of,
@@ -87,10 +88,6 @@ _INSTALL_HINT = (
     "Install it with `pip install 'digitalearth[web]'` "
     "(or, in this repo, `pixi install -e web`)."
 )
-
-#: How many column names an "active geometry missing" error quotes before it elides the rest — a wide
-#: table would otherwise print hundreds of names into a traceback.
-_MAX_COLUMNS_IN_ERROR = 12
 
 #: Short style aliases → CartoCDN basemap slugs. A bare name resolves to the CartoCDN style URL; a full URL
 #: (or a MapLibre style ``dict``) is passed through untouched. CartoCDN basemaps need no API token.
@@ -2661,11 +2658,7 @@ class WebMapBase:
         Raises:
             TypeError: when ``data`` is a pyramids raster.
         """
-        if isinstance(getattr(data, "columns", None), int):
-            raise TypeError(
-                f"{method}() does not take a raster; got {type(data).__name__}. For a single raster use "
-                f"field(); for a raster time stack pass a DatasetCollection to timeslider()."
-            )
+        reject_raster(data, method, single="field", stack="timeslider")
 
     @staticmethod
     def _require_vector(features: Any, method: str) -> None:
@@ -2720,26 +2713,7 @@ class WebMapBase:
             digitalearth.web.bigdata.BigDataMixin._require_points: the narrower geometry-kind guard that
                 runs after this one for the heatmap/cluster builders.
         """
-        if hasattr(features, "geometry"):
-            return
-        # A raster reports `columns` as an int (the grid width); a table reports an Index of names. Telling
-        # the two apart keeps a GeoDataFrame whose geometry was never activated from being called a raster.
-        WebMapBase._reject_raster(features, method)
-        columns = getattr(features, "columns", None)
-        if columns is not None:
-            names = [str(name) for name in columns]
-            shown = names[:_MAX_COLUMNS_IN_ERROR]
-            if len(names) > _MAX_COLUMNS_IN_ERROR:
-                shown.append(f"... (+{len(names) - _MAX_COLUMNS_IN_ERROR} more)")
-            raise TypeError(
-                f"{method}() needs a layer with an active geometry column; got a "
-                f"{type(features).__name__} whose columns are {shown}. Call set_geometry(...) on it first."
-            )
-        raise TypeError(
-            f"{method}() needs a vector layer (a pyramids FeatureCollection / GeoDataFrame); got "
-            f"{type(features).__name__}. For a single raster use field(); for a raster time stack "
-            f"use timeslider() with a DatasetCollection."
-        )
+        require_vector(features, method, single="field", stack="timeslider")
 
     @staticmethod
     def _json_safe(gdf: Any) -> Any:

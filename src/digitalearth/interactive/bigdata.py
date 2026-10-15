@@ -183,7 +183,9 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     _require_holoviz()
     props = held_props(interactive_map, layer)
     column = props.get("column")
-    element = interactive_map._as_element(data, vdims=[column] if column else None)
+    element = interactive_map._as_element(
+        data, method="rasterize", vdims=[column] if column else None
+    )
     rasterized = _rasterize(
         element,
         aggregator=_resolve_aggregator(props.get("aggregator"), column),
@@ -227,7 +229,9 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     _require_holoviz()
     props = held_props(interactive_map, layer)
     column = props.get("column")
-    element = interactive_map._as_element(data, vdims=[column] if column else None)
+    element = interactive_map._as_element(
+        data, method="datashade", vdims=[column] if column else None
+    )
     op_kwargs: dict = dict(props.get("canvas") or {})
     color_key = props.get("color_key")
     if color_key is not None:
@@ -279,7 +283,10 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     props = held_props(interactive_map, layer)
     by = props.get("by")
     path = _track_path(
-        hv, interactive_map._display_gdf(data), props.get("track_column"), by
+        hv,
+        interactive_map._display_gdf(data, method="trajectory"),
+        props.get("track_column"),
+        by,
     )
     op_kwargs: dict = dict(props.get("canvas") or {})
     if by is not None:
@@ -329,12 +336,13 @@ class BigDataMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
-    def _as_element(self, layer: Any, *, vdims: list | None = None) -> Any:
+    def _as_element(self, layer: Any, *, method: str, vdims: list | None = None) -> Any:
         """Return ``layer`` as a HoloViews element (GeoDataFrames become point layers).
 
         Args:
             layer: A HoloViews/GeoViews element, or a (Feature)GeoDataFrame routed through the
                 vector plumbing (reproject in pyramids → ``gv.Points``).
+            method: The calling builder's name, quoted in the raster guard applied to a GeoDataFrame input.
             vdims: Value dimensions to carry when building from a GeoDataFrame.
 
         Returns:
@@ -346,7 +354,7 @@ class BigDataMixin(_MixinBase):
             # like a (Feature)GeoDataFrame is, so its CRS is guarded here too (IN-16).
             self._guard_element_crs(layer, caller="rasterize/datashade")
             return layer
-        gdf = self._display_gdf(layer)
+        gdf = self._display_gdf(layer, method=method)
         return self._vector_element("Points", gdf, vdims=vdims)
 
     def rasterize(
