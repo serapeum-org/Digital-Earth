@@ -108,6 +108,43 @@ class TestMissingColumnIsNamed:
             Map(crs=4326).sankey(lines_fc, column="nope")
 
 
+class TestNonNumericColumnIsNamed:
+    """#379 (L2) — a scale/column that exists but holds text is refused by name, not deep in numpy."""
+
+    def test_cartogram_scale_non_numeric(self):
+        """cartogram's sizing column holding text is named, not reported as a numpy conversion error."""
+        polys = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"label": ["a", "b"]},
+                geometry=[
+                    Polygon([(0, 0), (1, 0), (1, 1)]),
+                    Polygon([(2, 2), (3, 2), (3, 3)]),
+                ],
+                crs="EPSG:4326",
+            )
+        )
+        with pytest.raises(
+            ValueError,
+            match=r"cartogram\(\) needs scale='label' to name a column of numbers",
+        ):
+            Map(crs=4326).cartogram(polys, "label")
+
+    def test_quadtree_column_non_numeric(self):
+        """quadtree's aggregate column holding text is named, not reported as a numpy conversion error."""
+        pts = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"label": ["a", "b"]},
+                geometry=[Point(0, 0), Point(1, 1)],
+                crs="EPSG:4326",
+            )
+        )
+        with pytest.raises(
+            ValueError,
+            match=r"quadtree\(\) needs column='label' to name a column of numbers",
+        ):
+            Map(crs=4326).quadtree(pts, column="label")
+
+
 class TestColourNormWithoutValuesRefused:
     """#380 — a Normalize under color= is refused when the call has no values to scale, honoured otherwise."""
 
@@ -161,7 +198,9 @@ class TestColourNormWithoutValuesRefused:
         """
         from cleopatra.glyphs.base.glyph import ColorScaling
 
-        with pytest.raises(ValueError, match=r"Map\.lines\(\): color= is a ColorScaling"):
+        with pytest.raises(
+            ValueError, match=r"Map\.lines\(\): color= is a ColorScaling"
+        ):
             Map(crs=4326).lines(lines_fc, color=ColorScaling())
         with pytest.raises(ValueError, match=r"polygons\(\): color= is a ColorScaling"):
             Map(crs=4326).polygons(polygons_fc, color=ColorScaling())

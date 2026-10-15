@@ -1003,10 +1003,8 @@ def draw_cartogram(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         name="cartogram",
         geom_label="polygon",
     )
-    _require_column(gdf, props["scale"], "scale", _CARTOGRAM_CALLER)
-    factors = scene._scale_factors(
-        gdf[props["scale"]].to_numpy(dtype=float), tuple(props["limits"])
-    )
+    scale_values = _numeric_column(gdf, props["scale"], "scale", _CARTOGRAM_CALLER)
+    factors = scene._scale_factors(scale_values, tuple(props["limits"]))
     scaled = [
         affine_scale(g, xfact=f, yfact=f, origin="centroid")
         for g, f in zip(gdf.geometry, factors)
@@ -1055,9 +1053,11 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         data, geom_types=("Point",), name="quadtree", geom_label="point"
     )
     # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
-    if column is not None:
-        _require_column(gdf, column, "column", _QUADTREE_CALLER)
-    col_vals_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+    col_vals_full = (
+        _numeric_column(gdf, column, "column", _QUADTREE_CALLER)
+        if column is not None
+        else None
+    )
     xs, ys, col_vals = scene._finite_point_xy(gdf.geometry, col_vals_full)
     if xs.size == 0:
         raise ValueError("quadtree: no finite points in the display CRS")
@@ -2945,7 +2945,8 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``features`` contains non-polygon geometry.
+            ValueError: if ``features`` contains non-polygon geometry, or if ``scale`` names a column that
+                does not hold numbers (the sizing factor needs numeric values).
             KeyError: if ``scale`` or ``column`` names no feature attribute — the refusal names
                 ``cartogram()`` and lists the columns the features do have (via :func:`_require_column`).
 
@@ -3093,7 +3094,8 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``features`` is not all single ``Point`` geometries, or ``agg`` is an unknown name.
+            ValueError: if ``features`` is not all single ``Point`` geometries, if ``agg`` is an unknown
+                name, or if ``column`` names a column that does not hold numbers (the aggregate needs them).
             KeyError: if ``column`` names no feature attribute — the refusal names ``quadtree()`` and lists
                 the columns the features do have (via :func:`_require_column`).
 
