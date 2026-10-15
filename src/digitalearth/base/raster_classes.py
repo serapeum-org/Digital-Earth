@@ -269,7 +269,9 @@ def _is_code(category: Any) -> bool:
     return float(category).is_integer()
 
 
-def classify_band(values: Any, scheme: Any, k: Any, cmap: Any) -> BandClasses:
+def classify_band(
+    values: Any, scheme: Any, k: Any, cmap: Any, categories: Any = None
+) -> BandClasses:
     """Cut a band into the classes ``scheme`` asks for, and colour each one.
 
     Args:
@@ -283,6 +285,11 @@ def classify_band(values: Any, scheme: Any, k: Any, cmap: Any) -> BandClasses:
         cmap: The colours: a palette for codes (``None`` takes the shared categorical default), or the
             colormap graduated classes are sampled from — a name, a ``Colormap`` or a list of colours
             (``None`` takes :data:`DEFAULT_CLASS_CMAP`).
+        categories: Only for ``"categorical"`` — the class codes to key on, given outright instead of read
+            from this band. A caller colouring several bands by one shared scale (a ``facet``) pools the
+            codes over the stack and passes them here, so every band records the same categorical scale and
+            the gap-filling codes get the same colour on each; ``None`` (default) reads the codes from
+            ``values`` (a single band classes itself).
 
     Returns:
         The band's :class:`BandClasses`.
@@ -331,10 +338,10 @@ def classify_band(values: Any, scheme: Any, k: Any, cmap: Any) -> BandClasses:
             ```
     """
     if asks_categorical(scheme):
-        codes = raster_categories(values)
-        categories, colors = categorical_colors(codes, resolve_categorical_cmap(cmap))
+        codes = raster_categories(values) if categories is None else list(categories)
+        classes, colors = categorical_colors(codes, resolve_categorical_cmap(cmap))
         return BandClasses(
-            Scale.categorical(categories, colors),
+            Scale.categorical(classes, colors),
             tuple(code_edges(codes)),
             tuple(colors),
         )
