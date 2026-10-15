@@ -60,7 +60,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -5588,6 +5588,21 @@ shareable HTML page. It needs the optional <code>web</code> extra (<code>pip ins
 <code>pixi install -e web</code> in this repo). All data is reprojected to lon/lat through pyramids before a layer
 is built; MapLibre renders Web Mercator itself.</p>
 <p>This notebook runs headless (no browser) — it builds layer specs and writes HTML; it does not screenshot.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ab970929">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>What this tier is for — and what it is not.</strong> The web tier draws thematic maps (choropleths, points,
+lines, heatmaps, clustering), 3-D and big-data layers, and contours, and exports the result as a shareable
+HTML page. It is deliberately <strong>not</strong> a peer of the static tier for scientific <em>field</em> rendering: vector/flow
+fields, unstructured meshes and kernel-density / hex-binning have no native MapLibre primitive, so they live
+in the <code>static</code> (matplotlib) and <code>interactive</code> (HoloViz) tiers — reach for those backends when you need them.</p>
 </div>
 </div>
 </div>
