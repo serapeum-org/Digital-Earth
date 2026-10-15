@@ -1697,6 +1697,12 @@ class VectorMixin(_MixinBase):
             :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
+        Raises:
+            KeyError: if ``size_column`` names no feature attribute — the refusal names ``Map.points()``
+                and lists the columns the features do have (via :func:`_require_column`).
+            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` but the features carry no numeric
+                value for it to scale; a colour *scaling* needs values, so it is refused rather than dropped.
+
         """
         self._draw(
             LayerRecord(
@@ -2632,6 +2638,10 @@ class VectorMixin(_MixinBase):
             :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
+        Raises:
+            KeyError: if ``column`` names no feature attribute — the refusal names ``choropleth()`` and
+                lists the columns the features do have (via :func:`_require_column`).
+
         Examples:
             - Colour buffered point features by their ``fid`` column and count the drawn polygons:
                 ```python
@@ -2721,6 +2731,11 @@ class VectorMixin(_MixinBase):
             drew nothing, so it is absent from the figure and refused there. See
             :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
+
+        Raises:
+            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` — ``polygons`` draws a uniform
+                fill with no values to scale, so a colour *scaling* is refused; use :meth:`choropleth` to
+                colour polygons by a column.
         """
         _refuse_colour_norm(
             opts.get("color"),
@@ -2829,6 +2844,8 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries.
+            KeyError: if ``column`` names no feature attribute — the refusal names ``voronoi()`` and lists
+                the columns the features do have (via :func:`_require_column`).
 
         Examples:
             - Tessellate the point fixture and colour the cells by ``fid``:
@@ -2926,6 +2943,8 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: if ``features`` contains non-polygon geometry.
+            KeyError: if ``scale`` or ``column`` names no feature attribute — the refusal names
+                ``cartogram()`` and lists the columns the features do have (via :func:`_require_column`).
 
         Examples:
             - Scale buffered points by ``fid`` and colour them by the same column:
@@ -3072,6 +3091,8 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries, or ``agg`` is an unknown name.
+            KeyError: if ``column`` names no feature attribute — the refusal names ``quadtree()`` and lists
+                the columns the features do have (via :func:`_require_column`).
 
         Examples:
             - Aggregate the point fixture into a fine density grid:
@@ -3477,8 +3498,10 @@ class VectorMixin(_MixinBase):
             ValueError: if ``features`` is empty or contains non-line geometry; if ``width`` is not a
                 positive finite number (a line has no negative thickness); if ``color`` is a string that
                 is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a
-                column's name; or if ``column`` or a column ``width`` names a column that does not hold
-                numbers, which a ramp and a width scale both need.
+                column's name; if ``color`` is a ``matplotlib.colors.Normalize`` while ``column`` is
+                ``None`` — a colour *scaling* has no values to act on without a column, so it is refused
+                rather than dropped; or if ``column`` or a column ``width`` names a column that does not
+                hold numbers, which a ramp and a width scale both need.
             KeyError: if ``column`` or a column ``width`` names no feature attribute — the refusal names
                 ``Map.lines()``, the keyword and the column, and lists the columns there are.
 
@@ -3676,7 +3699,11 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``features`` contains non-line geometry.
+            ValueError: if ``features`` contains non-line geometry; or if ``color`` is a
+                ``matplotlib.colors.Normalize`` while ``column`` is ``None`` — a colour *scaling* has no
+                values to act on without a column, so it is refused rather than dropped.
+            KeyError: if ``column`` or ``scale`` names no feature attribute — the refusal names ``sankey()``
+                and lists the columns the features do have (via :func:`_require_column`).
 
         See Also:
             lines: the same geometry as a plain line layer, with line defaults and the Core keywords.
