@@ -46,9 +46,11 @@ lat_step   tiny (1e-4)   ~1,800,000 parallels, same hang
 ```
 
 So the step now carries a lower bound as well, by the same by-keyword ``ValueError`` — a ceiling on the
-whole-world line count (:data:`~digitalearth.static.maps.projection.MAX_GRATICULE_LINES`), which a step
-below :data:`MERIDIAN_FLOOR` / :data:`PARALLEL_FLOOR` would exceed. The bound is a function of the step
-alone, because the line count is: the view never enters it. The refusal is pure arithmetic, so it lands
+line count (:data:`~digitalearth.static.maps.projection.MAX_GRATICULE_LINES`). The count is ``span / step``:
+on an **unframed or global** view the span is the whole world (``360``/``180``), so a step below
+:data:`MERIDIAN_FLOOR` / :data:`PARALLEL_FLOOR` is refused regardless — the cases these tests pin. Since #393
+a **framed** view budgets against the degrees it holds instead, so a fine step a small region can show is
+let through (covered by ``test_graticule_view_clipping``). The refusal is still pure arithmetic, so it lands
 before a single line is projected — which is what the hang-guarded tests below prove, by refusing in
 milliseconds where the unbounded call ran for minutes.
 """
@@ -269,6 +271,9 @@ class TestANonIntegralStepIsStillLegal:
         meridian = FRACTIONAL_STEP if keyword != "lat_step" else DEFAULT_STEP
         parallel = FRACTIONAL_STEP if keyword != "lon_step" else DEFAULT_STEP
         expected = _line_count(meridian, parallel)
+        # On a world view the lines are not clipped, so a legal step draws every one it reaches — the
+        # count this asserts. (A framed view now cuts the lines to the window; #393 covers that separately.)
+        framed.set_global()
         framed.graticule(**{keyword: FRACTIONAL_STEP})
         (collection,) = framed.ax.collections
         drawn = len(collection.get_segments())
@@ -307,15 +312,18 @@ class TestARefusedReplacementLeavesTheGridItHad:
 
         Test scenario:
             ``lon_step=-45.0`` used to re-cut the collection to 5 segments without warning, so the grid on
-            the axes disagreed with the 18 lines the figure described.
+            the axes disagreed with the lines the figure described. Counted before and after the refusal so
+            it holds whether or not the view clips the lines (#393): the refusal must leave the count as it
+            found it.
         """
         framed.graticule(lon_step=DEFAULT_STEP)
+        before = len(framed.ax.collections[0].get_segments())
         with pytest.raises(ValueError):
             framed.graticule(lon_step=-45.0)
         (collection,) = framed.ax.collections
         drawn = len(collection.get_segments())
-        assert drawn == _line_count(DEFAULT_STEP, DEFAULT_STEP), (
-            f"the refused replacement left {drawn} lines on the axes"
+        assert drawn == before, (
+            f"the refused replacement left {drawn} lines on the axes, not the {before} it had"
         )
 
 

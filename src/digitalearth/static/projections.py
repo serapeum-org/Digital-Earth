@@ -432,18 +432,32 @@ def projection_frame(
 
 
 def graticule(
-    crs: Any, lon_step: float = 30.0, lat_step: float = 30.0, dens: int = 200
+    crs: Any,
+    lon_step: float = 30.0,
+    lat_step: float = 30.0,
+    dens: int = 200,
+    window: tuple[float, float, float, float] | None = None,
 ) -> list[np.ndarray]:
     """Return projected lon/lat grid polylines (meridians + parallels) for a CRS.
 
     Each meridian/parallel is densified in lon/lat, projected via pyramids, and split at non-finite points
     (the projection limb / antimeridian) so nothing wraps across the figure.
 
+    The meridian/parallel positions are the same world-phase ticks whatever the view — a multiple of the step
+    from the datelines/poles — so framing never shifts a line, only which lines are cut. With a ``window`` only
+    the lines the view holds (plus one step of margin on each side, so an edge line is not clipped off) are
+    generated: a fine step on a small region draws a handful of lines rather than a world's worth. Each line is
+    still densified across its full span in the other axis — matplotlib clips it to the axes — so a reframe
+    re-cuts to the new view by regenerating with its window, and an unframed/global view (``window=None``)
+    draws the whole world exactly as before.
+
     Args:
         crs: Target CRS (EPSG int or proj4 string).
         lon_step: Spacing between meridians, degrees.
         lat_step: Spacing between parallels, degrees.
         dens: Points per line before splitting (higher = smoother curves).
+        window: ``(lon_min, lat_min, lon_max, lat_max)`` in degrees to clip generation to, or ``None``
+            (default) for the whole world.
 
     Returns:
         A list of ``(M, 2)`` projected polylines.
@@ -459,15 +473,32 @@ def graticule(
             2
 
             ```
+        - A window clips generation to the lines the view holds, so a 2° region draws only a few:
+            ```python
+            >>> from digitalearth.static import projections
+            >>> few = projections.graticule(4326, lon_step=1, lat_step=1, window=(4.0, 50.0, 6.0, 52.0))
+            >>> world = projections.graticule(4326, lon_step=1, lat_step=1)
+            >>> len(few) < len(world)
+            True
+
+            ```
     """
+    if window is None:
+        lon_min, lat_min, lon_max, lat_max = -180.0, -90.0, 180.0, 90.0
+    else:
+        lon_min, lat_min, lon_max, lat_max = window
     lines: list[np.ndarray] = []
     for lon in np.arange(-180, 180 + lon_step, lon_step):
+        if not (lon_min - lon_step <= lon <= lon_max + lon_step):
+            continue
         lat = np.linspace(-89.5, 89.5, dens)
         x, y = reproject_coordinates(
             np.full_like(lat, lon).tolist(), lat.tolist(), from_crs=4326, to_crs=crs
         )
         lines += _split_finite(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
     for lat in np.arange(-90 + lat_step, 90, lat_step):
+        if not (lat_min - lat_step <= lat <= lat_max + lat_step):
+            continue
         lon = np.linspace(-180, 180, dens)
         x, y = reproject_coordinates(
             lon.tolist(), np.full_like(lon, lat).tolist(), from_crs=4326, to_crs=crs
