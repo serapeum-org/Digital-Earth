@@ -560,6 +560,12 @@ class _Graticule:
                 carries no ``labels`` key and is read as asking for them, which is this tier's default.
 
         Raises:
+            ValueError: from :func:`_checked_step`, when the stored step would draw more than
+                :data:`MAX_GRATICULE_LINES` lines across the span the view covers (review H1). This is the
+                budget the ``graticule()`` entry applies, applied again here because #393 made the count
+                view-dependent: a step legal on a small view is ruinous once a later framing call enlarges
+                the view, and this choke point is the one place every re-cut passes through. Raised before a
+                line is projected, so a refused reframe leaves the grid the map is still drawing untouched.
             ZeroDivisionError: from the projection, for a step of zero. Raised here, before anything is
                 drawn or recorded, which is what lets a refused *replacement* leave the grid the map is
                 still drawing exactly as it was (round 2, M1). Not reachable through
@@ -571,6 +577,20 @@ class _Graticule:
         self._lon_step = props["lon_step"]
         self._lat_step = props["lat_step"]
         self._labelled = bool(props.get("labels", True))
+        window = None if scene.globe else self.window()
+        # The line-count budget is enforced **here**, at the one place every draw of a graticule generates
+        # its lines — the `graticule()` entry, a reframe's re-cut (`_relabel_graticule`), an animation frame,
+        # a figure drawn by hand. #393 made the count view-dependent, so a step legal on a small view
+        # (`spacing=0.1` draws ~20 lines on a 2-degree view) regenerates thousands once the view is enlarged;
+        # checking only at the entry point let a later `set_global()`/`set_domain()` re-cut the stored step
+        # against the whole world with no ceiling, rebuilding the unbounded grid the R2-L4 budget exists to
+        # refuse and hanging the process (review H1). `_checked_step` refuses by the keyword that carried the
+        # step, against the span the lines will actually cover — the world for a globe or an unframed view,
+        # the framed region otherwise. The stored steps are always finite and positive (they passed this on
+        # the way in), so only the budget can trip here, and it trips before a single line is projected.
+        lon_span, lat_span = _window_spans(window)
+        _checked_step("lon_step", self._lon_step, span=lon_span)
+        _checked_step("lat_step", self._lat_step, span=lat_span)
         #: The projected polylines, meridians then parallels, split at the projection limb — cut to the view
         #: the axes holds (a globe draws its whole grid and clips at the limb instead, so it is unframed
         #: here). ``window()`` is ``None`` only when the display CRS can place no sample of the view, where
@@ -579,7 +599,7 @@ class _Graticule:
             scene.crs,
             lon_step=self._lon_step,
             lat_step=self._lat_step,
-            window=None if scene.globe else self.window(),
+            window=window,
         )
 
     def draw(self, layer: LayerSpec) -> DrawnLayer:

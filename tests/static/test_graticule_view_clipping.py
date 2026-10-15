@@ -133,6 +133,26 @@ class TestReframingRecutsTheGrid:
             f"narrowing the view should have re-cut the grid below its {before} lines; got {after}"
         )
 
+    def test_enlarging_the_view_re_budgets_the_stored_step(self):
+        """A fine step legal on a small view is refused when a later framing call enlarges the view (H1).
+
+        Test scenario:
+            #393 made the lines view-dependent, so a step cheap on a 2x2-degree view
+            (``0.1`` -> ~20 lines) regenerates thousands across the world. The budget was only applied at
+            the ``graticule()`` entry, so ``set_global()`` re-cut the grid with the stored step and the new
+            window and never re-checked it — the R2-L4 hang through the back door. The budget is enforced at
+            generation now, so enlarging the view refuses the stored step by name rather than regenerating an
+            unbounded grid.
+        """
+        scene = Map(crs=4326)
+        scene.set_bounds(SMALL_VIEW)
+        scene.graticule(spacing=FINE_STEP)
+        try:
+            with pytest.raises(ValueError, match=r"graticule\(\) was given lon_step="):
+                scene.set_global()
+        finally:
+            scene.close()
+
     def test_a_bare_grid_is_recut_too(self):
         """A ``labels=False`` grid is re-cut on reframe even though it carries no degrees.
 
