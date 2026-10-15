@@ -119,6 +119,35 @@ class TestGribDecodeCached:
         )
 
 
+class TestGribCacheInvalidation:
+    """Reassigning a dataset's band metadata in place is not served a stale cached decode."""
+
+    def test_in_place_mutation_is_not_served_stale(self, grib_dataset):
+        """After band_meta_data is reassigned on the same Dataset, the identity refreshes with the units.
+
+        Test scenario:
+            The per-dataset decode cache is keyed by Dataset identity with no invalidation. Reassigning
+            band_meta_data in place and re-reading returned the stale cached identity (element stayed 'TMP')
+            while units re-read fresh from GRIB_UNIT — an internally inconsistent Source. The identity must
+            refresh too.
+        """
+        first = get_source(grib_dataset)
+        assert first.metadata("element") == "TMP"
+        assert first.units == "C"
+        grib_dataset.band_meta_data = [
+            {
+                "GRIB_ELEMENT": "PRES",
+                "GRIB_SHORT_NAME": "0-SFC",
+                "GRIB_UNIT": "[Pa]",
+                "GRIB_VALID_TIME": "1609480800 sec UTC",
+                "GRIB_FORECAST_SECONDS": "21600 sec",
+            }
+        ]
+        second = get_source(grib_dataset)
+        assert second.metadata("element") == "PRES", "stale cached identity served after mutation"
+        assert second.units == "Pa", "units should refresh with the identity"
+
+
 class TestNonGribRasterUnaffected:
     """A plain raster gains none of the GRIB keys and pays no decode cost."""
 

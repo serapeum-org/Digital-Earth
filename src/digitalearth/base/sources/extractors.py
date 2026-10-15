@@ -411,9 +411,15 @@ def _is_grib(band_meta: Any) -> bool:
     )
 
 
-def _decode_grib(ds: Dataset) -> list[dict[str, Any]]:
-    """Return pyramids' per-band GRIB metadata for ``ds``, decoding once and caching it per dataset."""
-    cached = _GRIB_DECODE_CACHE.get(ds)
+def _decode_grib(ds: Dataset, *, refresh: bool = False) -> list[dict[str, Any]]:
+    """Return pyramids' per-band GRIB metadata for ``ds``, decoding once and caching it per dataset.
+
+    Args:
+        ds: The pyramids ``Dataset`` to decode.
+        refresh: When ``True``, ignore any cached decode and re-decode — used to drop a cache entry that a
+            caller found stale (the band metadata was reassigned in place after the first decode).
+    """
+    cached = None if refresh else _GRIB_DECODE_CACHE.get(ds)
     if cached is None:
         from pyramids.grib import grib_band_metadata
 
@@ -444,6 +450,14 @@ def _grib_identity(ds: Dataset, band_meta: Any, idx: int) -> dict:
     if not _is_grib(band_meta):
         return {}
     entry = _band_item(_decode_grib(ds), idx) or {}
+    # Guard against a stale cache: `element`/`short_name` in the decoded entry come from the same GDAL keys the
+    # live `band_meta` carries, so a disagreement means the band metadata was reassigned in place after the
+    # first decode. Re-decode once to drop the stale entry, keeping identity and units consistent.
+    if (entry.get("element"), entry.get("short_name")) != (
+        band_meta.get("GRIB_ELEMENT"),
+        band_meta.get("GRIB_SHORT_NAME"),
+    ):
+        entry = _band_item(_decode_grib(ds, refresh=True), idx) or {}
     return {
         out: entry[key]
         for key, out in _GRIB_META_KEYS.items()
