@@ -189,6 +189,29 @@ class TestReframingRecutsTheGrid:
         finally:
             scene.close()
 
+    def test_a_refused_enlargement_leaves_the_view_unchanged(self):
+        """When the re-cut budget refuses an enlargement, the view is restored, not half-applied (R2-M1).
+
+        Test scenario:
+            ``set_bounds`` sets the new limits before re-cutting the grid, so a budget refusal on the re-cut
+            used to leave the map framed on the enlarged view with the old grid still on it. The reframe is
+            atomic now: the refusal restores the limits this call tried to set, so a caught error leaves the
+            map exactly as it was.
+        """
+        scene = Map(crs=4326)
+        scene.set_bounds(SMALL_VIEW)
+        scene.graticule(spacing=FINE_STEP)
+        before = tuple(float(v) for v in scene.ax.get_xlim())
+        try:
+            with pytest.raises(ValueError):
+                scene.set_global()
+            after = tuple(float(v) for v in scene.ax.get_xlim())
+            assert after == before, (
+                f"the refused enlargement left the view at {after}, not the {before} it had"
+            )
+        finally:
+            scene.close()
+
     def test_a_bare_grid_is_recut_too(self):
         """A ``labels=False`` grid is re-cut on reframe even though it carries no degrees.
 

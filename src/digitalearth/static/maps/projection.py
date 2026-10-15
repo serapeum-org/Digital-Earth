@@ -1268,7 +1268,12 @@ class ProjectionMixin(_MixinBase):
             ValueError: if the sequence form does not hold exactly four values; if ``bounds=None`` and the
                 figure draws nothing with an extent, because silently doing nothing is indistinguishable
                 from the call being dropped; or, from `Bounds`, for a non-finite edge or a ``padding``
-                below ``-0.5``, which would turn the frame inside out.
+                below ``-0.5``, which would turn the frame inside out. Also when the map carries a
+                graticule whose stored step would draw more than
+                :data:`MAX_GRATICULE_LINES` lines across the view this call frames — a fine step legal on a
+                small view is over budget once the view is enlarged (review H1). The reframe is **atomic**:
+                such a refusal restores the view this call tried to set, so the map is left exactly as it
+                was rather than framed on the new view with the old grid (review R2-M1).
 
         Warns:
             UserWarning: naming every degree a **labelled graticule**'s re-label cannot place in the view
@@ -1350,13 +1355,28 @@ class ProjectionMixin(_MixinBase):
         """
         frame = self._frame_asked(bounds, padding)
         xmin, xmax, ymin, ymax = frame.limits()
+        # The view this call is about to replace, kept so the reframe is atomic. Re-cutting the graticule
+        # (`_relabel_graticule`) can refuse — a fine stored step is over budget once the view is enlarged
+        # (review H1) — and that refusal must not leave the map framed on the new view with the old grid
+        # still on it: the limits move *before* the re-cut, so without this a caught error left the two
+        # disagreeing (review R2-M1). On a refusal the view this call tried to set is rolled back and the
+        # error re-raised, so the map is exactly as the call found it.
+        previous_xlim = self.ax.get_xlim()
+        previous_ylim = self.ax.get_ylim()
+        previous_bounds = self._frame_bounds
         self.ax.set_xlim(xmin, xmax)
         self.ax.set_ylim(ymin, ymax)
         # Read back, not `frame.box`: matplotlib will not hold a singular limit and expands one as it is set,
         # so a zero-span frame — a fit onto one point, or `padding=-0.5` — was recorded as a rectangle the
         # axes was not holding and the figure never showed (review R2-M10).
         self._frame_bounds = self._frame_held(frame.box.crs)
-        self._relabel_graticule()
+        try:
+            self._relabel_graticule()
+        except BaseException:
+            self.ax.set_xlim(*previous_xlim)
+            self.ax.set_ylim(*previous_ylim)
+            self._frame_bounds = previous_bounds
+            raise
         return self
 
     def _relabel_graticule(self) -> None:
