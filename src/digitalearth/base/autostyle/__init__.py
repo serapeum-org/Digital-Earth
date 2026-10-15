@@ -339,22 +339,33 @@ def auto_style(source: Source) -> dict[str, Any]:
     variable_raw = str(source.metadata("variable") or "")
     style: dict[str, Any] = dict(library.get("default", {}))
 
+    # pyramids auto-names a GRIB band "Band_N", so its real identity is the message short name / element.
+    # Offer those as extra name candidates: for a non-GRIB source both are absent and this is just the
+    # variable, so nothing changes; a GRIB field gets a chance to match on its short name instead of "Band_1".
+    candidates = [variable_raw]
+    for key in ("short_name", "element"):
+        extra = source.metadata(key)
+        if extra:
+            candidates.append(str(extra))
+    standard_name = source.metadata("standard_name")
+
     # First, the richer ECMWF Magics identity matching (name -> standard_name -> units): when it recognises
     # the field, it supplies a canonical colormap *and* contour levels and we are done.
-    magics = magics_style(variable_raw, source.metadata("standard_name"), source.units)
-    if magics is not None:
-        style.update(magics)
-        return _with_source_units(style, source)
+    for candidate in candidates:
+        magics = magics_style(candidate, standard_name, source.units)
+        if magics is not None:
+            style.update(magics)
+            return _with_source_units(style, source)
 
     # Otherwise fall back to the lighter variables.yml substring library (case-insensitive, first match wins).
-    variable = variable_raw.lower()
+    haystack = " ".join(candidates).lower()
     for name, params in library.items():
         if name == "default":
             continue
         patterns = params.get("match", [])
         if isinstance(patterns, str):
             patterns = [patterns]
-        if any(p.lower() in variable for p in patterns):
+        if any(p.lower() in haystack for p in patterns):
             style.update({k: v for k, v in params.items() if k != "match"})
             break
     return _with_source_units(style, source)

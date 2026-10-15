@@ -356,21 +356,85 @@ def _attr(metadata: Any, key: str) -> str | None:
     return None
 
 
+#: CF identity attributes carried onto a ``Source``: ``standard_name`` drives the Magics style matcher, and
+#: ``long_name`` is the most human name :func:`~digitalearth.base.captions.caption` reaches for first.
+_IDENTITY_KEYS = ("standard_name", "long_name")
+
+
 def _identity(*mappings: Any) -> dict:
-    """Collect the CF identity the style matcher reads, from the first mapping that declares it.
+    """Collect the CF identity keys a title/style reads, each from the first mapping that declares it.
 
     Args:
         *mappings: Attribute mappings in precedence order (e.g. the band's metadata, then the dataset's).
 
     Returns:
-        A ``{"standard_name": ...}`` dict, or an empty one when nothing declares a standard name — so a
-        caller-supplied value is never overwritten with ``None``.
+        A dict of the :data:`_IDENTITY_KEYS` any mapping declares (``standard_name``, ``long_name``), or an
+        empty one when none do — so a caller-supplied value is never overwritten with ``None``.
     """
-    for mapping in mappings:
-        found = _attr(mapping, "standard_name")
-        if found is not None:
-            return {"standard_name": found}
-    return {}
+    found: dict[str, str] = {}
+    for key in _IDENTITY_KEYS:
+        for mapping in mappings:
+            value = _attr(mapping, key)
+            if value is not None:
+                found[key] = value
+                break
+    return found
+
+
+#: GRIB keys :func:`pyramids.grib.grib_band_metadata` decodes that are worth carrying onto a ``Source`` — the
+#: message-native identity plus the forecast time/horizon. ``forecast_seconds`` is surfaced under the friendlier
+#: name ``step``. ``band`` (the 1-based index) is dropped: the ``Source`` already records it.
+_GRIB_META_KEYS = {
+    "element": "element",
+    "short_name": "short_name",
+    "comment": "comment",
+    "discipline": "discipline",
+    "ref_time": "ref_time",
+    "valid_time": "valid_time",
+    "forecast_seconds": "step",
+}
+
+
+def _grib_identity(ds: Dataset, band_meta: Any, idx: int) -> dict:
+    """Decode a GRIB band's NWP metadata through pyramids, when the band carries any.
+
+    Detection is cheap — a GRIB band's GDAL metadata carries ``GRIB_*`` keys — so a non-GRIB raster never pays
+    for the decode. The decoding itself is **pyramids'** (:func:`pyramids.grib.grib_band_metadata`), not
+    reimplemented here: it parses the reference/valid times to timezone-aware datetimes and the forecast
+    horizon to seconds. Only the keys in :data:`_GRIB_META_KEYS` that are present (non-``None``) are returned,
+    with ``forecast_seconds`` surfaced as ``step``, so :func:`~digitalearth.base.captions.caption` can stamp a
+    ``valid_time`` and a panel can be keyed by ``step`` / ``element``.
+
+    Args:
+        ds: The pyramids ``Dataset`` the band belongs to.
+        band_meta: The band's GDAL metadata mapping (already read by the caller), used only to detect GRIB.
+        idx: 0-based band index into the decoded list.
+
+    Returns:
+        The decoded NWP metadata for the band, or an empty dict when the band is not GRIB.
+    """
+    if not isinstance(band_meta, Mapping) or not any(
+        str(key).startswith("GRIB_") for key in band_meta
+    ):
+        return {}
+    from pyramids.grib import grib_band_metadata
+
+    entry = _band_item(grib_band_metadata(ds), idx) or {}
+    return {
+        out: entry[key]
+        for key, out in _GRIB_META_KEYS.items()
+        if entry.get(key) is not None
+    }
+
+
+def _unbracket(units: str | None) -> str | None:
+    """Strip the ``[...]`` GDAL wraps a GRIB unit in (``"[C]"`` → ``"C"``); other spellings pass through."""
+    if not units:
+        return units
+    stripped = units.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        stripped = stripped[1:-1].strip()
+    return stripped or None
 
 
 def _features_crs(fc: Any) -> Any:
@@ -414,11 +478,21 @@ def _from_raster(
     z = read_masked_band(ds, band)
     band_meta = _band_item(ds.band_meta_data, idx) or {}
     dataset_meta = getattr(ds, "meta_data", None)
+    grib = _grib_identity(ds, band_meta, idx)
+    grib_unit = _unbracket(_attr(band_meta, "GRIB_UNIT")) if grib else None
     units = (
         _band_item(ds.band_units, idx)
         or _attr(band_meta, "units")
         or _attr(dataset_meta, "units")
+        or grib_unit
     )
+    identity = _identity(band_meta, dataset_meta)
+    # pyramids auto-names a GRIB band "Band_N", so the human name has to come from the message itself: its
+    # comment (the description), else the short name / element. Surfaced as long_name, which caption reads first.
+    if grib and "long_name" not in identity:
+        grib_name = grib.get("comment") or grib.get("short_name") or grib.get("element")
+        if grib_name:
+            identity = {"long_name": grib_name, **identity}
     return Source(
         z=_axis(z, "z", units),
         x=_axis(ds.x, "x"),  # 1-D cell-centre coords, length == columns
@@ -429,7 +503,8 @@ def _from_raster(
             "kind": "raster",
             "variable": _band_item(ds.band_names, idx, ""),
             "band": band,
-            **_identity(band_meta, dataset_meta),
+            **grib,
+            **identity,
             **(metadata or {}),
         },
     )

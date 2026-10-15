@@ -1,0 +1,114 @@
+"""Tests for surfacing GRIB NWP metadata onto a Source, and into captions / autostyle (gap #458).
+
+The GRIB *driver* is not installed in CI, so real ``.grib2`` files cannot be opened here (pyramids' own GRIB
+doctests are ``+SKIP`` for the same reason). The ``grib_dataset`` / ``grib_stack`` fixtures instead carry the
+``GRIB_*`` band-metadata keys on an in-memory GDAL dataset, which pyramids' ``grib_band_metadata`` decodes
+driver-free — so these exercise the real extraction path, through pyramids' own decoder, with no GRIB file.
+"""
+
+import numpy as np
+
+from digitalearth.base.captions import caption, format_metadata
+from digitalearth.base.sources import get_source
+from digitalearth.base.sources.extractors import _grib_identity, _unbracket
+
+
+class TestGribMetadataOnSource:
+    """get_source folds a GRIB band's decoded message metadata onto the Source."""
+
+    def test_identity_keys_are_surfaced(self, grib_dataset):
+        """element, short_name, discipline and comment reach the Source as metadata."""
+        src = get_source(grib_dataset)
+        assert src.metadata("element") == "TMP"
+        assert src.metadata("short_name") == "2-HTGL"
+        assert src.metadata("discipline") == "0"
+        assert src.metadata("comment") == "Temperature"
+
+    def test_valid_time_and_step_are_decoded(self, grib_dataset):
+        """valid_time is a decoded datetime and the forecast horizon is surfaced as ``step`` seconds."""
+        src = get_source(grib_dataset)
+        valid_time = src.metadata("valid_time")
+        assert valid_time is not None
+        assert valid_time.year == 2021
+        assert src.metadata("step") == 21600
+
+    def test_units_come_from_the_grib_unit_unbracketed(self, grib_dataset):
+        """A GRIB ``[C]`` unit becomes the Source's units without the brackets GDAL wraps it in."""
+        assert get_source(grib_dataset).units == "C"
+
+    def test_human_name_falls_back_to_the_grib_comment(self, grib_dataset):
+        """With no CF long/standard name, the GRIB comment becomes long_name, so the caption reads it."""
+        src = get_source(grib_dataset)
+        assert src.metadata("long_name") == "Temperature"
+        assert caption(src).title.startswith("Temperature")
+
+    def test_caption_stamps_the_valid_time(self, grib_dataset):
+        """caption() appends the decoded valid time to the title, as it does for any ``valid_time``."""
+        title = caption(get_source(grib_dataset)).title
+        assert "2021-01-01" in title
+
+    def test_format_metadata_reads_the_grib_keys(self, grib_dataset):
+        """A format template can pull the surfaced GRIB keys."""
+        src = get_source(grib_dataset)
+        assert format_metadata(src, "{element} +{step}s") == "TMP +21600s"
+
+    def test_each_band_carries_its_own_step(self, grib_stack):
+        """A multi-step stack surfaces a distinct step/valid_time per band."""
+        steps = [get_source(grib_stack, band=b).metadata("step") for b in (1, 2, 3)]
+        assert steps == [21600, 43200, 64800]
+
+
+class TestNonGribRasterUnaffected:
+    """A plain raster gains none of the GRIB keys and pays no decode cost."""
+
+    def test_no_grib_keys_leak_onto_a_plain_raster(self, dataset):
+        """A GeoTIFF Source has no element/valid_time/step metadata."""
+        src = get_source(dataset)
+        assert src.metadata("element") is None
+        assert src.metadata("valid_time") is None
+        assert src.metadata("step") is None
+
+    def test_grib_identity_is_empty_without_grib_keys(self, dataset):
+        """_grib_identity short-circuits to {} when the band metadata carries no GRIB_* key."""
+        assert _grib_identity(dataset, {"units": "mm"}, 0) == {}
+
+
+class TestUnbracket:
+    """_unbracket strips the [...] GDAL wraps a GRIB unit in, leaving other spellings alone."""
+
+    def test_brackets_are_stripped(self):
+        """A bracketed unit loses its brackets."""
+        assert _unbracket("[C]") == "C"
+
+    def test_plain_unit_passes_through(self):
+        """An unbracketed unit is returned unchanged."""
+        assert _unbracket("mm") == "mm"
+
+    def test_none_and_empty_pass_through(self):
+        """None stays None, and an empty/whitespace-only string collapses to None."""
+        assert _unbracket(None) is None
+        assert _unbracket("[]") is None
+
+
+class TestAutostyleUsesGribIdentity:
+    """auto_style tries the GRIB short_name / element when the band name does not match."""
+
+    def test_short_name_drives_the_match_when_variable_is_a_bare_band_name(self):
+        """A GRIB band named 'Band_1' but carrying a recognisable short_name styles by that short_name."""
+        from digitalearth.base.autostyle import auto_style
+        from digitalearth.base.sources import DimensionInfo, Source
+
+        def src(metadata):
+            return Source(
+                DimensionInfo(np.zeros((2, 2)), "z"),
+                DimensionInfo(np.array([0.0]), "x"),
+                DimensionInfo(np.array([0.0]), "y"),
+                metadata=metadata,
+            )
+
+        # "t2m" is recognised (temperature); as a short_name it must style the same as when it is the variable,
+        # even though the variable itself is the unhelpful auto band name.
+        by_variable = auto_style(src({"variable": "t2m"}))
+        by_short_name = auto_style(src({"variable": "Band_1", "short_name": "t2m"}))
+        assert by_short_name.get("cmap") == by_variable.get("cmap")
+        assert by_variable.get("cmap") is not None

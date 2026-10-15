@@ -134,6 +134,27 @@ class TestQuickpanels:
             quickpanels([dataset, dataset], titles=["only one"])
 
 
+class TestTitlesFrom:
+    """titles_from keys each panel by a metadata field of its own source (e.g. a GRIB forecast step)."""
+
+    def test_titles_come_from_the_named_metadata_key(self, grib_stack):
+        """A forecast stack titled by step reads each band's own step, not the full caption."""
+        fig, maps = quickpanels(grib_stack, cols=3, titles_from="step")
+        assert [m.ax.get_title() for m in maps[:3]] == ["21600", "43200", "64800"]
+        plt.close(fig)
+
+    def test_missing_key_titles_as_empty_then_disambiguated(self, dataset):
+        """Fields lacking the key title as empty strings, which the repeat-numbering then disambiguates."""
+        fig, maps = quickpanels([dataset, dataset], titles_from="no_such_key")
+        assert [m.ax.get_title() for m in maps] == [" (1)", " (2)"]
+        plt.close(fig)
+
+    def test_titles_and_titles_from_are_mutually_exclusive(self, dataset):
+        """Passing both titles= and titles_from= is refused, since each sets the panel titles."""
+        with pytest.raises(ValueError, match="not both"):
+            quickpanels([dataset, dataset], titles=["a", "b"], titles_from="band")
+
+
 class TestUniqueTitles:
     """_unique_titles numbers only the repeats, leaving unique titles untouched."""
 
