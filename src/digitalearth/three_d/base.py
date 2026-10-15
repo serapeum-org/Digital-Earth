@@ -1932,10 +1932,11 @@ class Scene3DBase:
                 (lo[1] - lo[0]) ** 2 + (lo[3] - lo[2]) ** 2 + (lo[5] - lo[4]) ** 2
             ) ** 0.5
             distance = 1.5 * span if span > 0.0 else 1.0
-        # Within ~0.6 deg of a pole the default vertical up is parallel to the straight down/up sightline, which
-        # Camera.look_at rejects; there, use a horizontal up perpendicular to the azimuth so the documented
-        # straight-down (elevation=90) / straight-up (-90) frame works. Everywhere else the vertical up reads
-        # naturally (terrain "up" is up on screen).
+        # Camera.look_at rejects a view_up parallel to the sightline, which the default vertical (0, 0, 1) only
+        # truly becomes at the exact pole. Switch to a horizontal up perpendicular to the azimuth a little early
+        # (within ~0.6 deg of the pole) as a safety margin, so the documented straight-down (elevation=90) /
+        # straight-up (-90) frame works; that horizontal up is perpendicular to the sightline for any azimuth.
+        # Everywhere else the vertical up reads naturally (terrain "up" is up on screen).
         az_rad = np.radians(float(azimuth))
         if abs(float(np.cos(np.radians(float(elevation))))) < 0.01:
             view_up = (float(np.cos(az_rad)), float(-np.sin(az_rad)), 0.0)
