@@ -45,7 +45,11 @@ dependencies = [
     # WatermarkMixin and took the free stamp_mark() function private, so static/scene.py and
     # static/textured_globe.py cannot import the old name. An uncapped >=0.37 let CI resolve
     # 0.39 against code that still called the function, which is how it broke.
-    "cleopatra[tiles] >=0.40.0",
+    # 0.42.0 is a floor, not a preference: it added `basemap.reference.natural_earth_polygons` (the
+    # hole-aware polygon analogue of `natural_earth`), which `web`/`three_d` `land()`/`ocean()` fills
+    # consume to draw ocean holes over continents correctly (cleopatra#384). An older floor resolves
+    # against code that imports a name 0.41 and earlier do not have.
+    "cleopatra[tiles] >=0.42.0",
     # static/maps/decoration.py constructs the TileProvider a keyed basemap is handed to cleopatra as,
     # so it is imported directly here and declared for the same reason matplotlib is above: it currently
     # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is

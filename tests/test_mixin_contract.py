@@ -604,6 +604,9 @@ CONTRACT_CARVE_OUTS = {
     "digitalearth.three_d.flat:FlatMixin.choropleth": _THREE_D_ACTOR,
     "digitalearth.three_d.decoration:DecorationMixin.coastlines": _THREE_D_ACTOR,
     "digitalearth.three_d.decoration:DecorationMixin.borders": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration:DecorationMixin.land": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration:DecorationMixin.ocean": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration:DecorationMixin.lakes": _THREE_D_ACTOR,
 }
 
 

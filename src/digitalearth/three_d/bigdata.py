@@ -151,6 +151,11 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "Natural-Earth coastlines and borders are lines, not a surface, and are already loaded at the "
             "resolution the caller chose (110m/50m/10m); pick a coarser resolution for fewer vertices"
         ),
+        "reference_fill": (
+            "Natural-Earth land/ocean/lake fills are already loaded at the resolution the caller chose "
+            "(110m/50m/10m), and thinning a filled area polygon would distort its boundary; pick a coarser "
+            "resolution for fewer vertices"
+        ),
         "text": (
             "a label is one anchor point and one string, so there is never anything to reduce; a scene with "
             "too many labels to read is a composition the caller chose rather than data to thin"

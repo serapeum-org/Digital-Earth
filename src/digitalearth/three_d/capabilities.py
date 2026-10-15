@@ -44,6 +44,10 @@ CAPABILITIES = Capabilities(
             # Natural-Earth coastlines/borders drawn as reference lines in a non-globe scene (TD-5b, #205),
             # through `coastlines()`/`borders()` on the decoration mixin.
             "reference_lines",
+            # Natural-Earth land/ocean/lakes drawn as hole-aware polygon fills in a non-globe scene — the
+            # fill half of TD-5b/#205, unblocked by cleopatra 0.42.0's `natural_earth_polygons` (#384),
+            # through `land()`/`ocean()`/`lakes()` on the decoration mixin.
+            "reference_fill",
             # A string placed at a coordinate (#203). It is a layer rather than furniture for the same reason
             # it is one on the interactive and web tiers: it is drawn where the data is, not in a corner.
             "text",
