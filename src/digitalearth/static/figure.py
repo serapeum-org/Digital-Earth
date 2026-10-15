@@ -27,7 +27,7 @@ from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import read_masked_band
-from digitalearth.base.captions import caption
+from digitalearth.base.captions import Caption, caption
 from digitalearth.base.clim import frozen_scale, measure_clim
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.raster_classes import (
@@ -1121,6 +1121,87 @@ def _unique_titles(titles: list[str]) -> list[str]:
     return out
 
 
+def _titles_from_key(
+    sources: list[Any], key: str, captions: list[Caption] | None
+) -> list[str]:
+    """One title per source from its ``key`` metadata, falling back to the caption title where absent.
+
+    Reuses the already-built ``captions`` for a field missing the key; only computes a caption lazily on the
+    ``colorbar=False`` path, where none were built. ``0`` / ``False`` are kept as valid titles — only ``None``
+    and ``""`` fall back.
+
+    Args:
+        sources: One :class:`~digitalearth.base.sources.Source` per panel, in order.
+        key: The metadata key to title each panel by.
+        captions: The captions already built for the colorbar labels, or ``None`` when none were.
+
+    Returns:
+        One raw (not-yet-deduplicated) title per source.
+    """
+    labels: list[str] = []
+    for index, src in enumerate(sources):
+        value = src.metadata(key)
+        if value not in (None, ""):
+            labels.append(str(value))
+        elif captions is not None:
+            labels.append(captions[index].title)
+        else:
+            labels.append(caption(src).title)
+    return labels
+
+
+def _resolve_titles_and_captions(
+    frames: list[Any],
+    bands: list[int],
+    titles: Sequence[Any] | None,
+    titles_from: str | None,
+    colorbar: bool,
+) -> tuple[list[str], list[Caption] | None]:
+    """Resolve each panel's title and, when one is drawn, its caption — reading sources only as needed.
+
+    Each field's :class:`~digitalearth.base.sources.Source` is read only when something consumes it: the
+    colorbar labels, the auto captions, or a ``titles_from`` lookup. With explicit ``titles=`` and
+    ``colorbar=False`` nothing is read. Everything is resolved before the figure is built, so a metadata error
+    cannot leak a half-built figure.
+
+    Args:
+        frames: The per-panel field frames.
+        bands: The 1-based band to read from each frame.
+        titles: Explicit per-panel titles, or ``None``.
+        titles_from: A metadata key to title each panel by, or ``None``.
+        colorbar: Whether each panel gets a colorbar (its label needs a caption).
+
+    Returns:
+        ``(panel_titles, captions)`` — the resolved titles, and the per-panel captions when colorbar labels
+        need them (else ``None``).
+    """
+    need_caption = (titles is None and titles_from is None) or colorbar
+    need_source = need_caption or titles_from is not None
+    sources = (
+        [get_source(f, band=b) for f, b in zip(frames, bands)] if need_source else None
+    )
+    captions = (
+        [caption(src) for src in sources]
+        if need_caption and sources is not None
+        else None
+    )
+    if titles is not None:
+        return [str(title) for title in titles], captions
+    if titles_from is not None:
+        assert (
+            sources is not None
+        )  # titles_from implies need_source, so sources was built
+        return _unique_titles(
+            _titles_from_key(sources, titles_from, captions)
+        ), captions
+    # Auto titles: a bare single-band Dataset carries no CF name, so two caption alike as "Band 1";
+    # disambiguate the collisions positionally so the panels stay distinguishable.
+    assert (
+        captions is not None
+    )  # no titles/titles_from implies need_caption, so captions was built
+    return _unique_titles([cap.title for cap in captions]), captions
+
+
 def quickpanels(
     fields: Any,
     *,
@@ -1235,46 +1316,11 @@ def quickpanels(
             "pass titles= or titles_from=, not both — each sets the panel titles"
         )
     method, fixed = _FACET_KINDS[kind]
-    # Read each field's source only when something uses it: the colorbar labels, the auto captions, or a
-    # titles_from metadata lookup. With explicit titles= and colorbar=False, nothing is read, so the work is
-    # skipped. Sources/captions are built before grid() so a metadata error cannot leak a half-built figure.
-    need_caption = (titles is None and titles_from is None) or colorbar
-    need_source = need_caption or titles_from is not None
-    sources = (
-        [get_source(f, band=b) for f, b in zip(frames, bands)] if need_source else None
+    # Titles and (when a colorbar needs them) captions are resolved before grid() builds the figure, so a
+    # metadata error cannot leak a half-built one. See _resolve_titles_and_captions for which sources are read.
+    panel_titles, captions = _resolve_titles_and_captions(
+        frames, bands, titles, titles_from, colorbar
     )
-    captions = None
-    if need_caption:
-        assert (
-            sources is not None
-        )  # need_caption implies need_source, so sources was built
-        captions = [caption(src) for src in sources]
-    if titles is not None:
-        panel_titles = [str(title) for title in titles]
-    elif titles_from is not None:
-        assert (
-            sources is not None
-        )  # titles_from set implies need_source, so sources was built
-        # Fall back to the field's caption title when it lacks the key, rather than the blank that
-        # _unique_titles would render as a bare " (1)". Reuse the captions already built for the colorbar
-        # labels when there are any; only compute one lazily on the colorbar=False path (captions is None).
-        labels = []
-        for index, src in enumerate(sources):
-            value = src.metadata(titles_from)
-            if value not in (None, ""):
-                labels.append(str(value))
-            elif captions is not None:
-                labels.append(captions[index].title)
-            else:
-                labels.append(caption(src).title)
-        panel_titles = _unique_titles(labels)
-    else:
-        # A bare single-band Dataset carries no CF name, so two of them both caption as "Band 1";
-        # disambiguate colliding auto-titles positionally so the panels stay distinguishable.
-        assert (
-            captions is not None
-        )  # titles/titles_from both None implies need_caption, so captions was built
-        panel_titles = _unique_titles([cap.title for cap in captions])
     ncols = min(max(cols, 1), len(frames))
     nrows = math.ceil(len(frames) / ncols)
     fig, maps = grid(
