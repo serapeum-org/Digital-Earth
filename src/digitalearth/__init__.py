@@ -287,6 +287,7 @@ _LAZY_MODULES = {
         "facet",
         "grid",
         "projections",
+        "quickpanels",
         "shared_colorbar",
     ),
     "digitalearth.static.charts": (
@@ -341,6 +342,7 @@ if TYPE_CHECKING:
         facet,
         grid,
         projections,
+        quickpanels,
         shared_colorbar,
     )
     from digitalearth.static.charts import (
@@ -372,6 +374,7 @@ __all__ = [
     "TexturedGlobe",
     "facet",
     "grid",
+    "quickpanels",
     "shared_colorbar",
     "projections",
     # data view

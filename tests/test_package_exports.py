@@ -16,6 +16,7 @@ import digitalearth
 
 EXPECTED = [
     "quickplot",
+    "quickpanels",
     "quickmap",
     "to_backend",
     "Map",

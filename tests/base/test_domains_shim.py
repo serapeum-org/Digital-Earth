@@ -28,7 +28,9 @@ class TestTheOldImportPathStillResolves:
     def test_the_shim_names_what_it_exports(self):
         """So `from digitalearth.static.domains import *` keeps working too."""
         assert sorted(static_domains.__all__) == [
+            "ALIASES",
             "DOMAINS",
             "DomainLike",
             "resolve_domain",
+            "union_domains",
         ]

@@ -28,6 +28,7 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
+from weakref import WeakKeyDictionary
 
 import numpy as np
 from pandas.api.types import is_bool_dtype, is_numeric_dtype
@@ -356,21 +357,122 @@ def _attr(metadata: Any, key: str) -> str | None:
     return None
 
 
+#: CF identity attributes carried onto a ``Source``: ``standard_name`` drives the Magics style matcher, and
+#: ``long_name`` is the most human name :func:`~digitalearth.base.captions.caption` reaches for first.
+_IDENTITY_KEYS = ("standard_name", "long_name")
+
+
 def _identity(*mappings: Any) -> dict:
-    """Collect the CF identity the style matcher reads, from the first mapping that declares it.
+    """Collect the CF identity keys a title/style reads, each from the first mapping that declares it.
 
     Args:
         *mappings: Attribute mappings in precedence order (e.g. the band's metadata, then the dataset's).
 
     Returns:
-        A ``{"standard_name": ...}`` dict, or an empty one when nothing declares a standard name — so a
-        caller-supplied value is never overwritten with ``None``.
+        A dict of the :data:`_IDENTITY_KEYS` any mapping declares (``standard_name``, ``long_name``), or an
+        empty one when none do — so a caller-supplied value is never overwritten with ``None``.
     """
-    for mapping in mappings:
-        found = _attr(mapping, "standard_name")
-        if found is not None:
-            return {"standard_name": found}
-    return {}
+    found: dict[str, str] = {}
+    for key in _IDENTITY_KEYS:
+        for mapping in mappings:
+            value = _attr(mapping, key)
+            if value is not None:
+                found[key] = value
+                break
+    return found
+
+
+#: GRIB keys :func:`pyramids.grib.grib_band_metadata` decodes that are worth carrying onto a ``Source`` — the
+#: message-native identity plus the forecast time/horizon. ``forecast_seconds`` is surfaced under the friendlier
+#: name ``step``. ``band`` (the 1-based index) is dropped: the ``Source`` already records it.
+_GRIB_META_KEYS = {
+    "element": "element",
+    "short_name": "short_name",
+    "comment": "comment",
+    "discipline": "discipline",
+    "ref_time": "ref_time",
+    "valid_time": "valid_time",
+    "forecast_seconds": "step",
+}
+
+
+#: Per-dataset cache of pyramids' decoded GRIB band metadata. ``grib_band_metadata`` decodes *all* bands, so
+#: reading an n-band GRIB stack band-by-band (as facet/quickpanels do) would call it once per band — quadratic.
+#: Keyed weakly by the ``Dataset``, so a dataset that goes out of scope drops its entry without being pinned.
+_GRIB_DECODE_CACHE: "WeakKeyDictionary[Dataset, list[dict[str, Any]]]" = (
+    WeakKeyDictionary()
+)
+
+
+def _is_grib(band_meta: Any) -> bool:
+    """Whether a band's GDAL metadata marks it as GRIB — a cheap ``GRIB_*`` key check, no decode."""
+    return isinstance(band_meta, Mapping) and any(
+        str(key).startswith("GRIB_") for key in band_meta
+    )
+
+
+def _decode_grib(ds: Dataset, *, refresh: bool = False) -> list[dict[str, Any]]:
+    """Return pyramids' per-band GRIB metadata for ``ds``, decoding once and caching it per dataset.
+
+    Args:
+        ds: The pyramids ``Dataset`` to decode.
+        refresh: When ``True``, ignore any cached decode and re-decode — used to drop a cache entry that a
+            caller found stale (the band metadata was reassigned in place after the first decode).
+    """
+    cached = None if refresh else _GRIB_DECODE_CACHE.get(ds)
+    if cached is None:
+        from pyramids.grib import grib_band_metadata
+
+        cached = grib_band_metadata(ds)
+        _GRIB_DECODE_CACHE[ds] = cached
+    return cached
+
+
+def _grib_identity(ds: Dataset, band_meta: Any, idx: int) -> dict:
+    """Decode a GRIB band's NWP metadata through pyramids, when the band carries any.
+
+    Detection is cheap — a GRIB band's GDAL metadata carries ``GRIB_*`` keys (see :func:`_is_grib`) — so a
+    non-GRIB raster never pays for the decode. The decoding itself is **pyramids'**
+    (:func:`pyramids.grib.grib_band_metadata`), not reimplemented here: it parses the reference/valid times to
+    timezone-aware datetimes and the forecast horizon to seconds, and is cached per dataset by
+    :func:`_decode_grib`. Only the keys in :data:`_GRIB_META_KEYS` that are present (non-``None``) are returned,
+    with ``forecast_seconds`` surfaced as ``step``, so :func:`~digitalearth.base.captions.caption` can stamp a
+    ``valid_time`` and a panel can be keyed by ``step`` / ``element``.
+
+    Args:
+        ds: The pyramids ``Dataset`` the band belongs to.
+        band_meta: The band's GDAL metadata mapping (already read by the caller), used only to detect GRIB.
+        idx: 0-based band index into the decoded list.
+
+    Returns:
+        The decoded NWP metadata for the band, or an empty dict when the band is not GRIB.
+    """
+    if not _is_grib(band_meta):
+        return {}
+    entry = _band_item(_decode_grib(ds), idx) or {}
+    # Guard against a stale cache: `element`/`short_name` in the decoded entry come from the same GDAL keys the
+    # live `band_meta` carries, so a disagreement means the band metadata was reassigned in place after the
+    # first decode. Re-decode once to drop the stale entry, keeping identity and units consistent.
+    if (entry.get("element"), entry.get("short_name")) != (
+        band_meta.get("GRIB_ELEMENT"),
+        band_meta.get("GRIB_SHORT_NAME"),
+    ):
+        entry = _band_item(_decode_grib(ds, refresh=True), idx) or {}
+    return {
+        out: entry[key]
+        for key, out in _GRIB_META_KEYS.items()
+        if entry.get(key) is not None
+    }
+
+
+def _unbracket(units: str | None) -> str | None:
+    """Strip the ``[...]`` GDAL wraps a GRIB unit in (``"[C]"`` → ``"C"``); other spellings pass through."""
+    if not units:
+        return units
+    stripped = units.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        stripped = stripped[1:-1].strip()
+    return stripped or None
 
 
 def _features_crs(fc: Any) -> Any:
@@ -414,11 +516,25 @@ def _from_raster(
     z = read_masked_band(ds, band)
     band_meta = _band_item(ds.band_meta_data, idx) or {}
     dataset_meta = getattr(ds, "meta_data", None)
+    grib = _grib_identity(ds, band_meta, idx)
+    # Gate the GRIB_UNIT fallback on GRIB *detection*, not on the decoded identity being non-empty: a band that
+    # decodes to no identity/time keys still declares its unit, and GRIB_UNIT is not matched by the `units` step.
+    grib_unit = (
+        _unbracket(_attr(band_meta, "GRIB_UNIT")) if _is_grib(band_meta) else None
+    )
     units = (
         _band_item(ds.band_units, idx)
         or _attr(band_meta, "units")
         or _attr(dataset_meta, "units")
+        or grib_unit
     )
+    identity = _identity(band_meta, dataset_meta)
+    # pyramids auto-names a GRIB band "Band_N", so the human name has to come from the message itself: its
+    # comment (the description), else the short name / element. Surfaced as long_name, which caption reads first.
+    if grib and "long_name" not in identity:
+        grib_name = grib.get("comment") or grib.get("short_name") or grib.get("element")
+        if grib_name:
+            identity = {"long_name": grib_name, **identity}
     return Source(
         z=_axis(z, "z", units),
         x=_axis(ds.x, "x"),  # 1-D cell-centre coords, length == columns
@@ -429,7 +545,8 @@ def _from_raster(
             "kind": "raster",
             "variable": _band_item(ds.band_names, idx, ""),
             "band": band,
-            **_identity(band_meta, dataset_meta),
+            **grib,
+            **identity,
             **(metadata or {}),
         },
     )
@@ -531,24 +648,12 @@ def _from_collection(
         Source: the raster source, with the member's identity carried forward.
     """
     members = dc.datasets
-    src = _from_raster(members[member], band, metadata, crs=crs)
-    standard_name = src.metadata("standard_name")
-    # augment the raster metadata with the collection position
-    return Source(
-        z=src.z,
-        x=src.x,
-        y=src.y,
-        crs=src.crs,
-        units=src.units,
-        metadata={
-            "kind": "raster",
-            "variable": src.metadata("variable", ""),
-            "member": member,
-            "n_members": len(members),
-            **({"standard_name": standard_name} if standard_name else {}),
-            **(metadata or {}),
-        },
-    )
+    # Pass the collection position *through* _from_raster rather than rebuilding the Source afterwards: the
+    # rebuild hand-listed a subset of keys and silently dropped everything else _from_raster derives (the GRIB
+    # message metadata and its long_name). _from_raster merges this dict last (the caller's own values within
+    # it still win), so member/n_members are recorded without losing the member's identity.
+    position = {"member": member, "n_members": len(members), **(metadata or {})}
+    return _from_raster(members[member], band, position, crs=crs)
 
 
 def _from_feature(fc: Any, metadata: dict | None, *, crs: Any = None) -> Source:

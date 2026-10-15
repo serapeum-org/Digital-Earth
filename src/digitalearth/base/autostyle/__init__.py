@@ -10,6 +10,7 @@ colormap *and* contour levels for common meteorological fields; :func:`auto_styl
 falls back to the lighter substring library (``variables.yml``) for everything else.
 """
 
+import copy
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from functools import lru_cache
@@ -23,8 +24,10 @@ from digitalearth.base.sources.source import Source
 
 __all__ = [
     "auto_style",
+    "list_styles",
     "load_library",
     "load_magics_library",
+    "load_style",
     "magics_style",
     "register_style_library",
     "temporary_style_library",
@@ -94,6 +97,81 @@ def load_library() -> dict[str, dict]:
         load_magics_library: The richer ECMWF Magics operational library (loaded separately).
     """
     return {**_bundled_library(), **_PLUGIN_LIBRARY}
+
+
+def list_styles() -> list[str]:
+    """Return the names of the style groups available to :func:`load_style` and :func:`auto_style`.
+
+    The user-facing discovery half of the library: the sorted group names a caller can name — the bundled
+    groups plus anything a ``digitalearth.styles`` plugin or :func:`temporary_style_library` has merged in.
+    (The richer per-variable ECMWF Magics entries are a separate operational table, reached through
+    ``load_magics_library``, and are not listed here.)
+
+    Returns:
+        The sorted style-group names, e.g. ``["default", "temperature", ...]``.
+
+    Examples:
+        - The shipped library's groups:
+            ```python
+            >>> from digitalearth.base.autostyle import list_styles
+            >>> list_styles()
+            ['default', 'discharge', 'elevation', 'precipitation', 'pressure', 'temperature', 'wind']
+
+            ```
+    """
+    return sorted(load_library())
+
+
+def load_style(name: str) -> dict[str, Any]:
+    """Return a copy of one named style group's cleopatra parameters.
+
+    The fetch half of the discovery API: hand it a name from :func:`list_styles` and get that group's style
+    parameters (``cmap``, ``levels``, ``units``, …) to pass to a glyph or merge into a call. The ``match``
+    key — the library's own variable-matching hint — is stripped, as :func:`auto_style` strips it.
+
+    Args:
+        name: A style-group name, as listed by :func:`list_styles`.
+
+    Returns:
+        A fresh dict of that group's parameters, safe to mutate.
+
+    Raises:
+        KeyError: If ``name`` is not a registered style group.
+
+    Examples:
+        - Fetch a group's colormap:
+            ```python
+            >>> from digitalearth.base.autostyle import load_style
+            >>> load_style("temperature")["cmap"]
+            'coolwarm'
+
+            ```
+        - An unknown name is rejected, pointing at the discovery call:
+            ```python
+            >>> from digitalearth.base.autostyle import load_style
+            >>> load_style("nope")
+            Traceback (most recent call last):
+                ...
+            KeyError: "unknown style 'nope'; call list_styles() to see what is available"
+
+            ```
+    """
+    library = load_library()
+    if name not in library:
+        raise KeyError(
+            f"unknown style {name!r}; call list_styles() to see what is available"
+        )
+    # Copy nested containers so a caller mutating e.g. ``load_style(name)["levels"]`` cannot corrupt the
+    # shared library. Scalars and any live style object (a Colormap, a ColorScale, a callable a plugin
+    # contributed) are shared by reference, not deep-copied — an unconditional deepcopy raises on such a
+    # value, which is the trap load_library documents.
+    return {
+        key: copy.deepcopy(value)
+        if isinstance(value, (list, dict, set, tuple))
+        else value
+        for key, value in library[name].items()
+        if key != "match"
+    }
 
 
 def register_style_library(library: Mapping[str, dict]) -> None:
@@ -261,22 +339,35 @@ def auto_style(source: Source) -> dict[str, Any]:
     variable_raw = str(source.metadata("variable") or "")
     style: dict[str, Any] = dict(library.get("default", {}))
 
+    # pyramids auto-names a GRIB band "Band_N", so its real identity is the message short name / element.
+    # Offer those as extra name candidates: for a non-GRIB source both are absent and this is just the
+    # variable, so nothing changes; a GRIB field gets a chance to match on its short name instead of "Band_1".
+    candidates = [variable_raw]
+    for key in ("short_name", "element"):
+        extra = source.metadata(key)
+        if extra:
+            candidates.append(str(extra))
+    standard_name = source.metadata("standard_name")
+
     # First, the richer ECMWF Magics identity matching (name -> standard_name -> units): when it recognises
     # the field, it supplies a canonical colormap *and* contour levels and we are done.
-    magics = magics_style(variable_raw, source.metadata("standard_name"), source.units)
-    if magics is not None:
-        style.update(magics)
-        return _with_source_units(style, source)
+    for candidate in candidates:
+        magics = magics_style(candidate, standard_name, source.units)
+        if magics is not None:
+            style.update(magics)
+            return _with_source_units(style, source)
 
     # Otherwise fall back to the lighter variables.yml substring library (case-insensitive, first match wins).
-    variable = variable_raw.lower()
+    # Match each candidate on its own rather than a space-joined blob, so a multi-token pattern can never match
+    # across the gap between two candidates (e.g. "Band_1" + "msl" reading as one string).
+    lowered = [candidate.lower() for candidate in candidates]
     for name, params in library.items():
         if name == "default":
             continue
         patterns = params.get("match", [])
         if isinstance(patterns, str):
             patterns = [patterns]
-        if any(p.lower() in variable for p in patterns):
+        if any(p.lower() in hay for p in patterns for hay in lowered):
             style.update({k: v for k, v in params.items() if k != "match"})
             break
     return _with_source_units(style, source)

@@ -2,9 +2,10 @@ import shutil
 from pathlib import Path
 
 import geopandas as gpd
+import numpy as np
 import pytest
 from geopandas.geodataframe import GeoDataFrame
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 
 def pytest_addoption(parser):
@@ -70,6 +71,91 @@ def _close_figures():
 @pytest.fixture(scope="module")
 def dataset() -> Dataset:
     return Dataset.read_file("examples/data/acc4000.tif")
+
+
+def _grib_like_dataset(
+    bands: int = 1, *, element: str = "TMP", named: bool = True
+) -> Dataset:
+    """Build an in-memory pyramids ``Dataset`` whose bands carry GRIB message metadata.
+
+    Built entirely through pyramids — ``Dataset.from_array`` for the raster and the ``band_meta_data`` setter
+    for the per-band metadata — so no raster/GDAL handling leaks into the tests. The real GRIB *driver*
+    (``libgdal-grib``) is absent in CI, so GRIB files cannot be opened here (pyramids' own GRIB doctests are
+    ``+SKIP``); but ``pyramids.grib.grib_band_metadata`` only *decodes* the ``GRIB_*`` band-metadata keys, so
+    a Dataset carrying those keys exercises the real extraction path driver-free. Each band's forecast horizon
+    / valid time steps by 6 h, as a short forecast stack would.
+
+    Args:
+        bands: Number of forecast steps (bands) to build.
+        element: The GRIB ``element`` code every band carries (when ``named``).
+        named: When ``True`` each band carries the identity keys (element/short_name/unit/comment/discipline);
+            when ``False`` only the reference/valid time and forecast horizon, to exercise the unnamed path.
+
+    Returns:
+        A pyramids ``Dataset`` of the requested band count, EPSG:4326, with GRIB message metadata per band.
+    """
+    cells = np.arange(12, dtype="float32").reshape(3, 4)
+    array = cells if bands == 1 else np.stack([cells] * bands)
+    reference = GeoReference(geo=(0.0, 1.0, 0.0, 3.0, 0.0, -1.0), epsg=4326)
+    grid = Dataset.from_array(array, geo_ref=reference)
+    base = 1609459200  # 2021-01-01T00:00:00Z, in GRIB's "<seconds> sec UTC" spelling
+    per_band = []
+    for index in range(1, bands + 1):
+        step = index * 21600  # 6 h per step
+        message = {
+            "GRIB_REF_TIME": f"{base} sec UTC",
+            "GRIB_VALID_TIME": f"{base + step} sec UTC",
+            "GRIB_FORECAST_SECONDS": f"{step} sec",
+        }
+        if named:
+            message |= {
+                "GRIB_ELEMENT": element,
+                "GRIB_SHORT_NAME": "2-HTGL",
+                "GRIB_UNIT": "[C]",
+                "GRIB_COMMENT": "Temperature",
+                "GRIB_DISCIPLINE": "0",
+            }
+        per_band.append(message)
+    grid.band_meta_data = per_band
+    return grid
+
+
+@pytest.fixture
+def grib_dataset() -> Dataset:
+    """A single-band Dataset carrying GRIB message metadata (see :func:`_grib_like_dataset`)."""
+    return _grib_like_dataset(bands=1)
+
+
+@pytest.fixture
+def grib_stack() -> Dataset:
+    """A three-band GRIB Dataset: one band per 6-hour forecast step, each with its own valid time."""
+    return _grib_like_dataset(bands=3)
+
+
+@pytest.fixture
+def grib_dataset_timeonly() -> Dataset:
+    """A GRIB Dataset whose message carries only a valid time + forecast horizon (no element/short_name)."""
+    return _grib_like_dataset(bands=1, named=False)
+
+
+@pytest.fixture
+def grib_dataset_unitonly() -> Dataset:
+    """A GRIB band that declares only a unit (``GRIB_UNIT``) — no identity keys and no time."""
+    reference = GeoReference(geo=(0.0, 1.0, 0.0, 3.0, 0.0, -1.0), epsg=4326)
+    grid = Dataset.from_array(
+        np.arange(12, dtype="float32").reshape(3, 4), geo_ref=reference
+    )
+    grid.band_meta_data = [{"GRIB_UNIT": "[K]"}]
+    return grid
+
+
+@pytest.fixture
+def grib_collection():
+    """A DatasetCollection of two single-band GRIB members, each carrying its own message metadata."""
+    from pyramids.dataset.collection import DatasetCollection
+
+    members = [_grib_like_dataset(bands=1), _grib_like_dataset(bands=1)]
+    return DatasetCollection(members[0], len(members), datasets=members)
 
 
 @pytest.fixture(scope="module")
