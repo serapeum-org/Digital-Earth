@@ -139,6 +139,15 @@ def grib_dataset_timeonly() -> Dataset:
 
 
 @pytest.fixture
+def grib_dataset_unitonly() -> Dataset:
+    """A GRIB band that declares only a unit (``GRIB_UNIT``) — no identity keys and no time."""
+    reference = GeoReference(geo=(0.0, 1.0, 0.0, 3.0, 0.0, -1.0), epsg=4326)
+    grid = Dataset.from_array(np.arange(12, dtype="float32").reshape(3, 4), geo_ref=reference)
+    grid.band_meta_data = [{"GRIB_UNIT": "[K]"}]
+    return grid
+
+
+@pytest.fixture
 def grib_collection():
     """A DatasetCollection of two single-band GRIB members, each carrying its own message metadata."""
     from pyramids.dataset.collection import DatasetCollection

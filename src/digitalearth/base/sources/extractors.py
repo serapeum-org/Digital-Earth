@@ -501,7 +501,9 @@ def _from_raster(
     band_meta = _band_item(ds.band_meta_data, idx) or {}
     dataset_meta = getattr(ds, "meta_data", None)
     grib = _grib_identity(ds, band_meta, idx)
-    grib_unit = _unbracket(_attr(band_meta, "GRIB_UNIT")) if grib else None
+    # Gate the GRIB_UNIT fallback on GRIB *detection*, not on the decoded identity being non-empty: a band that
+    # decodes to no identity/time keys still declares its unit, and GRIB_UNIT is not matched by the `units` step.
+    grib_unit = _unbracket(_attr(band_meta, "GRIB_UNIT")) if _is_grib(band_meta) else None
     units = (
         _band_item(ds.band_units, idx)
         or _attr(band_meta, "units")

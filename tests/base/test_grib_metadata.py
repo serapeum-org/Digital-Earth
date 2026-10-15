@@ -36,6 +36,16 @@ class TestGribMetadataOnSource:
         """A GRIB ``[C]`` unit becomes the Source's units without the brackets GDAL wraps it in."""
         assert get_source(grib_dataset).units == "C"
 
+    def test_unit_only_grib_band_still_gets_units(self, grib_dataset_unitonly):
+        """A GRIB band declaring only a unit (no identity/time) still resolves its units.
+
+        Test scenario:
+            The GRIB_UNIT fallback was gated on the decoded identity dict being non-empty, so a band whose
+            message decodes to no identity/time keys lost its unit. Gating on GRIB *detection* instead, the
+            unit is still read and unbracketed.
+        """
+        assert get_source(grib_dataset_unitonly).units == "K"
+
     def test_human_name_falls_back_to_the_grib_comment(self, grib_dataset):
         """With no CF long/standard name, the GRIB comment becomes long_name, so the caption reads it."""
         src = get_source(grib_dataset)
