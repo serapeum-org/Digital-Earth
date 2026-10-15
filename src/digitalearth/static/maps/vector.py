@@ -357,6 +357,50 @@ def _refuse_colour_norm(color: Any, caller: str, remedy: str) -> None:
         )
 
 
+def _resolve_line_colour(color: Any, column: str | None, opts: dict) -> str | None:
+    """Resolve ``lines``' ``color=`` to a constant line colour, or stash a scaling in ``opts``.
+
+    The three ways ``color=`` is read, lifted out of :meth:`VectorMixin.lines` so the builder stays within
+    its cognitive-complexity budget: a colour *scaling* (``Normalize``/``ColorScaling``) with no ``column`` to
+    scale is refused (#380); a matplotlib colour becomes the constant line colour (hex); anything else — a
+    scaling paired with a ``column``, chiefly — is left in ``opts`` for the glyph to apply.
+
+    Args:
+        color: The caller's ``color=`` value.
+        column: The ``column`` the lines are coloured by, or ``None`` for a constant colour.
+        opts: The glyph options, mutated in place when ``color`` is a scaling the glyph should apply.
+
+    Returns:
+        The constant line colour as a hex string, or ``None`` when the colour is left to ``opts``/the glyph.
+
+    Raises:
+        ValueError: if ``color`` is a colour *scaling* with no ``column`` to scale (#380), or a string that
+            is not a matplotlib colour — the refusal names ``column=`` as the keyword that takes a column.
+    """
+    if column is None:
+        _refuse_colour_norm(
+            color,
+            _LINES_CALLER,
+            "Pass column= to choose the values to scale, or a matplotlib colour for one "
+            "constant line colour.",
+        )
+    if isinstance(color, str) or (color is not None and is_color_like(color)):
+        # `color=` and `column=` sit next to each other in the signature, so a column name under `color=` is a
+        # plausible slip — and `to_hex` answered it with matplotlib's "Invalid RGBA argument", which names
+        # neither this method nor either keyword (review L4).
+        try:
+            return to_hex(color, keep_alpha=True)
+        except (ValueError, TypeError):
+            raise ValueError(
+                f"{_LINES_CALLER} needs color= as one matplotlib colour for every line, and "
+                f"{color!r} is not one. To colour the lines by a column's values instead, pass "
+                f"column={color!r}"
+            ) from None
+    if color is not None:
+        opts["color"] = color
+    return None
+
+
 def _numeric_column(gdf: Any, column: str, argument: str, caller: str) -> np.ndarray:
     """Read one feature column as floats, refusing one that holds something a ramp cannot read.
 
@@ -3629,29 +3673,7 @@ class VectorMixin(_MixinBase):
                     f"{_LINES_CALLER} needs width= as a positive number of points, or the name of a "
                     f"column to scale the widths by; got {width!r}"
                 )
-        if column is None:
-            _refuse_colour_norm(
-                color,
-                _LINES_CALLER,
-                "Pass column= to choose the values to scale, or a matplotlib colour for one "
-                "constant line colour.",
-            )
-        if isinstance(color, str) or (color is not None and is_color_like(color)):
-            # `color=` and `column=` sit next to each other in the signature, so a column name under
-            # `color=` is a plausible slip — and `to_hex` answered it with matplotlib's "Invalid RGBA
-            # argument", which names neither this method nor either keyword (review L4).
-            try:
-                line_color: Any | None = to_hex(color, keep_alpha=True)
-            except (ValueError, TypeError):
-                raise ValueError(
-                    f"{_LINES_CALLER} needs color= as one matplotlib colour for every line, and "
-                    f"{color!r} is not one. To colour the lines by a column's values instead, pass "
-                    f"column={color!r}"
-                ) from None
-        else:
-            line_color = None
-            if color is not None:
-                opts["color"] = color
+        line_color = _resolve_line_colour(color, column, opts)
         if cmap is not None:
             opts["cmap"] = cmap
         if scheme is not None:
