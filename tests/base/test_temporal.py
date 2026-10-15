@@ -70,18 +70,40 @@ class TestEngineNeutral:
     """The reduction is reusable by any backend — importing it pulls in no renderer."""
 
     def test_no_renderer_is_imported(self):
-        """Importing base.temporal and reducing a series loads no matplotlib/cleopatra/pyvista module.
+        """base.temporal's own imports name a renderer nowhere — numpy, base and stdlib only.
 
         Test scenario:
             #168 moved the reduction to base so every backend can reuse it; the point is lost if the module
-            drags a renderer in. Assert no renderer package is present in sys.modules after a fresh import +
-            a reduction (matplotlib may be imported by an unrelated earlier test, so check it is not pulled
-            in by this module specifically via a subprocess-free module-attribute check).
+            drags a renderer in. The package-wide guard (``test_base_is_engine_neutral``) enforces neutrality
+            across all of ``base/``; this is the focused local check. Scan the module's own import statements
+            by AST — stronger than probing ``sys.modules``, which an unrelated earlier test can pollute, and
+            than reading the docstring, which proves nothing about imports — and assert none names a renderer
+            and the top-level names are numpy + ``digitalearth`` + stdlib.
         """
+        import ast
+        import inspect
+
         import digitalearth.base.temporal as temporal_module
 
-        assert not hasattr(temporal_module, "plt")
-        assert not hasattr(temporal_module, "LineGlyph")
-        # the module's own imports are numpy + pyramids + base only
-        source = temporal_module.__doc__ or ""
-        assert "renderer" in source  # the module documents its neutrality
+        tree = ast.parse(inspect.getsource(temporal_module))
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".")[0])
+        renderers = {
+            "matplotlib",
+            "cleopatra",
+            "pyvista",
+            "holoviews",
+            "bokeh",
+            "maplibre",
+            "plotly",
+        }
+        assert not imported & renderers, (
+            f"base.temporal imports a renderer, breaking its neutrality: {sorted(imported & renderers)}"
+        )
+        assert imported <= {"collections", "typing", "numpy", "digitalearth"}, (
+            f"base.temporal imports beyond numpy + base + stdlib: {sorted(imported)}"
+        )

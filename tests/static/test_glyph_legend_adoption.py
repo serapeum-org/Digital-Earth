@@ -189,3 +189,39 @@ class TestQuickmapColorbarFalseTakesOneCall:
             )
         finally:
             m.close()
+
+
+class TestQuickmapColorbarFalseOnAContinuousField:
+    """The one-call collapse is safe on a continuous field too — it has no autonomous colorbar to orphan."""
+
+    def test_no_colorbar_axis_is_left(self):
+        """`quickmap(colorbar=False)` on a continuous raster leaves the figure one axes and records show=False.
+
+        Test scenario:
+            #350 collapsed the key-off to one `colorbar(visible=False)`. That is safe only if a continuous
+            glyph does not draw its own colorbar the way a categorical glyph draws its own legend; the guide
+            system owns the continuous colorbar, so `colorbar=False` records `Guide(show=False)` with nothing
+            on the axes to take off. A continuous field's extra axis would be a colorbar axis, so one axes
+            means none was drawn.
+        """
+        import numpy as np
+        from pyramids.dataset import Dataset, GeoReference
+
+        from digitalearth import quickmap
+
+        field = Dataset.from_array(
+            arr=np.arange(16.0).reshape(4, 4),
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+            no_data_value=-9999.0,
+        )
+        m = quickmap(field, crs=field.epsg, colorbar=False)
+        try:
+            assert len(m.fig.axes) == 1, (
+                f"colorbar=False should leave the figure one axes; got {len(m.fig.axes)}"
+            )
+            shown = [m.get_layer(i).symbology.guide() for i in m.layer_ids]
+            assert any(g is not None and g.show is False for g in shown), (
+                f"colorbar=False should record a guide switched off; got {shown}"
+            )
+        finally:
+            m.close()
