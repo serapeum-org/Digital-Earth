@@ -141,10 +141,6 @@ KEYWORD_SHORTFALLS: Mapping[tuple[str, str], tuple[tuple[str, ...], str]] = (
                 ("url",),
                 "a name and a URL both arrive through one overloaded provider= — #268",
             ),
-            ("web", "labels"): (
-                ("crs",),
-                "places labels in EPSG:4326 only, so a column in another CRS cannot be labelled — #265",
-            ),
         }
     )
 )

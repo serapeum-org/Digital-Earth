@@ -329,7 +329,7 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
     def test_deck_scatter_takes_size(self):
         """The GPU path a large points layer routes to takes the same word."""
         m = WebMap().deck_scatter(_points_frame(3), size=7.0)
-        assert m._deck_layers[0]["getPointRadius"] == 7.0
+        assert _deck_layer(m, "getPointRadius") == 7.0
 
     def test_point_cloud_takes_size(self):
         """A 3-D point is a marker as much as a 2-D one."""
@@ -825,28 +825,31 @@ class TestC8TheBigDataCutoff:
         m = WebMap()
         m.big_data_threshold = 2
         m.points(_points_frame(5)).points(_points_frame(5))
-        assert m.layer_ids == [], "both layers should have routed to deck.gl"
-        assert len(m._deck_layers) == 2, m._deck_layers
+        # Both routed to deck.gl, and since #396 each is an addressable deck layer rather than a shared slot.
+        assert m.layer_ids == ["deck-scatter-1", "deck-scatter-2"], m.layer_ids
+        assert m._deck_layers is None
 
     def test_a_per_call_override_moves_it_for_that_call_only(self):
         """The same name per call, so a caller does not have to learn a second one."""
         m = WebMap()
         m.points(_points_frame(5), big_data_threshold=2)
-        assert m.layer_ids == [], "the overridden call should have routed to deck.gl"
+        assert m.layer_ids == ["deck-scatter-1"], (
+            "the overridden call routed to deck.gl"
+        )
         m.points(_points_frame(5))
-        assert m.layer_ids, "the map's own threshold was left at 50 000"
+        assert m.get_layer(m.layer_ids[-1]).kind == "points", (
+            "the map's own threshold was left at 50 000"
+        )
         assert m.big_data_threshold == 50_000, "the override leaked onto the map"
 
     def test_polygons_honour_the_override_too(self):
         """Both routed builders take it, or the override would depend on the geometry kind."""
         m = WebMap()
         m.polygons(_polygon_frame(), big_data_threshold=1)
-        assert m.layer_ids == [], (
-            f"polygons ignored the override; got MapLibre layers {m.layer_ids}"
+        assert m.layer_ids == ["deck-polygons-1"], (
+            f"polygons ignored the override; got {m.layer_ids}"
         )
-        assert m._deck_layers, (
-            "polygons ignored the override; nothing routed to deck.gl"
-        )
+        assert m.get_layer("deck-polygons-1").kind == "deck_polygons"
 
     def test_a_negative_threshold_is_refused(self):
         """A cutoff below zero routes an empty layer, which is never what the caller meant."""

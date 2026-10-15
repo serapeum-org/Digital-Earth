@@ -116,6 +116,9 @@ DESCRIBED_AND_DRAWN = {
     "labels": lambda m: m.labels(_points(), "label"),
     "heatmap": lambda m: m.heatmap(_points()),
     "clusters": lambda m: m.cluster(_points()),
+    # The big-data GPU routes: described since #396, each a deck.gl GeoJsonLayer with its own tree slot.
+    "deck_scatter": lambda m: m.deck_scatter(_points()),
+    "deck_polygons": lambda m: m.deck_polygons(_polygons()),
     "extrusion": lambda m: m.extrusion(_polygons(), height=30.0),
     "contours": lambda m: m.contours(_dem(), interval=CONTOUR_INTERVAL),
     "filled_contours": lambda m: m.contours(

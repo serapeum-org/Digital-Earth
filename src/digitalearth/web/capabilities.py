@@ -41,6 +41,8 @@ CAPABILITIES = Capabilities(
             "vector_tiles",
             "heatmap",
             "clusters",
+            "deck_scatter",
+            "deck_polygons",
             "point_cloud",
             "extrusion",
             "terrain",

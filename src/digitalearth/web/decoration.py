@@ -2924,6 +2924,21 @@ class DecorationMixin(_MixinBase):
                 raise KeyError(
                     f"no layer {unknown[0]!r} on this map; its layers are {self.layer_ids}"
                 )
+            # A deck.gl overlay is addressable by id (#396) but is not a MapLibre style layer, so MapLibre's
+            # click handler cannot reach it — a popup/tooltip bound to one would queue a closure that never
+            # fires. Refuse it by name rather than build a promise the saved page cannot keep (the honesty
+            # the pre-#396 `name=`/`visible=` refusal gave, review M1).
+            deck = [
+                layer_id
+                for layer_id in targets
+                if self.get_layer(layer_id).kind in {"deck_scatter", "deck_polygons"}
+            ]
+            if deck:
+                raise ValueError(
+                    f"popup()/tooltip() cannot bind to {deck[0]!r}: it is a deck.gl overlay (kind "
+                    f"{self.get_layer(deck[0]).kind!r}), which MapLibre's click handler cannot reach, so the "
+                    f"binding would never fire. Bind a vector layer (points/lines/polygons) instead."
+                )
         kwargs = self._attribute_template(fields)
         for layer_id in targets:
             # Nothing below refuses an id now: a caller-named list was validated above, and a tier-chosen id
@@ -2947,8 +2962,13 @@ class DecorationMixin(_MixinBase):
         if layer is None:
             last = self._last_layer_id
             if last is None:
+                # A deck.gl / big-data layer draws but never becomes the default target: MapLibre cannot
+                # click it, so it does not set `_last_layer_id` (review L2). Say so rather than claim nothing
+                # was drawn, which would be wrong after e.g. `points(huge, big=True)` (review L1).
                 raise ValueError(
-                    "popup()/tooltip() needs a layer — draw a data layer first or pass layer=..."
+                    "popup()/tooltip() needs a clickable layer to bind to; pass layer=<id>, or draw a "
+                    "vector layer (points/lines/polygons) first — a deck.gl / big-data layer is not a click "
+                    "target and so never becomes the default."
                 )
             return [last]
         if isinstance(layer, str):

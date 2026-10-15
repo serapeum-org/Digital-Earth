@@ -21,6 +21,8 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `custom:maplibre` | — | ✓ | — | — |
 | `custom:matplotlib` | ✓ | — | — | — |
 | `custom:pyvista` | — | — | — | ✓ |
+| `deck_polygons` | — | ✓ | — | — |
+| `deck_scatter` | — | ✓ | — | — |
 | `extrusion` | — | ✓ | — | ✓ |
 | `filled_contours` | ✓ | ✓ | ✓ | — |
 | `flow` | ✓ | — | ✓ | — |

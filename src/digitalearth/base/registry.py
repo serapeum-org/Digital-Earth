@@ -1216,6 +1216,12 @@ _BUILT_IN_KINDS = (
         "data",
     ),
     (
+        "deck_scatter",
+        "points",
+        "a large point table rendered on the GPU as a deck.gl layer — web deck_scatter",
+        "data",
+    ),
+    (
         "labels",
         "points",
         "text taken from a feature column — static/interactive/web labels",
@@ -1249,6 +1255,12 @@ _BUILT_IN_KINDS = (
         "extrusion",
         "polygons",
         "polygons raised by a column — 3-D extruded_polygons, web extrusion",
+        "data",
+    ),
+    (
+        "deck_polygons",
+        "polygons",
+        "a large polygon table rendered on the GPU as a deck.gl layer — web deck_polygons",
         "data",
     ),
     (

@@ -360,6 +360,12 @@ class _DeckOverlay:
     describes none of them and they carry no ``beforeId`` at all — deck.gl's own "above every style layer",
     which is where these builders have always drawn (review R2-H5). Only a deck layer with a queue slot of
     its own — one the renderer drew from a `LayerSpec` — is ordered against the style layers.
+
+    Since #396 the only builder that still accumulates here is `tiles_3d`: `deck_scatter`, `deck_polygons`
+    and the big-data routes of `points`/`polygons` each record a `LayerSpec` now (kinds `deck_scatter` /
+    `deck_polygons`, drawn by :func:`~digitalearth.web.bigdata.draw_deck_geojson`), so they own queue slots
+    and are ordered like `point_cloud`/`model`. `tiles_3d` streams its tileset from a URL rather than a
+    feature frame this tier can serve, so it has no description to rebuild from and stays here.
     """
 
 
@@ -1469,20 +1475,20 @@ class WebMapBase:
             re-arranges the queue (:meth:`~digitalearth.web.renderer.Renderer._arrange`) — so what MapLibre
             adds last, and therefore draws on top, follows.
 
-            A deck.gl layer (`point_cloud`, `model`, and the big-data routes — see
-            :attr:`~digitalearth.web.renderer.DrawnLayer.route`) is not a MapLibre style layer, and the page
-            composes all of them into **one** overlay handed over after the whole queue. A **described** one
-            reaches the page all the same: the overlay is interleaved, so it names the style layer it draws
-            beneath and deck.gl inserts it there.
+            A deck.gl layer (`point_cloud`, `model`, `deck_scatter`, `deck_polygons`, and the big-data routes
+            of `points`/`polygons` — see :attr:`~digitalearth.web.renderer.DrawnLayer.route`) is not a
+            MapLibre style layer, and the page composes all of them into **one** overlay handed over after
+            the whole queue. A **described** one reaches the page all the same: the overlay is interleaved,
+            so it names the style layer it draws beneath and deck.gl inserts it there.
 
             Two kinds of layer cannot be ordered at all. A layer a caller wired themselves through
             :meth:`add_layer`/:meth:`add_underlay` with a callable is added inside that callable under ids
             this map never sees, so a deck layer is placed relative to the nearest style layer it *can*
-            name. And the deck builders that record no description — `deck_scatter`, `deck_polygons`,
-            `tiles_3d`, and the route `points` takes above `big_data_threshold` — mint no layer id, so there
-            is nothing here to address them by; they share one slot in the queue and draw above every style
-            layer, whenever they were called (review R2-H5). Name the layer (`point_cloud`, `model`) to place
-            it, or add it after the layers it belongs above.
+            name. And `tiles_3d` — the one deck builder still recording no description, its tileset streaming
+            from a URL rather than a feature frame this tier can serve — mints no layer id, so there is
+            nothing here to address it by; it shares one slot in the queue and draws above every style layer,
+            whenever it was called (review R2-H5). `deck_scatter`, `deck_polygons` and the big-data routes
+            joined the tree in #396, so they are ordered like `point_cloud`/`model`.
 
         Examples:
             - Two labels, reordered by id:
@@ -2870,7 +2876,7 @@ class WebMapBase:
             out[name] = series
         return out
 
-    def _display_gdf(self, features: Any, *, method: str) -> Any:
+    def _display_gdf(self, features: Any, *, method: str, crs: Any = None) -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
         The single vector choke point the point/line/polygon builders call, and so the place the tier
@@ -2890,6 +2896,10 @@ class WebMapBase:
                 with (review H1).
             method: The calling builder's name, quoted in the guard's error message. Required, so a
                 new builder cannot silently inherit a generic label.
+            crs: The CRS to interpret ``features`` as when the frame carries none of its own — stamped
+                onto it (a reinterpretation, not a warp) so the reprojection below places it, rather than
+                taking an unlabelled frame as already lon/lat. ``None`` (the default) leaves a
+                self-describing frame alone, and never overrides a CRS the frame already carries.
 
         Returns:
             A GeoDataFrame in the display CRS (EPSG:4326 by default), with date-like columns ISO-encoded,
@@ -2911,10 +2921,20 @@ class WebMapBase:
         if hasattr(features, "epsg") and hasattr(
             features, "to_crs"
         ):  # pyramids FeatureCollection (a GeoDataFrame)
+            # Honour `crs=` here too: a FeatureCollection can carry no CRS (`epsg is None`), and without the
+            # stamp `_needs_reproject` would warp it unlabelled — the mis-placement `crs=` exists to prevent.
+            if crs is not None and getattr(features, "crs", None) is None:
+                features = features.set_crs(crs)
             if self._needs_reproject(features):
                 features = self._placed(features, method=method)
             return self._noted(self._json_safe(features))
         own_crs = getattr(features, "crs", None)
+        # A caller can declare the CRS of a frame that carries none (`crs=`): stamp it (a reinterpretation,
+        # not a warp) so the reprojection below places it, rather than taking an unlabelled frame as already
+        # lon/lat. A frame that already carries a CRS is self-describing, so `crs=` does not override it.
+        if own_crs is None and crs is not None:
+            features = features.set_crs(crs)
+            own_crs = crs
         # A bare GeoDataFrame in another CRS. Compared by meaning, not by EPSG code: a projection with no
         # authority code has none, and was drawn as if its metres were degrees.
         if own_crs is not None and not same_crs(own_crs, self.crs):

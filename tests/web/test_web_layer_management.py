@@ -466,24 +466,17 @@ class TestTheKindsThatUsedToRecordNoLayer:
 class TestTheDeckOverlayIsOneCall:
     """deck.gl owns one overlay per page, and two kinds now reach it from their own queue slots."""
 
-    def test_a_described_cloud_and_an_undescribed_scatter_share_one_overlay(self):
+    def test_a_described_cloud_and_an_undescribed_tileset_share_one_overlay(self):
         """A second ``addDeckOverlay`` replaces the first, so every deck layer has to go in one call.
 
         Test scenario:
-            `point_cloud` and `model` are described and join the overlay from their queue slots;
-            `deck_scatter`, `deck_polygons` and `tiles_3d` record nothing and accumulate into
-            `WebMap._deck_layers`. There used to be one accumulator and one closure, so one call was
-            automatic. The page composes the overlay from the queue now, and a composition that left either
-            source out — or issued a call per source — would drop layers silently.
+            `point_cloud` and `model` are described and join the overlay from their queue slots; `tiles_3d`
+            records nothing and accumulates into `WebMap._deck_layers` (the last undescribed deck route after
+            #396). The page composes the overlay from the queue, and a composition that left either source
+            out — or issued a call per source — would drop layers silently.
         """
-        import geopandas as gpd
-        from shapely.geometry import Point
-
-        frame = gpd.GeoDataFrame(
-            geometry=[Point(4.9, 52.4), Point(5.0, 52.2)], crs=4326
-        )
         tier = WebMap()
-        tier.deck_scatter(frame)
+        tier.tiles_3d("https://example.com/tileset.json")
         tier.point_cloud([(4.9, 52.4, 10.0)], name="cloud")
         tier.gltf("https://example.invalid/model.glb", 4.9, 52.4, name="statue")
         overlays = [
@@ -663,12 +656,14 @@ class TestADeckLayerOrderedAgainstAStyleLayer:
 
 @pytest.fixture
 def undescribed():
-    """Yield a map with an undescribed `deck_scatter`, a described deck layer and a style layer.
+    """Yield a map with an undescribed `tiles_3d`, a described deck layer and a style layer.
 
-    `deck_scatter` records no `LayerSpec`: it appends to `WebMap._deck_layers` and the queue holds **one**
+    `tiles_3d` records no `LayerSpec`: it appends to `WebMap._deck_layers` and the queue holds **one**
     `_DeckOverlay` marker for every builder that does, so that slot is shared and says nothing about where
-    any one of those layers belongs. `point_cloud` is the described counterpart — it owns its own queue slot
-    — and `points` is the style layer both are ordered against, all three in the `data` band.
+    any one of those layers belongs. It is the last deck route still off the tree — `deck_scatter`,
+    `deck_polygons` and the big-data routes joined it in #396. `point_cloud` is the described counterpart —
+    it owns its own queue slot — and `points` is the style layer both are ordered against, all three in the
+    `data` band.
 
     Yields:
         The map.
@@ -680,7 +675,7 @@ def undescribed():
         {"v": [1.0, 2.0]}, geometry=[Point(4.9, 52.4), Point(5.0, 52.2)], crs=4326
     )
     built = WebMap()
-    built.deck_scatter(frame)
+    built.tiles_3d("https://example.com/tileset.json")
     built.point_cloud([(4.9, 52.4, 10.0), (5.0, 52.2, 20.0)], name=BOTTOM)
     built.points(frame, name=TOP)
     yield built
@@ -688,14 +683,15 @@ def undescribed():
 
 
 class TestAnUndescribedDeckBuilderIsNotOrderedAtAll:
-    """`deck_scatter`/`deck_polygons`/`tiles_3d` share one queue slot, so nothing anchors them.
+    """`tiles_3d` shares one queue slot, so nothing anchors it.
 
-    Anchoring reads one anchor per **queue entry**, and these builders have no entry of their own: they
-    accumulate behind a single `_DeckOverlay` marker whichever order they were called in. Anchoring them off
-    that slot gave every one of them the first builder's position — drawn beneath the next style layer the
-    queue adds, where they used to draw on top of every style layer — and since they record no `LayerSpec`
-    they are not in `layer_ids`, so `move_layer` cannot put them back (review R2-H5). They keep no
-    `beforeId`, which is deck.gl's own "on top", and the described deck layers keep theirs.
+    Anchoring reads one anchor per **queue entry**, and this builder has no entry of its own: it
+    accumulates behind a single `_DeckOverlay` marker whichever order such builders were called in. Anchoring
+    it off that slot would give it the first builder's position — drawn beneath the next style layer the
+    queue adds, where it used to draw on top of every style layer — and since it records no `LayerSpec` it is
+    not in `layer_ids`, so `move_layer` cannot put it back (review R2-H5). It keeps no `beforeId`, which is
+    deck.gl's own "on top", and the described deck layers keep theirs. (`deck_scatter`/`deck_polygons` left
+    this bucket in #396 and are ordered like `point_cloud`/`model` now.)
     """
 
     def test_the_overlay_anchors_the_described_layer_and_not_the_shared_slot(
@@ -709,7 +705,7 @@ class TestAnUndescribedDeckBuilderIsNotOrderedAtAll:
         placed = [
             (layer["id"], layer.get("beforeId")) for layer in _page_overlay(undescribed)
         ]
-        assert placed == [("deck-scatter-1", None), (BOTTOM, TOP)], placed
+        assert placed == [("deck-tiles3d-1", None), (BOTTOM, TOP)], placed
 
     def test_the_page_draws_the_shared_slot_above_every_style_layer(self, undescribed):
         """A layer a caller cannot address must not be moved under one they can.
@@ -718,7 +714,7 @@ class TestAnUndescribedDeckBuilderIsNotOrderedAtAll:
             undescribed: The map under test.
         """
         drawn = _page_layer_ids(undescribed)
-        assert drawn == [BOTTOM, TOP, "deck-scatter-1"], drawn
+        assert drawn == [BOTTOM, TOP, "deck-tiles3d-1"], drawn
 
     def test_a_builder_called_after_the_style_layer_is_on_top_too(self, undescribed):
         """The shared slot is queued once, so its position cannot describe a later builder either.
@@ -726,17 +722,9 @@ class TestAnUndescribedDeckBuilderIsNotOrderedAtAll:
         Args:
             undescribed: The map under test.
         """
-        import geopandas as gpd
-        from shapely.geometry import Point
-
-        undescribed.deck_polygons(
-            gpd.GeoDataFrame(
-                geometry=[Point(4.9, 52.4).buffer(0.1)],
-                crs=4326,
-            )
-        )
+        undescribed.tiles_3d("https://example.com/other.json")
         drawn = _page_layer_ids(undescribed)
-        assert drawn[-2:] == ["deck-scatter-1", "deck-polygons-1"], drawn
+        assert drawn[-2:] == ["deck-tiles3d-1", "deck-tiles3d-2"], drawn
 
     def test_the_described_deck_layer_can_still_be_moved_over_the_style_layer(
         self, undescribed
@@ -748,13 +736,13 @@ class TestAnUndescribedDeckBuilderIsNotOrderedAtAll:
 
         Test scenario:
             The described cloud starts beneath the style layer and is moved over it, which is the ordering
-            `beforeId` was added for and must survive. It lands above the scatter rather than beneath it
+            `beforeId` was added for and must survive. It lands above the tileset rather than beneath it
             because both now name no style layer, and deck.gl draws one bucket in the overlay's own array
             order — which is the queue's, and the shared slot was queued first.
         """
         undescribed.move_layer(BOTTOM, 1)
         drawn = _page_layer_ids(undescribed)
-        assert drawn == [TOP, "deck-scatter-1", BOTTOM], drawn
+        assert drawn == [TOP, "deck-tiles3d-1", BOTTOM], drawn
 
 
 @pytest.fixture
