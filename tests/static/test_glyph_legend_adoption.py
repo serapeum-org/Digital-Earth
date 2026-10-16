@@ -24,9 +24,9 @@ from digitalearth import Map  # noqa: E402 - after the Agg backend is set
 
 @pytest.fixture
 def zones():
-    """Yield a four-feature categorical ``FeatureCollection`` of unit squares in three zones.
+    """Return a four-feature categorical ``FeatureCollection`` of unit squares in three zones.
 
-    Yields:
+    Returns:
         A :class:`pyramids.feature.FeatureCollection` whose ``zone`` column takes three distinct values, so a
         categorical choropleth over it draws a three-swatch legend.
     """
@@ -37,7 +37,7 @@ def zones():
         geometry=[Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)]) for i in range(4)],
         crs="EPSG:4326",
     )
-    yield FeatureCollection(gdf)
+    return FeatureCollection(gdf)
 
 
 def _glyph_legend(scene, layer_id):
