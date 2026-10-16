@@ -114,6 +114,27 @@ class TestEveryVectorBuilderRejectsARaster:
         )()
         assert InteractiveMap()._reject_raster(mesh, "trimesh") is None
 
+    def test_trimesh_accepts_a_ugrid_mesh_end_to_end(self):
+        """``trimesh`` builds a layer from a UGRID mesh, not merely passing the raster-only guard.
+
+        Test scenario:
+            A mesh exposes ``node_x``/``node_y``/``fan_triangles`` rather than ``geometry``; ``trimesh``
+            must route it through the UGRID branch of ``_mesh_inputs`` and register a layer. This exercises
+            the whole accept path end-to-end, which the isolated ``_reject_raster`` check does not, guarding
+            the routing (the guard runs before the mesh build) against regression.
+        """
+        mesh = type(
+            "Mesh",
+            (),
+            {
+                "node_x": (0.0, 1.0, 0.0, 1.0),
+                "node_y": (0.0, 0.0, 1.0, 1.0),
+                "fan_triangles": [[0, 1, 2], [1, 3, 2]],
+            },
+        )()
+        m = InteractiveMap().trimesh(mesh)
+        assert m.layers, "a UGRID mesh must build a trimesh layer end-to-end"
+
     def test_reject_raster_skips_a_path_string(self):
         """``_reject_raster`` leaves a path/URL alone, so the drawer opens and validates it later (not here).
 
