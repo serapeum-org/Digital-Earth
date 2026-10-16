@@ -118,6 +118,82 @@ def get(name: str, **kwargs) -> Any:
 # ---------------------------------------------------------------- geometry helpers
 
 
+def _drop_interior_points(pts: np.ndarray) -> np.ndarray:
+    """Drop the points that lie strictly inside the polygon of the eight extreme points.
+
+    The Akl-Toussaint heuristic: a point inside the polygon spanned by the points extreme along the axes and
+    the diagonals (min/max of x, y, x+y and x-y) cannot be a convex-hull vertex, so removing it leaves the
+    hull unchanged while sparing the monotone chain the bulk of a filled point cloud (review #381). Eight
+    directions rather than four because the four axis extremes alone span only an inscribed diamond that
+    covers about half a filled rectangle; adding the diagonals makes an octagon that discards far more of a
+    projected sphere's filled interior. The test is one vectorised cross-product per polygon edge: a point
+    strictly inside a convex polygon has the same sign against every edge, whichever way it winds, so the
+    mask is winding-agnostic and a point *on* an edge (cross of zero) is kept, never dropped.
+
+    Args:
+        pts: An ``(N, 2)`` array of unique points.
+
+    Returns:
+        The points that are not strictly interior — the hull vertices and whatever boundary points share
+        their band. Returns ``pts`` unchanged when there are too few to be worth filtering, or when the
+        extremes collapse to fewer than three distinct points (a degenerate, near-collinear cloud the polygon
+        cannot bound).
+
+    Examples:
+        - A filled grid's interior is discarded, leaving far fewer points for the hull to walk:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.projections import _drop_interior_points
+            >>> grid = np.stack(np.meshgrid(np.arange(10.0), np.arange(10.0)), -1).reshape(-1, 2)
+            >>> bool(len(_drop_interior_points(grid)) < len(grid))
+            True
+
+            ```
+        - A cloud below the size guard is returned unchanged — filtering a handful of points saves nothing:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.projections import _drop_interior_points
+            >>> small = np.array([[0.0, 0.0], [2.0, 0.0], [1.0, 1.0]])
+            >>> len(_drop_interior_points(small))
+            3
+
+            ```
+    """
+    if len(pts) < 32:
+        return pts
+    x, y = pts[:, 0], pts[:, 1]
+    diag1, diag2 = x + y, x - y
+    extremes = pts[
+        [
+            x.argmin(),
+            x.argmax(),
+            y.argmin(),
+            y.argmax(),
+            diag1.argmin(),
+            diag1.argmax(),
+            diag2.argmin(),
+            diag2.argmax(),
+        ]
+    ]
+    poly = np.unique(extremes, axis=0)
+    if len(poly) < 3:
+        return pts
+    centre = poly.mean(axis=0)
+    poly = poly[np.argsort(np.arctan2(poly[:, 1] - centre[1], poly[:, 0] - centre[0]))]
+    nxt = np.roll(poly, -1, axis=0)
+    edge = nxt - poly
+    # Cross of each edge with the vector to every point: shape (edges, N).
+    crosses = np.stack(
+        [
+            edge[k, 0] * (pts[:, 1] - poly[k, 1])
+            - edge[k, 1] * (pts[:, 0] - poly[k, 0])
+            for k in range(len(poly))
+        ]
+    )
+    inside = (crosses > 0).all(axis=0) | (crosses < 0).all(axis=0)
+    return pts[~inside]
+
+
 def _convex_hull(points: np.ndarray) -> np.ndarray:
     """Return the convex-hull ring (closed) of 2-D ``points`` via Andrew's monotone chain (pure numpy).
 
@@ -156,6 +232,13 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
     pts = np.unique(points, axis=0)
     if len(pts) < 3:
         return np.vstack([pts, pts[:1]]) if len(pts) else pts
+    # Discard the points no hull vertex can be among before the Python chain walks them: a global
+    # projection samples a filled region (720x360 ~ 259k points), yet its hull is the thin boundary band,
+    # and the monotone chain below cost ~1.8s walking all of them in Python (review #381). The
+    # Akl-Toussaint heuristic keeps only the points outside the quadrilateral of the four axis extremes —
+    # every interior point is provably not a hull vertex — which is an exact reduction done in vectorised
+    # numpy, leaving the chain a few thousand boundary points instead of a quarter-million.
+    pts = _drop_interior_points(pts)
     pts = pts[np.lexsort((pts[:, 1], pts[:, 0]))]
 
     def cross2d(o, a, b):
@@ -415,8 +498,15 @@ def projection_frame(
     lon = np.linspace(-180, 180, n)
     lat = np.linspace(-90, 90, max(n // 2, 2))
     grid_lon, grid_lat = np.meshgrid(lon, lat)
+    # `precision=None` skips pyramids' per-coordinate `round(value, 6)` — a Python list comprehension over
+    # every sampled point (518k `round` calls at n=720), pure overhead for a hull whose vertices need no
+    # six-decimal tidying (review #381). The unrounded coordinates give the same boundary.
     px, py = reproject_coordinates(
-        grid_lon.ravel().tolist(), grid_lat.ravel().tolist(), from_crs=4326, to_crs=crs
+        grid_lon.ravel().tolist(),
+        grid_lat.ravel().tolist(),
+        from_crs=4326,
+        to_crs=crs,
+        precision=None,
     )
     px, py = np.asarray(px, dtype=float), np.asarray(py, dtype=float)
     mask = np.isfinite(px) & np.isfinite(py)
