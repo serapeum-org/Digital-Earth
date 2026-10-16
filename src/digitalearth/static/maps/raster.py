@@ -975,11 +975,14 @@ def _classified(
             ```
     """
     scheme = opts.get("scheme")
+    # `categories` (pooled class codes from a shared scale, e.g. facet) is this tier's own keyword — never a
+    # glyph option — so take it out before cleopatra sees anything; it only directs the categorical classify.
+    categories = opts.pop("categories", None)
     classes: BandClasses | None
     if scheme is None:
         classes = classes_of(described, opts.get("cmap"))
     elif asks_categorical(scheme):
-        classes = classify_band(values, scheme, None, requested)
+        classes = classify_band(values, scheme, None, requested, categories=categories)
         reusable = (
             requested is None
             and described is not None

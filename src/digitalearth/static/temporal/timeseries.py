@@ -1,4 +1,9 @@
-"""TimeSeries — reduce a DatasetCollection to a per-time-step series and plot it as a line."""
+"""TimeSeries — reduce a DatasetCollection to a per-time-step series and plot it as a line.
+
+The reduction is engine-neutral and lives in :mod:`digitalearth.base.temporal`
+(:func:`~digitalearth.base.temporal.series_values`); this class is the static backend's thin wrapper that
+also draws the series. See that module for why the compute/draw split is a relayering (#168).
+"""
 
 from collections.abc import Sequence
 from typing import Any
@@ -7,8 +12,8 @@ import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
-from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.spec import DEFAULT_BAND
+from digitalearth.base.temporal import SERIES_REDUCERS, series_values
 
 
 class TimeSeries:
@@ -51,14 +56,14 @@ class TimeSeries:
             ```
     """
 
-    _REDUCERS = {name: NAN_REDUCERS[name] for name in ("mean", "sum", "min", "max")}
+    _REDUCERS = SERIES_REDUCERS
 
     def __init__(
         self, collection: Any, band: int = DEFAULT_BAND, reducer: str = "mean"
     ):
-        if reducer not in self._REDUCERS:
+        if reducer not in SERIES_REDUCERS:
             raise ValueError(
-                f"unknown reducer {reducer!r}; choose from {sorted(self._REDUCERS)}"
+                f"unknown reducer {reducer!r}; choose from {sorted(SERIES_REDUCERS)}"
             )
         self.collection = collection
         self.band = band
@@ -67,15 +72,12 @@ class TimeSeries:
     def values(self) -> np.ndarray:
         """Return the reduced value of each member (one per time step).
 
+        Delegates to the engine-neutral :func:`~digitalearth.base.temporal.series_values`.
+
         Returns:
             1-D array of length ``len(collection.datasets)``.
         """
-        func = self._REDUCERS[self.reducer]
-        out = [
-            func(read_masked_band(member, self.band))
-            for member in self.collection.datasets
-        ]
-        return np.asarray(out)
+        return series_values(self.collection, self.band, self.reducer)
 
     def plot(
         self, times: Sequence | None = None, ax: Axes | None = None, **kwargs

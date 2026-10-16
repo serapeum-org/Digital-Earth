@@ -40,17 +40,22 @@ from digitalearth.static.scene import LayerRecord, drawing_style
 #: :meth:`ProjectionMixin.graticule` say when ``spacing=`` has just discarded one (review R2-L3).
 DEFAULT_GRATICULE_STEP: float = 30.0
 
-#: The most gridlines a graticule may draw along one axis, whole-world. The lines span the globe whatever
-#: the view shows — :func:`digitalearth.static.projections.graticule` runs its meridians across the full
-#: ``-180..180`` and its parallels across ``-90..90``, never reading the limits — so the count is a function
-#: of the step alone: ``~360/lon_step`` meridians and ``~180/lat_step`` parallels. A vanishing step draws
-#: millions of them and the call never returns rather than drawing or refusing (the R2-L4 follow-up: a step
-#: that is finite, positive and so clears every other guard, yet ``spacing=1e-4`` builds ~5.4M lines and
+#: The most gridlines a graticule may draw along one axis. The count is ``~span/step`` —
+#: :func:`digitalearth.static.projections.graticule` cuts its lines to the view's ``window`` since #393, so
+#: ``span`` is the degrees that window covers: the whole world (``360`` of longitude, ``180`` of latitude)
+#: for an unframed or global view, and the framed region otherwise. A vanishing step draws millions of lines
+#: and the call never returns rather than drawing or refusing (the R2-L4 follow-up: a step that is finite,
+#: positive and so clears every other guard, yet ``spacing=1e-4`` builds ~5.4M lines across the world and
 #: ran past two minutes). Each line is a 200-point pyramids reprojection at ~0.6 ms, so this ceiling holds
-#: the build near a second where the unbounded one hung. It is far above any readable grid — 30° is 13
-#: meridians, and even a 1° world grid is 361 — so no step a caller would actually want comes near it. The
-#: step cannot be made cheap on a small view without clipping the line *generation* to the limits, which
-#: lives in :func:`~digitalearth.static.projections.graticule` (and pyramids beneath it), not here.
+#: the build near a second where the unbounded one hung. It is far above any readable grid — a 30° world
+#: grid is 13 meridians, and even a 1° one is 361 — so no step a caller would actually want comes near it.
+#:
+#: Because the count now depends on the view, a step cheap on a small view is ruinous once the view is
+#: enlarged, so the ceiling is enforced wherever the lines are generated — :meth:`_Graticule.__init__`, which
+#: every draw passes through — and not only at the :meth:`ProjectionMixin.graticule` entry (review H1). The
+#: clipping that makes a fine step cheap on a small view lives in
+#: :func:`~digitalearth.static.projections.graticule` (and pyramids beneath it); the refusal that bounds it
+#: is :func:`_checked_step`.
 MAX_GRATICULE_LINES: int = 2000
 
 #: How a flat map's grid looks when the caller asks for nothing else, in the **plural** keys a
@@ -517,8 +522,8 @@ class _Graticule:
     the figure described the layer as drawn.
 
     Examples:
-        - The grid a framed flat map asks for: the lines span the world, and the labels are only the
-          degrees the *view* holds:
+        - The grid a framed flat map asks for: since #393 the lines are cut to the view (nine here, not the
+          world's eighteen), and the labels are the degrees the *view* holds:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -528,7 +533,7 @@ class _Graticule:
             >>> _ = m.set_bounds([-35.0, -5.0, 35.0, 65.0])
             >>> grid = _Graticule(m, {"lon_step": 30.0, "lat_step": 30.0, "labels": True})
             >>> len(grid.lines), tuple(round(v, 1) for v in grid.window())
-            (18, (-35.0, -5.0, 35.0, 65.0))
+            (9, (-35.0, -5.0, 35.0, 65.0))
             >>> [label.line.text for label in grid.labels()]
             ['30°W', '0°', '30°E', '0°', '30°N', '60°N']
             >>> m.close()
@@ -560,6 +565,12 @@ class _Graticule:
                 carries no ``labels`` key and is read as asking for them, which is this tier's default.
 
         Raises:
+            ValueError: from :func:`_checked_step`, when the stored step would draw more than
+                :data:`MAX_GRATICULE_LINES` lines across the span the view covers (review H1). This is the
+                budget the ``graticule()`` entry applies, applied again here because #393 made the count
+                view-dependent: a step legal on a small view is ruinous once a later framing call enlarges
+                the view, and this choke point is the one place every re-cut passes through. Raised before a
+                line is projected, so a refused reframe leaves the grid the map is still drawing untouched.
             ZeroDivisionError: from the projection, for a step of zero. Raised here, before anything is
                 drawn or recorded, which is what lets a refused *replacement* leave the grid the map is
                 still drawing exactly as it was (round 2, M1). Not reachable through
@@ -571,9 +582,29 @@ class _Graticule:
         self._lon_step = props["lon_step"]
         self._lat_step = props["lat_step"]
         self._labelled = bool(props.get("labels", True))
-        #: The projected polylines, meridians then parallels, split at the projection limb.
+        window = None if scene.globe else self.window()
+        # The line-count budget is enforced **here**, at the one place every draw of a graticule generates
+        # its lines — the `graticule()` entry, a reframe's re-cut (`_relabel_graticule`), an animation frame,
+        # a figure drawn by hand. #393 made the count view-dependent, so a step legal on a small view
+        # (`spacing=0.1` draws ~20 lines on a 2-degree view) regenerates thousands once the view is enlarged;
+        # checking only at the entry point let a later `set_global()`/`set_domain()` re-cut the stored step
+        # against the whole world with no ceiling, rebuilding the unbounded grid the R2-L4 budget exists to
+        # refuse and hanging the process (review H1). `_checked_step` refuses by the keyword that carried the
+        # step, against the span the lines will actually cover — the world for a globe or an unframed view,
+        # the framed region otherwise. The stored steps are always finite and positive (they passed this on
+        # the way in), so only the budget can trip here, and it trips before a single line is projected.
+        lon_span, lat_span = _window_spans(window)
+        _checked_step("lon_step", self._lon_step, span=lon_span)
+        _checked_step("lat_step", self._lat_step, span=lat_span)
+        #: The projected polylines, meridians then parallels, split at the projection limb — cut to the view
+        #: the axes holds (a globe draws its whole grid and clips at the limb instead, so it is unframed
+        #: here). ``window()`` is ``None`` only when the display CRS can place no sample of the view, where
+        #: the whole-world grid is the honest fallback; an unframed axes windows to the whole world anyway.
         self.lines: list[Any] = projections.graticule(
-            scene.crs, lon_step=self._lon_step, lat_step=self._lat_step
+            scene.crs,
+            lon_step=self._lon_step,
+            lat_step=self._lat_step,
+            window=window,
         )
 
     def draw(self, layer: LayerSpec) -> DrawnLayer:
@@ -650,44 +681,19 @@ class _Graticule:
         return self._placed(asked, np.asarray(x, float), np.asarray(y, float))
 
     def window(self) -> tuple[float, float, float, float] | None:
-        """Return the lon/lat window the view covers, as ``(lon_min, lat_min, lon_max, lat_max)``.
+        """Return the lon/lat window the view covers (see :func:`_view_window`).
 
-        What the labels are placed in: the lines span the world whatever the map is looking at, so the
-        degrees worth drawing are the ones the *view* holds. The view is in the display CRS, so it is
-        converted back to lon/lat through pyramids — over a grid of its interior rather than its border,
-        because an oblique projection can place a rectangle's extreme longitude inside it.
+        What the labels are placed in, and — since #393 — what the lines are cut to: the degrees worth
+        drawing are the ones the *view* holds. Delegates to the module-level :func:`_view_window`, which
+        :meth:`ProjectionMixin.graticule` also reads to budget a step against the framed span rather than
+        the world.
 
         Returns:
-            The window, clipped to the span the lines themselves cover; :data:`_LABEL_WORLD_WINDOW` when
-            nothing has framed the axes yet, which is a view of the whole world once the grid autoscales
-            it; or ``None`` when no sample of the view has a lon/lat at all, which is a view the display
-            CRS cannot place and so a window nothing can be labelled in.
+            ``(lon_min, lat_min, lon_max, lat_max)`` clipped to the span the lines cover;
+            :data:`_LABEL_WORLD_WINDOW` when nothing has framed the axes yet; or ``None`` when no sample of
+            the view has a lon/lat at all.
         """
-        xmin, xmax = (float(value) for value in self._scene.ax.get_xlim())
-        ymin, ymax = (float(value) for value in self._scene.ax.get_ylim())
-        if (xmin, xmax, ymin, ymax) == _UNFRAMED_LIMITS:
-            return _LABEL_WORLD_WINDOW
-        xs, ys = np.meshgrid(
-            np.linspace(min(xmin, xmax), max(xmin, xmax), _WINDOW_SAMPLES),
-            np.linspace(min(ymin, ymax), max(ymin, ymax), _WINDOW_SAMPLES),
-        )
-        lon, lat = reproject_coordinates(
-            xs.ravel().tolist(),
-            ys.ravel().tolist(),
-            from_crs=self._scene.crs,
-            to_crs=4326,
-        )
-        lon, lat = np.asarray(lon, dtype=float), np.asarray(lat, dtype=float)
-        seen = np.isfinite(lon) & np.isfinite(lat)
-        if not seen.any():
-            return None
-        west, south, east, north = _LABEL_WORLD_WINDOW
-        return (
-            max(float(lon[seen].min()), west),
-            max(float(lat[seen].min()), south),
-            min(float(lon[seen].max()), east),
-            min(float(lat[seen].max()), north),
-        )
+        return _view_window(self._scene)
 
     def _placed(
         self, asked: list[_GridLine], x: np.ndarray, y: np.ndarray
@@ -797,7 +803,115 @@ class _Graticule:
         )
 
 
-def _checked_step(keyword: str, value: float | None) -> float | None:
+def _view_window(scene: Any) -> tuple[float, float, float, float] | None:
+    """Return the lon/lat window a scene's view covers, as ``(lon_min, lat_min, lon_max, lat_max)``.
+
+    The view is in the display CRS, so it is converted back to lon/lat through pyramids — over a grid of its
+    interior rather than its border, because an oblique projection can place a rectangle's extreme longitude
+    inside it. Both the graticule's line generation and its label placement read this: the lines are cut to
+    the view and the degrees are placed in it (#393 / review R2-M2).
+
+    Args:
+        scene: The map whose axes limits and display CRS define the view.
+
+    Returns:
+        The window clipped to the span the lines themselves cover; :data:`_LABEL_WORLD_WINDOW` when nothing
+        has framed the axes yet (a view of the whole world once the grid autoscales it); or ``None`` when no
+        sample of the view has a lon/lat at all, which is a view the display CRS cannot place.
+    """
+    xmin, xmax = (float(value) for value in scene.ax.get_xlim())
+    ymin, ymax = (float(value) for value in scene.ax.get_ylim())
+    if (xmin, xmax, ymin, ymax) == _UNFRAMED_LIMITS:
+        return _LABEL_WORLD_WINDOW
+    xs, ys = np.meshgrid(
+        np.linspace(min(xmin, xmax), max(xmin, xmax), _WINDOW_SAMPLES),
+        np.linspace(min(ymin, ymax), max(ymin, ymax), _WINDOW_SAMPLES),
+    )
+    lon, lat = reproject_coordinates(
+        xs.ravel().tolist(), ys.ravel().tolist(), from_crs=scene.crs, to_crs=4326
+    )
+    lon, lat = np.asarray(lon, dtype=float), np.asarray(lat, dtype=float)
+    seen = np.isfinite(lon) & np.isfinite(lat)
+    if not seen.any():
+        return None
+    west, south, east, north = _LABEL_WORLD_WINDOW
+    lon_min = max(float(lon[seen].min()), west)
+    lon_max = min(float(lon[seen].max()), east)
+    if _pole_in_view(scene):
+        # Every meridian converges at an in-view pole, so longitude is unbounded there and the interior
+        # sample under-reports it — on a flat polar/oblique map it missed the antimeridian sector and the
+        # line generation then dropped meridians that cross the view (review R2-M2). Widen longitude to the
+        # whole world so no crossing meridian is dropped; latitude stays as sampled, clipped to the pole.
+        lon_min, lon_max = west, east
+    return (
+        lon_min,
+        max(float(lat[seen].min()), south),
+        lon_max,
+        min(float(lat[seen].max()), north),
+    )
+
+
+def _pole_in_view(scene: Any) -> bool:
+    """Whether a geographic pole sits inside the view as a point meridians converge at.
+
+    The test longitude is unbounded needs: a pole is in view **and** the display CRS is one where meridians
+    meet at it (an azimuthal or conic projection), not one where the pole is the top edge (a cylindrical
+    projection, where longitude stays bounded however near the pole the view is). Reproject two opposite
+    meridians at each pole through pyramids: they land on the same point only where the pole is a
+    convergence, and that point is then tested against the axes limits.
+
+    Args:
+        scene: The map whose axes limits and display CRS define the view.
+
+    Returns:
+        ``True`` when the north or south pole is a convergence point inside the current axes limits — the one
+        case where longitude cannot be bounded and the whole meridian set must be drawn.
+    """
+    xmin, xmax = sorted(float(value) for value in scene.ax.get_xlim())
+    ymin, ymax = sorted(float(value) for value in scene.ax.get_ylim())
+    span = max(xmax - xmin, ymax - ymin) or 1.0
+    for pole in (90.0, -90.0):
+        xs, ys = reproject_coordinates(
+            [0.0, 180.0], [pole, pole], from_crs=4326, to_crs=scene.crs
+        )
+        xs = [float(value) for value in xs]
+        ys = [float(value) for value in ys]
+        if not all(isfinite(value) for value in (*xs, *ys)):
+            continue
+        converges = (
+            abs(xs[0] - xs[1]) <= span * 1e-6 and abs(ys[0] - ys[1]) <= span * 1e-6
+        )
+        if converges and xmin <= xs[0] <= xmax and ymin <= ys[0] <= ymax:
+            return True
+    return False
+
+
+def _window_spans(
+    window: tuple[float, float, float, float] | None,
+) -> tuple[float, float]:
+    """Return the ``(lon_span, lat_span)`` degrees a window covers, defaulting to the whole world.
+
+    Args:
+        window: ``(lon_min, lat_min, lon_max, lat_max)``, or ``None`` for the whole world — which is the
+            right span to budget an unframed or global view against, so a fine step still refuses there.
+            :data:`_LABEL_WORLD_WINDOW` — what :func:`_view_window` returns for an **unframed** flat map — is
+            treated as the whole world too: its latitude is inset to ``±89.5`` to keep labels off the poles,
+            a span of ``179`` that would otherwise report an unframed refusal as "across this view" when no
+            view has been framed (review L1). The budget is the same either way; only the message differs.
+
+    Returns:
+        The longitude and latitude spans in degrees; ``(360, 180)`` for the whole world, including the
+        unframed world-label window.
+    """
+    if window is None or window == _LABEL_WORLD_WINDOW:
+        return _MERIDIANS.limit * 2.0, _PARALLELS.limit * 2.0
+    lon_min, lat_min, lon_max, lat_max = window
+    return lon_max - lon_min, lat_max - lat_min
+
+
+def _checked_step(
+    keyword: str, value: float | None, span: float | None = None
+) -> float | None:
     """Return a spacing a grid can be cut at, or refuse it by name.
 
     Args:
@@ -805,6 +919,10 @@ def _checked_step(keyword: str, value: float | None) -> float | None:
             ``lon_step`` or ``lat_step`` — which is what the refusal names. Those three are the method's
             whole numeric surface; it takes no count or ``n`` beside them.
         value: What the caller wrote, or ``None`` for an argument they did not name.
+        span: The degrees the **view** covers along this keyword's axis, which bounds how many lines are
+            cut; ``None`` (default) budgets against the whole world — the right span for an unframed or
+            global view, and what a direct caller gets. A smaller framed view lets a finer step through,
+            because only the lines it holds are drawn (#393).
 
     Returns:
         The value unchanged, ``None`` included: an argument nobody named is not a step to check, and is
@@ -814,14 +932,16 @@ def _checked_step(keyword: str, value: float | None) -> float | None:
         ValueError: when the value is not a finite number of degrees greater than zero — zero divided by
             zero inside the projection, ``nan`` and ``inf`` came back as ``arange: cannot compute
             length``, and a **negative** step raised nothing at all, describing a layer and putting an
-            empty ``LineCollection`` on the axes (review R2-L4) — **or** when it is so small that the
-            whole-world grid would exceed :data:`MAX_GRATICULE_LINES` lines along this keyword's axis. A
-            meridian runs the full ``360`` degrees of longitude and a parallel the ``180`` of latitude, so
-            ``~span/value`` lines are drawn whatever the view shows; ``spacing`` is held to the meridian
-            span, the denser of the two it sets. ``spacing=1e-4`` is finite and positive, so it cleared
-            every other guard, yet it builds ~5.4M lines and never returns (the R2-L4 follow-up). The
-            refusal is this arithmetic, so it lands before a single line is projected. None of the
-            unbounded messages named the method or the keyword.
+            empty ``LineCollection`` on the axes (review R2-L4) — **or** when it is so small that the grid
+            would exceed :data:`MAX_GRATICULE_LINES` lines along this keyword's axis. The count is
+            ``~span/value``: ``span`` is the whole world (``360`` of longitude, ``180`` of latitude) for an
+            unframed or global view, and the framed view's own span once there is one (#393), so a fine step
+            a small region can show is let through while the same step on the world is refused; ``spacing``
+            is held to the meridian (longitude) span, the denser of the two it sets. On the world,
+            ``spacing=1e-4`` is finite and positive, so it cleared every other guard, yet it builds ~5.4M
+            lines and never returns (the R2-L4 follow-up). The refusal is this arithmetic, so it lands
+            before a single line is projected. None of the unbounded messages named the method or the
+            keyword.
 
     Examples:
         - A positive step comes back as it was, fractions included, and so does an argument nobody wrote:
@@ -860,20 +980,33 @@ def _checked_step(keyword: str, value: float | None) -> float | None:
             "default and a fraction such as 7.5 is drawn here — or leave the argument out, which keeps the "
             "step the grid already carries."
         )
-    # The lines span the world whatever the view shows, so the count is `span / value` and nothing but the
-    # step enters it. A parallel covers 180 degrees of latitude, a meridian 360 of longitude; `spacing`
-    # sets both, so it answers to the meridian axis, the denser one.
-    span = _PARALLELS.limit * 2.0 if keyword == "lat_step" else _MERIDIANS.limit * 2.0
+    # The count is `span / value`: how many step-spaced lines the view holds. `span` is the whole world
+    # (360 of longitude, 180 of latitude; `spacing` answers to the denser meridian axis) unless the caller
+    # passes the framed view's own span, which is what lets a fine step through on a small region (#393).
+    world_span = (
+        _PARALLELS.limit * 2.0 if keyword == "lat_step" else _MERIDIANS.limit * 2.0
+    )
+    span = world_span if span is None else span
     lines = span / value
     if lines > MAX_GRATICULE_LINES:
         floor = span / MAX_GRATICULE_LINES
+        world = span >= world_span
+        where = "across the world" if world else "across this view"
+        # The count is `span / step`, and since #393 `span` is the view's (the world only for an unframed or
+        # global view). So the reason and the advice differ: on the world, framing smaller lets a denser step
+        # through; already framed small and still over budget, only a coarser step will do.
+        reason = (
+            "The lines span the whole globe whatever the map is framed on, so a step this small is that "
+            "many lines even on a small view; frame a smaller region to let a denser grid through, or pass "
+            f"{keyword}>={floor:g}"
+            if world
+            else "The lines are cut to this view, and even across it that step is that many lines; pass "
+            f"{keyword}>={floor:g}, or frame a smaller region"
+        )
         raise ValueError(
             f"graticule() was given {keyword}={value!r}, which would draw about {int(lines)} gridlines "
-            f"across the world — past the {MAX_GRATICULE_LINES}-line budget a reference grid is held to. "
-            "The lines span the whole globe whatever the map is framed on, so a step this small is that "
-            f"many lines even on a small view. Pass {keyword}>={floor:g} (30 is the default), or frame a "
-            "smaller region if a denser grid is what you are after — the line count is the step's, not the "
-            "view's."
+            f"{where} — past the {MAX_GRATICULE_LINES}-line budget a reference grid is held to. {reason} "
+            f"({DEFAULT_GRATICULE_STEP:g} is the default)."
         )
     return value
 
@@ -936,6 +1069,7 @@ class _GraticuleSteps(NamedTuple):
         spacing: float | None,
         labels: bool = True,
         carried: Optional["_GraticuleSteps"] = None,
+        window: tuple[float, float, float, float] | None = None,
     ) -> "_GraticuleSteps":
         """Collapse what a caller wrote into the two steps a graticule is drawn at.
 
@@ -948,6 +1082,9 @@ class _GraticuleSteps(NamedTuple):
                 the call that creates it. A step the caller does not name is taken from here: a call that
                 names one step is asking for that step, not for the other one to be re-cut at the default
                 (round 1, M7). ``spacing`` outranks it, since that argument names both steps.
+            window: The lon/lat window the view holds (from :func:`_view_window`), so a fine step is
+                budgeted against the framed span rather than the world; ``None`` (default — a direct caller,
+                an unframed or a global view) budgets against the whole world (#393).
 
         Returns:
             The two steps — each the caller's own, else ``carried``'s, else
@@ -964,10 +1101,12 @@ class _GraticuleSteps(NamedTuple):
                 that nothing has been described, let alone drawn, when the caller hears about it.
         """
         # In the precedence order the rest of this method follows, so the refusal names the argument that
-        # would have cut the grid rather than one `spacing` was about to discard anyway.
-        spacing = _checked_step("spacing", spacing)
-        lon_step = _checked_step("lon_step", lon_step)
-        lat_step = _checked_step("lat_step", lat_step)
+        # would have cut the grid rather than one `spacing` was about to discard anyway. `spacing` answers
+        # to the meridian (longitude) span, the denser of the two it sets.
+        lon_span, lat_span = _window_spans(window)
+        spacing = _checked_step("spacing", spacing, span=lon_span)
+        lon_step = _checked_step("lon_step", lon_step, span=lon_span)
+        lat_step = _checked_step("lat_step", lat_step, span=lat_span)
         if spacing is not None:
             if lon_step is not None or lat_step is not None:
                 warnings.warn(
@@ -1172,7 +1311,12 @@ class ProjectionMixin(_MixinBase):
             ValueError: if the sequence form does not hold exactly four values; if ``bounds=None`` and the
                 figure draws nothing with an extent, because silently doing nothing is indistinguishable
                 from the call being dropped; or, from `Bounds`, for a non-finite edge or a ``padding``
-                below ``-0.5``, which would turn the frame inside out.
+                below ``-0.5``, which would turn the frame inside out. Also when the map carries a
+                graticule whose stored step would draw more than
+                :data:`MAX_GRATICULE_LINES` lines across the view this call frames — a fine step legal on a
+                small view is over budget once the view is enlarged (review H1). The reframe is **atomic**:
+                such a refusal restores the view this call tried to set, so the map is left exactly as it
+                was rather than framed on the new view with the old grid (review R2-M1).
 
         Warns:
             UserWarning: naming every degree a **labelled graticule**'s re-label cannot place in the view
@@ -1195,11 +1339,13 @@ class ProjectionMixin(_MixinBase):
             rectangles across the 2-D tiers; the matplotlib ordering is reachable from `Bounds` alone now,
             through :meth:`~digitalearth.base.spec.bounds.Bounds.as_mpl`.
 
-            A **labelled graticule** is re-labelled against the view this call leaves behind, because a
-            degree label is positioned in the view it is read off and a flat map has no render-time pass to
-            revisit it (:meth:`_relabel_graticule`, review R2-M2). The grid's lines are untouched. This is
-            therefore the one call that redraws a graticule layer without ``graticule()`` being written, so
-            it carries that method's placement warning — see *Warns*.
+            A **graticule** is re-cut and re-labelled against the view this call leaves behind, because its
+            lines are cut to the view and a degree label is positioned in the view it is read off, and a
+            flat map has no render-time pass to revisit either (:meth:`_relabel_graticule`, reviews R2-M2
+            and #393). The lines are re-cut even when the grid is bare (``labels=False``), since they depend
+            on the view whether or not they carry degrees. This is therefore the one call that redraws a
+            graticule layer without ``graticule()`` being written, so it carries that method's placement
+            warning — see *Warns*.
 
             What :attr:`viewport` reports is read **back off the axes** once the limits are set, so it is the
             rectangle the figure is holding rather than the one that was asked for. The two differ for a frame
@@ -1252,13 +1398,28 @@ class ProjectionMixin(_MixinBase):
         """
         frame = self._frame_asked(bounds, padding)
         xmin, xmax, ymin, ymax = frame.limits()
+        # The view this call is about to replace, kept so the reframe is atomic. Re-cutting the graticule
+        # (`_relabel_graticule`) can refuse — a fine stored step is over budget once the view is enlarged
+        # (review H1) — and that refusal must not leave the map framed on the new view with the old grid
+        # still on it: the limits move *before* the re-cut, so without this a caught error left the two
+        # disagreeing (review R2-M1). On a refusal the view this call tried to set is rolled back and the
+        # error re-raised, so the map is exactly as the call found it.
+        previous_xlim = self.ax.get_xlim()
+        previous_ylim = self.ax.get_ylim()
+        previous_bounds = self._frame_bounds
         self.ax.set_xlim(xmin, xmax)
         self.ax.set_ylim(ymin, ymax)
         # Read back, not `frame.box`: matplotlib will not hold a singular limit and expands one as it is set,
         # so a zero-span frame — a fit onto one point, or `padding=-0.5` — was recorded as a rectangle the
         # axes was not holding and the figure never showed (review R2-M10).
         self._frame_bounds = self._frame_held(frame.box.crs)
-        self._relabel_graticule()
+        try:
+            self._relabel_graticule()
+        except BaseException:
+            self.ax.set_xlim(*previous_xlim)
+            self.ax.set_ylim(*previous_ylim)
+            self._frame_bounds = previous_bounds
+            raise
         return self
 
     def _relabel_graticule(self) -> None:
@@ -1276,22 +1437,22 @@ class ProjectionMixin(_MixinBase):
         :meth:`set_bounds` is the single funnel every framing call reaches — :meth:`set_domain` and
         :meth:`set_global` both frame through it — so one call here covers all three.
 
-        The **lines** are left to the redraw to re-cut identically: they span the world whatever the map is
-        looking at, which is why this is a re-label rather than a rebuild in anything but name. The redraw
-        goes through ``Renderer.draw_layer``, so the grid replaces its own drawing (the collection is
-        reused, the old labels come off), the described ``visible`` flag is re-applied, and a draw that
-        raises takes its own artists back off.
+        The **lines** are re-cut to the new view too, since #393 made them view-dependent: the redraw goes
+        through ``Renderer.draw_layer``, which rebuilds the grid from the framed window — so a fine grid on a
+        small region re-cuts to the handful of lines that region holds rather than keeping the previous
+        view's. The collection is reused, the old labels come off, the described ``visible`` flag is
+        re-applied, and a draw that raises takes its own artists back off.
 
         Note:
-            A grid drawn ``labels=False`` is left alone: a framing call is not a request for the degrees of
-            a deliberately bare grid to come back, which is the rule a *replacing* ``graticule()`` call
-            already follows. A globe is left alone because its grid carries no degrees at all.
+            A grid drawn ``labels=False`` is **also** re-cut now: its lines depend on the view even though it
+            carries no degrees, so framing has to regenerate them (before #393 the lines spanned the world
+            whatever the view, so a bare grid was left alone). A globe is left alone — its grid is drawn
+            world-wide at render time and clipped at the limb, not cut to a flat view.
         """
         held = self._graticule_held()
         if self.globe or held is None:
             return
-        steps = _GraticuleSteps.held_by(held)
-        if steps is None or not steps.labels:
+        if _GraticuleSteps.held_by(held) is None:
             return
         self._renderer.draw_layer(self.figure_spec, held.id)
 
@@ -1512,14 +1673,16 @@ class ProjectionMixin(_MixinBase):
         everything else. Before #221 the *flat* map had no such pass, so this call computed a grid, stored
         it, and drew nothing at all while the figure described a layer that was drawn.
 
-        **A later framing call re-labels it.** A degree label is positioned in the view it is read off, so
-        a labelled grid drawn before :meth:`set_bounds`, :meth:`set_domain` or :meth:`set_global` is
-        re-placed by that call against the view it leaves behind
-        (:meth:`_relabel_graticule`) — the lines are unchanged, since they span the world whatever the map
-        is looking at. Until then the labels were placed once: ``graticule(spacing=30.0)`` followed by
+        **A later framing call re-cuts and re-labels it.** The lines are cut to the view and the degrees
+        are placed in it, so a grid drawn before :meth:`set_bounds`, :meth:`set_domain` or
+        :meth:`set_global` is redrawn by that call against the view it leaves behind
+        (:meth:`_relabel_graticule`) — the lines are re-cut to the new region and the labels re-placed in
+        it (#393). Until #393 the lines spanned the world whatever the view, so only the labels moved; now a
+        fine grid on a small region draws the handful of lines that region holds rather than the world's.
+        Until R2-M2 the labels were placed once: ``graticule(spacing=30.0)`` followed by
         ``set_domain("europe")`` left all 18 degrees outside the axes and off the canvas without a word,
-        and the reverse order of the same two calls drew three (review R2-M2). A bare grid is not
-        re-labelled — a framing call is not a request for the degrees of a ``labels=False`` grid to come
+        and the reverse order of the same two calls drew three. A bare (``labels=False``) grid is re-cut
+        too — its lines depend on the view even though it carries no degrees — but its degrees do not come
         back, the rule a *replacing* call here already follows.
 
         Args:
@@ -1564,26 +1727,31 @@ class ProjectionMixin(_MixinBase):
 
             The grid itself is reached by id, and a graticule is the layer where the two spellings differ.
             `Scene.artist(layer_id)` hands back **what the drawer computed** — the list of projected
-            polylines, 18 of them at the default spacing, as `(N, 2)` arrays — because that is this
-            drawer's value, and it answers that way even on a globe whose lines are not on the axes yet.
-            What is *on* the axes is `Renderer.drawn[layer_id].artists`, and it is a different shape per
-            frame. A flat map carries one `LineCollection` for the whole grid plus one `Text` per
-            **labelled line** — a count that tracks the degrees the *view* holds rather than the
-            polylines, and tracks them whichever order the framing call and this one are written in, since
-            a framing call re-labels the grid. Measured on `Map(crs=4326)`, both orders:
+            polylines, 18 of them at the default spacing on an unframed (world) view, as `(N, 2)` arrays —
+            because that is this drawer's value, and it answers that way even on a globe whose lines are not
+            on the axes yet. What is *on* the axes is `Renderer.drawn[layer_id].artists`, and it is a
+            different shape per frame. A flat map carries one `LineCollection` for the whole grid plus one
+            `Text` per **labelled line**. Both the polylines and the labels track the *view* since #393: a
+            framed view cuts the lines to the region it holds and places a degree on each line it can,
+            whichever order the framing call and this one are written in. Measured on `Map(crs=4326)`, both
+            orders:
 
             ```
             unframed, spacing=30                  polylines=18  LineCollection=1  Text=18
-            framed THEN graticule, spacing=30     polylines=18  LineCollection=1  Text=6
-            graticule THEN framed, spacing=30     polylines=18  LineCollection=1  Text=6
+            framed THEN graticule, spacing=30     polylines= 9  LineCollection=1  Text=6
+            graticule THEN framed, spacing=30     polylines= 9  LineCollection=1  Text=6
             unframed, spacing=60                  polylines= 9  LineCollection=1  Text=10
-            framed THEN graticule, spacing=60     polylines= 9  LineCollection=1  Text=3
-            graticule THEN framed, spacing=60     polylines= 9  LineCollection=1  Text=3
-            labels=False, either order            polylines=18  LineCollection=1
+            framed THEN graticule, spacing=60     polylines= 5  LineCollection=1  Text=3
+            graticule THEN framed, spacing=60     polylines= 5  LineCollection=1  Text=3
+            labels=False, unframed                polylines=18  LineCollection=1
+            labels=False, framed (either order)   polylines= 9  LineCollection=1
             ```
 
-            ("framed" is `[-35, -5, 35, 65]`.) The two orders differed before R2-M2: the second row of
-            each pair carried the first row's count, placed against a view the figure had already left.
+            ("framed" is `[-35, -5, 35, 65]`.) The two orders agree: a framing call re-cuts and re-labels a
+            grid drawn before it to the same view a grid drawn after it is cut to. Before #393 the polyline
+            counts did not clip — a framed grid carried the world's 18 (or 9) lines — and before R2-M2 the
+            two orders' label counts differed, the second row of each pair carrying the first row's labels,
+            placed against a view the figure had already left.
 
             A globe's grid is instead drawn by `apply_projection_frame` as one `Line2D` per
             polyline (measured: 18, and 0 artists before `render()`). `set_visible` and `remove_layer` act
@@ -1687,7 +1855,7 @@ class ProjectionMixin(_MixinBase):
                 >>> "150°W" in message, "120°E" in message
                 (True, True)
                 >>> len(m.ax.texts)
-                5
+                6
                 >>> m.close()
 
                 ```
@@ -1696,7 +1864,12 @@ class ProjectionMixin(_MixinBase):
         # the layer it replaces is the only record of what those options were.
         carried = _GraticuleSteps.held_by(self._graticule_held())
         steps = _GraticuleSteps.asked(
-            lon_step, lat_step, spacing, self._labels_asked(labels, carried), carried
+            lon_step,
+            lat_step,
+            spacing,
+            self._labels_asked(labels, carried),
+            carried,
+            window=None if self.globe else _view_window(self),
         )
         edit = self._describe_graticule(steps.symbology(), name=name, visible=visible)
         # Described first, then drawn — but through the renderer directly rather than through

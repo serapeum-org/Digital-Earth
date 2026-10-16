@@ -433,6 +433,30 @@ class TestAPooledCategoricalScale:
         painted = _code_colors(maps[1].layers[-1][1], codes)
         assert painted == dict(zip(codes, palette)), painted
 
+    def test_each_panel_records_a_categorical_scale_keyed_by_code(self, code_stack):
+        """A categorical facet records a categorical scale over the pooled codes, keyed as codes (#377).
+
+        Test scenario:
+            The panels used to be handed explicit class edges — a graduated scheme — so each layer recorded
+            a graduated scale whose legend read numeric ranges (`0.5 – 1.5`) and `is_categorical` was False.
+            With the codes passed as categories, each panel records `Scale.categorical(pooled_codes, …)`, so
+            its legend reads the codes (`1`, `2`, …) and the identity travels in the description.
+        """
+        codes = [
+            int(code)
+            for code in np.unique(np.concatenate([a.ravel() for a in CODE_FRAMES]))
+        ]
+        _, maps = facet(code_stack, crs=4326, scheme="categorical")
+        for panel in maps:
+            scale = dict(list(panel.figure_spec.layers)[-1].symbology.encodings)[
+                "color"
+            ].scale
+            assert scale.is_categorical, "panel layer recorded a non-categorical scale"
+            assert list(scale.categories) == codes, list(scale.categories)
+            panel.legend()
+            labels = [text.get_text() for text in panel.ax.get_legend().get_texts()]
+            assert labels == [str(code) for code in codes], labels
+
 
 class TestTheMeasurePass:
     """The scale is measured by reading each frame once, not once per panel."""

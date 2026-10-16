@@ -32,12 +32,10 @@ from digitalearth.base.clim import frozen_scale, measure_clim
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.raster_classes import (
     asks_categorical,
-    code_edges,
     raster_categories,
 )
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DEFAULT_BAND, Scale
-from digitalearth.base.symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.static.map import Map
 from digitalearth.static.scene import Scene
 
@@ -660,32 +658,26 @@ def _pooled_values(values: Sequence[np.ndarray]) -> np.ndarray:
 
 
 def _pooled_codes(pooled: np.ndarray, cmap: Any) -> dict[str, Any]:
-    """Cut one categorical scale over the whole stack: every code the frames hold, each with its own colour.
+    """Cut one categorical scale over the whole stack: every code the frames hold, keyed as codes.
 
-    ``scheme="categorical"`` classifies a band by the codes *that band* holds, so forwarding the word to each
-    panel gives each one a different class list — two frames holding ``{1, 2}`` and ``{3, 4}`` both paint
-    their lowest code in the palette's first colour, and the two classes read as one. The codes are therefore
-    pooled here, the way a graduated scheme's edges are, and handed to every panel as explicit class edges
-    plus the matching palette — the spelling a shared scale has to travel in, since the word ``"categorical"``
-    carries no class list with it.
-
-    Explicit edges are a *graduated* scheme, so each panel's layer records a graduated scale and its key reads
-    the class ranges (``0.5 – 1.5``) rather than the codes (``1``). The drawn colours are right either way —
-    one code is one colour on every panel, and a replay of a panel paints the same hexes — so what is wrong is
-    the recorded scale's identity and the legend text it produces; #377 asks for a way to state the categories
-    outright and tracks the fix.
+    ``scheme="categorical"`` classifies a band by the codes *that band* holds, so forwarding the word alone to
+    each panel gives each a different class list — two frames holding ``{1, 2}`` and ``{3, 4}`` both paint
+    their lowest code in the palette's first colour, and the two classes read as one (that was #374). The
+    codes are therefore pooled here and handed to every panel **as the categories to key on**, through the
+    ``field(categories=…)`` seam (#377): each panel then records a *categorical* scale over the pooled codes,
+    so its legend reads the codes (``1``, ``2``) — not the numeric ranges (``0.5 – 1.5``) that explicit class
+    edges, a graduated scheme, used to produce — and the identity travels in the description.
 
     Args:
         pooled: Every finite value of every frame that lands on the view, concatenated.
-        cmap: The caller's ``cmap``, or ``None`` — resolved through
-            :func:`~digitalearth.base.symbology.resolve_categorical_cmap`, so a facet takes the same
-            qualitative default a single categorical ``Map`` takes.
+        cmap: The caller's ``cmap``, or ``None`` — passed through to each panel, where
+            :func:`~digitalearth.base.raster_classes.classify_band` resolves it over the pooled codes, so a
+            facet takes the same qualitative default a single categorical ``Map`` takes and every panel the
+            same palette.
 
     Returns:
-        The ``scheme``/``cmap`` keywords every panel is drawn with: one class per pooled code, cut by
-        :func:`~digitalearth.base.raster_classes.code_edges` — half a step below the first code, midway
-        between each pair of neighbours, half a step above the last, so a gap in the codes widens a class
-        rather than letting it swallow a code — and one colour per class in code order.
+        The ``scheme``/``categories``/``cmap`` keywords every panel is drawn with: ``"categorical"`` over the
+        pooled codes, in code order, with the caller's ``cmap`` carried through unchanged.
 
     Raises:
         ValueError: from :func:`~digitalearth.base.raster_classes.raster_categories` when the pooled values
@@ -693,26 +685,23 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> dict[str, Any]:
             key can show (24).
 
     Examples:
-        - Three codes, one class and one colour each; the gap between 2 and 5 widens the middle class:
+        - Three codes pool into the categories every panel keys on, with the caller's cmap carried through:
             ```python
             >>> import numpy as np
             >>> from digitalearth.static.figure import _pooled_codes
             >>> shared = _pooled_codes(np.array([1.0, 2.0, 2.0, 5.0]), None)
-            >>> shared["scheme"]
-            [0.5, 1.5, 3.5, 5.5]
-            >>> shared["cmap"]
-            ['#1f77b4', '#ff7f0e', '#2ca02c']
+            >>> shared["scheme"], shared["categories"], shared["cmap"]
+            ('categorical', [1, 2, 5], None)
 
             ```
-        - The codes of two frames pool into one scale, so the second frame's codes carry on the palette
-          instead of restarting it:
+        - The codes of two frames pool into one category list, so the second frame's codes carry on the
+          palette instead of restarting it:
             ```python
             >>> import numpy as np
             >>> from digitalearth.static.figure import _pooled_codes
             >>> low, high = np.array([1.0, 2.0]), np.array([3.0, 4.0])
-            >>> shared = _pooled_codes(np.concatenate([low, high]), None)
-            >>> len(shared["cmap"]), shared["cmap"][2:]
-            (4, ['#2ca02c', '#d62728'])
+            >>> _pooled_codes(np.concatenate([low, high]), "Set2")["categories"]
+            [1, 2, 3, 4]
 
             ```
         - Values that are not class codes are refused, naming what to use instead:
@@ -728,8 +717,7 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> dict[str, Any]:
             ```
     """
     codes = raster_categories(pooled)
-    _, colors = categorical_colors(codes, resolve_categorical_cmap(cmap))
-    return {"scheme": code_edges(codes), "cmap": colors}
+    return {"scheme": "categorical", "categories": codes, "cmap": cmap}
 
 
 #: The classes a named ``facet(scheme=)`` cuts when the caller names no count — the classifier's own default.

@@ -203,9 +203,10 @@ class TestTheWholeChainRuns:
             not rule out is a grid that *computed* nothing: this drawer's value is the list of projected
             polylines, and ``[] is not None`` is True (review R2-L9). So the count is asserted.
             :data:`WORLD_LINES` is built from the two ranges a 30-degree grid steps through rather than
-            read back off the map.
+            read back off the map. The frame is the world (``set_global``), so the lines are not clipped to
+            a view: since #393 a framed view cuts them to the region it holds, counted elsewhere.
         """
-        canvas.set_bounds(WINDOW).graticule(spacing=30.0)
+        canvas.set_global().graticule(spacing=30.0)
         drawn = len(canvas.artist("graticule-1"))
         assert drawn == WORLD_LINES, (
             f"the chained graticule should have computed {WORLD_LINES} polylines; got {drawn}"

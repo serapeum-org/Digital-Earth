@@ -170,18 +170,21 @@ class TestANarrowedViewIsLabelledForTheViewItNowShows:
             f"the narrowed view should be labelled {EUROPE_DEGREES}; got {_labels(narrowed)}"
         )
 
-    def test_the_grid_itself_is_not_recut_by_the_reframe(self, narrowed):
-        """The lines span the world whatever the view is, so only the labels may move.
+    def test_the_grid_is_recut_to_the_view(self, narrowed):
+        """The lines are cut to the view now (#393), so narrowing drops the ones it no longer holds.
 
         Args:
             narrowed: A world grid whose view was narrowed afterwards.
 
         Test scenario:
-            This is the half of the layer that is *not* positioned against the call-time view, asserted
-            rather than argued: the collection still holds all 18 polylines after the reframe.
+            Before #393 the lines spanned the world whatever the view, so a reframe only moved the labels
+            and the collection kept all 18 polylines. Now the lines depend on the view: framing on Europe
+            re-cuts the collection to the handful that region holds, fewer than the world's 18 — this is the
+            invariant #393 inverts.
         """
-        assert _segments(narrowed) == WORLD_DEGREE_COUNT, (
-            f"the reframe re-cut the grid to {_segments(narrowed)} lines"
+        recut = _segments(narrowed)
+        assert 0 < recut < WORLD_DEGREE_COUNT, (
+            f"the reframe should have re-cut the grid below the world's {WORLD_DEGREE_COUNT}; got {recut}"
         )
 
     def test_the_layer_still_owns_exactly_one_collection(self, narrowed):
