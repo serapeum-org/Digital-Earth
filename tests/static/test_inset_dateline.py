@@ -66,8 +66,53 @@ class TestADatelineCrossingExtentIsDrawn:
             )
 
 
+class TestTheOrdinaryInsetPathsAreUnaffected:
+    """`inset()` without a crossing extent still frames normally, with no recentring."""
+
+    def test_no_extent_shows_the_whole_projection_domain(self):
+        """`inset()` with no extent builds a locator on the map's own CRS, framed to the whole domain.
+
+        Test scenario:
+            The default (no `extent`) path skips the recentring branch entirely: the locator is drawn on the
+            map's CRS and shown globally, so its CRS is never an equidistant-cylindrical recentring.
+        """
+        with Map(crs=4326) as m:
+            m.set_bounds([120.0, -10.0, 160.0, 10.0])
+            m.inset()
+            assert m.locator is not None and "eqc" not in str(m.locator.crs), (
+                f"a no-extent inset recentred or failed to build: {m.locator!r}"
+            )
+
+    def test_an_ordinary_extent_keeps_the_map_crs(self):
+        """A plain `west < east` extent frames the locator without recentring it.
+
+        Test scenario:
+            `[130, -5, 150, 5]` is an ordinary rectangle, so `_checked_extent` returns no recentring CRS and
+            the locator keeps the map's CRS rather than an equidistant-cylindrical one.
+        """
+        with Map(crs=4326) as m:
+            m.set_bounds([120.0, -10.0, 160.0, 10.0])
+            m.inset(extent=[130.0, -5.0, 150.0, 5.0])
+            assert "eqc" not in str(m.locator.crs), (
+                f"an ordinary extent recentred onto an eqc CRS: {m.locator.crs!r}"
+            )
+
+
 class TestTheRefusalsThatStand:
     """A `west > east` pair without an antimeridian, and a flipped latitude, are still refused."""
+
+    def test_a_crossing_the_projection_cannot_place_is_refused(self):
+        """A recentred box that collapses to zero width is refused, naming the failed recentring.
+
+        Test scenario:
+            A pair whose longitudes coincide reprojects to a zero-width box on the equidistant-cylindrical
+            CRS, so `_recentre_dateline` cannot frame a `west < east` rectangle and refuses rather than
+            drawing an empty locator.
+        """
+        with Map(crs=4326) as m:
+            coincident = [10.0, -40.0, 10.0, 40.0]
+            with pytest.raises(ValueError, match=r"could not be recentred"):
+                m._recentre_dateline(coincident, 4326)
 
     def test_a_projected_crs_refuses_west_over_east(self):
         """On a projected CRS `west > east` is an inverted rectangle, not a crossing.
@@ -124,3 +169,18 @@ class TestCheckedExtentResolution:
             assert box[0] < box[2] and box[1] < box[3], (
                 f"the recentred box is not a contiguous west<east/south<north rectangle: {box}"
             )
+
+    def test_a_crossing_past_the_antimeridian_folds_the_centre_back(self):
+        """A crossing whose midpoint lands beyond +180 folds the centre meridian back into range.
+
+        Test scenario:
+            `[179, -40, -170, 40]` has a midpoint longitude of 184.5, past the antimeridian; the centre is
+            folded by 360 to -175.5, so the locator is recentred onto `+proj=eqc +lon_0=-175.5` rather than
+            an out-of-range meridian.
+        """
+        with Map(crs=4326) as m:
+            box, recentre = m._checked_extent([179.0, -40.0, -170.0, 40.0], 4326)
+            assert recentre is not None and "lon_0=-175.5" in str(recentre), (
+                f"the past-antimeridian centre was not folded back: {recentre!r}"
+            )
+            assert box[0] < box[2], f"the folded crossing is not a contiguous span: {box}"

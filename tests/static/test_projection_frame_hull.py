@@ -125,6 +125,37 @@ class TestTheInteriorFilterPreservesTheHull:
         )
 
 
+class TestTheInteriorFilterGuards:
+    """`_drop_interior_points` returns the cloud untouched for the two inputs it refuses to filter."""
+
+    def test_a_cloud_below_the_size_guard_is_returned_unchanged(self):
+        """Fewer than 32 points skip the filter and come back exactly as handed in.
+
+        Test scenario:
+            Filtering a handful of points saves nothing, so the size guard returns the input verbatim; a
+            25-point cloud is below the threshold and must emerge with the same points in the same order.
+        """
+        small = np.column_stack([np.arange(25.0), np.arange(25.0) ** 2])
+        kept = _drop_interior_points(small)
+        assert np.array_equal(kept, small), (
+            f"a below-threshold cloud was altered: {len(kept)} of {len(small)} points returned"
+        )
+
+    def test_near_collinear_extremes_fall_back_to_the_whole_cloud(self):
+        """A cloud whose eight extremes collapse to fewer than three distinct points is returned whole.
+
+        Test scenario:
+            Forty points on a single horizontal line are above the size guard, but every axis and diagonal
+            extreme lands on one of the two endpoints, so the polygon has fewer than three vertices and
+            cannot bound anything; the filter must then return the cloud unchanged rather than an empty one.
+        """
+        line = np.column_stack([np.arange(40.0), np.zeros(40)])
+        kept = _drop_interior_points(line)
+        assert np.array_equal(kept, line), (
+            f"a degenerate collinear cloud was filtered to {len(kept)} of {len(line)} points"
+        )
+
+
 class TestProjectionFrameStillFrames:
     """`projection_frame` returns the same shape of ring after the speedups."""
 
