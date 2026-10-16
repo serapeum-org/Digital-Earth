@@ -88,3 +88,40 @@ class TestPolygonsClassifies:
         """The default path is untouched: no scheme draws a plain polygon layer, which still registers."""
         m = InteractiveMap().polygons(polygons_gdf)
         assert m.layers, "a plain polygon layer must still register"
+
+    def test_rasterize_alongside_a_scheme_warns_it_is_dropped(self, polygons_gdf):
+        """An explicit ``rasterize=``/``big_data_threshold=`` with a scheme is a dropped request, so it warns.
+
+        Test scenario:
+            A classified layer draws raw glyphs (each class keeps its colour), so the datashading hints
+            cannot apply. Rather than discard them in silence — the over-specification this branch warns
+            about in ``graticule()`` and refuses for scheme-without-column — ``polygons`` warns, names them,
+            and still classifies.
+        """
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            m = InteractiveMap().polygons(
+                polygons_gdf, column="val", scheme="quantiles", k=3, rasterize=True
+            )
+        dropped = [
+            str(w.message)
+            for w in caught
+            if issubclass(w.category, UserWarning) and "rasterize" in str(w.message)
+        ]
+        assert dropped, [str(w.message) for w in caught]
+        assert m.last_breaks, (
+            "the layer must still classify despite the ignored rasterize="
+        )
+
+    def test_auto_rasterize_with_a_scheme_is_silent(self, polygons_gdf):
+        """The default ``rasterize="auto"`` names no datashading request, so a classified call stays silent."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            InteractiveMap().polygons(
+                polygons_gdf, column="val", scheme="quantiles", k=3
+            )
+        assert [str(w.message) for w in caught if "rasterize" in str(w.message)] == []

@@ -16,6 +16,7 @@ producing an empty Bokeh layer.
 """
 
 import os
+import warnings
 from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
@@ -946,7 +947,9 @@ class VectorMixin(_MixinBase):
             rasterize: ``"auto"`` (default) routes through Datashader above
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
                 Polygon datashading needs the optional ``spatialpandas`` package. Ignored for a classified
-                layer, which draws raw glyphs so each class keeps its colour.
+                layer (``scheme`` set), which draws raw glyphs so each class keeps its colour — passing an
+                explicit ``rasterize=``/``big_data_threshold=`` alongside ``scheme`` **warns**, because the
+                request is dropped (``"auto"`` names no request, so it is silent).
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
                 (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
                 as given, so a path is measured as a string rather than as rows — see the note below.
@@ -990,6 +993,11 @@ class VectorMixin(_MixinBase):
                 datashader's own polygon backend, not a Digital-Earth dependency, so the tier says
                 which package to install — or to pass ``rasterize=False`` and draw raw glyphs —
                 rather than failing deeper inside datashader.
+
+        Warns:
+            UserWarning: when a classified call (``scheme`` set) is also given an explicit ``rasterize=``
+                or ``big_data_threshold=``, which a classified layer cannot honour, so the request is
+                dropped rather than silently ignored.
         """
         self._require_vector(features, "polygons")
         apply_opacity(opacity, opts)
@@ -1003,6 +1011,18 @@ class VectorMixin(_MixinBase):
                 raise ValueError(
                     "InteractiveMap.polygons(): scheme= classifies column=, which was not given; "
                     "name the column to classify, or drop scheme="
+                )
+            if rasterize != "auto" or big_data_threshold is not None:
+                # A classified layer draws raw glyphs so each class keeps its colour, so the datashading
+                # hints cannot apply. Rather than drop them in silence, warn and name them — the same
+                # over-specification this tier warns about in graticule() and refuses for scheme-without-
+                # column. `rasterize="auto"` names no request, so it does not warn.
+                warnings.warn(
+                    f"InteractiveMap.polygons(): a classified layer (scheme={scheme!r}) draws raw glyphs, "
+                    f"so rasterize={rasterize!r}/big_data_threshold={big_data_threshold!r} are ignored; "
+                    "drop scheme= to datashade, or drop rasterize=/big_data_threshold=.",
+                    UserWarning,
+                    stacklevel=2,
                 )
             if isinstance(scheme, str) and scheme.lower() == "categorical":
                 return self._categorical_polygons(
@@ -1796,6 +1816,10 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
+            TypeError: when ``data`` is a pyramids raster. ``trimesh`` takes a UGRID mesh or a point
+                collection, so it uses the raster-only guard (:meth:`_reject_raster`) — a mesh exposing
+                ``node_x``/``node_y`` rather than ``geometry`` passes, a raster is turned away naming the
+                builder and the raster entry points (#175).
 
         Examples:
             - Delaunay-triangulate scattered points; the nodes carry the value column:
