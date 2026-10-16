@@ -890,7 +890,7 @@ class TestOverridesMergeOverRecordedStyle:
             The base used to be one dict merged across every colour-mapped layer; it is each layer's own
             record now, which is what stops two rasters sharing the last one's colours (#300).
         """
-        m = InteractiveMap().field(dataset, cmap="viridis", clim=(0.0, 10.0))
+        m = InteractiveMap().field(dataset, cmap="viridis", limits=(0.0, 10.0))
         m.points(point_fc, column="fid", cmap="magma")
         raster = m._restyled_layers({"alpha": 0.5})[0]
         style = hv.Store.lookup_options("bokeh", raster, "style").kwargs
@@ -904,7 +904,7 @@ class TestOverridesMergeOverRecordedStyle:
 
     def test_override_wins_over_the_recorded_style(self, dataset):
         """The widget value replaces the recorded entry; the untouched entries survive it."""
-        m = InteractiveMap().field(dataset, cmap="viridis", clim=(0.0, 10.0))
+        m = InteractiveMap().field(dataset, cmap="viridis", limits=(0.0, 10.0))
         out = m._render_with_overrides({"cmap": "magma"})
         style = hv.Store.lookup_options("bokeh", out, "style").kwargs
         plot = hv.Store.lookup_options("bokeh", out, "plot").kwargs

@@ -525,10 +525,10 @@ class RasterMixin(_MixinBase):
         *,
         band: int = DEFAULT_BAND,
         cmap: str | None = None,
-        clim: tuple[float, float] | None = None,
+        limits: tuple[float, float] | None = None,
         scheme: Any | None = None,
         k: int | None = None,
-        alpha: Maybe[float] = UNSET,
+        opacity: Maybe[float] = UNSET,
         colorbar: bool = True,
         clabel: str | None = None,
         name: str | None = None,
@@ -543,11 +543,13 @@ class RasterMixin(_MixinBase):
             band: 1-based band to render.
             cmap: Colormap name; ``None`` (default) resolves it from the variable via
                 ``autostyle.auto_style`` (DI.12) — the same lookup the static ``Map`` uses.
-            clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales. A list is taken too,
-                and is the spelling the figure records — a tuple is what the travel rule refuses, so the
-                documented pair used to be dropped from every saved figure (review R2-M13). The drawer
-                hands HoloViews the tuple its own option is declared with either way. Ignored when
-                ``scheme`` classifies the band, whose limits are its class edges.
+            limits: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, so the same
+                channel is written the same way on every tier (#332); it reaches HoloViews as its own
+                ``clim``. A list is taken too, and is the spelling the figure records — a tuple is what the
+                travel rule refuses, so the documented pair used to be dropped from every saved figure
+                (review R2-M13). The drawer hands HoloViews the tuple its own option is declared with either
+                way. Ignored when ``scheme`` classifies the band, whose limits are its class edges.
             scheme: Colour the band class by class rather than along a ramp. A named graduated scheme
                 (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) or an explicit list of edges cuts
                 classes coloured from ``cmap``; ``"categorical"`` gives each integer code a class of its own,
@@ -557,9 +559,11 @@ class RasterMixin(_MixinBase):
                 colour encoding, so the colorbar steps at them and a figure drawn on another tier keeps them.
                 ``None`` (default) draws the continuous ramp.
             k: How many classes a named graduated scheme cuts; ``None`` takes 5. Ignored without ``scheme``.
-            alpha: Layer opacity in ``[0, 1]``; not passed leaves :data:`FIELD_ALPHA`. The keyword is
-                recorded when it is passed, so a caller asking for exactly that value publishes it like any
-                other (#334).
+            opacity: Layer opacity in ``[0, 1]``; not passed leaves :data:`FIELD_ALPHA`. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, so the same
+                channel is written the same way on every tier (#332); HoloViews reads it as ``alpha``. The
+                keyword is recorded when it is passed, so a caller asking for exactly that value publishes it
+                like any other (#334).
             colorbar: Whether to draw a colorbar.
             clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
                 ``autostyle.auto_style`` (#230) and leaves the colorbar unlabelled when it knows none.
@@ -577,7 +581,7 @@ class RasterMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem, cmap="terrain", clim=(0, 60))  # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="terrain", limits=(0, 60))  # doctest: +SKIP
                 >>> len(m.layers)                                               # doctest: +SKIP
                 1
 
@@ -621,7 +625,7 @@ class RasterMixin(_MixinBase):
                 under ``"categorical"``, a band holding non-integer values, more than
                 :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` codes, or no valid cell.
         """
-        scale = limits_scale(clim)
+        scale = limits_scale(limits)
         if scheme is not None:
             scale = _band_classes(self, data, band, scheme, k, cmap).scale
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
@@ -651,12 +655,12 @@ class RasterMixin(_MixinBase):
                     "via": "image",
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
-                    "clim": describe(held, "clim", _travelling_pair(clim)),
+                    "clim": describe(held, "clim", _travelling_pair(limits)),
                     "scheme": scheme
                     if scheme is None or isinstance(scheme, str)
                     else list(scheme),
                     "k": k,
-                    "alpha": ask("alpha", alpha, FIELD_ALPHA),
+                    "alpha": ask("alpha", opacity, FIELD_ALPHA),
                     "colorbar": colorbar,
                     "clabel": clabel,
                     "opts": described_opts,
