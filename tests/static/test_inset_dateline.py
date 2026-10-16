@@ -7,6 +7,8 @@ equidistant-cylindrical CRS recentred over the crossing, so the two longitude ba
 antimeridian to wrap around and stays the refusal it was.
 """
 
+import logging
+
 import matplotlib
 import numpy as np
 import pytest
@@ -239,6 +241,28 @@ class TestASeamWrappingBoxIsDropped:
             assert len(_box_patches(m.locator)) >= 1, (
                 "a continuous-longitude box was dropped by the seam guard"
             )
+
+    def test_a_continuous_region_outside_the_locator_warns_of_both_causes(self, caplog):
+        """A continuous main map whose region sits outside the recentred locator is dropped, with honest advice.
+
+        Args:
+            caplog: pytest's log capture.
+
+        Test scenario:
+            A London-region main map (`[-10, 40, 10, 60]`, perfectly continuous) reprojected into an eqc
+            locator recentred on the dateline wraps the seam too, so its box is dropped. The warning must
+            name both causes — the inverted axis *or* a region outside the locator — rather than only the
+            inverted-axis one, which does not apply here.
+        """
+        with caplog.at_level(logging.WARNING):
+            with Map(crs=4326) as m:
+                m.coastlines()
+                m.set_bounds([-10.0, 40.0, 10.0, 60.0])
+                m.inset(extent=DATELINE)
+                assert _box_patches(m.locator) == [], "the out-of-locator box was drawn"
+        assert "outside the recentred locator" in caplog.text, (
+            f"the warning did not name the out-of-locator cause: {caplog.text!r}"
+        )
 
 
 class TestRingWraps:

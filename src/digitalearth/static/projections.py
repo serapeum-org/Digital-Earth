@@ -235,9 +235,10 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
     # Discard the points no hull vertex can be among before the Python chain walks them: a global
     # projection samples a filled region (720x360 ~ 259k points), yet its hull is the thin boundary band,
     # and the monotone chain below cost ~1.8s walking all of them in Python (review #381). The
-    # Akl-Toussaint heuristic keeps only the points outside the quadrilateral of the four axis extremes —
-    # every interior point is provably not a hull vertex — which is an exact reduction done in vectorised
-    # numpy, leaving the chain a few thousand boundary points instead of a quarter-million.
+    # Akl-Toussaint heuristic keeps only the points outside the octagon of the eight extreme points (the
+    # axes and the two diagonals) — every interior point is provably not a hull vertex — which is an exact
+    # reduction done in vectorised numpy, leaving the chain a few thousand boundary points instead of a
+    # quarter-million.
     pts = _drop_interior_points(pts)
     pts = pts[np.lexsort((pts[:, 1], pts[:, 0]))]
 

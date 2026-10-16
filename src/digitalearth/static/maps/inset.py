@@ -671,7 +671,8 @@ class InsetMixin(_MixinBase):
             # CRS cannot place at all.
             logger.warning(
                 "mark_extent: the extent (%s, %s, %s, %s) in %r wraps the seam of %r, so no box was drawn — "
-                "frame the marked map in continuous longitudes (e.g. 178..182, not 178..-179)",
+                "either the marked map is framed with an inverted axis (frame it in continuous longitudes, "
+                "e.g. 178..182 not 178..-179) or its region lies outside the recentred locator's extent",
                 box.west,
                 box.south,
                 box.east,
