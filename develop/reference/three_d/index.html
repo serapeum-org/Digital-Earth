@@ -15715,97 +15715,97 @@ image is only returned.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1890">1890</a></span>
-<span class="normal"><a href="#__codelineno-0-1891">1891</a></span>
-<span class="normal"><a href="#__codelineno-0-1892">1892</a></span>
-<span class="normal"><a href="#__codelineno-0-1893">1893</a></span>
-<span class="normal"><a href="#__codelineno-0-1894">1894</a></span>
-<span class="normal"><a href="#__codelineno-0-1895">1895</a></span>
-<span class="normal"><a href="#__codelineno-0-1896">1896</a></span>
-<span class="normal"><a href="#__codelineno-0-1897">1897</a></span>
-<span class="normal"><a href="#__codelineno-0-1898">1898</a></span>
-<span class="normal"><a href="#__codelineno-0-1899">1899</a></span>
-<span class="normal"><a href="#__codelineno-0-1900">1900</a></span>
-<span class="normal"><a href="#__codelineno-0-1901">1901</a></span>
-<span class="normal"><a href="#__codelineno-0-1902">1902</a></span>
-<span class="normal"><a href="#__codelineno-0-1903">1903</a></span>
-<span class="normal"><a href="#__codelineno-0-1904">1904</a></span>
-<span class="normal"><a href="#__codelineno-0-1905">1905</a></span>
-<span class="normal"><a href="#__codelineno-0-1906">1906</a></span>
-<span class="normal"><a href="#__codelineno-0-1907">1907</a></span>
-<span class="normal"><a href="#__codelineno-0-1908">1908</a></span>
-<span class="normal"><a href="#__codelineno-0-1909">1909</a></span>
-<span class="normal"><a href="#__codelineno-0-1910">1910</a></span>
-<span class="normal"><a href="#__codelineno-0-1911">1911</a></span>
-<span class="normal"><a href="#__codelineno-0-1912">1912</a></span>
-<span class="normal"><a href="#__codelineno-0-1913">1913</a></span>
-<span class="normal"><a href="#__codelineno-0-1914">1914</a></span>
-<span class="normal"><a href="#__codelineno-0-1915">1915</a></span>
-<span class="normal"><a href="#__codelineno-0-1916">1916</a></span>
-<span class="normal"><a href="#__codelineno-0-1917">1917</a></span>
-<span class="normal"><a href="#__codelineno-0-1918">1918</a></span>
-<span class="normal"><a href="#__codelineno-0-1919">1919</a></span>
-<span class="normal"><a href="#__codelineno-0-1920">1920</a></span>
-<span class="normal"><a href="#__codelineno-0-1921">1921</a></span>
-<span class="normal"><a href="#__codelineno-0-1922">1922</a></span>
-<span class="normal"><a href="#__codelineno-0-1923">1923</a></span>
-<span class="normal"><a href="#__codelineno-0-1924">1924</a></span>
-<span class="normal"><a href="#__codelineno-0-1925">1925</a></span>
-<span class="normal"><a href="#__codelineno-0-1926">1926</a></span>
-<span class="normal"><a href="#__codelineno-0-1927">1927</a></span>
-<span class="normal"><a href="#__codelineno-0-1928">1928</a></span>
-<span class="normal"><a href="#__codelineno-0-1929">1929</a></span>
-<span class="normal"><a href="#__codelineno-0-1930">1930</a></span>
-<span class="normal"><a href="#__codelineno-0-1931">1931</a></span>
-<span class="normal"><a href="#__codelineno-0-1932">1932</a></span>
-<span class="normal"><a href="#__codelineno-0-1933">1933</a></span>
-<span class="normal"><a href="#__codelineno-0-1934">1934</a></span>
-<span class="normal"><a href="#__codelineno-0-1935">1935</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1890" name="__codelineno-0-1890"></a><span class="k">def</span><span class="w"> </span><span class="nf">screenshot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Destination</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<a id="__codelineno-0-1891" name="__codelineno-0-1891"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render the scene off-screen and return the RGB image (optionally writing it to ``path``).</span>
-<a id="__codelineno-0-1892" name="__codelineno-0-1892"></a>
-<a id="__codelineno-0-1893" name="__codelineno-0-1893"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1894" name="__codelineno-0-1894"></a><span class="sd">        path: Optional destination for the PNG, as a string or ``os.PathLike``. When ``None`` the</span>
-<a id="__codelineno-0-1895" name="__codelineno-0-1895"></a><span class="sd">            image is only returned.</span>
-<a id="__codelineno-0-1896" name="__codelineno-0-1896"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.screenshot`.</span>
-<a id="__codelineno-0-1897" name="__codelineno-0-1897"></a>
-<a id="__codelineno-0-1898" name="__codelineno-0-1898"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1899" name="__codelineno-0-1899"></a><span class="sd">        numpy.ndarray: the ``(height, width, 3)`` RGB frame.</span>
-<a id="__codelineno-0-1900" name="__codelineno-0-1900"></a>
-<a id="__codelineno-0-1901" name="__codelineno-0-1901"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1902" name="__codelineno-0-1902"></a><span class="sd">        - Render to memory and work with the frame as an array:</span>
-<a id="__codelineno-0-1903" name="__codelineno-0-1903"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1904" name="__codelineno-0-1904"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-1905" name="__codelineno-0-1905"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-1906" name="__codelineno-0-1906"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True, window_size=(200, 150))</span>
-<a id="__codelineno-0-1907" name="__codelineno-0-1907"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
-<a id="__codelineno-0-1908" name="__codelineno-0-1908"></a><span class="sd">            &gt;&gt;&gt; frame = scene.screenshot()</span>
-<a id="__codelineno-0-1909" name="__codelineno-0-1909"></a><span class="sd">            &gt;&gt;&gt; frame.ndim, frame.shape[-1]</span>
-<a id="__codelineno-0-1910" name="__codelineno-0-1910"></a><span class="sd">            (3, 3)</span>
-<a id="__codelineno-0-1911" name="__codelineno-0-1911"></a><span class="sd">            &gt;&gt;&gt; bool(frame.any())</span>
-<a id="__codelineno-0-1912" name="__codelineno-0-1912"></a><span class="sd">            True</span>
-<a id="__codelineno-0-1913" name="__codelineno-0-1913"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-1914" name="__codelineno-0-1914"></a>
-<a id="__codelineno-0-1915" name="__codelineno-0-1915"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1916" name="__codelineno-0-1916"></a><span class="sd">        - Write a PNG to disk; the frame is still returned:</span>
-<a id="__codelineno-0-1917" name="__codelineno-0-1917"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1918" name="__codelineno-0-1918"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-1919" name="__codelineno-0-1919"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-1920" name="__codelineno-0-1920"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-1921" name="__codelineno-0-1921"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-1922" name="__codelineno-0-1922"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Cube())</span>
-<a id="__codelineno-0-1923" name="__codelineno-0-1923"></a><span class="sd">            ...     out = os.path.join(folder, &quot;frame.png&quot;)</span>
-<a id="__codelineno-0-1924" name="__codelineno-0-1924"></a><span class="sd">            ...     frame = scene.screenshot(path=out)</span>
-<a id="__codelineno-0-1925" name="__codelineno-0-1925"></a><span class="sd">            ...     scene.close()</span>
-<a id="__codelineno-0-1926" name="__codelineno-0-1926"></a><span class="sd">            ...     os.path.getsize(out) &gt; 0</span>
-<a id="__codelineno-0-1927" name="__codelineno-0-1927"></a><span class="sd">            True</span>
-<a id="__codelineno-0-1928" name="__codelineno-0-1928"></a>
-<a id="__codelineno-0-1929" name="__codelineno-0-1929"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1930" name="__codelineno-0-1930"></a>
-<a id="__codelineno-0-1931" name="__codelineno-0-1931"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1932" name="__codelineno-0-1932"></a><span class="sd">        save: dispatches here for the raster-frame suffixes (:data:`IMAGE_SUFFIXES`).</span>
-<a id="__codelineno-0-1933" name="__codelineno-0-1933"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1934" name="__codelineno-0-1934"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_camera</span><span class="p">()</span>
-<a id="__codelineno-0-1935" name="__codelineno-0-1935"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">return_img</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2002">2002</a></span>
+<span class="normal"><a href="#__codelineno-0-2003">2003</a></span>
+<span class="normal"><a href="#__codelineno-0-2004">2004</a></span>
+<span class="normal"><a href="#__codelineno-0-2005">2005</a></span>
+<span class="normal"><a href="#__codelineno-0-2006">2006</a></span>
+<span class="normal"><a href="#__codelineno-0-2007">2007</a></span>
+<span class="normal"><a href="#__codelineno-0-2008">2008</a></span>
+<span class="normal"><a href="#__codelineno-0-2009">2009</a></span>
+<span class="normal"><a href="#__codelineno-0-2010">2010</a></span>
+<span class="normal"><a href="#__codelineno-0-2011">2011</a></span>
+<span class="normal"><a href="#__codelineno-0-2012">2012</a></span>
+<span class="normal"><a href="#__codelineno-0-2013">2013</a></span>
+<span class="normal"><a href="#__codelineno-0-2014">2014</a></span>
+<span class="normal"><a href="#__codelineno-0-2015">2015</a></span>
+<span class="normal"><a href="#__codelineno-0-2016">2016</a></span>
+<span class="normal"><a href="#__codelineno-0-2017">2017</a></span>
+<span class="normal"><a href="#__codelineno-0-2018">2018</a></span>
+<span class="normal"><a href="#__codelineno-0-2019">2019</a></span>
+<span class="normal"><a href="#__codelineno-0-2020">2020</a></span>
+<span class="normal"><a href="#__codelineno-0-2021">2021</a></span>
+<span class="normal"><a href="#__codelineno-0-2022">2022</a></span>
+<span class="normal"><a href="#__codelineno-0-2023">2023</a></span>
+<span class="normal"><a href="#__codelineno-0-2024">2024</a></span>
+<span class="normal"><a href="#__codelineno-0-2025">2025</a></span>
+<span class="normal"><a href="#__codelineno-0-2026">2026</a></span>
+<span class="normal"><a href="#__codelineno-0-2027">2027</a></span>
+<span class="normal"><a href="#__codelineno-0-2028">2028</a></span>
+<span class="normal"><a href="#__codelineno-0-2029">2029</a></span>
+<span class="normal"><a href="#__codelineno-0-2030">2030</a></span>
+<span class="normal"><a href="#__codelineno-0-2031">2031</a></span>
+<span class="normal"><a href="#__codelineno-0-2032">2032</a></span>
+<span class="normal"><a href="#__codelineno-0-2033">2033</a></span>
+<span class="normal"><a href="#__codelineno-0-2034">2034</a></span>
+<span class="normal"><a href="#__codelineno-0-2035">2035</a></span>
+<span class="normal"><a href="#__codelineno-0-2036">2036</a></span>
+<span class="normal"><a href="#__codelineno-0-2037">2037</a></span>
+<span class="normal"><a href="#__codelineno-0-2038">2038</a></span>
+<span class="normal"><a href="#__codelineno-0-2039">2039</a></span>
+<span class="normal"><a href="#__codelineno-0-2040">2040</a></span>
+<span class="normal"><a href="#__codelineno-0-2041">2041</a></span>
+<span class="normal"><a href="#__codelineno-0-2042">2042</a></span>
+<span class="normal"><a href="#__codelineno-0-2043">2043</a></span>
+<span class="normal"><a href="#__codelineno-0-2044">2044</a></span>
+<span class="normal"><a href="#__codelineno-0-2045">2045</a></span>
+<span class="normal"><a href="#__codelineno-0-2046">2046</a></span>
+<span class="normal"><a href="#__codelineno-0-2047">2047</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2002" name="__codelineno-0-2002"></a><span class="k">def</span><span class="w"> </span><span class="nf">screenshot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Destination</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render the scene off-screen and return the RGB image (optionally writing it to ``path``).</span>
+<a id="__codelineno-0-2004" name="__codelineno-0-2004"></a>
+<a id="__codelineno-0-2005" name="__codelineno-0-2005"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a><span class="sd">        path: Optional destination for the PNG, as a string or ``os.PathLike``. When ``None`` the</span>
+<a id="__codelineno-0-2007" name="__codelineno-0-2007"></a><span class="sd">            image is only returned.</span>
+<a id="__codelineno-0-2008" name="__codelineno-0-2008"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.screenshot`.</span>
+<a id="__codelineno-0-2009" name="__codelineno-0-2009"></a>
+<a id="__codelineno-0-2010" name="__codelineno-0-2010"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2011" name="__codelineno-0-2011"></a><span class="sd">        numpy.ndarray: the ``(height, width, 3)`` RGB frame.</span>
+<a id="__codelineno-0-2012" name="__codelineno-0-2012"></a>
+<a id="__codelineno-0-2013" name="__codelineno-0-2013"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2014" name="__codelineno-0-2014"></a><span class="sd">        - Render to memory and work with the frame as an array:</span>
+<a id="__codelineno-0-2015" name="__codelineno-0-2015"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2016" name="__codelineno-0-2016"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
+<a id="__codelineno-0-2017" name="__codelineno-0-2017"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2018" name="__codelineno-0-2018"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True, window_size=(200, 150))</span>
+<a id="__codelineno-0-2019" name="__codelineno-0-2019"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
+<a id="__codelineno-0-2020" name="__codelineno-0-2020"></a><span class="sd">            &gt;&gt;&gt; frame = scene.screenshot()</span>
+<a id="__codelineno-0-2021" name="__codelineno-0-2021"></a><span class="sd">            &gt;&gt;&gt; frame.ndim, frame.shape[-1]</span>
+<a id="__codelineno-0-2022" name="__codelineno-0-2022"></a><span class="sd">            (3, 3)</span>
+<a id="__codelineno-0-2023" name="__codelineno-0-2023"></a><span class="sd">            &gt;&gt;&gt; bool(frame.any())</span>
+<a id="__codelineno-0-2024" name="__codelineno-0-2024"></a><span class="sd">            True</span>
+<a id="__codelineno-0-2025" name="__codelineno-0-2025"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-2026" name="__codelineno-0-2026"></a>
+<a id="__codelineno-0-2027" name="__codelineno-0-2027"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2028" name="__codelineno-0-2028"></a><span class="sd">        - Write a PNG to disk; the frame is still returned:</span>
+<a id="__codelineno-0-2029" name="__codelineno-0-2029"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2030" name="__codelineno-0-2030"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
+<a id="__codelineno-0-2031" name="__codelineno-0-2031"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2032" name="__codelineno-0-2032"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
+<a id="__codelineno-0-2033" name="__codelineno-0-2033"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Cube())</span>
+<a id="__codelineno-0-2035" name="__codelineno-0-2035"></a><span class="sd">            ...     out = os.path.join(folder, &quot;frame.png&quot;)</span>
+<a id="__codelineno-0-2036" name="__codelineno-0-2036"></a><span class="sd">            ...     frame = scene.screenshot(path=out)</span>
+<a id="__codelineno-0-2037" name="__codelineno-0-2037"></a><span class="sd">            ...     scene.close()</span>
+<a id="__codelineno-0-2038" name="__codelineno-0-2038"></a><span class="sd">            ...     os.path.getsize(out) &gt; 0</span>
+<a id="__codelineno-0-2039" name="__codelineno-0-2039"></a><span class="sd">            True</span>
+<a id="__codelineno-0-2040" name="__codelineno-0-2040"></a>
+<a id="__codelineno-0-2041" name="__codelineno-0-2041"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2042" name="__codelineno-0-2042"></a>
+<a id="__codelineno-0-2043" name="__codelineno-0-2043"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2044" name="__codelineno-0-2044"></a><span class="sd">        save: dispatches here for the raster-frame suffixes (:data:`IMAGE_SUFFIXES`).</span>
+<a id="__codelineno-0-2045" name="__codelineno-0-2045"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2046" name="__codelineno-0-2046"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_camera</span><span class="p">()</span>
+<a id="__codelineno-0-2047" name="__codelineno-0-2047"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">return_img</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -16021,119 +16021,7 @@ export_html: the interactive-page branch.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2008">2008</a></span>
-<span class="normal"><a href="#__codelineno-0-2009">2009</a></span>
-<span class="normal"><a href="#__codelineno-0-2010">2010</a></span>
-<span class="normal"><a href="#__codelineno-0-2011">2011</a></span>
-<span class="normal"><a href="#__codelineno-0-2012">2012</a></span>
-<span class="normal"><a href="#__codelineno-0-2013">2013</a></span>
-<span class="normal"><a href="#__codelineno-0-2014">2014</a></span>
-<span class="normal"><a href="#__codelineno-0-2015">2015</a></span>
-<span class="normal"><a href="#__codelineno-0-2016">2016</a></span>
-<span class="normal"><a href="#__codelineno-0-2017">2017</a></span>
-<span class="normal"><a href="#__codelineno-0-2018">2018</a></span>
-<span class="normal"><a href="#__codelineno-0-2019">2019</a></span>
-<span class="normal"><a href="#__codelineno-0-2020">2020</a></span>
-<span class="normal"><a href="#__codelineno-0-2021">2021</a></span>
-<span class="normal"><a href="#__codelineno-0-2022">2022</a></span>
-<span class="normal"><a href="#__codelineno-0-2023">2023</a></span>
-<span class="normal"><a href="#__codelineno-0-2024">2024</a></span>
-<span class="normal"><a href="#__codelineno-0-2025">2025</a></span>
-<span class="normal"><a href="#__codelineno-0-2026">2026</a></span>
-<span class="normal"><a href="#__codelineno-0-2027">2027</a></span>
-<span class="normal"><a href="#__codelineno-0-2028">2028</a></span>
-<span class="normal"><a href="#__codelineno-0-2029">2029</a></span>
-<span class="normal"><a href="#__codelineno-0-2030">2030</a></span>
-<span class="normal"><a href="#__codelineno-0-2031">2031</a></span>
-<span class="normal"><a href="#__codelineno-0-2032">2032</a></span>
-<span class="normal"><a href="#__codelineno-0-2033">2033</a></span>
-<span class="normal"><a href="#__codelineno-0-2034">2034</a></span>
-<span class="normal"><a href="#__codelineno-0-2035">2035</a></span>
-<span class="normal"><a href="#__codelineno-0-2036">2036</a></span>
-<span class="normal"><a href="#__codelineno-0-2037">2037</a></span>
-<span class="normal"><a href="#__codelineno-0-2038">2038</a></span>
-<span class="normal"><a href="#__codelineno-0-2039">2039</a></span>
-<span class="normal"><a href="#__codelineno-0-2040">2040</a></span>
-<span class="normal"><a href="#__codelineno-0-2041">2041</a></span>
-<span class="normal"><a href="#__codelineno-0-2042">2042</a></span>
-<span class="normal"><a href="#__codelineno-0-2043">2043</a></span>
-<span class="normal"><a href="#__codelineno-0-2044">2044</a></span>
-<span class="normal"><a href="#__codelineno-0-2045">2045</a></span>
-<span class="normal"><a href="#__codelineno-0-2046">2046</a></span>
-<span class="normal"><a href="#__codelineno-0-2047">2047</a></span>
-<span class="normal"><a href="#__codelineno-0-2048">2048</a></span>
-<span class="normal"><a href="#__codelineno-0-2049">2049</a></span>
-<span class="normal"><a href="#__codelineno-0-2050">2050</a></span>
-<span class="normal"><a href="#__codelineno-0-2051">2051</a></span>
-<span class="normal"><a href="#__codelineno-0-2052">2052</a></span>
-<span class="normal"><a href="#__codelineno-0-2053">2053</a></span>
-<span class="normal"><a href="#__codelineno-0-2054">2054</a></span>
-<span class="normal"><a href="#__codelineno-0-2055">2055</a></span>
-<span class="normal"><a href="#__codelineno-0-2056">2056</a></span>
-<span class="normal"><a href="#__codelineno-0-2057">2057</a></span>
-<span class="normal"><a href="#__codelineno-0-2058">2058</a></span>
-<span class="normal"><a href="#__codelineno-0-2059">2059</a></span>
-<span class="normal"><a href="#__codelineno-0-2060">2060</a></span>
-<span class="normal"><a href="#__codelineno-0-2061">2061</a></span>
-<span class="normal"><a href="#__codelineno-0-2062">2062</a></span>
-<span class="normal"><a href="#__codelineno-0-2063">2063</a></span>
-<span class="normal"><a href="#__codelineno-0-2064">2064</a></span>
-<span class="normal"><a href="#__codelineno-0-2065">2065</a></span>
-<span class="normal"><a href="#__codelineno-0-2066">2066</a></span>
-<span class="normal"><a href="#__codelineno-0-2067">2067</a></span>
-<span class="normal"><a href="#__codelineno-0-2068">2068</a></span>
-<span class="normal"><a href="#__codelineno-0-2069">2069</a></span>
-<span class="normal"><a href="#__codelineno-0-2070">2070</a></span>
-<span class="normal"><a href="#__codelineno-0-2071">2071</a></span>
-<span class="normal"><a href="#__codelineno-0-2072">2072</a></span>
-<span class="normal"><a href="#__codelineno-0-2073">2073</a></span>
-<span class="normal"><a href="#__codelineno-0-2074">2074</a></span>
-<span class="normal"><a href="#__codelineno-0-2075">2075</a></span>
-<span class="normal"><a href="#__codelineno-0-2076">2076</a></span>
-<span class="normal"><a href="#__codelineno-0-2077">2077</a></span>
-<span class="normal"><a href="#__codelineno-0-2078">2078</a></span>
-<span class="normal"><a href="#__codelineno-0-2079">2079</a></span>
-<span class="normal"><a href="#__codelineno-0-2080">2080</a></span>
-<span class="normal"><a href="#__codelineno-0-2081">2081</a></span>
-<span class="normal"><a href="#__codelineno-0-2082">2082</a></span>
-<span class="normal"><a href="#__codelineno-0-2083">2083</a></span>
-<span class="normal"><a href="#__codelineno-0-2084">2084</a></span>
-<span class="normal"><a href="#__codelineno-0-2085">2085</a></span>
-<span class="normal"><a href="#__codelineno-0-2086">2086</a></span>
-<span class="normal"><a href="#__codelineno-0-2087">2087</a></span>
-<span class="normal"><a href="#__codelineno-0-2088">2088</a></span>
-<span class="normal"><a href="#__codelineno-0-2089">2089</a></span>
-<span class="normal"><a href="#__codelineno-0-2090">2090</a></span>
-<span class="normal"><a href="#__codelineno-0-2091">2091</a></span>
-<span class="normal"><a href="#__codelineno-0-2092">2092</a></span>
-<span class="normal"><a href="#__codelineno-0-2093">2093</a></span>
-<span class="normal"><a href="#__codelineno-0-2094">2094</a></span>
-<span class="normal"><a href="#__codelineno-0-2095">2095</a></span>
-<span class="normal"><a href="#__codelineno-0-2096">2096</a></span>
-<span class="normal"><a href="#__codelineno-0-2097">2097</a></span>
-<span class="normal"><a href="#__codelineno-0-2098">2098</a></span>
-<span class="normal"><a href="#__codelineno-0-2099">2099</a></span>
-<span class="normal"><a href="#__codelineno-0-2100">2100</a></span>
-<span class="normal"><a href="#__codelineno-0-2101">2101</a></span>
-<span class="normal"><a href="#__codelineno-0-2102">2102</a></span>
-<span class="normal"><a href="#__codelineno-0-2103">2103</a></span>
-<span class="normal"><a href="#__codelineno-0-2104">2104</a></span>
-<span class="normal"><a href="#__codelineno-0-2105">2105</a></span>
-<span class="normal"><a href="#__codelineno-0-2106">2106</a></span>
-<span class="normal"><a href="#__codelineno-0-2107">2107</a></span>
-<span class="normal"><a href="#__codelineno-0-2108">2108</a></span>
-<span class="normal"><a href="#__codelineno-0-2109">2109</a></span>
-<span class="normal"><a href="#__codelineno-0-2110">2110</a></span>
-<span class="normal"><a href="#__codelineno-0-2111">2111</a></span>
-<span class="normal"><a href="#__codelineno-0-2112">2112</a></span>
-<span class="normal"><a href="#__codelineno-0-2113">2113</a></span>
-<span class="normal"><a href="#__codelineno-0-2114">2114</a></span>
-<span class="normal"><a href="#__codelineno-0-2115">2115</a></span>
-<span class="normal"><a href="#__codelineno-0-2116">2116</a></span>
-<span class="normal"><a href="#__codelineno-0-2117">2117</a></span>
-<span class="normal"><a href="#__codelineno-0-2118">2118</a></span>
-<span class="normal"><a href="#__codelineno-0-2119">2119</a></span>
-<span class="normal"><a href="#__codelineno-0-2120">2120</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2120">2120</a></span>
 <span class="normal"><a href="#__codelineno-0-2121">2121</a></span>
 <span class="normal"><a href="#__codelineno-0-2122">2122</a></span>
 <span class="normal"><a href="#__codelineno-0-2123">2123</a></span>
@@ -16160,146 +16048,258 @@ export_html: the interactive-page branch.</p>
 <span class="normal"><a href="#__codelineno-0-2144">2144</a></span>
 <span class="normal"><a href="#__codelineno-0-2145">2145</a></span>
 <span class="normal"><a href="#__codelineno-0-2146">2146</a></span>
-<span class="normal"><a href="#__codelineno-0-2147">2147</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2008" name="__codelineno-0-2008"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Destination</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-<a id="__codelineno-0-2009" name="__codelineno-0-2009"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the scene, dispatching on ``path``&#39;s suffix — a rendered frame, or a scene export.</span>
-<a id="__codelineno-0-2010" name="__codelineno-0-2010"></a>
-<a id="__codelineno-0-2011" name="__codelineno-0-2011"></a><span class="sd">    Two families share the one entry point, and the suffix decides which:</span>
-<a id="__codelineno-0-2012" name="__codelineno-0-2012"></a>
-<a id="__codelineno-0-2013" name="__codelineno-0-2013"></a><span class="sd">    - ``.html`` → :meth:`export_html`, a self-contained interactive page (see there for why a heavy scene</span>
-<a id="__codelineno-0-2014" name="__codelineno-0-2014"></a><span class="sd">      is better served by :meth:`digitalearth.three_d.Scene3D.orbit`, and for the suffix normalisation it</span>
-<a id="__codelineno-0-2015" name="__codelineno-0-2015"></a><span class="sd">      applies).</span>
-<a id="__codelineno-0-2016" name="__codelineno-0-2016"></a><span class="sd">    - :data:`IMAGE_SUFFIXES` (``.png`` ``.jpg`` ``.jpeg`` ``.bmp`` ``.tif`` ``.tiff``) →</span>
-<a id="__codelineno-0-2017" name="__codelineno-0-2017"></a><span class="sd">      :meth:`screenshot`, a rendered raster frame **in the format the suffix names** — ``.tif`` writes a</span>
-<a id="__codelineno-0-2018" name="__codelineno-0-2018"></a><span class="sd">      TIFF, not a PNG.</span>
-<a id="__codelineno-0-2019" name="__codelineno-0-2019"></a><span class="sd">    - :data:`SCENE_EXPORTERS` (``.gltf`` ``.obj`` ``.vrml`` ``.wrl`` ``.vtksz``) → the matching</span>
-<a id="__codelineno-0-2020" name="__codelineno-0-2020"></a><span class="sd">      :class:`pyvista.Plotter` scene exporter, which writes the geometry itself rather than a picture of</span>
-<a id="__codelineno-0-2021" name="__codelineno-0-2021"></a><span class="sd">      it.</span>
-<a id="__codelineno-0-2022" name="__codelineno-0-2022"></a><span class="sd">    - anything else — **including a path with no suffix at all** — raises. A format is never invented on</span>
-<a id="__codelineno-0-2023" name="__codelineno-0-2023"></a><span class="sd">      the caller&#39;s behalf, so ``save(&quot;scene&quot;)`` no longer quietly writes ``scene.png``.</span>
-<a id="__codelineno-0-2024" name="__codelineno-0-2024"></a>
-<a id="__codelineno-0-2025" name="__codelineno-0-2025"></a><span class="sd">    The suffix match is case-insensitive throughout (``SCENE.HTML`` exports a page).</span>
-<a id="__codelineno-0-2026" name="__codelineno-0-2026"></a>
-<a id="__codelineno-0-2027" name="__codelineno-0-2027"></a><span class="sd">    **It returns the path it wrote**, like every other tier&#39;s ``save()``, so a caller can chain on the</span>
-<a id="__codelineno-0-2028" name="__codelineno-0-2028"></a><span class="sd">    result without rebuilding the filename — and ``.html`` returns the *normalised* name, which is not</span>
-<a id="__codelineno-0-2029" name="__codelineno-0-2029"></a><span class="sd">    always the one passed in.</span>
-<a id="__codelineno-0-2030" name="__codelineno-0-2030"></a>
-<a id="__codelineno-0-2031" name="__codelineno-0-2031"></a><span class="sd">    **Changed, with no transition: it used to return the RGB frame** for a raster suffix, and ``None``</span>
-<a id="__codelineno-0-2032" name="__codelineno-0-2032"></a><span class="sd">    for an export — a return type that depended on the suffix, and gave the one branch producing a</span>
-<a id="__codelineno-0-2033" name="__codelineno-0-2033"></a><span class="sd">    useful value no counterpart on the others. Ask for the frame by name instead:</span>
-<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><span class="sd">    :meth:`screenshot` writes the same file *and* hands back the array, so ``frame = scene.save(out)``</span>
-<a id="__codelineno-0-2035" name="__codelineno-0-2035"></a><span class="sd">    becomes ``frame = scene.screenshot(out)`` — one call, the same two effects. Unlike the renamed</span>
-<a id="__codelineno-0-2036" name="__codelineno-0-2036"></a><span class="sd">    keywords in this batch, which keep their old spelling for a release, a return *type* has no shim to</span>
-<a id="__codelineno-0-2037" name="__codelineno-0-2037"></a><span class="sd">    offer: a value contrived to read as both a ``Path`` and an array would be worse than the break, so</span>
-<a id="__codelineno-0-2038" name="__codelineno-0-2038"></a><span class="sd">    this one is announced rather than eased.</span>
-<a id="__codelineno-0-2039" name="__codelineno-0-2039"></a>
-<a id="__codelineno-0-2040" name="__codelineno-0-2040"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2041" name="__codelineno-0-2041"></a><span class="sd">        path: Output file, as a string or ``os.PathLike``. Its suffix selects the branch.</span>
-<a id="__codelineno-0-2042" name="__codelineno-0-2042"></a><span class="sd">        **kwargs: Forwarded to the branch that runs — :meth:`screenshot` for a raster frame, the</span>
-<a id="__codelineno-0-2043" name="__codelineno-0-2043"></a><span class="sd">            ``pyvista.Plotter`` exporter for a scene export (e.g. ``inline_data=False`` for ``.gltf``);</span>
-<a id="__codelineno-0-2044" name="__codelineno-0-2044"></a><span class="sd">            ignored for HTML.</span>
-<a id="__codelineno-0-2045" name="__codelineno-0-2045"></a>
-<a id="__codelineno-0-2046" name="__codelineno-0-2046"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2047" name="__codelineno-0-2047"></a><span class="sd">        pathlib.Path: the file that was written — ``path`` itself for every branch but ``.html``, which</span>
-<a id="__codelineno-0-2048" name="__codelineno-0-2048"></a><span class="sd">        returns the suffix-normalised name :meth:`export_html` actually wrote.</span>
-<a id="__codelineno-0-2049" name="__codelineno-0-2049"></a>
-<a id="__codelineno-0-2050" name="__codelineno-0-2050"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2051" name="__codelineno-0-2051"></a><span class="sd">        ValueError: when ``path`` has no suffix, or one outside the dispatch table; the message names both</span>
-<a id="__codelineno-0-2052" name="__codelineno-0-2052"></a><span class="sd">            families&#39; supported suffixes. Also when the installed pyvista lacks the exporter a supported</span>
-<a id="__codelineno-0-2053" name="__codelineno-0-2053"></a><span class="sd">            scene suffix needs.</span>
-<a id="__codelineno-0-2054" name="__codelineno-0-2054"></a>
-<a id="__codelineno-0-2055" name="__codelineno-0-2055"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a><span class="sd">        - A raster suffix screenshots, and hands back the path it wrote — not the frame:</span>
-<a id="__codelineno-0-2057" name="__codelineno-0-2057"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2058" name="__codelineno-0-2058"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2059" name="__codelineno-0-2059"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2060" name="__codelineno-0-2060"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-2061" name="__codelineno-0-2061"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True, window_size=(200, 150))</span>
-<a id="__codelineno-0-2062" name="__codelineno-0-2062"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
-<a id="__codelineno-0-2063" name="__codelineno-0-2063"></a><span class="sd">            ...     out = os.path.join(folder, &quot;scene.png&quot;)</span>
-<a id="__codelineno-0-2064" name="__codelineno-0-2064"></a><span class="sd">            ...     written = scene.save(out)</span>
-<a id="__codelineno-0-2065" name="__codelineno-0-2065"></a><span class="sd">            ...     scene.close()</span>
-<a id="__codelineno-0-2066" name="__codelineno-0-2066"></a><span class="sd">            ...     written.name, written.is_file()</span>
-<a id="__codelineno-0-2067" name="__codelineno-0-2067"></a><span class="sd">            (&#39;scene.png&#39;, True)</span>
-<a id="__codelineno-0-2068" name="__codelineno-0-2068"></a>
-<a id="__codelineno-0-2069" name="__codelineno-0-2069"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2070" name="__codelineno-0-2070"></a><span class="sd">        - A scene-export suffix writes the geometry through PyVista&#39;s own exporter, and returns its path</span>
-<a id="__codelineno-0-2071" name="__codelineno-0-2071"></a><span class="sd">          the same way:</span>
-<a id="__codelineno-0-2072" name="__codelineno-0-2072"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2073" name="__codelineno-0-2073"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2074" name="__codelineno-0-2074"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2075" name="__codelineno-0-2075"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-2076" name="__codelineno-0-2076"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-2077" name="__codelineno-0-2077"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
-<a id="__codelineno-0-2078" name="__codelineno-0-2078"></a><span class="sd">            ...     written = scene.save(os.path.join(folder, &quot;scene.gltf&quot;))</span>
-<a id="__codelineno-0-2079" name="__codelineno-0-2079"></a><span class="sd">            ...     scene.close()</span>
-<a id="__codelineno-0-2080" name="__codelineno-0-2080"></a><span class="sd">            ...     written.suffix, written.stat().st_size &gt; 0</span>
-<a id="__codelineno-0-2081" name="__codelineno-0-2081"></a><span class="sd">            (&#39;.gltf&#39;, True)</span>
-<a id="__codelineno-0-2082" name="__codelineno-0-2082"></a>
-<a id="__codelineno-0-2083" name="__codelineno-0-2083"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2084" name="__codelineno-0-2084"></a><span class="sd">        - An ``.html`` suffix exports an interactive page instead. The match is case-insensitive, and</span>
-<a id="__codelineno-0-2085" name="__codelineno-0-2085"></a><span class="sd">          :meth:`export_html` normalises the suffix it writes — so ``SCENE.HTML`` lands as ``SCENE.html``</span>
-<a id="__codelineno-0-2086" name="__codelineno-0-2086"></a><span class="sd">          and the returned path is the normalised one, not the name that was passed:</span>
-<a id="__codelineno-0-2087" name="__codelineno-0-2087"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2088" name="__codelineno-0-2088"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2089" name="__codelineno-0-2089"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2090" name="__codelineno-0-2090"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-2091" name="__codelineno-0-2091"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-2092" name="__codelineno-0-2092"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
-<a id="__codelineno-0-2093" name="__codelineno-0-2093"></a><span class="sd">            ...     written = scene.save(os.path.join(folder, &quot;SCENE.HTML&quot;))</span>
-<a id="__codelineno-0-2094" name="__codelineno-0-2094"></a><span class="sd">            ...     scene.close()</span>
-<a id="__codelineno-0-2095" name="__codelineno-0-2095"></a><span class="sd">            ...     written.name, sorted(os.listdir(folder))</span>
-<a id="__codelineno-0-2096" name="__codelineno-0-2096"></a><span class="sd">            (&#39;SCENE.html&#39;, [&#39;SCENE.html&#39;])</span>
-<a id="__codelineno-0-2097" name="__codelineno-0-2097"></a>
-<a id="__codelineno-0-2098" name="__codelineno-0-2098"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="sd">        - A suffix-less destination is an error, not a silent ``.png``:</span>
-<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a><span class="sd">            ...     scene.save(&quot;scene&quot;)</span>
-<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a><span class="sd">            ... except ValueError as error:</span>
-<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a><span class="sd">            ...     print(str(error).split(&quot;;&quot;)[0])</span>
-<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">            ... finally:</span>
-<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a><span class="sd">            ...     scene.close()</span>
-<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">            save() cannot infer a format from &#39;scene&#39;: it has no suffix</span>
-<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a>
-<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a>
-<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a><span class="sd">        screenshot: the raster-frame branch, where its ``**kwargs`` end up, and the only method that</span>
-<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a><span class="sd">            returns the rendered array.</span>
-<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a><span class="sd">        export_html: the interactive-page branch.</span>
-<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a>    <span class="n">suffix</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-<a id="__codelineno-0-2119" name="__codelineno-0-2119"></a>    <span class="k">if</span> <span class="n">suffix</span> <span class="o">==</span> <span class="n">HTML_SUFFIX</span><span class="p">:</span>
-<a id="__codelineno-0-2120" name="__codelineno-0-2120"></a>        <span class="c1"># export_html normalises the suffix it writes, so report the name it actually produced rather</span>
-<a id="__codelineno-0-2121" name="__codelineno-0-2121"></a>        <span class="c1"># than the one that was asked for.</span>
-<a id="__codelineno-0-2122" name="__codelineno-0-2122"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">export_html</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
-<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a>    <span class="k">if</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="n">IMAGE_SUFFIXES</span><span class="p">:</span>
-<a id="__codelineno-0-2124" name="__codelineno-0-2124"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-<a id="__codelineno-0-2125" name="__codelineno-0-2125"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
-<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a>    <span class="n">exporter_name</span> <span class="o">=</span> <span class="n">SCENE_EXPORTERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">suffix</span><span class="p">)</span>
-<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a>    <span class="k">if</span> <span class="n">exporter_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a>        <span class="c1"># Guarded with getattr rather than assumed: the exporter set is a pyvista capability, and a</span>
-<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a>        <span class="c1"># version that lacks one must say so plainly instead of failing on a missing attribute.</span>
-<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a>        <span class="n">exporter</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="p">,</span> <span class="n">exporter_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a>        <span class="k">if</span> <span class="n">exporter</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a>            <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a>
-<a id="__codelineno-0-2134" name="__codelineno-0-2134"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2135" name="__codelineno-0-2135"></a>                <span class="sa">f</span><span class="s2">&quot;the installed pyvista (</span><span class="si">{</span><span class="n">pv</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">) has no Plotter.</span><span class="si">{</span><span class="n">exporter_name</span><span class="si">}</span><span class="s2">, so </span><span class="si">{</span><span class="n">suffix</span><span class="si">!r}</span><span class="s2"> &quot;</span>
-<a id="__codelineno-0-2136" name="__codelineno-0-2136"></a>                <span class="sa">f</span><span class="s2">&quot;cannot be exported; </span><span class="si">{</span><span class="n">supported_destinations</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-2137" name="__codelineno-0-2137"></a>            <span class="p">)</span>
-<a id="__codelineno-0-2138" name="__codelineno-0-2138"></a>        <span class="n">exporter</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-<a id="__codelineno-0-2139" name="__codelineno-0-2139"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
-<a id="__codelineno-0-2140" name="__codelineno-0-2140"></a>    <span class="n">reason</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-2141" name="__codelineno-0-2141"></a>        <span class="s2">&quot;it has no suffix&quot;</span>
-<a id="__codelineno-0-2142" name="__codelineno-0-2142"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">suffix</span>
-<a id="__codelineno-0-2143" name="__codelineno-0-2143"></a>        <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">suffix</span><span class="si">!r}</span><span class="s2"> is not a format it can write&quot;</span>
-<a id="__codelineno-0-2144" name="__codelineno-0-2144"></a>    <span class="p">)</span>
-<a id="__codelineno-0-2145" name="__codelineno-0-2145"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2146" name="__codelineno-0-2146"></a>        <span class="sa">f</span><span class="s2">&quot;save() cannot infer a format from </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">; </span><span class="si">{</span><span class="n">supported_destinations</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-2147" name="__codelineno-0-2147"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-2147">2147</a></span>
+<span class="normal"><a href="#__codelineno-0-2148">2148</a></span>
+<span class="normal"><a href="#__codelineno-0-2149">2149</a></span>
+<span class="normal"><a href="#__codelineno-0-2150">2150</a></span>
+<span class="normal"><a href="#__codelineno-0-2151">2151</a></span>
+<span class="normal"><a href="#__codelineno-0-2152">2152</a></span>
+<span class="normal"><a href="#__codelineno-0-2153">2153</a></span>
+<span class="normal"><a href="#__codelineno-0-2154">2154</a></span>
+<span class="normal"><a href="#__codelineno-0-2155">2155</a></span>
+<span class="normal"><a href="#__codelineno-0-2156">2156</a></span>
+<span class="normal"><a href="#__codelineno-0-2157">2157</a></span>
+<span class="normal"><a href="#__codelineno-0-2158">2158</a></span>
+<span class="normal"><a href="#__codelineno-0-2159">2159</a></span>
+<span class="normal"><a href="#__codelineno-0-2160">2160</a></span>
+<span class="normal"><a href="#__codelineno-0-2161">2161</a></span>
+<span class="normal"><a href="#__codelineno-0-2162">2162</a></span>
+<span class="normal"><a href="#__codelineno-0-2163">2163</a></span>
+<span class="normal"><a href="#__codelineno-0-2164">2164</a></span>
+<span class="normal"><a href="#__codelineno-0-2165">2165</a></span>
+<span class="normal"><a href="#__codelineno-0-2166">2166</a></span>
+<span class="normal"><a href="#__codelineno-0-2167">2167</a></span>
+<span class="normal"><a href="#__codelineno-0-2168">2168</a></span>
+<span class="normal"><a href="#__codelineno-0-2169">2169</a></span>
+<span class="normal"><a href="#__codelineno-0-2170">2170</a></span>
+<span class="normal"><a href="#__codelineno-0-2171">2171</a></span>
+<span class="normal"><a href="#__codelineno-0-2172">2172</a></span>
+<span class="normal"><a href="#__codelineno-0-2173">2173</a></span>
+<span class="normal"><a href="#__codelineno-0-2174">2174</a></span>
+<span class="normal"><a href="#__codelineno-0-2175">2175</a></span>
+<span class="normal"><a href="#__codelineno-0-2176">2176</a></span>
+<span class="normal"><a href="#__codelineno-0-2177">2177</a></span>
+<span class="normal"><a href="#__codelineno-0-2178">2178</a></span>
+<span class="normal"><a href="#__codelineno-0-2179">2179</a></span>
+<span class="normal"><a href="#__codelineno-0-2180">2180</a></span>
+<span class="normal"><a href="#__codelineno-0-2181">2181</a></span>
+<span class="normal"><a href="#__codelineno-0-2182">2182</a></span>
+<span class="normal"><a href="#__codelineno-0-2183">2183</a></span>
+<span class="normal"><a href="#__codelineno-0-2184">2184</a></span>
+<span class="normal"><a href="#__codelineno-0-2185">2185</a></span>
+<span class="normal"><a href="#__codelineno-0-2186">2186</a></span>
+<span class="normal"><a href="#__codelineno-0-2187">2187</a></span>
+<span class="normal"><a href="#__codelineno-0-2188">2188</a></span>
+<span class="normal"><a href="#__codelineno-0-2189">2189</a></span>
+<span class="normal"><a href="#__codelineno-0-2190">2190</a></span>
+<span class="normal"><a href="#__codelineno-0-2191">2191</a></span>
+<span class="normal"><a href="#__codelineno-0-2192">2192</a></span>
+<span class="normal"><a href="#__codelineno-0-2193">2193</a></span>
+<span class="normal"><a href="#__codelineno-0-2194">2194</a></span>
+<span class="normal"><a href="#__codelineno-0-2195">2195</a></span>
+<span class="normal"><a href="#__codelineno-0-2196">2196</a></span>
+<span class="normal"><a href="#__codelineno-0-2197">2197</a></span>
+<span class="normal"><a href="#__codelineno-0-2198">2198</a></span>
+<span class="normal"><a href="#__codelineno-0-2199">2199</a></span>
+<span class="normal"><a href="#__codelineno-0-2200">2200</a></span>
+<span class="normal"><a href="#__codelineno-0-2201">2201</a></span>
+<span class="normal"><a href="#__codelineno-0-2202">2202</a></span>
+<span class="normal"><a href="#__codelineno-0-2203">2203</a></span>
+<span class="normal"><a href="#__codelineno-0-2204">2204</a></span>
+<span class="normal"><a href="#__codelineno-0-2205">2205</a></span>
+<span class="normal"><a href="#__codelineno-0-2206">2206</a></span>
+<span class="normal"><a href="#__codelineno-0-2207">2207</a></span>
+<span class="normal"><a href="#__codelineno-0-2208">2208</a></span>
+<span class="normal"><a href="#__codelineno-0-2209">2209</a></span>
+<span class="normal"><a href="#__codelineno-0-2210">2210</a></span>
+<span class="normal"><a href="#__codelineno-0-2211">2211</a></span>
+<span class="normal"><a href="#__codelineno-0-2212">2212</a></span>
+<span class="normal"><a href="#__codelineno-0-2213">2213</a></span>
+<span class="normal"><a href="#__codelineno-0-2214">2214</a></span>
+<span class="normal"><a href="#__codelineno-0-2215">2215</a></span>
+<span class="normal"><a href="#__codelineno-0-2216">2216</a></span>
+<span class="normal"><a href="#__codelineno-0-2217">2217</a></span>
+<span class="normal"><a href="#__codelineno-0-2218">2218</a></span>
+<span class="normal"><a href="#__codelineno-0-2219">2219</a></span>
+<span class="normal"><a href="#__codelineno-0-2220">2220</a></span>
+<span class="normal"><a href="#__codelineno-0-2221">2221</a></span>
+<span class="normal"><a href="#__codelineno-0-2222">2222</a></span>
+<span class="normal"><a href="#__codelineno-0-2223">2223</a></span>
+<span class="normal"><a href="#__codelineno-0-2224">2224</a></span>
+<span class="normal"><a href="#__codelineno-0-2225">2225</a></span>
+<span class="normal"><a href="#__codelineno-0-2226">2226</a></span>
+<span class="normal"><a href="#__codelineno-0-2227">2227</a></span>
+<span class="normal"><a href="#__codelineno-0-2228">2228</a></span>
+<span class="normal"><a href="#__codelineno-0-2229">2229</a></span>
+<span class="normal"><a href="#__codelineno-0-2230">2230</a></span>
+<span class="normal"><a href="#__codelineno-0-2231">2231</a></span>
+<span class="normal"><a href="#__codelineno-0-2232">2232</a></span>
+<span class="normal"><a href="#__codelineno-0-2233">2233</a></span>
+<span class="normal"><a href="#__codelineno-0-2234">2234</a></span>
+<span class="normal"><a href="#__codelineno-0-2235">2235</a></span>
+<span class="normal"><a href="#__codelineno-0-2236">2236</a></span>
+<span class="normal"><a href="#__codelineno-0-2237">2237</a></span>
+<span class="normal"><a href="#__codelineno-0-2238">2238</a></span>
+<span class="normal"><a href="#__codelineno-0-2239">2239</a></span>
+<span class="normal"><a href="#__codelineno-0-2240">2240</a></span>
+<span class="normal"><a href="#__codelineno-0-2241">2241</a></span>
+<span class="normal"><a href="#__codelineno-0-2242">2242</a></span>
+<span class="normal"><a href="#__codelineno-0-2243">2243</a></span>
+<span class="normal"><a href="#__codelineno-0-2244">2244</a></span>
+<span class="normal"><a href="#__codelineno-0-2245">2245</a></span>
+<span class="normal"><a href="#__codelineno-0-2246">2246</a></span>
+<span class="normal"><a href="#__codelineno-0-2247">2247</a></span>
+<span class="normal"><a href="#__codelineno-0-2248">2248</a></span>
+<span class="normal"><a href="#__codelineno-0-2249">2249</a></span>
+<span class="normal"><a href="#__codelineno-0-2250">2250</a></span>
+<span class="normal"><a href="#__codelineno-0-2251">2251</a></span>
+<span class="normal"><a href="#__codelineno-0-2252">2252</a></span>
+<span class="normal"><a href="#__codelineno-0-2253">2253</a></span>
+<span class="normal"><a href="#__codelineno-0-2254">2254</a></span>
+<span class="normal"><a href="#__codelineno-0-2255">2255</a></span>
+<span class="normal"><a href="#__codelineno-0-2256">2256</a></span>
+<span class="normal"><a href="#__codelineno-0-2257">2257</a></span>
+<span class="normal"><a href="#__codelineno-0-2258">2258</a></span>
+<span class="normal"><a href="#__codelineno-0-2259">2259</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2120" name="__codelineno-0-2120"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Destination</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-0-2121" name="__codelineno-0-2121"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the scene, dispatching on ``path``&#39;s suffix — a rendered frame, or a scene export.</span>
+<a id="__codelineno-0-2122" name="__codelineno-0-2122"></a>
+<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a><span class="sd">    Two families share the one entry point, and the suffix decides which:</span>
+<a id="__codelineno-0-2124" name="__codelineno-0-2124"></a>
+<a id="__codelineno-0-2125" name="__codelineno-0-2125"></a><span class="sd">    - ``.html`` → :meth:`export_html`, a self-contained interactive page (see there for why a heavy scene</span>
+<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">      is better served by :meth:`digitalearth.three_d.Scene3D.orbit`, and for the suffix normalisation it</span>
+<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">      applies).</span>
+<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">    - :data:`IMAGE_SUFFIXES` (``.png`` ``.jpg`` ``.jpeg`` ``.bmp`` ``.tif`` ``.tiff``) →</span>
+<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a><span class="sd">      :meth:`screenshot`, a rendered raster frame **in the format the suffix names** — ``.tif`` writes a</span>
+<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a><span class="sd">      TIFF, not a PNG.</span>
+<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a><span class="sd">    - :data:`SCENE_EXPORTERS` (``.gltf`` ``.obj`` ``.vrml`` ``.wrl`` ``.vtksz``) → the matching</span>
+<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a><span class="sd">      :class:`pyvista.Plotter` scene exporter, which writes the geometry itself rather than a picture of</span>
+<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a><span class="sd">      it.</span>
+<a id="__codelineno-0-2134" name="__codelineno-0-2134"></a><span class="sd">    - anything else — **including a path with no suffix at all** — raises. A format is never invented on</span>
+<a id="__codelineno-0-2135" name="__codelineno-0-2135"></a><span class="sd">      the caller&#39;s behalf, so ``save(&quot;scene&quot;)`` no longer quietly writes ``scene.png``.</span>
+<a id="__codelineno-0-2136" name="__codelineno-0-2136"></a>
+<a id="__codelineno-0-2137" name="__codelineno-0-2137"></a><span class="sd">    The suffix match is case-insensitive throughout (``SCENE.HTML`` exports a page).</span>
+<a id="__codelineno-0-2138" name="__codelineno-0-2138"></a>
+<a id="__codelineno-0-2139" name="__codelineno-0-2139"></a><span class="sd">    **It returns the path it wrote**, like every other tier&#39;s ``save()``, so a caller can chain on the</span>
+<a id="__codelineno-0-2140" name="__codelineno-0-2140"></a><span class="sd">    result without rebuilding the filename — and ``.html`` returns the *normalised* name, which is not</span>
+<a id="__codelineno-0-2141" name="__codelineno-0-2141"></a><span class="sd">    always the one passed in.</span>
+<a id="__codelineno-0-2142" name="__codelineno-0-2142"></a>
+<a id="__codelineno-0-2143" name="__codelineno-0-2143"></a><span class="sd">    **Changed, with no transition: it used to return the RGB frame** for a raster suffix, and ``None``</span>
+<a id="__codelineno-0-2144" name="__codelineno-0-2144"></a><span class="sd">    for an export — a return type that depended on the suffix, and gave the one branch producing a</span>
+<a id="__codelineno-0-2145" name="__codelineno-0-2145"></a><span class="sd">    useful value no counterpart on the others. Ask for the frame by name instead:</span>
+<a id="__codelineno-0-2146" name="__codelineno-0-2146"></a><span class="sd">    :meth:`screenshot` writes the same file *and* hands back the array, so ``frame = scene.save(out)``</span>
+<a id="__codelineno-0-2147" name="__codelineno-0-2147"></a><span class="sd">    becomes ``frame = scene.screenshot(out)`` — one call, the same two effects. Unlike the renamed</span>
+<a id="__codelineno-0-2148" name="__codelineno-0-2148"></a><span class="sd">    keywords in this batch, which keep their old spelling for a release, a return *type* has no shim to</span>
+<a id="__codelineno-0-2149" name="__codelineno-0-2149"></a><span class="sd">    offer: a value contrived to read as both a ``Path`` and an array would be worse than the break, so</span>
+<a id="__codelineno-0-2150" name="__codelineno-0-2150"></a><span class="sd">    this one is announced rather than eased.</span>
+<a id="__codelineno-0-2151" name="__codelineno-0-2151"></a>
+<a id="__codelineno-0-2152" name="__codelineno-0-2152"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2153" name="__codelineno-0-2153"></a><span class="sd">        path: Output file, as a string or ``os.PathLike``. Its suffix selects the branch.</span>
+<a id="__codelineno-0-2154" name="__codelineno-0-2154"></a><span class="sd">        **kwargs: Forwarded to the branch that runs — :meth:`screenshot` for a raster frame, the</span>
+<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">            ``pyvista.Plotter`` exporter for a scene export (e.g. ``inline_data=False`` for ``.gltf``);</span>
+<a id="__codelineno-0-2156" name="__codelineno-0-2156"></a><span class="sd">            ignored for HTML.</span>
+<a id="__codelineno-0-2157" name="__codelineno-0-2157"></a>
+<a id="__codelineno-0-2158" name="__codelineno-0-2158"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2159" name="__codelineno-0-2159"></a><span class="sd">        pathlib.Path: the file that was written — ``path`` itself for every branch but ``.html``, which</span>
+<a id="__codelineno-0-2160" name="__codelineno-0-2160"></a><span class="sd">        returns the suffix-normalised name :meth:`export_html` actually wrote.</span>
+<a id="__codelineno-0-2161" name="__codelineno-0-2161"></a>
+<a id="__codelineno-0-2162" name="__codelineno-0-2162"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2163" name="__codelineno-0-2163"></a><span class="sd">        ValueError: when ``path`` has no suffix, or one outside the dispatch table; the message names both</span>
+<a id="__codelineno-0-2164" name="__codelineno-0-2164"></a><span class="sd">            families&#39; supported suffixes. Also when the installed pyvista lacks the exporter a supported</span>
+<a id="__codelineno-0-2165" name="__codelineno-0-2165"></a><span class="sd">            scene suffix needs.</span>
+<a id="__codelineno-0-2166" name="__codelineno-0-2166"></a>
+<a id="__codelineno-0-2167" name="__codelineno-0-2167"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2168" name="__codelineno-0-2168"></a><span class="sd">        - A raster suffix screenshots, and hands back the path it wrote — not the frame:</span>
+<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2170" name="__codelineno-0-2170"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
+<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2172" name="__codelineno-0-2172"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
+<a id="__codelineno-0-2173" name="__codelineno-0-2173"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True, window_size=(200, 150))</span>
+<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
+<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a><span class="sd">            ...     out = os.path.join(folder, &quot;scene.png&quot;)</span>
+<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a><span class="sd">            ...     written = scene.save(out)</span>
+<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a><span class="sd">            ...     scene.close()</span>
+<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a><span class="sd">            ...     written.name, written.is_file()</span>
+<a id="__codelineno-0-2179" name="__codelineno-0-2179"></a><span class="sd">            (&#39;scene.png&#39;, True)</span>
+<a id="__codelineno-0-2180" name="__codelineno-0-2180"></a>
+<a id="__codelineno-0-2181" name="__codelineno-0-2181"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a><span class="sd">        - A scene-export suffix writes the geometry through PyVista&#39;s own exporter, and returns its path</span>
+<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a><span class="sd">          the same way:</span>
+<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
+<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2187" name="__codelineno-0-2187"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
+<a id="__codelineno-0-2188" name="__codelineno-0-2188"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
+<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a><span class="sd">            ...     written = scene.save(os.path.join(folder, &quot;scene.gltf&quot;))</span>
+<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a><span class="sd">            ...     scene.close()</span>
+<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a><span class="sd">            ...     written.suffix, written.stat().st_size &gt; 0</span>
+<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a><span class="sd">            (&#39;.gltf&#39;, True)</span>
+<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a>
+<a id="__codelineno-0-2195" name="__codelineno-0-2195"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2196" name="__codelineno-0-2196"></a><span class="sd">        - An ``.html`` suffix exports an interactive page instead. The match is case-insensitive, and</span>
+<a id="__codelineno-0-2197" name="__codelineno-0-2197"></a><span class="sd">          :meth:`export_html` normalises the suffix it writes — so ``SCENE.HTML`` lands as ``SCENE.html``</span>
+<a id="__codelineno-0-2198" name="__codelineno-0-2198"></a><span class="sd">          and the returned path is the normalised one, not the name that was passed:</span>
+<a id="__codelineno-0-2199" name="__codelineno-0-2199"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2200" name="__codelineno-0-2200"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
+<a id="__codelineno-0-2201" name="__codelineno-0-2201"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2202" name="__codelineno-0-2202"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
+<a id="__codelineno-0-2203" name="__codelineno-0-2203"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2204" name="__codelineno-0-2204"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
+<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">            ...     written = scene.save(os.path.join(folder, &quot;SCENE.HTML&quot;))</span>
+<a id="__codelineno-0-2206" name="__codelineno-0-2206"></a><span class="sd">            ...     scene.close()</span>
+<a id="__codelineno-0-2207" name="__codelineno-0-2207"></a><span class="sd">            ...     written.name, sorted(os.listdir(folder))</span>
+<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">            (&#39;SCENE.html&#39;, [&#39;SCENE.html&#39;])</span>
+<a id="__codelineno-0-2209" name="__codelineno-0-2209"></a>
+<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2211" name="__codelineno-0-2211"></a><span class="sd">        - A suffix-less destination is an error, not a silent ``.png``:</span>
+<a id="__codelineno-0-2212" name="__codelineno-0-2212"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2214" name="__codelineno-0-2214"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2215" name="__codelineno-0-2215"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-2216" name="__codelineno-0-2216"></a><span class="sd">            ...     scene.save(&quot;scene&quot;)</span>
+<a id="__codelineno-0-2217" name="__codelineno-0-2217"></a><span class="sd">            ... except ValueError as error:</span>
+<a id="__codelineno-0-2218" name="__codelineno-0-2218"></a><span class="sd">            ...     print(str(error).split(&quot;;&quot;)[0])</span>
+<a id="__codelineno-0-2219" name="__codelineno-0-2219"></a><span class="sd">            ... finally:</span>
+<a id="__codelineno-0-2220" name="__codelineno-0-2220"></a><span class="sd">            ...     scene.close()</span>
+<a id="__codelineno-0-2221" name="__codelineno-0-2221"></a><span class="sd">            save() cannot infer a format from &#39;scene&#39;: it has no suffix</span>
+<a id="__codelineno-0-2222" name="__codelineno-0-2222"></a>
+<a id="__codelineno-0-2223" name="__codelineno-0-2223"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2224" name="__codelineno-0-2224"></a>
+<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2226" name="__codelineno-0-2226"></a><span class="sd">        screenshot: the raster-frame branch, where its ``**kwargs`` end up, and the only method that</span>
+<a id="__codelineno-0-2227" name="__codelineno-0-2227"></a><span class="sd">            returns the rendered array.</span>
+<a id="__codelineno-0-2228" name="__codelineno-0-2228"></a><span class="sd">        export_html: the interactive-page branch.</span>
+<a id="__codelineno-0-2229" name="__codelineno-0-2229"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2230" name="__codelineno-0-2230"></a>    <span class="n">suffix</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+<a id="__codelineno-0-2231" name="__codelineno-0-2231"></a>    <span class="k">if</span> <span class="n">suffix</span> <span class="o">==</span> <span class="n">HTML_SUFFIX</span><span class="p">:</span>
+<a id="__codelineno-0-2232" name="__codelineno-0-2232"></a>        <span class="c1"># export_html normalises the suffix it writes, so report the name it actually produced rather</span>
+<a id="__codelineno-0-2233" name="__codelineno-0-2233"></a>        <span class="c1"># than the one that was asked for.</span>
+<a id="__codelineno-0-2234" name="__codelineno-0-2234"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">export_html</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+<a id="__codelineno-0-2235" name="__codelineno-0-2235"></a>    <span class="k">if</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="n">IMAGE_SUFFIXES</span><span class="p">:</span>
+<a id="__codelineno-0-2236" name="__codelineno-0-2236"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-2237" name="__codelineno-0-2237"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+<a id="__codelineno-0-2238" name="__codelineno-0-2238"></a>    <span class="n">exporter_name</span> <span class="o">=</span> <span class="n">SCENE_EXPORTERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">suffix</span><span class="p">)</span>
+<a id="__codelineno-0-2239" name="__codelineno-0-2239"></a>    <span class="k">if</span> <span class="n">exporter_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a>        <span class="c1"># Guarded with getattr rather than assumed: the exporter set is a pyvista capability, and a</span>
+<a id="__codelineno-0-2241" name="__codelineno-0-2241"></a>        <span class="c1"># version that lacks one must say so plainly instead of failing on a missing attribute.</span>
+<a id="__codelineno-0-2242" name="__codelineno-0-2242"></a>        <span class="n">exporter</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="p">,</span> <span class="n">exporter_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-2243" name="__codelineno-0-2243"></a>        <span class="k">if</span> <span class="n">exporter</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2244" name="__codelineno-0-2244"></a>            <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
+<a id="__codelineno-0-2245" name="__codelineno-0-2245"></a>
+<a id="__codelineno-0-2246" name="__codelineno-0-2246"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2247" name="__codelineno-0-2247"></a>                <span class="sa">f</span><span class="s2">&quot;the installed pyvista (</span><span class="si">{</span><span class="n">pv</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">) has no Plotter.</span><span class="si">{</span><span class="n">exporter_name</span><span class="si">}</span><span class="s2">, so </span><span class="si">{</span><span class="n">suffix</span><span class="si">!r}</span><span class="s2"> &quot;</span>
+<a id="__codelineno-0-2248" name="__codelineno-0-2248"></a>                <span class="sa">f</span><span class="s2">&quot;cannot be exported; </span><span class="si">{</span><span class="n">supported_destinations</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-2249" name="__codelineno-0-2249"></a>            <span class="p">)</span>
+<a id="__codelineno-0-2250" name="__codelineno-0-2250"></a>        <span class="n">exporter</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-2251" name="__codelineno-0-2251"></a>        <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a>    <span class="n">reason</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-2253" name="__codelineno-0-2253"></a>        <span class="s2">&quot;it has no suffix&quot;</span>
+<a id="__codelineno-0-2254" name="__codelineno-0-2254"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">suffix</span>
+<a id="__codelineno-0-2255" name="__codelineno-0-2255"></a>        <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">suffix</span><span class="si">!r}</span><span class="s2"> is not a format it can write&quot;</span>
+<a id="__codelineno-0-2256" name="__codelineno-0-2256"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2257" name="__codelineno-0-2257"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2258" name="__codelineno-0-2258"></a>        <span class="sa">f</span><span class="s2">&quot;save() cannot infer a format from </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">; </span><span class="si">{</span><span class="n">supported_destinations</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-2259" name="__codelineno-0-2259"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -16452,145 +16452,145 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1937">1937</a></span>
-<span class="normal"><a href="#__codelineno-0-1938">1938</a></span>
-<span class="normal"><a href="#__codelineno-0-1939">1939</a></span>
-<span class="normal"><a href="#__codelineno-0-1940">1940</a></span>
-<span class="normal"><a href="#__codelineno-0-1941">1941</a></span>
-<span class="normal"><a href="#__codelineno-0-1942">1942</a></span>
-<span class="normal"><a href="#__codelineno-0-1943">1943</a></span>
-<span class="normal"><a href="#__codelineno-0-1944">1944</a></span>
-<span class="normal"><a href="#__codelineno-0-1945">1945</a></span>
-<span class="normal"><a href="#__codelineno-0-1946">1946</a></span>
-<span class="normal"><a href="#__codelineno-0-1947">1947</a></span>
-<span class="normal"><a href="#__codelineno-0-1948">1948</a></span>
-<span class="normal"><a href="#__codelineno-0-1949">1949</a></span>
-<span class="normal"><a href="#__codelineno-0-1950">1950</a></span>
-<span class="normal"><a href="#__codelineno-0-1951">1951</a></span>
-<span class="normal"><a href="#__codelineno-0-1952">1952</a></span>
-<span class="normal"><a href="#__codelineno-0-1953">1953</a></span>
-<span class="normal"><a href="#__codelineno-0-1954">1954</a></span>
-<span class="normal"><a href="#__codelineno-0-1955">1955</a></span>
-<span class="normal"><a href="#__codelineno-0-1956">1956</a></span>
-<span class="normal"><a href="#__codelineno-0-1957">1957</a></span>
-<span class="normal"><a href="#__codelineno-0-1958">1958</a></span>
-<span class="normal"><a href="#__codelineno-0-1959">1959</a></span>
-<span class="normal"><a href="#__codelineno-0-1960">1960</a></span>
-<span class="normal"><a href="#__codelineno-0-1961">1961</a></span>
-<span class="normal"><a href="#__codelineno-0-1962">1962</a></span>
-<span class="normal"><a href="#__codelineno-0-1963">1963</a></span>
-<span class="normal"><a href="#__codelineno-0-1964">1964</a></span>
-<span class="normal"><a href="#__codelineno-0-1965">1965</a></span>
-<span class="normal"><a href="#__codelineno-0-1966">1966</a></span>
-<span class="normal"><a href="#__codelineno-0-1967">1967</a></span>
-<span class="normal"><a href="#__codelineno-0-1968">1968</a></span>
-<span class="normal"><a href="#__codelineno-0-1969">1969</a></span>
-<span class="normal"><a href="#__codelineno-0-1970">1970</a></span>
-<span class="normal"><a href="#__codelineno-0-1971">1971</a></span>
-<span class="normal"><a href="#__codelineno-0-1972">1972</a></span>
-<span class="normal"><a href="#__codelineno-0-1973">1973</a></span>
-<span class="normal"><a href="#__codelineno-0-1974">1974</a></span>
-<span class="normal"><a href="#__codelineno-0-1975">1975</a></span>
-<span class="normal"><a href="#__codelineno-0-1976">1976</a></span>
-<span class="normal"><a href="#__codelineno-0-1977">1977</a></span>
-<span class="normal"><a href="#__codelineno-0-1978">1978</a></span>
-<span class="normal"><a href="#__codelineno-0-1979">1979</a></span>
-<span class="normal"><a href="#__codelineno-0-1980">1980</a></span>
-<span class="normal"><a href="#__codelineno-0-1981">1981</a></span>
-<span class="normal"><a href="#__codelineno-0-1982">1982</a></span>
-<span class="normal"><a href="#__codelineno-0-1983">1983</a></span>
-<span class="normal"><a href="#__codelineno-0-1984">1984</a></span>
-<span class="normal"><a href="#__codelineno-0-1985">1985</a></span>
-<span class="normal"><a href="#__codelineno-0-1986">1986</a></span>
-<span class="normal"><a href="#__codelineno-0-1987">1987</a></span>
-<span class="normal"><a href="#__codelineno-0-1988">1988</a></span>
-<span class="normal"><a href="#__codelineno-0-1989">1989</a></span>
-<span class="normal"><a href="#__codelineno-0-1990">1990</a></span>
-<span class="normal"><a href="#__codelineno-0-1991">1991</a></span>
-<span class="normal"><a href="#__codelineno-0-1992">1992</a></span>
-<span class="normal"><a href="#__codelineno-0-1993">1993</a></span>
-<span class="normal"><a href="#__codelineno-0-1994">1994</a></span>
-<span class="normal"><a href="#__codelineno-0-1995">1995</a></span>
-<span class="normal"><a href="#__codelineno-0-1996">1996</a></span>
-<span class="normal"><a href="#__codelineno-0-1997">1997</a></span>
-<span class="normal"><a href="#__codelineno-0-1998">1998</a></span>
-<span class="normal"><a href="#__codelineno-0-1999">1999</a></span>
-<span class="normal"><a href="#__codelineno-0-2000">2000</a></span>
-<span class="normal"><a href="#__codelineno-0-2001">2001</a></span>
-<span class="normal"><a href="#__codelineno-0-2002">2002</a></span>
-<span class="normal"><a href="#__codelineno-0-2003">2003</a></span>
-<span class="normal"><a href="#__codelineno-0-2004">2004</a></span>
-<span class="normal"><a href="#__codelineno-0-2005">2005</a></span>
-<span class="normal"><a href="#__codelineno-0-2006">2006</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1937" name="__codelineno-0-1937"></a><span class="k">def</span><span class="w"> </span><span class="nf">export_html</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Destination</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-0-1938" name="__codelineno-0-1938"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Export the scene to a self-contained interactive HTML page (via trame/vtk.js).</span>
-<a id="__codelineno-0-1939" name="__codelineno-0-1939"></a>
-<a id="__codelineno-0-1940" name="__codelineno-0-1940"></a><span class="sd">    The page embeds the whole mesh, so it grows with the geometry rather than with the rendered image: about</span>
-<a id="__codelineno-0-1941" name="__codelineno-0-1941"></a><span class="sd">    a 1 MB vtk.js floor plus ~19 bytes per point (a 12x12 grid gives 1.1 MB, 512x512 gives 6 MB, and a</span>
-<a id="__codelineno-0-1942" name="__codelineno-0-1942"></a><span class="sd">    4700x4700 DEM gives ~430 MB). Past a modest tile the result is technically interactive but too heavy to</span>
-<a id="__codelineno-0-1943" name="__codelineno-0-1943"></a><span class="sd">    sit beside a notebook or in docs — prefer :meth:`digitalearth.three_d.Scene3D.orbit`, which writes a</span>
-<a id="__codelineno-0-1944" name="__codelineno-0-1944"></a><span class="sd">    compact GIF/MP4 fly-through of the same scene.</span>
-<a id="__codelineno-0-1945" name="__codelineno-0-1945"></a>
-<a id="__codelineno-0-1946" name="__codelineno-0-1946"></a><span class="sd">    The destination is normalised to a ``.html`` suffix before writing, and that normalised path is what</span>
-<a id="__codelineno-0-1947" name="__codelineno-0-1947"></a><span class="sd">    comes back. pyvista&#39;s own behaviour here differs by version — the ``trame-pyvista`` component used from</span>
-<a id="__codelineno-0-1948" name="__codelineno-0-1948"></a><span class="sd">    0.49 rewrites a non-``.html`` suffix, while 0.48&#39;s native export honours the name it was given — so</span>
-<a id="__codelineno-0-1949" name="__codelineno-0-1949"></a><span class="sd">    normalising up front is what makes the two agree and keeps the returned path the file that exists.</span>
-<a id="__codelineno-0-1950" name="__codelineno-0-1950"></a>
-<a id="__codelineno-0-1951" name="__codelineno-0-1951"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1952" name="__codelineno-0-1952"></a><span class="sd">        path: Destination file. A suffix other than ``.html`` (including ``.HTML``) is replaced with</span>
-<a id="__codelineno-0-1953" name="__codelineno-0-1953"></a><span class="sd">            ``.html``; a name with no suffix gains one. Replacement is :meth:`pathlib.Path.with_suffix`,</span>
-<a id="__codelineno-0-1954" name="__codelineno-0-1954"></a><span class="sd">            matching what ``trame-pyvista`` does, so a dotted stem loses its last segment</span>
-<a id="__codelineno-0-1955" name="__codelineno-0-1955"></a><span class="sd">            (``report.v2`` becomes ``report.html``). Note :meth:`save` dispatches only on a literal</span>
-<a id="__codelineno-0-1956" name="__codelineno-0-1956"></a><span class="sd">            ``.html`` suffix, so ``save(\&quot;x.htm\&quot;)`` raises on the unknown suffix while</span>
-<a id="__codelineno-0-1957" name="__codelineno-0-1957"></a><span class="sd">            ``export_html(\&quot;x.htm\&quot;)`` writes ``x.html``.</span>
-<a id="__codelineno-0-1958" name="__codelineno-0-1958"></a>
-<a id="__codelineno-0-1959" name="__codelineno-0-1959"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1960" name="__codelineno-0-1960"></a><span class="sd">        The ``.html`` path written, as a string.</span>
-<a id="__codelineno-0-1961" name="__codelineno-0-1961"></a>
-<a id="__codelineno-0-1962" name="__codelineno-0-1962"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1963" name="__codelineno-0-1963"></a><span class="sd">        ImportError: If the trame/vtk.js export stack is missing. pyvista raises this itself and its message</span>
-<a id="__codelineno-0-1964" name="__codelineno-0-1964"></a><span class="sd">            names the package to install; the ``3d`` extra pulls the stack via ``pyvista[jupyter]``.</span>
-<a id="__codelineno-0-1965" name="__codelineno-0-1965"></a><span class="sd">            Note pyvista&#39;s registry turns a *failing* plugin import into a ``UserWarning`` and drops the</span>
-<a id="__codelineno-0-1966" name="__codelineno-0-1966"></a><span class="sd">            entry, so a broken-but-installed ``trame-pyvista`` reports that same message — when the</span>
-<a id="__codelineno-0-1967" name="__codelineno-0-1967"></a><span class="sd">            package is present, read the warning for the real cause.</span>
-<a id="__codelineno-0-1968" name="__codelineno-0-1968"></a><span class="sd">        RuntimeError: If trame and pyvista are bound to different VTK builds — the message names</span>
-<a id="__codelineno-0-1969" name="__codelineno-0-1969"></a><span class="sd">            ``VTK_MODULE_NAME``, the variable that reconciles them.</span>
-<a id="__codelineno-0-1970" name="__codelineno-0-1970"></a>
-<a id="__codelineno-0-1971" name="__codelineno-0-1971"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1972" name="__codelineno-0-1972"></a><span class="sd">        - Export a small scene. Asking for ``scene.HTML`` writes ``scene.html``, and the returned path is</span>
-<a id="__codelineno-0-1973" name="__codelineno-0-1973"></a><span class="sd">          the normalised one — the page that exists, on either pyvista — so it can be passed straight on:</span>
-<a id="__codelineno-0-1974" name="__codelineno-0-1974"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1975" name="__codelineno-0-1975"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-1976" name="__codelineno-0-1976"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-1977" name="__codelineno-0-1977"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-1978" name="__codelineno-0-1978"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-1979" name="__codelineno-0-1979"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
-<a id="__codelineno-0-1980" name="__codelineno-0-1980"></a><span class="sd">            ...     out = scene.export_html(os.path.join(folder, &quot;scene.HTML&quot;))</span>
-<a id="__codelineno-0-1981" name="__codelineno-0-1981"></a><span class="sd">            ...     scene.close()</span>
-<a id="__codelineno-0-1982" name="__codelineno-0-1982"></a><span class="sd">            ...     os.path.basename(out), os.path.getsize(out) &gt; 0, sorted(os.listdir(folder))</span>
-<a id="__codelineno-0-1983" name="__codelineno-0-1983"></a><span class="sd">            (&#39;scene.html&#39;, True, [&#39;scene.html&#39;])</span>
-<a id="__codelineno-0-1984" name="__codelineno-0-1984"></a>
-<a id="__codelineno-0-1985" name="__codelineno-0-1985"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1986" name="__codelineno-0-1986"></a>
-<a id="__codelineno-0-1987" name="__codelineno-0-1987"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1988" name="__codelineno-0-1988"></a><span class="sd">        digitalearth.three_d.Scene3D.orbit: a compact GIF/MP4 fly-through, the better choice for a heavy</span>
-<a id="__codelineno-0-1989" name="__codelineno-0-1989"></a><span class="sd">            scene.</span>
-<a id="__codelineno-0-1990" name="__codelineno-0-1990"></a><span class="sd">        save: routes here automatically for a ``*.html`` destination.</span>
-<a id="__codelineno-0-1991" name="__codelineno-0-1991"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1992" name="__codelineno-0-1992"></a>    <span class="c1"># pyvista &gt;=0.49 moved trame support out into the separate `trame-pyvista` package: the export now lives</span>
-<a id="__codelineno-0-1993" name="__codelineno-0-1993"></a>    <span class="c1"># on a registered `trame` plotter component and `Plotter.export_html` is deprecated. This is a capability</span>
-<a id="__codelineno-0-1994" name="__codelineno-0-1994"></a>    <span class="c1"># switch, not a version one — 0.48 ships the same component registry, so a 0.48 user who installs</span>
-<a id="__codelineno-0-1995" name="__codelineno-0-1995"></a>    <span class="c1"># trame-pyvista takes the component branch too. Falling back (rather than raising here) hands the</span>
-<a id="__codelineno-0-1996" name="__codelineno-0-1996"></a>    <span class="c1"># not-installed case to pyvista&#39;s own actionable ImportError. The VTK-build check runs before either</span>
-<a id="__codelineno-0-1997" name="__codelineno-0-1997"></a>    <span class="c1"># branch: 0.49 makes it inside the deprecated Plotter.export_html we no longer call, and 0.48 makes</span>
-<a id="__codelineno-0-1998" name="__codelineno-0-1998"></a>    <span class="c1"># it nowhere at all, so doing it here is what guards both versions rather than neither.</span>
-<a id="__codelineno-0-1999" name="__codelineno-0-1999"></a>    <span class="n">destination</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="n">HTML_SUFFIX</span><span class="p">))</span>
-<a id="__codelineno-0-2000" name="__codelineno-0-2000"></a>    <span class="n">_require_one_vtk_build</span><span class="p">()</span>
-<a id="__codelineno-0-2001" name="__codelineno-0-2001"></a>    <span class="n">component</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="p">,</span> <span class="s2">&quot;trame&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-2002" name="__codelineno-0-2002"></a>    <span class="k">if</span> <span class="n">component</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">export_html</span><span class="p">(</span><span class="n">destination</span><span class="p">)</span>
-<a id="__codelineno-0-2004" name="__codelineno-0-2004"></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-2005" name="__codelineno-0-2005"></a>        <span class="n">component</span><span class="o">.</span><span class="n">export_html</span><span class="p">(</span><span class="n">destination</span><span class="p">)</span>
-<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a>    <span class="k">return</span> <span class="n">destination</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2049">2049</a></span>
+<span class="normal"><a href="#__codelineno-0-2050">2050</a></span>
+<span class="normal"><a href="#__codelineno-0-2051">2051</a></span>
+<span class="normal"><a href="#__codelineno-0-2052">2052</a></span>
+<span class="normal"><a href="#__codelineno-0-2053">2053</a></span>
+<span class="normal"><a href="#__codelineno-0-2054">2054</a></span>
+<span class="normal"><a href="#__codelineno-0-2055">2055</a></span>
+<span class="normal"><a href="#__codelineno-0-2056">2056</a></span>
+<span class="normal"><a href="#__codelineno-0-2057">2057</a></span>
+<span class="normal"><a href="#__codelineno-0-2058">2058</a></span>
+<span class="normal"><a href="#__codelineno-0-2059">2059</a></span>
+<span class="normal"><a href="#__codelineno-0-2060">2060</a></span>
+<span class="normal"><a href="#__codelineno-0-2061">2061</a></span>
+<span class="normal"><a href="#__codelineno-0-2062">2062</a></span>
+<span class="normal"><a href="#__codelineno-0-2063">2063</a></span>
+<span class="normal"><a href="#__codelineno-0-2064">2064</a></span>
+<span class="normal"><a href="#__codelineno-0-2065">2065</a></span>
+<span class="normal"><a href="#__codelineno-0-2066">2066</a></span>
+<span class="normal"><a href="#__codelineno-0-2067">2067</a></span>
+<span class="normal"><a href="#__codelineno-0-2068">2068</a></span>
+<span class="normal"><a href="#__codelineno-0-2069">2069</a></span>
+<span class="normal"><a href="#__codelineno-0-2070">2070</a></span>
+<span class="normal"><a href="#__codelineno-0-2071">2071</a></span>
+<span class="normal"><a href="#__codelineno-0-2072">2072</a></span>
+<span class="normal"><a href="#__codelineno-0-2073">2073</a></span>
+<span class="normal"><a href="#__codelineno-0-2074">2074</a></span>
+<span class="normal"><a href="#__codelineno-0-2075">2075</a></span>
+<span class="normal"><a href="#__codelineno-0-2076">2076</a></span>
+<span class="normal"><a href="#__codelineno-0-2077">2077</a></span>
+<span class="normal"><a href="#__codelineno-0-2078">2078</a></span>
+<span class="normal"><a href="#__codelineno-0-2079">2079</a></span>
+<span class="normal"><a href="#__codelineno-0-2080">2080</a></span>
+<span class="normal"><a href="#__codelineno-0-2081">2081</a></span>
+<span class="normal"><a href="#__codelineno-0-2082">2082</a></span>
+<span class="normal"><a href="#__codelineno-0-2083">2083</a></span>
+<span class="normal"><a href="#__codelineno-0-2084">2084</a></span>
+<span class="normal"><a href="#__codelineno-0-2085">2085</a></span>
+<span class="normal"><a href="#__codelineno-0-2086">2086</a></span>
+<span class="normal"><a href="#__codelineno-0-2087">2087</a></span>
+<span class="normal"><a href="#__codelineno-0-2088">2088</a></span>
+<span class="normal"><a href="#__codelineno-0-2089">2089</a></span>
+<span class="normal"><a href="#__codelineno-0-2090">2090</a></span>
+<span class="normal"><a href="#__codelineno-0-2091">2091</a></span>
+<span class="normal"><a href="#__codelineno-0-2092">2092</a></span>
+<span class="normal"><a href="#__codelineno-0-2093">2093</a></span>
+<span class="normal"><a href="#__codelineno-0-2094">2094</a></span>
+<span class="normal"><a href="#__codelineno-0-2095">2095</a></span>
+<span class="normal"><a href="#__codelineno-0-2096">2096</a></span>
+<span class="normal"><a href="#__codelineno-0-2097">2097</a></span>
+<span class="normal"><a href="#__codelineno-0-2098">2098</a></span>
+<span class="normal"><a href="#__codelineno-0-2099">2099</a></span>
+<span class="normal"><a href="#__codelineno-0-2100">2100</a></span>
+<span class="normal"><a href="#__codelineno-0-2101">2101</a></span>
+<span class="normal"><a href="#__codelineno-0-2102">2102</a></span>
+<span class="normal"><a href="#__codelineno-0-2103">2103</a></span>
+<span class="normal"><a href="#__codelineno-0-2104">2104</a></span>
+<span class="normal"><a href="#__codelineno-0-2105">2105</a></span>
+<span class="normal"><a href="#__codelineno-0-2106">2106</a></span>
+<span class="normal"><a href="#__codelineno-0-2107">2107</a></span>
+<span class="normal"><a href="#__codelineno-0-2108">2108</a></span>
+<span class="normal"><a href="#__codelineno-0-2109">2109</a></span>
+<span class="normal"><a href="#__codelineno-0-2110">2110</a></span>
+<span class="normal"><a href="#__codelineno-0-2111">2111</a></span>
+<span class="normal"><a href="#__codelineno-0-2112">2112</a></span>
+<span class="normal"><a href="#__codelineno-0-2113">2113</a></span>
+<span class="normal"><a href="#__codelineno-0-2114">2114</a></span>
+<span class="normal"><a href="#__codelineno-0-2115">2115</a></span>
+<span class="normal"><a href="#__codelineno-0-2116">2116</a></span>
+<span class="normal"><a href="#__codelineno-0-2117">2117</a></span>
+<span class="normal"><a href="#__codelineno-0-2118">2118</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2049" name="__codelineno-0-2049"></a><span class="k">def</span><span class="w"> </span><span class="nf">export_html</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Destination</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-2050" name="__codelineno-0-2050"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Export the scene to a self-contained interactive HTML page (via trame/vtk.js).</span>
+<a id="__codelineno-0-2051" name="__codelineno-0-2051"></a>
+<a id="__codelineno-0-2052" name="__codelineno-0-2052"></a><span class="sd">    The page embeds the whole mesh, so it grows with the geometry rather than with the rendered image: about</span>
+<a id="__codelineno-0-2053" name="__codelineno-0-2053"></a><span class="sd">    a 1 MB vtk.js floor plus ~19 bytes per point (a 12x12 grid gives 1.1 MB, 512x512 gives 6 MB, and a</span>
+<a id="__codelineno-0-2054" name="__codelineno-0-2054"></a><span class="sd">    4700x4700 DEM gives ~430 MB). Past a modest tile the result is technically interactive but too heavy to</span>
+<a id="__codelineno-0-2055" name="__codelineno-0-2055"></a><span class="sd">    sit beside a notebook or in docs — prefer :meth:`digitalearth.three_d.Scene3D.orbit`, which writes a</span>
+<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a><span class="sd">    compact GIF/MP4 fly-through of the same scene.</span>
+<a id="__codelineno-0-2057" name="__codelineno-0-2057"></a>
+<a id="__codelineno-0-2058" name="__codelineno-0-2058"></a><span class="sd">    The destination is normalised to a ``.html`` suffix before writing, and that normalised path is what</span>
+<a id="__codelineno-0-2059" name="__codelineno-0-2059"></a><span class="sd">    comes back. pyvista&#39;s own behaviour here differs by version — the ``trame-pyvista`` component used from</span>
+<a id="__codelineno-0-2060" name="__codelineno-0-2060"></a><span class="sd">    0.49 rewrites a non-``.html`` suffix, while 0.48&#39;s native export honours the name it was given — so</span>
+<a id="__codelineno-0-2061" name="__codelineno-0-2061"></a><span class="sd">    normalising up front is what makes the two agree and keeps the returned path the file that exists.</span>
+<a id="__codelineno-0-2062" name="__codelineno-0-2062"></a>
+<a id="__codelineno-0-2063" name="__codelineno-0-2063"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2064" name="__codelineno-0-2064"></a><span class="sd">        path: Destination file. A suffix other than ``.html`` (including ``.HTML``) is replaced with</span>
+<a id="__codelineno-0-2065" name="__codelineno-0-2065"></a><span class="sd">            ``.html``; a name with no suffix gains one. Replacement is :meth:`pathlib.Path.with_suffix`,</span>
+<a id="__codelineno-0-2066" name="__codelineno-0-2066"></a><span class="sd">            matching what ``trame-pyvista`` does, so a dotted stem loses its last segment</span>
+<a id="__codelineno-0-2067" name="__codelineno-0-2067"></a><span class="sd">            (``report.v2`` becomes ``report.html``). Note :meth:`save` dispatches only on a literal</span>
+<a id="__codelineno-0-2068" name="__codelineno-0-2068"></a><span class="sd">            ``.html`` suffix, so ``save(\&quot;x.htm\&quot;)`` raises on the unknown suffix while</span>
+<a id="__codelineno-0-2069" name="__codelineno-0-2069"></a><span class="sd">            ``export_html(\&quot;x.htm\&quot;)`` writes ``x.html``.</span>
+<a id="__codelineno-0-2070" name="__codelineno-0-2070"></a>
+<a id="__codelineno-0-2071" name="__codelineno-0-2071"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2072" name="__codelineno-0-2072"></a><span class="sd">        The ``.html`` path written, as a string.</span>
+<a id="__codelineno-0-2073" name="__codelineno-0-2073"></a>
+<a id="__codelineno-0-2074" name="__codelineno-0-2074"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2075" name="__codelineno-0-2075"></a><span class="sd">        ImportError: If the trame/vtk.js export stack is missing. pyvista raises this itself and its message</span>
+<a id="__codelineno-0-2076" name="__codelineno-0-2076"></a><span class="sd">            names the package to install; the ``3d`` extra pulls the stack via ``pyvista[jupyter]``.</span>
+<a id="__codelineno-0-2077" name="__codelineno-0-2077"></a><span class="sd">            Note pyvista&#39;s registry turns a *failing* plugin import into a ``UserWarning`` and drops the</span>
+<a id="__codelineno-0-2078" name="__codelineno-0-2078"></a><span class="sd">            entry, so a broken-but-installed ``trame-pyvista`` reports that same message — when the</span>
+<a id="__codelineno-0-2079" name="__codelineno-0-2079"></a><span class="sd">            package is present, read the warning for the real cause.</span>
+<a id="__codelineno-0-2080" name="__codelineno-0-2080"></a><span class="sd">        RuntimeError: If trame and pyvista are bound to different VTK builds — the message names</span>
+<a id="__codelineno-0-2081" name="__codelineno-0-2081"></a><span class="sd">            ``VTK_MODULE_NAME``, the variable that reconciles them.</span>
+<a id="__codelineno-0-2082" name="__codelineno-0-2082"></a>
+<a id="__codelineno-0-2083" name="__codelineno-0-2083"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2084" name="__codelineno-0-2084"></a><span class="sd">        - Export a small scene. Asking for ``scene.HTML`` writes ``scene.html``, and the returned path is</span>
+<a id="__codelineno-0-2085" name="__codelineno-0-2085"></a><span class="sd">          the normalised one — the page that exists, on either pyvista — so it can be passed straight on:</span>
+<a id="__codelineno-0-2086" name="__codelineno-0-2086"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2087" name="__codelineno-0-2087"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
+<a id="__codelineno-0-2088" name="__codelineno-0-2088"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2089" name="__codelineno-0-2089"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
+<a id="__codelineno-0-2090" name="__codelineno-0-2090"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2091" name="__codelineno-0-2091"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
+<a id="__codelineno-0-2092" name="__codelineno-0-2092"></a><span class="sd">            ...     out = scene.export_html(os.path.join(folder, &quot;scene.HTML&quot;))</span>
+<a id="__codelineno-0-2093" name="__codelineno-0-2093"></a><span class="sd">            ...     scene.close()</span>
+<a id="__codelineno-0-2094" name="__codelineno-0-2094"></a><span class="sd">            ...     os.path.basename(out), os.path.getsize(out) &gt; 0, sorted(os.listdir(folder))</span>
+<a id="__codelineno-0-2095" name="__codelineno-0-2095"></a><span class="sd">            (&#39;scene.html&#39;, True, [&#39;scene.html&#39;])</span>
+<a id="__codelineno-0-2096" name="__codelineno-0-2096"></a>
+<a id="__codelineno-0-2097" name="__codelineno-0-2097"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2098" name="__codelineno-0-2098"></a>
+<a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="sd">        digitalearth.three_d.Scene3D.orbit: a compact GIF/MP4 fly-through, the better choice for a heavy</span>
+<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a><span class="sd">            scene.</span>
+<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a><span class="sd">        save: routes here automatically for a ``*.html`` destination.</span>
+<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a>    <span class="c1"># pyvista &gt;=0.49 moved trame support out into the separate `trame-pyvista` package: the export now lives</span>
+<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a>    <span class="c1"># on a registered `trame` plotter component and `Plotter.export_html` is deprecated. This is a capability</span>
+<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a>    <span class="c1"># switch, not a version one — 0.48 ships the same component registry, so a 0.48 user who installs</span>
+<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a>    <span class="c1"># trame-pyvista takes the component branch too. Falling back (rather than raising here) hands the</span>
+<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a>    <span class="c1"># not-installed case to pyvista&#39;s own actionable ImportError. The VTK-build check runs before either</span>
+<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a>    <span class="c1"># branch: 0.49 makes it inside the deprecated Plotter.export_html we no longer call, and 0.48 makes</span>
+<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a>    <span class="c1"># it nowhere at all, so doing it here is what guards both versions rather than neither.</span>
+<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a>    <span class="n">destination</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="n">HTML_SUFFIX</span><span class="p">))</span>
+<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a>    <span class="n">_require_one_vtk_build</span><span class="p">()</span>
+<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a>    <span class="n">component</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="p">,</span> <span class="s2">&quot;trame&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a>    <span class="k">if</span> <span class="n">component</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">export_html</span><span class="p">(</span><span class="n">destination</span><span class="p">)</span>
+<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a>        <span class="n">component</span><span class="o">.</span><span class="n">export_html</span><span class="p">(</span><span class="n">destination</span><span class="p">)</span>
+<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a>    <span class="k">return</span> <span class="n">destination</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -16695,81 +16695,81 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2149">2149</a></span>
-<span class="normal"><a href="#__codelineno-0-2150">2150</a></span>
-<span class="normal"><a href="#__codelineno-0-2151">2151</a></span>
-<span class="normal"><a href="#__codelineno-0-2152">2152</a></span>
-<span class="normal"><a href="#__codelineno-0-2153">2153</a></span>
-<span class="normal"><a href="#__codelineno-0-2154">2154</a></span>
-<span class="normal"><a href="#__codelineno-0-2155">2155</a></span>
-<span class="normal"><a href="#__codelineno-0-2156">2156</a></span>
-<span class="normal"><a href="#__codelineno-0-2157">2157</a></span>
-<span class="normal"><a href="#__codelineno-0-2158">2158</a></span>
-<span class="normal"><a href="#__codelineno-0-2159">2159</a></span>
-<span class="normal"><a href="#__codelineno-0-2160">2160</a></span>
-<span class="normal"><a href="#__codelineno-0-2161">2161</a></span>
-<span class="normal"><a href="#__codelineno-0-2162">2162</a></span>
-<span class="normal"><a href="#__codelineno-0-2163">2163</a></span>
-<span class="normal"><a href="#__codelineno-0-2164">2164</a></span>
-<span class="normal"><a href="#__codelineno-0-2165">2165</a></span>
-<span class="normal"><a href="#__codelineno-0-2166">2166</a></span>
-<span class="normal"><a href="#__codelineno-0-2167">2167</a></span>
-<span class="normal"><a href="#__codelineno-0-2168">2168</a></span>
-<span class="normal"><a href="#__codelineno-0-2169">2169</a></span>
-<span class="normal"><a href="#__codelineno-0-2170">2170</a></span>
-<span class="normal"><a href="#__codelineno-0-2171">2171</a></span>
-<span class="normal"><a href="#__codelineno-0-2172">2172</a></span>
-<span class="normal"><a href="#__codelineno-0-2173">2173</a></span>
-<span class="normal"><a href="#__codelineno-0-2174">2174</a></span>
-<span class="normal"><a href="#__codelineno-0-2175">2175</a></span>
-<span class="normal"><a href="#__codelineno-0-2176">2176</a></span>
-<span class="normal"><a href="#__codelineno-0-2177">2177</a></span>
-<span class="normal"><a href="#__codelineno-0-2178">2178</a></span>
-<span class="normal"><a href="#__codelineno-0-2179">2179</a></span>
-<span class="normal"><a href="#__codelineno-0-2180">2180</a></span>
-<span class="normal"><a href="#__codelineno-0-2181">2181</a></span>
-<span class="normal"><a href="#__codelineno-0-2182">2182</a></span>
-<span class="normal"><a href="#__codelineno-0-2183">2183</a></span>
-<span class="normal"><a href="#__codelineno-0-2184">2184</a></span>
-<span class="normal"><a href="#__codelineno-0-2185">2185</a></span>
-<span class="normal"><a href="#__codelineno-0-2186">2186</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2149" name="__codelineno-0-2149"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2150" name="__codelineno-0-2150"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Display the scene interactively (or render a frame off-screen).</span>
-<a id="__codelineno-0-2151" name="__codelineno-0-2151"></a>
-<a id="__codelineno-0-2152" name="__codelineno-0-2152"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2153" name="__codelineno-0-2153"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.show`.</span>
-<a id="__codelineno-0-2154" name="__codelineno-0-2154"></a>
-<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2156" name="__codelineno-0-2156"></a><span class="sd">        Whatever :meth:`pyvista.Plotter.show` returns.</span>
-<a id="__codelineno-0-2157" name="__codelineno-0-2157"></a>
-<a id="__codelineno-0-2158" name="__codelineno-0-2158"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2159" name="__codelineno-0-2159"></a><span class="sd">        - Off-screen (as in CI, or under :data:`pyvista.OFF_SCREEN`) it renders a frame and returns without</span>
-<a id="__codelineno-0-2160" name="__codelineno-0-2160"></a><span class="sd">          opening a window. What comes back is pyvista&#39;s own return value, which its ``return_cpos``</span>
-<a id="__codelineno-0-2161" name="__codelineno-0-2161"></a><span class="sd">          theme setting decides — do not rely on it:</span>
-<a id="__codelineno-0-2162" name="__codelineno-0-2162"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2163" name="__codelineno-0-2163"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-2164" name="__codelineno-0-2164"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2165" name="__codelineno-0-2165"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-2166" name="__codelineno-0-2166"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
-<a id="__codelineno-0-2167" name="__codelineno-0-2167"></a><span class="sd">            &gt;&gt;&gt; _ = scene.show()</span>
-<a id="__codelineno-0-2168" name="__codelineno-0-2168"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a>
-<a id="__codelineno-0-2170" name="__codelineno-0-2170"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a><span class="sd">        - Keyword arguments reach :meth:`pyvista.Plotter.show`, so the camera can be framed on the way in:</span>
-<a id="__codelineno-0-2172" name="__codelineno-0-2172"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2173" name="__codelineno-0-2173"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Cube())</span>
-<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a><span class="sd">            &gt;&gt;&gt; _ = scene.show(cpos=&quot;xy&quot;)</span>
-<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-2179" name="__codelineno-0-2179"></a>
-<a id="__codelineno-0-2180" name="__codelineno-0-2180"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2181" name="__codelineno-0-2181"></a>
-<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a><span class="sd">        screenshot: returns the rendered frame as an array instead of displaying it.</span>
-<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_camera</span><span class="p">()</span>
-<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2261">2261</a></span>
+<span class="normal"><a href="#__codelineno-0-2262">2262</a></span>
+<span class="normal"><a href="#__codelineno-0-2263">2263</a></span>
+<span class="normal"><a href="#__codelineno-0-2264">2264</a></span>
+<span class="normal"><a href="#__codelineno-0-2265">2265</a></span>
+<span class="normal"><a href="#__codelineno-0-2266">2266</a></span>
+<span class="normal"><a href="#__codelineno-0-2267">2267</a></span>
+<span class="normal"><a href="#__codelineno-0-2268">2268</a></span>
+<span class="normal"><a href="#__codelineno-0-2269">2269</a></span>
+<span class="normal"><a href="#__codelineno-0-2270">2270</a></span>
+<span class="normal"><a href="#__codelineno-0-2271">2271</a></span>
+<span class="normal"><a href="#__codelineno-0-2272">2272</a></span>
+<span class="normal"><a href="#__codelineno-0-2273">2273</a></span>
+<span class="normal"><a href="#__codelineno-0-2274">2274</a></span>
+<span class="normal"><a href="#__codelineno-0-2275">2275</a></span>
+<span class="normal"><a href="#__codelineno-0-2276">2276</a></span>
+<span class="normal"><a href="#__codelineno-0-2277">2277</a></span>
+<span class="normal"><a href="#__codelineno-0-2278">2278</a></span>
+<span class="normal"><a href="#__codelineno-0-2279">2279</a></span>
+<span class="normal"><a href="#__codelineno-0-2280">2280</a></span>
+<span class="normal"><a href="#__codelineno-0-2281">2281</a></span>
+<span class="normal"><a href="#__codelineno-0-2282">2282</a></span>
+<span class="normal"><a href="#__codelineno-0-2283">2283</a></span>
+<span class="normal"><a href="#__codelineno-0-2284">2284</a></span>
+<span class="normal"><a href="#__codelineno-0-2285">2285</a></span>
+<span class="normal"><a href="#__codelineno-0-2286">2286</a></span>
+<span class="normal"><a href="#__codelineno-0-2287">2287</a></span>
+<span class="normal"><a href="#__codelineno-0-2288">2288</a></span>
+<span class="normal"><a href="#__codelineno-0-2289">2289</a></span>
+<span class="normal"><a href="#__codelineno-0-2290">2290</a></span>
+<span class="normal"><a href="#__codelineno-0-2291">2291</a></span>
+<span class="normal"><a href="#__codelineno-0-2292">2292</a></span>
+<span class="normal"><a href="#__codelineno-0-2293">2293</a></span>
+<span class="normal"><a href="#__codelineno-0-2294">2294</a></span>
+<span class="normal"><a href="#__codelineno-0-2295">2295</a></span>
+<span class="normal"><a href="#__codelineno-0-2296">2296</a></span>
+<span class="normal"><a href="#__codelineno-0-2297">2297</a></span>
+<span class="normal"><a href="#__codelineno-0-2298">2298</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2261" name="__codelineno-0-2261"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2262" name="__codelineno-0-2262"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Display the scene interactively (or render a frame off-screen).</span>
+<a id="__codelineno-0-2263" name="__codelineno-0-2263"></a>
+<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2265" name="__codelineno-0-2265"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.show`.</span>
+<a id="__codelineno-0-2266" name="__codelineno-0-2266"></a>
+<a id="__codelineno-0-2267" name="__codelineno-0-2267"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2268" name="__codelineno-0-2268"></a><span class="sd">        Whatever :meth:`pyvista.Plotter.show` returns.</span>
+<a id="__codelineno-0-2269" name="__codelineno-0-2269"></a>
+<a id="__codelineno-0-2270" name="__codelineno-0-2270"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2271" name="__codelineno-0-2271"></a><span class="sd">        - Off-screen (as in CI, or under :data:`pyvista.OFF_SCREEN`) it renders a frame and returns without</span>
+<a id="__codelineno-0-2272" name="__codelineno-0-2272"></a><span class="sd">          opening a window. What comes back is pyvista&#39;s own return value, which its ``return_cpos``</span>
+<a id="__codelineno-0-2273" name="__codelineno-0-2273"></a><span class="sd">          theme setting decides — do not rely on it:</span>
+<a id="__codelineno-0-2274" name="__codelineno-0-2274"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2275" name="__codelineno-0-2275"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
+<a id="__codelineno-0-2276" name="__codelineno-0-2276"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2277" name="__codelineno-0-2277"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2278" name="__codelineno-0-2278"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
+<a id="__codelineno-0-2279" name="__codelineno-0-2279"></a><span class="sd">            &gt;&gt;&gt; _ = scene.show()</span>
+<a id="__codelineno-0-2280" name="__codelineno-0-2280"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-2281" name="__codelineno-0-2281"></a>
+<a id="__codelineno-0-2282" name="__codelineno-0-2282"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2283" name="__codelineno-0-2283"></a><span class="sd">        - Keyword arguments reach :meth:`pyvista.Plotter.show`, so the camera can be framed on the way in:</span>
+<a id="__codelineno-0-2284" name="__codelineno-0-2284"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2285" name="__codelineno-0-2285"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
+<a id="__codelineno-0-2286" name="__codelineno-0-2286"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2287" name="__codelineno-0-2287"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2288" name="__codelineno-0-2288"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Cube())</span>
+<a id="__codelineno-0-2289" name="__codelineno-0-2289"></a><span class="sd">            &gt;&gt;&gt; _ = scene.show(cpos=&quot;xy&quot;)</span>
+<a id="__codelineno-0-2290" name="__codelineno-0-2290"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-2291" name="__codelineno-0-2291"></a>
+<a id="__codelineno-0-2292" name="__codelineno-0-2292"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2293" name="__codelineno-0-2293"></a>
+<a id="__codelineno-0-2294" name="__codelineno-0-2294"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2295" name="__codelineno-0-2295"></a><span class="sd">        screenshot: returns the rendered frame as an array instead of displaying it.</span>
+<a id="__codelineno-0-2296" name="__codelineno-0-2296"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2297" name="__codelineno-0-2297"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_camera</span><span class="p">()</span>
+<a id="__codelineno-0-2298" name="__codelineno-0-2298"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -16819,81 +16819,81 @@ it again on exit. A scene that never drew has no render window, and closing it o
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2188">2188</a></span>
-<span class="normal"><a href="#__codelineno-0-2189">2189</a></span>
-<span class="normal"><a href="#__codelineno-0-2190">2190</a></span>
-<span class="normal"><a href="#__codelineno-0-2191">2191</a></span>
-<span class="normal"><a href="#__codelineno-0-2192">2192</a></span>
-<span class="normal"><a href="#__codelineno-0-2193">2193</a></span>
-<span class="normal"><a href="#__codelineno-0-2194">2194</a></span>
-<span class="normal"><a href="#__codelineno-0-2195">2195</a></span>
-<span class="normal"><a href="#__codelineno-0-2196">2196</a></span>
-<span class="normal"><a href="#__codelineno-0-2197">2197</a></span>
-<span class="normal"><a href="#__codelineno-0-2198">2198</a></span>
-<span class="normal"><a href="#__codelineno-0-2199">2199</a></span>
-<span class="normal"><a href="#__codelineno-0-2200">2200</a></span>
-<span class="normal"><a href="#__codelineno-0-2201">2201</a></span>
-<span class="normal"><a href="#__codelineno-0-2202">2202</a></span>
-<span class="normal"><a href="#__codelineno-0-2203">2203</a></span>
-<span class="normal"><a href="#__codelineno-0-2204">2204</a></span>
-<span class="normal"><a href="#__codelineno-0-2205">2205</a></span>
-<span class="normal"><a href="#__codelineno-0-2206">2206</a></span>
-<span class="normal"><a href="#__codelineno-0-2207">2207</a></span>
-<span class="normal"><a href="#__codelineno-0-2208">2208</a></span>
-<span class="normal"><a href="#__codelineno-0-2209">2209</a></span>
-<span class="normal"><a href="#__codelineno-0-2210">2210</a></span>
-<span class="normal"><a href="#__codelineno-0-2211">2211</a></span>
-<span class="normal"><a href="#__codelineno-0-2212">2212</a></span>
-<span class="normal"><a href="#__codelineno-0-2213">2213</a></span>
-<span class="normal"><a href="#__codelineno-0-2214">2214</a></span>
-<span class="normal"><a href="#__codelineno-0-2215">2215</a></span>
-<span class="normal"><a href="#__codelineno-0-2216">2216</a></span>
-<span class="normal"><a href="#__codelineno-0-2217">2217</a></span>
-<span class="normal"><a href="#__codelineno-0-2218">2218</a></span>
-<span class="normal"><a href="#__codelineno-0-2219">2219</a></span>
-<span class="normal"><a href="#__codelineno-0-2220">2220</a></span>
-<span class="normal"><a href="#__codelineno-0-2221">2221</a></span>
-<span class="normal"><a href="#__codelineno-0-2222">2222</a></span>
-<span class="normal"><a href="#__codelineno-0-2223">2223</a></span>
-<span class="normal"><a href="#__codelineno-0-2224">2224</a></span>
-<span class="normal"><a href="#__codelineno-0-2225">2225</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2188" name="__codelineno-0-2188"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the wrapped plotter and free its render window.</span>
-<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a>
-<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a><span class="sd">    Closing twice is harmless, so a scene can be closed explicitly inside a ``with`` block that will close</span>
-<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a><span class="sd">    it again on exit. A scene that never drew has no render window, and closing it opens none.</span>
-<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a>
-<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2195" name="__codelineno-0-2195"></a><span class="sd">        - Free the render window when the scene is finished with:</span>
-<a id="__codelineno-0-2196" name="__codelineno-0-2196"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2197" name="__codelineno-0-2197"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-2198" name="__codelineno-0-2198"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2199" name="__codelineno-0-2199"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-2200" name="__codelineno-0-2200"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
-<a id="__codelineno-0-2201" name="__codelineno-0-2201"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-2202" name="__codelineno-0-2202"></a><span class="sd">            &gt;&gt;&gt; len(scene.layers)</span>
-<a id="__codelineno-0-2203" name="__codelineno-0-2203"></a><span class="sd">            1</span>
-<a id="__codelineno-0-2204" name="__codelineno-0-2204"></a>
-<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2206" name="__codelineno-0-2206"></a><span class="sd">        - A second close is a no-op, not an error:</span>
-<a id="__codelineno-0-2207" name="__codelineno-0-2207"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
-<a id="__codelineno-0-2209" name="__codelineno-0-2209"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
-<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-2211" name="__codelineno-0-2211"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-2212" name="__codelineno-0-2212"></a>
-<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2214" name="__codelineno-0-2214"></a>
-<a id="__codelineno-0-2215" name="__codelineno-0-2215"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2216" name="__codelineno-0-2216"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
-<a id="__codelineno-0-2217" name="__codelineno-0-2217"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2218" name="__codelineno-0-2218"></a>    <span class="c1"># A scene that never drew has no render window to free, and must not open one in order to close it.</span>
-<a id="__codelineno-0-2219" name="__codelineno-0-2219"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plotter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2220" name="__codelineno-0-2220"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_plotter</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-<a id="__codelineno-0-2221" name="__codelineno-0-2221"></a>    <span class="c1"># And the data goes with it. The registry holds strong references, so a session that builds scenes</span>
-<a id="__codelineno-0-2222" name="__codelineno-0-2222"></a>    <span class="c1"># keeps every dataset they drew until something says otherwise — and this is the caller saying so</span>
-<a id="__codelineno-0-2223" name="__codelineno-0-2223"></a>    <span class="c1"># (review M1/M2). A captured `figure_spec` cannot resolve an `object:` source afterwards, which is</span>
-<a id="__codelineno-0-2224" name="__codelineno-0-2224"></a>    <span class="c1"># what &quot;closed&quot; means for a figure whose data lived only in this process.</span>
-<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2300">2300</a></span>
+<span class="normal"><a href="#__codelineno-0-2301">2301</a></span>
+<span class="normal"><a href="#__codelineno-0-2302">2302</a></span>
+<span class="normal"><a href="#__codelineno-0-2303">2303</a></span>
+<span class="normal"><a href="#__codelineno-0-2304">2304</a></span>
+<span class="normal"><a href="#__codelineno-0-2305">2305</a></span>
+<span class="normal"><a href="#__codelineno-0-2306">2306</a></span>
+<span class="normal"><a href="#__codelineno-0-2307">2307</a></span>
+<span class="normal"><a href="#__codelineno-0-2308">2308</a></span>
+<span class="normal"><a href="#__codelineno-0-2309">2309</a></span>
+<span class="normal"><a href="#__codelineno-0-2310">2310</a></span>
+<span class="normal"><a href="#__codelineno-0-2311">2311</a></span>
+<span class="normal"><a href="#__codelineno-0-2312">2312</a></span>
+<span class="normal"><a href="#__codelineno-0-2313">2313</a></span>
+<span class="normal"><a href="#__codelineno-0-2314">2314</a></span>
+<span class="normal"><a href="#__codelineno-0-2315">2315</a></span>
+<span class="normal"><a href="#__codelineno-0-2316">2316</a></span>
+<span class="normal"><a href="#__codelineno-0-2317">2317</a></span>
+<span class="normal"><a href="#__codelineno-0-2318">2318</a></span>
+<span class="normal"><a href="#__codelineno-0-2319">2319</a></span>
+<span class="normal"><a href="#__codelineno-0-2320">2320</a></span>
+<span class="normal"><a href="#__codelineno-0-2321">2321</a></span>
+<span class="normal"><a href="#__codelineno-0-2322">2322</a></span>
+<span class="normal"><a href="#__codelineno-0-2323">2323</a></span>
+<span class="normal"><a href="#__codelineno-0-2324">2324</a></span>
+<span class="normal"><a href="#__codelineno-0-2325">2325</a></span>
+<span class="normal"><a href="#__codelineno-0-2326">2326</a></span>
+<span class="normal"><a href="#__codelineno-0-2327">2327</a></span>
+<span class="normal"><a href="#__codelineno-0-2328">2328</a></span>
+<span class="normal"><a href="#__codelineno-0-2329">2329</a></span>
+<span class="normal"><a href="#__codelineno-0-2330">2330</a></span>
+<span class="normal"><a href="#__codelineno-0-2331">2331</a></span>
+<span class="normal"><a href="#__codelineno-0-2332">2332</a></span>
+<span class="normal"><a href="#__codelineno-0-2333">2333</a></span>
+<span class="normal"><a href="#__codelineno-0-2334">2334</a></span>
+<span class="normal"><a href="#__codelineno-0-2335">2335</a></span>
+<span class="normal"><a href="#__codelineno-0-2336">2336</a></span>
+<span class="normal"><a href="#__codelineno-0-2337">2337</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2300" name="__codelineno-0-2300"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2301" name="__codelineno-0-2301"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the wrapped plotter and free its render window.</span>
+<a id="__codelineno-0-2302" name="__codelineno-0-2302"></a>
+<a id="__codelineno-0-2303" name="__codelineno-0-2303"></a><span class="sd">    Closing twice is harmless, so a scene can be closed explicitly inside a ``with`` block that will close</span>
+<a id="__codelineno-0-2304" name="__codelineno-0-2304"></a><span class="sd">    it again on exit. A scene that never drew has no render window, and closing it opens none.</span>
+<a id="__codelineno-0-2305" name="__codelineno-0-2305"></a>
+<a id="__codelineno-0-2306" name="__codelineno-0-2306"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2307" name="__codelineno-0-2307"></a><span class="sd">        - Free the render window when the scene is finished with:</span>
+<a id="__codelineno-0-2308" name="__codelineno-0-2308"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2309" name="__codelineno-0-2309"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
+<a id="__codelineno-0-2310" name="__codelineno-0-2310"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2311" name="__codelineno-0-2311"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2312" name="__codelineno-0-2312"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
+<a id="__codelineno-0-2313" name="__codelineno-0-2313"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-2314" name="__codelineno-0-2314"></a><span class="sd">            &gt;&gt;&gt; len(scene.layers)</span>
+<a id="__codelineno-0-2315" name="__codelineno-0-2315"></a><span class="sd">            1</span>
+<a id="__codelineno-0-2316" name="__codelineno-0-2316"></a>
+<a id="__codelineno-0-2317" name="__codelineno-0-2317"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2318" name="__codelineno-0-2318"></a><span class="sd">        - A second close is a no-op, not an error:</span>
+<a id="__codelineno-0-2319" name="__codelineno-0-2319"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2320" name="__codelineno-0-2320"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2321" name="__codelineno-0-2321"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
+<a id="__codelineno-0-2322" name="__codelineno-0-2322"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-2323" name="__codelineno-0-2323"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-2324" name="__codelineno-0-2324"></a>
+<a id="__codelineno-0-2325" name="__codelineno-0-2325"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2326" name="__codelineno-0-2326"></a>
+<a id="__codelineno-0-2327" name="__codelineno-0-2327"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2328" name="__codelineno-0-2328"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
+<a id="__codelineno-0-2329" name="__codelineno-0-2329"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2330" name="__codelineno-0-2330"></a>    <span class="c1"># A scene that never drew has no render window to free, and must not open one in order to close it.</span>
+<a id="__codelineno-0-2331" name="__codelineno-0-2331"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_plotter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2332" name="__codelineno-0-2332"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_plotter</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<a id="__codelineno-0-2333" name="__codelineno-0-2333"></a>    <span class="c1"># And the data goes with it. The registry holds strong references, so a session that builds scenes</span>
+<a id="__codelineno-0-2334" name="__codelineno-0-2334"></a>    <span class="c1"># keeps every dataset they drew until something says otherwise — and this is the caller saying so</span>
+<a id="__codelineno-0-2335" name="__codelineno-0-2335"></a>    <span class="c1"># (review M1/M2). A captured `figure_spec` cannot resolve an `object:` source afterwards, which is</span>
+<a id="__codelineno-0-2336" name="__codelineno-0-2336"></a>    <span class="c1"># what &quot;closed&quot; means for a figure whose data lived only in this process.</span>
+<a id="__codelineno-0-2337" name="__codelineno-0-2337"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
