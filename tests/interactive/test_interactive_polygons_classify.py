@@ -89,14 +89,14 @@ class TestPolygonsClassifies:
         m = InteractiveMap().polygons(polygons_gdf)
         assert m.layers, "a plain polygon layer must still register"
 
-    def test_rasterize_alongside_a_scheme_warns_it_is_dropped(self, polygons_gdf):
-        """An explicit ``rasterize=``/``big_data_threshold=`` with a scheme is a dropped request, so it warns.
+    def test_rasterize_true_with_a_scheme_warns_at_the_caller(self, polygons_gdf):
+        """``rasterize=True`` with a scheme is dropped (a classified layer draws raw glyphs), so it warns.
 
         Test scenario:
-            A classified layer draws raw glyphs (each class keeps its colour), so the datashading hints
-            cannot apply. Rather than discard them in silence — the over-specification this branch warns
-            about in ``graticule()`` and refuses for scheme-without-column — ``polygons`` warns, names them,
-            and still classifies.
+            A classified layer is never datashaded, so forcing ``rasterize=True`` is a dropped request —
+            named rather than discarded, like ``graticule()``'s over-specification warning. The warning must
+            point at THIS caller, not the ``@_skips_off_limb`` wrapper, so its ``filename`` is checked (the
+            builder is decorated, so the warn uses ``stacklevel=3``); the layer still classifies.
         """
         import warnings
 
@@ -106,14 +106,52 @@ class TestPolygonsClassifies:
                 polygons_gdf, column="val", scheme="quantiles", k=3, rasterize=True
             )
         dropped = [
-            str(w.message)
+            w
             for w in caught
-            if issubclass(w.category, UserWarning) and "rasterize" in str(w.message)
+            if issubclass(w.category, UserWarning)
+            and "rasterize=True" in str(w.message)
         ]
         assert dropped, [str(w.message) for w in caught]
-        assert m.last_breaks, (
-            "the layer must still classify despite the ignored rasterize="
+        assert dropped[0].filename.endswith("test_interactive_polygons_classify.py"), (
+            f"the warning must point at the caller, not the wrapper: {dropped[0].filename}"
         )
+        assert m.last_breaks, (
+            "the layer must still classify despite the ignored rasterize=True"
+        )
+
+    def test_big_data_threshold_with_a_scheme_warns(self, polygons_gdf):
+        """An explicit ``big_data_threshold=`` with a scheme is dropped too — a classified layer is not routed."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            InteractiveMap().polygons(
+                polygons_gdf,
+                column="val",
+                scheme="quantiles",
+                k=3,
+                big_data_threshold=1,
+            )
+        assert [w for w in caught if "big_data_threshold" in str(w.message)], [
+            str(w.message) for w in caught
+        ]
+
+    def test_rasterize_false_with_a_scheme_is_silent(self, polygons_gdf):
+        """``rasterize=False`` asks for raw glyphs, exactly what a classified layer draws, so it does not warn.
+
+        Test scenario:
+            Warning that ``rasterize=False`` was "dropped" would contradict the ImportError hint that tells
+            callers to pass ``rasterize=False`` for raw glyphs; a classified layer already draws them, so the
+            request is honoured, not dropped.
+        """
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            InteractiveMap().polygons(
+                polygons_gdf, column="val", scheme="quantiles", k=3, rasterize=False
+            )
+        assert [str(w.message) for w in caught if "rasterize" in str(w.message)] == []
 
     def test_auto_rasterize_with_a_scheme_is_silent(self, polygons_gdf):
         """The default ``rasterize="auto"`` names no datashading request, so a classified call stays silent."""
@@ -125,3 +163,14 @@ class TestPolygonsClassifies:
                 polygons_gdf, column="val", scheme="quantiles", k=3
             )
         assert [str(w.message) for w in caught if "rasterize" in str(w.message)] == []
+
+    def test_a_scheme_with_a_missing_column_is_named(self, polygons_gdf):
+        """A scheme naming an absent column raises a named ``KeyError``, as ``choropleth`` does — not a bare one.
+
+        Test scenario:
+            Without the check the classifier reaches into the frame and surfaces a bare pandas ``KeyError``;
+            ``polygons`` names the column and the builder instead, matching ``choropleth``.
+        """
+        m = InteractiveMap()
+        with pytest.raises(KeyError, match="polygons column 'nope' not found"):
+            m.polygons(polygons_gdf, column="nope", scheme="quantiles")
