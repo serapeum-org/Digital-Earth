@@ -12,7 +12,8 @@ import pytest
 from digitalearth.interactive import InteractiveMap
 
 # (method, kwargs, named): `named` is the builder the guard quotes — the method's own name, except `flow`,
-# a thin alias that routes its rejection through `graph`.
+# a thin alias that routes its rejection through `graph`. Every interactive vector builder validates its
+# input as the call runs (the tier builds its element eagerly), so each rejects a raster on the call itself.
 _BUILDERS = [
     ("points", {}, "points"),
     ("lines", {}, "lines"),
@@ -47,18 +48,18 @@ class TestEveryVectorBuilderRejectsARaster:
         "method, kwargs, named", _BUILDERS, ids=[builder[0] for builder in _BUILDERS]
     )
     def test_raster_is_rejected_by_name(self, dataset, method, kwargs, named):
-        """Each builder rejects a ``Dataset`` with a message naming it and the tier's raster entry points.
+        """Each vector builder rejects a ``Dataset`` on the call, naming it and the tier's raster entry points.
 
         Test scenario:
-            Some builders touch the input at build time (``points``/``polygons``/``choropleth``/``trimesh``)
-            and reject on the call; the rest record their source and reject when the layer is drawn. Either
-            way the message quotes the builder and routes the caller to ``field()``/``timecube()`` instead of
-            leaking the incidental ``has no len()`` / ``argument of type 'int'`` failure.
+            Every interactive vector builder validates its input as the call runs, so a raster is turned away
+            immediately with a message that quotes the builder and routes the caller to
+            ``field()``/``timecube()`` — never the incidental ``has no len()`` / ``argument of type 'int'``
+            failure. ``flow`` reports as ``graph``, the alias it delegates to.
         """
         m = InteractiveMap()
+        builder = getattr(m, method)
         with pytest.raises(TypeError) as excinfo:
-            built = getattr(m, method)(dataset, **kwargs)
-            built.render()
+            builder(dataset, **kwargs)
         message = str(excinfo.value)
         assert message.startswith(f"{named}()"), (
             f"{method} did not name the builder: {message}"
@@ -75,8 +76,9 @@ class TestEveryVectorBuilderRejectsARaster:
             An invented method name in the guidance would mislead the caller, so each quoted entry point is
             asserted to exist — a wrong name fails this test rather than shipping.
         """
+        m = InteractiveMap()
         with pytest.raises(TypeError) as excinfo:
-            InteractiveMap().points(dataset)
+            m.points(dataset)
         message = str(excinfo.value)
         for entry in ("field", "timecube"):
             assert f"{entry}()" in message, f"{entry} not named: {message}"
@@ -95,8 +97,9 @@ class TestEveryVectorBuilderRejectsARaster:
         from shapely.geometry import Point
 
         table = gpd.GeoDataFrame({"value": [1.0], "geom": [Point(0, 0)]})
+        m = InteractiveMap()
         with pytest.raises(TypeError, match="set_geometry"):
-            InteractiveMap().points(table)
+            m.points(table)
 
     def test_trimesh_still_accepts_a_non_vector_mesh(self):
         """``trimesh`` takes a UGRID mesh (no ``geometry``), so it uses the raster-only guard, not the vector.
@@ -110,6 +113,29 @@ class TestEveryVectorBuilderRejectsARaster:
             "Mesh", (), {"node_x": (0.0, 1.0, 0.0), "node_y": (0.0, 0.0, 1.0)}
         )()
         assert InteractiveMap()._reject_raster(mesh, "trimesh") is None
+
+    def test_reject_raster_skips_a_path_string(self):
+        """``_reject_raster`` leaves a path/URL alone, so the drawer opens and validates it later (not here).
+
+        Test scenario:
+            A path is the only input a figure carrying a ``trimesh`` layer can be written down with, so the
+            narrower guard must pass a ``str``/``PathLike`` through (returns ``None``) rather than rejecting
+            it — the raster check runs on the opened object at draw time instead.
+        """
+        assert (
+            InteractiveMap()._reject_raster("some/mesh.geojson", "trimesh") is None
+        ), "a path string must pass _reject_raster so the drawer can open it"
+
+    def test_require_vector_skips_a_path_string(self):
+        """``_require_vector`` passes a path/URL untouched, mirroring ``_reject_raster`` (the figure-source case).
+
+        Test scenario:
+            The same contract for the wider guard: a path a figure records stays a legal input, so
+            ``_require_vector`` returns ``None`` for a ``str`` rather than inspecting it as a raster or table.
+        """
+        assert (
+            InteractiveMap()._require_vector("some/points.geojson", "points") is None
+        ), "a path string must pass _require_vector so the drawer can open it"
 
     def test_a_valid_vector_layer_still_builds(self, point_fc):
         """The guard must not disturb the supported path: a point ``FeatureCollection`` still builds a layer.

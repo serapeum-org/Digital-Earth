@@ -305,7 +305,8 @@ class TestGraticuleSpacing:
             if issubclass(w.category, UserWarning) and "discarded" in str(w.message)
         ]
         assert discards, [str(w.message) for w in caught]
-        assert "spacing=30" in discards[0] and "lon_step=10" in discards[0], discards[0]
+        assert "spacing=30" in discards[0], discards[0]
+        assert "lon_step=10" in discards[0], discards[0]
         assert m.layers[-1].data.name == "graticules_30", m.layers[-1].data.name
 
     def test_spacing_alone_is_silent(self):

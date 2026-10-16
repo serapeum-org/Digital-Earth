@@ -80,8 +80,9 @@ class TestPolygonsClassifies:
             A dropped styling request is exactly what this tier stopped doing elsewhere; ``polygons`` must
             refuse ``scheme=`` with no ``column=`` rather than drawing plain outlines in silence.
         """
+        m = InteractiveMap()
         with pytest.raises(ValueError, match="scheme= classifies column="):
-            InteractiveMap().polygons(polygons_gdf, scheme="quantiles")
+            m.polygons(polygons_gdf, scheme="quantiles")
 
     def test_outlines_without_a_scheme_still_build(self, polygons_gdf):
         """The default path is untouched: no scheme draws a plain polygon layer, which still registers."""
