@@ -94,6 +94,30 @@ _BOX_STYLE: dict[str, Any] = {
 }
 
 
+def _ring_wraps(ring: np.ndarray, xlim: tuple[float, float]) -> bool:
+    """Whether a box ring jumps further between two samples than the view is wide — a seam crossing.
+
+    A box drawn on a map it fits in moves smoothly along the axes; a ring that leaps more than the whole
+    view's width between consecutive samples has crossed the seam of a wrapping projection and wrapped the
+    long way round the world (review L1). That is the signal a box is being marked across the dateline on a
+    recentred locator from a main map framed with an inverted ``west > east`` axis, which would otherwise
+    draw a near-global box rather than the few-degree one intended.
+
+    Args:
+        ring: The ``(N, 2)`` box outline in the display CRS, as :meth:`_ExtentBox.placed_in` returns it.
+        xlim: The axes' current ``(left, right)`` x-limits, the width the box is drawn against.
+
+    Returns:
+        ``True`` when the largest step between consecutive ring x-coordinates exceeds the view's own x-span
+        — a discontinuity no box that fits the view can have. ``False`` for an empty span or a ring too
+        short to step.
+    """
+    span = abs(float(xlim[1]) - float(xlim[0]))
+    if not (span > 0.0) or len(ring) < 2:
+        return False
+    return bool(np.abs(np.diff(np.asarray(ring, dtype=float)[:, 0])).max() > span)
+
+
 @dataclass(frozen=True, eq=False)
 class _ExtentBox:
     """The rectangle a map is looking at, in that map's own CRS, and how it lands in another one.
@@ -627,6 +651,24 @@ class InsetMixin(_MixinBase):
                 self.crs,
             )
             return None
+        if _ring_wraps(ring, self.ax.get_xlim()):
+            # The ring jumps further between two samples than the whole view is wide, which only a box that
+            # crosses the seam of a wrapping projection does — most often a main map framed across the
+            # dateline with the inverted ``west > east`` axis form, whose extent samples the long way round
+            # (review L1). Drawing it would stretch a ~340-degree box across the locator, implying the main
+            # map covers the whole world; dropping it with a warning is the honest answer, as for a box the
+            # CRS cannot place at all.
+            logger.warning(
+                "mark_extent: the extent (%s, %s, %s, %s) in %r wraps the seam of %r, so no box was drawn — "
+                "frame the marked map in continuous longitudes (e.g. 178..182, not 178..-179)",
+                box.west,
+                box.south,
+                box.east,
+                box.north,
+                box.crs,
+                self.crs,
+            )
+            return None
         patch = Polygon(ring, closed=True, **{**_BOX_STYLE, **style})
         self.ax.add_patch(patch)
         # Registered rather than just drawn, so the mark is addressable like any other layer:
@@ -1067,9 +1109,14 @@ class InsetMixin(_MixinBase):
         A ``west > east`` lon/lat extent spans the two longitude bands ``[west, 180]`` and ``[-180, east]``,
         which a CRS centred on the prime meridian can only draw by wrapping. Centring an equidistant
         cylindrical projection on the crossing's own middle longitude turns those two bands into one
-        contiguous span either side of the frame centre, so the reference geography and the marked extent
-        draw across the seam instead of around it (#395). The extent corners are reprojected into that CRS
-        so ``set_bounds`` frames a true ``west < east`` rectangle.
+        contiguous span either side of the frame centre, so the reference geography draws across the seam
+        instead of around it (#395). The extent corners are reprojected into that CRS so ``set_bounds`` frames
+        a true ``west < east`` rectangle.
+
+        The locator's *frame* and its geography are always right; the **marked extent box** — this map's own
+        extent, drawn onto the recentred locator — is right when the main map is framed in continuous
+        longitudes (``178..182``, not the inverted ``178..-179`` axis form). A box that would wrap the seam is
+        dropped with a warning rather than drawn near-global (:func:`_ring_wraps`, review L1).
 
         Args:
             values: The validated ``[west, south, east, north]`` in ``crs``, with ``east < west``.

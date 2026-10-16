@@ -8,13 +8,28 @@ antimeridian to wrap around and stays the refusal it was.
 """
 
 import matplotlib
+import numpy as np
 import pytest
+from matplotlib.patches import Polygon
 
 matplotlib.use("Agg")
 
 from digitalearth.static import Map  # noqa: E402 - after the Agg backend is set
+from digitalearth.static.maps.inset import _ring_wraps  # noqa: E402
 
 DATELINE = [170.0, -40.0, -170.0, 40.0]
+
+
+def _box_patches(locator):
+    """Return the extent-box polygons drawn on a locator's axes.
+
+    Args:
+        locator: The locator map read back from `Map.locator`.
+
+    Returns:
+        The `matplotlib.patches.Polygon` artists on the locator axes.
+    """
+    return [patch for patch in locator.ax.patches if isinstance(patch, Polygon)]
 
 
 class TestADatelineCrossingExtentIsDrawn:
@@ -183,4 +198,75 @@ class TestCheckedExtentResolution:
             assert recentre is not None and "lon_0=-175.5" in str(recentre), (
                 f"the past-antimeridian centre was not folded back: {recentre!r}"
             )
-            assert box[0] < box[2], f"the folded crossing is not a contiguous span: {box}"
+            assert box[0] < box[2], (
+                f"the folded crossing is not a contiguous span: {box}"
+            )
+
+
+class TestASeamWrappingBoxIsDropped:
+    """A marked box that would wrap the recentred locator's seam is dropped with a warning, not drawn (L1)."""
+
+    def test_an_inverted_main_map_extent_marks_no_box(self):
+        """A main map framed with the inverted `west>east` axis marks no box on the recentred locator.
+
+        Test scenario:
+            `set_bounds([178, -18, -179, -16])` frames the main map's x-axis the long way round (178 -> -179),
+            so marking its extent on an eqc-recentred locator would stretch a ~340-degree box across the view.
+            That box is dropped (a WARNING is logged), while the locator frame and its coastlines stay.
+        """
+        with Map(crs=4326) as m:
+            m.coastlines()
+            m.set_bounds([178.0, -18.0, -179.0, -16.0])
+            m.inset(extent=DATELINE)
+            assert _box_patches(m.locator) == [], (
+                "a seam-wrapping box was drawn instead of being dropped"
+            )
+            assert len(m.locator.ax.collections) >= 1, (
+                "the locator lost its reference geography along with the box"
+            )
+
+    def test_a_continuous_main_map_extent_still_marks_a_box(self):
+        """A main map framed in continuous longitudes marks its box on the recentred locator as before.
+
+        Test scenario:
+            `set_bounds([178, -18, 182, -16])` is the same Pacific region without the inverted axis, so its
+            box does not wrap and is drawn — the guard drops only the wrapping case, not every recentred box.
+        """
+        with Map(crs=4326) as m:
+            m.coastlines()
+            m.set_bounds([178.0, -18.0, 182.0, -16.0])
+            m.inset(extent=DATELINE)
+            assert len(_box_patches(m.locator)) >= 1, (
+                "a continuous-longitude box was dropped by the seam guard"
+            )
+
+
+class TestRingWraps:
+    """`_ring_wraps` flags a ring that jumps further than the view is wide, and only that."""
+
+    def test_a_seam_jump_wider_than_the_view_wraps(self):
+        """A ring with a step larger than the x-span is a seam crossing.
+
+        Test scenario:
+            Two clustered points with a single large jump between them exceed a narrow view, which is the
+            discontinuity a wrapped box has.
+        """
+        ring = np.array([[0.0, 0.0], [1.0, 0.0], [50.0, 1.0], [0.0, 0.0]])
+        assert _ring_wraps(ring, (0.0, 2.0)) is True, (
+            "a seam jump wider than the view was not flagged"
+        )
+
+    def test_a_box_that_fits_the_view_does_not_wrap(self):
+        """A ring whose steps all fit inside the view is not a wrap.
+
+        Test scenario:
+            A small box well inside a wide view steps smoothly, so no false positive; a zero-width view is
+            never a wrap either.
+        """
+        ring = np.array([[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0], [1.0, 0.0]])
+        assert _ring_wraps(ring, (0.0, 100.0)) is False, (
+            "a box that fits the view was flagged as a wrap"
+        )
+        assert _ring_wraps(ring, (5.0, 5.0)) is False, (
+            "a zero-width view was treated as a wrap"
+        )
