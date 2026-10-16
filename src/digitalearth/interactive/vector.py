@@ -16,10 +16,12 @@ producing an empty Bokeh layer.
 """
 
 import os
+import warnings
 from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
 from digitalearth.base.crs import reproject
+from digitalearth.base.guards import reject_raster, require_vector
 from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import (
     DEFAULT_BAND,
@@ -260,7 +262,7 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     from digitalearth.interactive.renderer import DrawnLayer
 
     props = held_props(interactive_map, layer)
-    gdf = interactive_map._display_gdf(data)
+    gdf = interactive_map._display_gdf(data, method=layer.kind)
     labels = props.get("labels")
     if labels:
         gdf = _as_labels(gdf, labels["column"], labels["missing"])
@@ -306,7 +308,7 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
-    gdf = interactive_map._display_gdf(data)
+    gdf = interactive_map._display_gdf(data, method="hexbin")
     # Build from explicit display-CRS x/y(/value) arrays, not the geometry GeoDataFrame: GeoViews
     # mis-projects a GeoDataFrame's point geometry at bokeh render time. HoloViews' hex aggregation
     # also needs the reducer as a numpy callable (np.size = count), not a string.
@@ -365,7 +367,7 @@ def draw_kde(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     _, hv = _require_holoviz()
     props = held_props(interactive_map, layer)
-    gdf = interactive_map._display_gdf(data)
+    gdf = interactive_map._display_gdf(data, method="kde")
     element = hv.Bivariate((gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy()))
     common = {"cmap": props.get("cmap"), **dict(props.get("opts") or {})}
     element = interactive_map._styled(
@@ -443,7 +445,7 @@ def _graph_element(interactive_map: Any, nodes: Any, edges: Any, props: dict) ->
     gv, _ = _require_holoviz()
     weight = props.get("weight")
     node_id = props.get("node_id")
-    gdf = interactive_map._display_gdf(nodes)
+    gdf = interactive_map._display_gdf(nodes, method="graph")
     crs = gv.util.process_crs(interactive_map.crs)
     ids = (
         gdf[node_id].to_numpy()
@@ -568,12 +570,57 @@ class VectorMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
-    def _display_gdf(self, features: Any) -> Any:
+    @staticmethod
+    def _require_vector(features: Any, method: str) -> None:
+        """Reject non-vector input before a builder touches it — this tier's share of the #175 guard.
+
+        Delegates to the engine-neutral :func:`~digitalearth.base.guards.require_vector`, naming this tier's
+        own raster entry points (``field`` for a single raster, ``timecube`` for a stack) so a ``Dataset``
+        handed to a vector builder is turned away with that route rather than failing obscurely downstream
+        (``object of type 'Dataset' has no len()`` and the like, #152). A path/URL is *not* rejected here: it
+        is opened and validated when the drawer reads it, so the path a figure records stays a legal input.
+
+        Args:
+            features: The caller's input, expected to be a vector layer (or a path/URL to one).
+            method: The calling builder's name, quoted in the error.
+
+        Raises:
+            TypeError: when ``features`` is a loaded raster, or a table whose geometry was never activated.
+        """
+        if isinstance(features, (str, os.PathLike)):
+            return
+        require_vector(features, method, single="field", stack="timecube")
+
+    @staticmethod
+    def _reject_raster(data: Any, method: str) -> None:
+        """Reject a raster while allowing the non-vector inputs a builder legitimately takes.
+
+        The narrower half of the #175 guard, for :meth:`trimesh` — which accepts a point collection *or* a
+        UGRID mesh that exposes ``node_x``/``node_y`` rather than ``geometry``, so :meth:`_require_vector`
+        would be too strict. Delegates to :func:`~digitalearth.base.guards.reject_raster` with this tier's
+        raster entry points. A path/URL is left for the drawer to open, as in :meth:`_require_vector`.
+
+        Args:
+            data: The caller's input.
+            method: The calling builder's name, quoted in the error.
+
+        Raises:
+            TypeError: when ``data`` is a loaded raster.
+        """
+        if isinstance(data, (str, os.PathLike)):
+            return
+        reject_raster(data, method, single="field", stack="timecube")
+
+    def _display_gdf(self, features: Any, *, method: str) -> Any:
         """Reproject ``features`` to the display CRS through pyramids and return the GeoDataFrame.
 
         Args:
             features: A pyramids ``FeatureCollection`` (or any GeoDataFrame-like with
                 ``epsg``/``to_crs``); plain GeoDataFrames already in the display CRS pass through.
+            method: The calling builder's name, quoted in :meth:`_require_vector`'s error. The drawers that
+                reach this choke point pass the layer's kind, so a raster that was never build-guarded
+                (``lines``/``hexbin``/``kde``/``graph`` record their source and open it here) is still turned
+                away naming the builder that was called.
 
         Reprojection goes through the shared :func:`~digitalearth.base.crs.reproject` helper rather than
         calling ``to_crs`` directly, so a warp that places none of the geometry is reported as an
@@ -582,7 +629,12 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The display-CRS GeoDataFrame (read-only from here on — geometry is never rebuilt).
+
+        Raises:
+            TypeError: when ``features`` is a raster (or a geometry-less table) — the #175 guard, applied
+                before the reprojection so a raster cannot reach ``to_crs``.
         """
+        self._require_vector(features, method)
         if (
             hasattr(features, "epsg")
             and hasattr(features, "to_crs")
@@ -714,6 +766,7 @@ class VectorMixin(_MixinBase):
             _route_through_rasterize,
         )
 
+        self._require_vector(features, "points")
         apply_opacity(opacity, opts)
         if scheme is not None and not column:
             # A scheme with nothing to classify used to draw plain points and say nothing — a dropped
@@ -855,6 +908,8 @@ class VectorMixin(_MixinBase):
         features: Any,
         *,
         column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
         cmap: str = "viridis",
         opacity: float | None = None,
         rasterize: Any = "auto",
@@ -863,7 +918,7 @@ class VectorMixin(_MixinBase):
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Add a polygon layer — outlines only, or filled by an attribute column.
+        """Add a polygon layer — outlines, a continuous fill, or classified by an attribute column.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
@@ -875,12 +930,27 @@ class VectorMixin(_MixinBase):
                 HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
                 ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
                 colormap's own alpha channel in force.
-            column: Optional numeric column filling the polygons (also shown on hover); ``None``
-                draws unfilled outlines.
-            cmap: Colormap used when ``column`` is given.
+            column: Optional column filling the polygons (also shown on hover); ``None`` draws unfilled
+                outlines.
+            scheme: Optional classification of ``column``, spelled and computed the way :meth:`choropleth`
+                and the web tier's ``polygons`` do, so the three answer the same call the same way (#331).
+                ``None`` (default) is a continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts ``column`` into ``k``
+                classes, and ``"categorical"`` gives every distinct value its own colour. It styles
+                ``column``, so naming a scheme without one is refused rather than ignored. A classified
+                polygon layer is described as a ``choropleth`` on this tier, the same as calling
+                :meth:`choropleth` — the class edges land on ``last_breaks`` and the layer's colour scale.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``. ``5`` is the shared cross-tier default (#246).
+            cmap: Colormap used when ``column`` is given (a qualitative map is used for ``"categorical"``
+                when left at the default; sampled once per class for a graduated scheme).
             rasterize: ``"auto"`` (default) routes through Datashader above
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
-                Polygon datashading needs the optional ``spatialpandas`` package.
+                Polygon datashading needs the optional ``spatialpandas`` package. Not applied to a classified
+                layer (``scheme`` set), which draws raw glyphs so each class keeps its colour — so
+                ``rasterize=True`` (force datashade) or an explicit ``big_data_threshold`` alongside
+                ``scheme`` **warns**, because that request is dropped. ``rasterize=False`` asks for the same
+                raw glyphs and ``"auto"`` names no request, so both are silent.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
                 (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
                 as given, so a path is measured as a string rather than as rows — see the note below.
@@ -916,13 +986,41 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
+            ValueError: if ``scheme`` is given without a ``column`` to classify, or when the column
+                cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit colour list
+                shorter than the class count).
+            KeyError: when ``scheme`` is given and ``column`` is not one of ``features``' columns — named
+                the way :meth:`choropleth` names it, rather than a bare pandas ``KeyError`` from the
+                classifier.
             ImportError: when the layer routes through Datashader (``rasterize=True``, or
                 ``"auto"`` above the threshold) and ``spatialpandas`` is not installed. It is
                 datashader's own polygon backend, not a Digital-Earth dependency, so the tier says
                 which package to install — or to pass ``rasterize=False`` and draw raw glyphs —
                 rather than failing deeper inside datashader.
+
+        Warns:
+            UserWarning: when a classified call (``scheme`` set) is also given ``rasterize=True`` or an
+                explicit ``big_data_threshold=``, which a classified layer cannot honour (it draws raw
+                glyphs), so the request is dropped rather than silently ignored. ``rasterize=False`` is
+                consistent with raw glyphs and does not warn.
         """
+        self._require_vector(features, "polygons")
         apply_opacity(opacity, opts)
+        # A classified polygon layer is a choropleth, cut by the very classifier `choropleth` uses (#331).
+        # The whole scheme path lives in its own method so this builder stays a thin dispatch.
+        if scheme is not None:
+            return self._classified_polygons(
+                features,
+                column=column,
+                scheme=scheme,
+                k=k,
+                cmap=cmap,
+                rasterize=rasterize,
+                big_data_threshold=big_data_threshold,
+                name=name,
+                visible=visible,
+                **opts,
+            )
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, caller="InteractiveMap.polygons()"
         )
@@ -933,6 +1031,101 @@ class VectorMixin(_MixinBase):
             cmap=cmap,
             rasterize=rasterize,
             threshold=threshold,
+            name=name,
+            visible=visible,
+            **opts,
+        )
+
+    def _classified_polygons(
+        self,
+        features: Any,
+        *,
+        column: str | None,
+        scheme: Any,
+        k: int,
+        cmap: str,
+        rasterize: Any,
+        big_data_threshold: int | None,
+        name: str | None,
+        visible: bool,
+        **opts: Any,
+    ) -> Self:
+        """Classify a polygon layer — the body :meth:`polygons` runs when a ``scheme`` is given.
+
+        Split out of :meth:`polygons` so that builder stays a thin dispatch (its cognitive complexity was
+        past the gate otherwise). It validates the request, warns about datashading keywords a classified
+        layer cannot honour, and hands off to the very categorical/graduated helpers :meth:`choropleth`
+        uses, so a classified ``polygons`` call and the matching ``choropleth`` call cut identical breaks
+        (#331).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries, or a path/URL to one.
+            column: The column to classify; required, since a scheme styles a column.
+            scheme: ``"categorical"`` for distinct-value colouring, or a graduated scheme name / explicit
+                sequence of class edges.
+            k: Number of classes for a graduated scheme.
+            cmap: Colormap name.
+            rasterize: As :meth:`polygons` takes it; ``True`` or an explicit ``big_data_threshold`` warns.
+            big_data_threshold: As :meth:`polygons` takes it.
+            name: The caller's own name for the layer, or ``None`` to generate one.
+            visible: Whether the layer is drawn.
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: if ``column`` was not given, or the column cannot be classified (unknown scheme,
+                no spread, ``k < 1``, or a short colour list).
+            KeyError: if ``column`` is not one of ``features``' columns — named as :meth:`choropleth`
+                names it, rather than a bare pandas ``KeyError`` from the classifier.
+
+        Warns:
+            UserWarning: when ``rasterize=True`` or an explicit ``big_data_threshold`` is given, which a
+                classified layer (raw glyphs, never datashaded) cannot honour. ``rasterize=False`` asks for
+                the same raw glyphs, so it is silent.
+        """
+        if not column:
+            # A scheme with nothing to classify is a dropped styling request, refused as `points` and
+            # `choropleth` refuse it rather than drawing plain polygons and saying nothing (#331).
+            raise ValueError(
+                "InteractiveMap.polygons(): scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        if column not in getattr(features, "columns", [column]):
+            # Named as choropleth names it, rather than letting the classifier reach into the frame and
+            # surface a bare pandas KeyError for a column that is simply absent. A path/URL has no
+            # `columns`, so it falls through and is read when the drawer opens it, exactly as choropleth.
+            raise KeyError(
+                f"polygons column {column!r} not found in the feature attributes"
+            )
+        # A classified layer draws raw glyphs so each class keeps its colour, and is never datashaded.
+        # `rasterize=False` asks for those same raw glyphs (consistent, silent); only `rasterize=True` or an
+        # explicit `big_data_threshold` is dropped, and is named rather than discarded (as graticule() warns).
+        dropped = []
+        if rasterize is True:
+            dropped.append(f"rasterize={rasterize!r}")
+        if big_data_threshold is not None:
+            dropped.append(f"big_data_threshold={big_data_threshold!r}")
+        if dropped:
+            # stacklevel=4: warn -> this method -> polygons() -> the @_skips_off_limb wrapper -> the caller.
+            warnings.warn(
+                f"InteractiveMap.polygons(): a classified layer (scheme={scheme!r}) draws raw glyphs "
+                f"and is not datashaded, so {' and '.join(dropped)} "
+                f"{'is' if len(dropped) == 1 else 'are'} ignored; drop scheme= to datashade instead.",
+                UserWarning,
+                stacklevel=4,
+            )
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            return self._categorical_polygons(
+                features, column, cmap=cmap, name=name, visible=visible, **opts
+            )
+        return self._graduated_polygons(
+            features,
+            column,
+            scheme=scheme,
+            k=k,
+            cmap=cmap,
             name=name,
             visible=visible,
             **opts,
@@ -1006,7 +1199,7 @@ class VectorMixin(_MixinBase):
             element = (
                 self._vector_element(  # pragma: no cover - needs optional spatialpandas
                     "Polygons",
-                    self._display_gdf(features),
+                    self._display_gdf(features, method=kind),
                     vdims=[column] if column else None,
                 )
             )
@@ -1392,6 +1585,7 @@ class VectorMixin(_MixinBase):
             ValueError: when a graduated ``scheme`` cannot classify ``column`` (unknown scheme name, a
                 constant column, ``k < 1``, …).
         """
+        self._require_vector(features, "choropleth")
         if column not in getattr(features, "columns", [column]):
             raise KeyError(
                 f"choropleth column {column!r} not found in the feature attributes"
@@ -1700,6 +1894,10 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
+            TypeError: when ``data`` is a pyramids raster. ``trimesh`` takes a UGRID mesh or a point
+                collection, so it uses the raster-only guard (:meth:`_reject_raster`) — a mesh exposing
+                ``node_x``/``node_y`` rather than ``geometry`` passes, a raster is turned away naming the
+                builder and the raster entry points (#175).
 
         Examples:
             - Delaunay-triangulate scattered points; the nodes carry the value column:
@@ -1747,6 +1945,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        self._reject_raster(data, "trimesh")
         gv, _ = _require_holoviz()
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, caller="InteractiveMap.trimesh()"
@@ -1819,7 +2018,7 @@ class VectorMixin(_MixinBase):
             Triangulation,
         )  # matplotlib, not a forbidden GIS engine
 
-        gdf = self._display_gdf(data)
+        gdf = self._display_gdf(data, method="trimesh")
         # The extraction and the non-finite drop are PointArrays' — and it keeps the value column in step
         # with the points it removes, which this site was doing with a second application of the mask.
         column = gdf[value_column].to_numpy() if value_column else None

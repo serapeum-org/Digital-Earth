@@ -125,13 +125,6 @@ KEYWORD_SHORTFALLS: Mapping[tuple[str, str], tuple[tuple[str, ...], str]] = (
             # 27a, and `padding` with the `None` that fits the data did not. Both landed at the framing
             # order, on this tier and on the interactive one, so the row is off and `set_bounds` is no
             # longer short of anything the Core declares for it.
-            ("interactive", "polygons"): (
-                ("k", "scheme"),
-                # This said the scheme/k half was "unscheduled", and #331 — open, and titled for exactly
-                # this gap — schedules it. A reason may say `unscheduled` only where nothing does. The
-                # `opacity` half came off when order 27a took the keyword (#332).
-                "classification is choropleth() on this tier, so polygons() takes no scheme/k at all — #331",
-            ),
             # `("interactive", "colorbar")` and `("interactive", "legend")` were listed here — "a show=
             # toggle on the layer added last, not a builder keyed by id" and "the same show= toggle as its
             # colorbar". Order 24 built both: each takes `layer_id` and the Core's own `label`/`title`,

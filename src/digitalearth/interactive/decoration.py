@@ -337,7 +337,7 @@ def draw_labels(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
     column = props["column"]
-    gdf = interactive_map._display_gdf(data)
+    gdf = interactive_map._display_gdf(data, method="labels")
     # Build from explicit display-CRS x/y/text columns rather than handing GeoViews the
     # geometry-bearing GeoDataFrame: gv.Labels mis-projects a GeoDataFrame's point geometry at
     # render time (a boolean-mask length mismatch). The geometry is already in the display CRS
