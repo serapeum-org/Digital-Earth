@@ -1245,7 +1245,7 @@ class Scene(WatermarkMixin):
         return self._renderer.drawn[layer_id].artist
 
     def add_layer(
-        self, artist: Any, *, name: str | None = None, band: str | None = None
+        self, layer: Any, *, name: str | None = None, band: str | None = None
     ) -> Self:
         """Register an artist **you built yourself** as a layer, and return this scene (chainable).
 
@@ -1260,7 +1260,7 @@ class Scene(WatermarkMixin):
         Drawing straight onto :attr:`ax` is still the escape hatch, and is still invisible to the figure.
 
         Args:
-            artist: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the
+            layer: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the
                 web tier reads it off a MapLibre layer: an artist built with ``visible=False`` is described
                 hidden rather than described as something the figure does not draw (review L10).
             name: The id to address it by; ``None`` generates ``custom-1``, ``custom-2``, …. A name already
@@ -1296,7 +1296,7 @@ class Scene(WatermarkMixin):
                 f"add_layer band must be one of {list(KIND_BANDS)}; got {band!r}"
             )
         self._add_layer(
-            None, artist, name=name, band=band, visible=artist_is_visible(artist)
+            None, layer, name=name, band=band, visible=artist_is_visible(layer)
         )
         return self
 

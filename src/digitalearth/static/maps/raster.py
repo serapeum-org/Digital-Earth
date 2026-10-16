@@ -1289,7 +1289,7 @@ class RasterMixin(_MixinBase):
 
     def field(
         self,
-        dataset: Any,
+        data: Any,
         *,
         name: str | None = None,
         visible: bool = True,
@@ -1322,7 +1322,7 @@ class RasterMixin(_MixinBase):
         those cells are left blank.
 
         Args:
-            dataset: A pyramids ``Dataset``, a bare 2-D numpy array, or a path or URL to a raster
+            data: A pyramids ``Dataset``, a bare 2-D numpy array, or a path or URL to a raster
                 (reprojected to :attr:`crs` first, except for the array — see above). Only a path-backed
                 layer can be written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
@@ -1427,9 +1427,9 @@ class RasterMixin(_MixinBase):
             rather than raising.
 
         Raises:
-            TypeError: when `dataset` is neither a raster, an array nor a reference to one — refused by name
+            TypeError: when `data` is neither a raster, an array nor a reference to one — refused by name
                 (see :meth:`_field`).
-            ValueError: when `dataset` is an array and the map is drawn on a globe frame, or when it is an
+            ValueError: when `data` is an array and the map is drawn on a globe frame, or when it is an
                 array of any rank but two; or from ``ArrayGlyph`` for a styling keyword it does not accept;
                 or for a ``scheme`` that cannot classify the band — an unknown
                 name, ``k`` below one, or, under ``scheme="categorical"``, a band holding non-integer values,
@@ -1523,7 +1523,7 @@ class RasterMixin(_MixinBase):
 
                 ```
         """
-        self._field(dataset, kind="imshow", name=name, visible=visible, **kwargs)
+        self._field(data, kind="imshow", name=name, visible=visible, **kwargs)
         return self
 
     def contours(

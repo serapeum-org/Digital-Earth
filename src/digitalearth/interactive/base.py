@@ -1308,7 +1308,7 @@ class InteractiveMapBase:
 
     def add_layer(
         self,
-        element: Any,
+        layer: Any,
         *,
         kind: str | None = None,
         name: str | None = None,
@@ -1323,7 +1323,7 @@ class InteractiveMapBase:
 
         The low-level entry point the capability mixins build on — every builder method ends here.
 
-        A builder of a drawn kind passes ``element=None`` and a ``symbology``: the layer is described first
+        A builder of a drawn kind passes ``layer=None`` and a ``symbology``: the layer is described first
         and its drawer builds the element from that description, which is what "render from the description"
         means here.
 
@@ -1334,7 +1334,7 @@ class InteractiveMapBase:
         (:mod:`digitalearth.base.custom` says which case a reader is in).
 
         Args:
-            element: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a
+            layer: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a
                 kind this tier draws — that one is built by its drawer from ``symbology``.
             kind: The registered, engine-neutral kind the layer is — ``"raster"``, ``"points"``, … A kind
                 listed in :data:`~digitalearth.interactive.renderer.DRAWN_KINDS` is drawn from its
@@ -1410,7 +1410,7 @@ class InteractiveMapBase:
         # (:mod:`digitalearth.base.custom`).
         from digitalearth.interactive.renderer import DRAWN_KINDS
 
-        self._guard_element_crs(element, caller="add_layer")
+        self._guard_element_crs(layer, caller="add_layer")
         resolved = kind or custom_kind("holoviews")
         layer_id = self._layer_id(resolved.split(":")[-1], name)
         # Everything from here to the draw is undone together if any of it raises. The layer is described
@@ -1438,7 +1438,7 @@ class InteractiveMapBase:
                 if drawn is None:
                     self._forget_layer(layer_id)
                     return self
-                element = drawn.element
+                layer = drawn.element
         except BaseException:
             self._forget_layer(layer_id)
             raise
@@ -1446,7 +1446,7 @@ class InteractiveMapBase:
         # draw-order band, so a basemap added last still goes under the data and a graticule added first
         # still goes over it — and the list `_compose` overlays cannot disagree with the figure the map
         # reports, which is what it did when a builder had to remember to insert at the front itself.
-        self.layers.insert(self._layer_tree.ids.index(layer_id), element)
+        self.layers.insert(self._layer_tree.ids.index(layer_id), layer)
         self._note_last_layer(layer_id)
         return self
 

@@ -824,7 +824,7 @@ class RasterMixin(_MixinBase):
     @_skips_off_limb
     def contours(
         self,
-        data: Any,
+        dataset: Any,
         *,
         band: int = DEFAULT_BAND,
         levels: Any = None,
@@ -843,7 +843,7 @@ class RasterMixin(_MixinBase):
         HoloViews, which refused it as an unknown *style* option.
 
         Args:
-            data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
+            dataset: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
             band: 1-based band to contour.
             levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
                 variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
@@ -900,7 +900,7 @@ class RasterMixin(_MixinBase):
         """
         _one_spacing_only("contours", levels, interval)
         return self._contour_layer(
-            data,
+            dataset,
             band=band,
             levels=levels,
             interval=interval,

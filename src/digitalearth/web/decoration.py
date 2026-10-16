@@ -1633,7 +1633,7 @@ class DecorationMixin(_MixinBase):
 
     def set_title(
         self,
-        heading: str,
+        title: str,
         *,
         position: str = "top-left",
         subtitle: str | None = None,
@@ -1644,7 +1644,7 @@ class DecorationMixin(_MixinBase):
         a control rather than a layer, so it sits above the map and moves with the corner it is pinned to.
 
         Args:
-            heading: The title text.
+            title: The title text.
             position: One of the four MapLibre corners.
             subtitle: A smaller second line — a date, a source, a unit.
 
@@ -1664,11 +1664,11 @@ class DecorationMixin(_MixinBase):
         """
         _require_maplibre()
         _check_position(position)
-        body = f'<div style="font-weight:600;font-size:15px">{_text(heading)}</div>'
+        body = f'<div style="font-weight:600;font-size:15px">{_text(title)}</div>'
         if subtitle:
             body += f'<div style="opacity:.75;margin-top:2px">{_text(subtitle)}</div>'
         self._panels["title"] = (f"<div>{body}</div>", position)
-        self._title = heading
+        self._title = title
         return self
 
     def graticule(

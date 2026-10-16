@@ -272,18 +272,18 @@ def _display_point(
     return float(placed_x[0]), float(placed_y[0])
 
 
-def _draw_title(plotter: Any, heading: str, style: dict[str, Any]) -> None:
+def _draw_title(plotter: Any, title: str, style: dict[str, Any]) -> None:
     """Put a heading, and an optional second line, onto a plotter.
 
     Args:
         plotter: The plotter to draw on.
-        heading: The title text.
+        title: The title text.
         style: How it is drawn — `font_size`, `color` and `subtitle`, as
             :meth:`DecorationMixin.set_title` recorded them.
     """
     font_size = int(style.get("font_size", 18))
     colour = style.get("color")
-    plotter.add_title(heading, font_size=font_size, color=colour)
+    plotter.add_title(title, font_size=font_size, color=colour)
     # A render window has exactly one centred title band, and the two lines in it cannot be sized apart, so a
     # subtitle is drawn smaller in the upper-left corner instead of under the heading. It is a separate actor,
     # filed under a name of its own, so a second `set_title` replaces it rather than stacking a second line.
@@ -554,7 +554,7 @@ class DecorationMixin(_MixinBase):
 
     def set_title(
         self,
-        heading: str,
+        title: str,
         *,
         subtitle: str | None = None,
         font_size: int = 18,
@@ -573,7 +573,7 @@ class DecorationMixin(_MixinBase):
         ground, it is not in the layer tree, and removing a layer never takes it with it.
 
         Args:
-            heading: The title text, drawn centred along the top of the render window.
+            title: The title text, drawn centred along the top of the render window.
             subtitle: A smaller second line — a date, a source, a unit. Drawn in the **upper-left corner**
                 rather than under the heading: a render window has one centred title band and the two lines in
                 it cannot be sized apart. Recorded as drawing state rather than on the figure, exactly as the
@@ -585,7 +585,7 @@ class DecorationMixin(_MixinBase):
             This scene, so decoration chains.
 
         Raises:
-            TypeError: when `heading` is not a string. A title is the one piece of a figure a reader is
+            TypeError: when `title` is not a string. A title is the one piece of a figure a reader is
                 certain to read, and `None` drawn as `"None"` is worse than no title.
 
         Examples:
@@ -616,11 +616,11 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.web.decoration.DecorationMixin.set_title: the same name on the web tier.
         """
-        if not isinstance(heading, str):
+        if not isinstance(title, str):
             raise TypeError(
-                f"set_title() needs the heading as a string; got {type(heading).__name__}"
+                f"set_title() needs the title as a string; got {type(title).__name__}"
             )
-        panel = with_fields(self._figure.panels[0], title=heading)
+        panel = with_fields(self._figure.panels[0], title=title)
         self._figure = with_fields(self._figure, panels=(panel,))
         self._decoration["title"] = {
             "font_size": int(font_size),
