@@ -83,7 +83,7 @@ class TestImage:
         )
 
     def test_clim_and_cmap_are_recorded(self, m, dataset):
-        m.field(dataset, cmap="magma", clim=(0.0, 50.0), alpha=0.5)
+        m.field(dataset, cmap="magma", limits=(0.0, 50.0), opacity=0.5)
         opts = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert opts["cmap"] == "magma", f"cmap not honoured: {opts.get('cmap')}"
         assert opts["alpha"] == 0.5, f"alpha not honoured: {opts.get('alpha')}"

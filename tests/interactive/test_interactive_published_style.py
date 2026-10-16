@@ -217,7 +217,7 @@ BORROWED: dict[str, Borrowed] = {
         lambda m: m.points(_points(), size=5.0), "size", 5.0, "the web tier's size"
     ),
     "alpha-is-the-web-tiers-opacity": Borrowed(
-        lambda m: m.field(_dem(), alpha=0.9),
+        lambda m: m.field(_dem(), opacity=0.9),
         "opacity",
         0.9,
         "the web tier's circle opacity",
@@ -622,13 +622,13 @@ class TestTheTiersOwnDefaultIsPublishedWhenItWasAskedFor:
         """The same, for the other builder that resolves a channel parameter of its own.
 
         Test scenario:
-            `field`'s `alpha` is the second and last row the deleted table held, and the two rows were the
+            `field`'s `opacity` is the second and last row the deleted table held, and the two rows were the
             whole of this tier's exposure — so both are asked, rather than one being taken as evidence for
             the other.
         """
-        published = _published(_drawn(lambda m: m.field(_dem(), alpha=1.0)))[0]
+        published = _published(_drawn(lambda m: m.field(_dem(), opacity=1.0)))[0]
         assert published == {"opacity": 1.0}, (
-            f"field(alpha=1.0) published {published}; 1.0 is what an unstyled field draws at, and asking "
+            f"field(opacity=1.0) published {published}; 1.0 is what an unstyled field draws at, and asking "
             "for it is still asking"
         )
 

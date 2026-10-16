@@ -254,8 +254,8 @@ def describe_opts(held: dict[str, Any], opts: Mapping[str, Any]) -> dict[str, An
     The bag that goes round the rule. :func:`describe` asks
     :func:`~digitalearth.base.spec._serial.travels_in_a_figure` per value — but every builder used to record
     its `**opts` wholesale into `held`, untested. So which of the caller's keywords a figure kept was decided
-    by which ones the builder happened to name in its signature: `field(alpha=0.25)` survived because
-    `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not, although both are plain floats and both are
+    by which ones the builder happened to name in its signature: `field(opacity=0.25)` survived because
+    `opacity` is a parameter, and `quadmesh(alpha=0.25)` did not, although both are plain floats and both are
     channels the shared vocabulary declares. A figure read back elsewhere then drew the engine's defaults
     where the caller's styling had been, silently (review M3).
 
@@ -1961,7 +1961,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)    # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", opacity=0.5)    # doctest: +SKIP
                 >>> m.style_of(0)["common"]["cmap"]                             # doctest: +SKIP
                 'magma'
 
@@ -2010,7 +2010,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)   # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", opacity=0.5)   # doctest: +SKIP
                 >>> [style["common"]["cmap"] for style in m.layer_styles]      # doctest: +SKIP
                 ['magma']
 

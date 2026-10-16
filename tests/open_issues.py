@@ -48,10 +48,11 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
             "refactor(api): tiles() takes a name on one tier and a URL on another, through one "
             "overloaded provider="
         ),
-        332: (
-            "refactor(api): static and interactive builders spell opacity and column differently from "
-            "the Core contract"
-        ),
+        # `332` ("refactor(api): static and interactive builders spell opacity and column differently from
+        # the Core contract") stood here against the five `KEYWORD_SHORTFALLS` rows that named it. Order
+        # 27a's remainder adopted the Core channel names on all five builders, so those rows are off and
+        # nothing names the issue any more — `test_the_allowlist_holds_nothing_either_table_stopped_naming`
+        # refuses an allowlist entry no row and no `PENDING` reason cites.
     }
 )
 
