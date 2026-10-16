@@ -113,7 +113,7 @@ def _ring_wraps(ring: np.ndarray, xlim: tuple[float, float]) -> bool:
         short to step.
     """
     span = abs(float(xlim[1]) - float(xlim[0]))
-    if not (span > 0.0) or len(ring) < 2:
+    if span <= 0.0 or len(ring) < 2:
         return False
     return bool(np.abs(np.diff(np.asarray(ring, dtype=float)[:, 0])).max() > span)
 

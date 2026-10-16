@@ -49,8 +49,11 @@ class TestADatelineCrossingExtentIsDrawn:
             m.set_bounds([120.0, -10.0, 160.0, 10.0])
             m.inset(extent=DATELINE)
             crs = str(m.locator.crs)
-            assert "eqc" in crs and "lon_0=180" in crs, (
-                f"the locator was not recentred onto an eqc CRS over the crossing: {crs!r}"
+            assert "eqc" in crs, (
+                f"the locator was not recentred onto an eqc CRS: {crs!r}"
+            )
+            assert "lon_0=180" in crs, (
+                f"the eqc CRS is not centred on the crossing: {crs!r}"
             )
 
     def test_the_frame_is_a_contiguous_west_to_east_span(self):
@@ -96,8 +99,9 @@ class TestTheOrdinaryInsetPathsAreUnaffected:
         with Map(crs=4326) as m:
             m.set_bounds([120.0, -10.0, 160.0, 10.0])
             m.inset()
-            assert m.locator is not None and "eqc" not in str(m.locator.crs), (
-                f"a no-extent inset recentred or failed to build: {m.locator!r}"
+            assert m.locator is not None, "a no-extent inset failed to build a locator"
+            assert "eqc" not in str(m.locator.crs), (
+                f"a no-extent inset recentred its CRS: {m.locator.crs!r}"
             )
 
     def test_an_ordinary_extent_keeps_the_map_crs(self):
@@ -180,12 +184,10 @@ class TestCheckedExtentResolution:
         """
         with Map(crs=4326) as m:
             box, recentre = m._checked_extent(DATELINE, 4326)
-            assert recentre is not None and "eqc" in str(recentre), (
-                f"a crossing did not recentre: {recentre!r}"
-            )
-            assert box[0] < box[2] and box[1] < box[3], (
-                f"the recentred box is not a contiguous west<east/south<north rectangle: {box}"
-            )
+            assert recentre is not None, "a crossing did not recentre"
+            assert "eqc" in str(recentre), f"the recentre CRS is not eqc: {recentre!r}"
+            assert box[0] < box[2], f"the recentred box is not west<east: {box}"
+            assert box[1] < box[3], f"the recentred box is not south<north: {box}"
 
     def test_a_crossing_past_the_antimeridian_folds_the_centre_back(self):
         """A crossing whose midpoint lands beyond +180 folds the centre meridian back into range.
@@ -197,7 +199,10 @@ class TestCheckedExtentResolution:
         """
         with Map(crs=4326) as m:
             box, recentre = m._checked_extent([179.0, -40.0, -170.0, 40.0], 4326)
-            assert recentre is not None and "lon_0=-175.5" in str(recentre), (
+            assert recentre is not None, (
+                "the past-antimeridian crossing did not recentre"
+            )
+            assert "lon_0=-175.5" in str(recentre), (
                 f"the past-antimeridian centre was not folded back: {recentre!r}"
             )
             assert box[0] < box[2], (
