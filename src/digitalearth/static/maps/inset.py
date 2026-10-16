@@ -624,19 +624,30 @@ class InsetMixin(_MixinBase):
         return self._locator
 
     def _mark(
-        self, box: _ExtentBox, name: str | None = None, **style: Any
+        self,
+        box: _ExtentBox,
+        name: str | None = None,
+        *,
+        guard_seam: bool = False,
+        **style: Any,
     ) -> Polygon | None:
         """Draw an already-read extent box on this map, in **this** map's CRS.
 
         Args:
             box: The extent to mark, carrying the CRS its four numbers are in.
             name: The id to address the mark by; ``None`` generates ``custom-1``, ``custom-2``, ….
+            guard_seam: Drop the box with a warning when its ring wraps this view's seam (:func:`_ring_wraps`)
+                rather than drawing it ~360 degrees wide. Set only by the **recentred dateline locator**
+                (#395, review L1), where a wrap means the marked map was framed with an inverted axis; left
+                ``False`` for :meth:`mark_extent`, whose legitimately antimeridian-spanning boxes — a polar
+                region on a lon/lat map — cross the seam too and must still draw.
             **style: Patch keywords laid over :data:`_BOX_STYLE`.
 
         Returns:
-            The :class:`~matplotlib.patches.Polygon` put on the axes, or ``None`` when this map's CRS
-            cannot place the box (see :meth:`_ExtentBox.placed_in`) — logged as a warning, because the
-            only other symptom is a locator with no box on it, which looks like the call never happened.
+            The :class:`~matplotlib.patches.Polygon` put on the axes, or ``None`` when this map's CRS cannot
+            place the box (see :meth:`_ExtentBox.placed_in`), or when ``guard_seam`` drops a wrapping one —
+            each logged as a warning, because the only other symptom is a locator with no box on it, which
+            looks like the call never happened.
         """
         ring = box.placed_in(self.crs)
         if ring is None:
@@ -651,7 +662,7 @@ class InsetMixin(_MixinBase):
                 self.crs,
             )
             return None
-        if _ring_wraps(ring, self.ax.get_xlim()):
+        if guard_seam and _ring_wraps(ring, self.ax.get_xlim()):
             # The ring jumps further between two samples than the whole view is wide, which only a box that
             # crosses the seam of a wrapping projection does — most often a main map framed across the
             # dateline with the inverted ``west > east`` axis form, whose extent samples the long way round
@@ -1001,6 +1012,7 @@ class InsetMixin(_MixinBase):
         on_a_globe = self._locator_globe(globe, extent)
         locator_crs = self.crs if crs is None else crs
         checked_extent: list[float] | None = None
+        recentred = False
         if extent is not None:
             checked_extent, recentre = self._checked_extent(extent, locator_crs)
             # A dateline-crossing extent recentres the locator onto its own equidistant-cylindrical CRS, so
@@ -1008,6 +1020,7 @@ class InsetMixin(_MixinBase):
             # reprojects this map's extent box into that CRS, the way any `crs=` locator already does.
             if recentre is not None:
                 locator_crs = recentre
+                recentred = True
         box = _ExtentBox.of(self, caller="inset")
         locator = type(self)(
             crs=locator_crs,
@@ -1027,7 +1040,9 @@ class InsetMixin(_MixinBase):
             locator.set_global()
         else:
             locator.set_bounds(checked_extent)
-        locator._mark(box)
+        # The seam guard runs only for a recentred locator: there a wrapping box means the marked map was
+        # framed with an inverted axis, while a plain locator's antimeridian-spanning box is legitimate (L1).
+        locator._mark(box, guard_seam=recentred)
         # The frame goes on here rather than at render time: nothing else renders the locator, and the
         # geography and the box have to be on the axes before they can be clipped to the limb. `render`
         # answers a flat locator with nothing, so this is the globe case only.
