@@ -1006,53 +1006,17 @@ class VectorMixin(_MixinBase):
         """
         self._require_vector(features, "polygons")
         apply_opacity(opacity, opts)
-        # A classified polygon layer is a choropleth, and goes through the very classifier `choropleth` uses,
-        # so the two builders cut the same column into the same breaks (#331). `rasterize`/`big_data_threshold`
-        # are continuous-ramp concerns and are not forwarded: a datashaded image carries no per-class colour.
+        # A classified polygon layer is a choropleth, cut by the very classifier `choropleth` uses (#331).
+        # The whole scheme path lives in its own method so this builder stays a thin dispatch.
         if scheme is not None:
-            if not column:
-                # A scheme with nothing to classify is a dropped styling request, refused here as `points`
-                # and `choropleth` refuse it rather than drawing plain polygons and saying nothing (#331).
-                raise ValueError(
-                    "InteractiveMap.polygons(): scheme= classifies column=, which was not given; "
-                    "name the column to classify, or drop scheme="
-                )
-            if column not in getattr(features, "columns", [column]):
-                # Named here as choropleth names it, rather than letting the classifier reach into the frame
-                # and surface a bare pandas KeyError for a column that is simply absent. A path/URL has no
-                # `columns`, so it falls through and is read when the drawer opens it, exactly as choropleth.
-                raise KeyError(
-                    f"polygons column {column!r} not found in the feature attributes"
-                )
-            # A classified layer draws raw glyphs so each class keeps its colour, and is never datashaded.
-            # `rasterize=False` asks for those same raw glyphs, so it is consistent and silent; only
-            # `rasterize=True` (force datashade) or an explicit `big_data_threshold` is actually dropped, and
-            # is named rather than discarded in silence — the over-specification graticule() warns about too.
-            # `stacklevel=3` because this builder is wrapped by `@_skips_off_limb`, so the warning must skip
-            # the method frame and the wrapper frame to land on the caller.
-            dropped = []
-            if rasterize is True:
-                dropped.append(f"rasterize={rasterize!r}")
-            if big_data_threshold is not None:
-                dropped.append(f"big_data_threshold={big_data_threshold!r}")
-            if dropped:
-                warnings.warn(
-                    f"InteractiveMap.polygons(): a classified layer (scheme={scheme!r}) draws raw glyphs "
-                    f"and is not datashaded, so {' and '.join(dropped)} "
-                    f"{'is' if len(dropped) == 1 else 'are'} ignored; drop scheme= to datashade instead.",
-                    UserWarning,
-                    stacklevel=3,
-                )
-            if isinstance(scheme, str) and scheme.lower() == "categorical":
-                return self._categorical_polygons(
-                    features, column, cmap=cmap, name=name, visible=visible, **opts
-                )
-            return self._graduated_polygons(
+            return self._classified_polygons(
                 features,
-                column,
+                column=column,
                 scheme=scheme,
                 k=k,
                 cmap=cmap,
+                rasterize=rasterize,
+                big_data_threshold=big_data_threshold,
                 name=name,
                 visible=visible,
                 **opts,
@@ -1067,6 +1031,101 @@ class VectorMixin(_MixinBase):
             cmap=cmap,
             rasterize=rasterize,
             threshold=threshold,
+            name=name,
+            visible=visible,
+            **opts,
+        )
+
+    def _classified_polygons(
+        self,
+        features: Any,
+        *,
+        column: str | None,
+        scheme: Any,
+        k: int,
+        cmap: str,
+        rasterize: Any,
+        big_data_threshold: int | None,
+        name: str | None,
+        visible: bool,
+        **opts: Any,
+    ) -> Self:
+        """Classify a polygon layer — the body :meth:`polygons` runs when a ``scheme`` is given.
+
+        Split out of :meth:`polygons` so that builder stays a thin dispatch (its cognitive complexity was
+        past the gate otherwise). It validates the request, warns about datashading keywords a classified
+        layer cannot honour, and hands off to the very categorical/graduated helpers :meth:`choropleth`
+        uses, so a classified ``polygons`` call and the matching ``choropleth`` call cut identical breaks
+        (#331).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries, or a path/URL to one.
+            column: The column to classify; required, since a scheme styles a column.
+            scheme: ``"categorical"`` for distinct-value colouring, or a graduated scheme name / explicit
+                sequence of class edges.
+            k: Number of classes for a graduated scheme.
+            cmap: Colormap name.
+            rasterize: As :meth:`polygons` takes it; ``True`` or an explicit ``big_data_threshold`` warns.
+            big_data_threshold: As :meth:`polygons` takes it.
+            name: The caller's own name for the layer, or ``None`` to generate one.
+            visible: Whether the layer is drawn.
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: if ``column`` was not given, or the column cannot be classified (unknown scheme,
+                no spread, ``k < 1``, or a short colour list).
+            KeyError: if ``column`` is not one of ``features``' columns — named as :meth:`choropleth`
+                names it, rather than a bare pandas ``KeyError`` from the classifier.
+
+        Warns:
+            UserWarning: when ``rasterize=True`` or an explicit ``big_data_threshold`` is given, which a
+                classified layer (raw glyphs, never datashaded) cannot honour. ``rasterize=False`` asks for
+                the same raw glyphs, so it is silent.
+        """
+        if not column:
+            # A scheme with nothing to classify is a dropped styling request, refused as `points` and
+            # `choropleth` refuse it rather than drawing plain polygons and saying nothing (#331).
+            raise ValueError(
+                "InteractiveMap.polygons(): scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        if column not in getattr(features, "columns", [column]):
+            # Named as choropleth names it, rather than letting the classifier reach into the frame and
+            # surface a bare pandas KeyError for a column that is simply absent. A path/URL has no
+            # `columns`, so it falls through and is read when the drawer opens it, exactly as choropleth.
+            raise KeyError(
+                f"polygons column {column!r} not found in the feature attributes"
+            )
+        # A classified layer draws raw glyphs so each class keeps its colour, and is never datashaded.
+        # `rasterize=False` asks for those same raw glyphs (consistent, silent); only `rasterize=True` or an
+        # explicit `big_data_threshold` is dropped, and is named rather than discarded (as graticule() warns).
+        dropped = []
+        if rasterize is True:
+            dropped.append(f"rasterize={rasterize!r}")
+        if big_data_threshold is not None:
+            dropped.append(f"big_data_threshold={big_data_threshold!r}")
+        if dropped:
+            # stacklevel=4: warn -> this method -> polygons() -> the @_skips_off_limb wrapper -> the caller.
+            warnings.warn(
+                f"InteractiveMap.polygons(): a classified layer (scheme={scheme!r}) draws raw glyphs "
+                f"and is not datashaded, so {' and '.join(dropped)} "
+                f"{'is' if len(dropped) == 1 else 'are'} ignored; drop scheme= to datashade instead.",
+                UserWarning,
+                stacklevel=4,
+            )
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            return self._categorical_polygons(
+                features, column, cmap=cmap, name=name, visible=visible, **opts
+            )
+        return self._graduated_polygons(
+            features,
+            column,
+            scheme=scheme,
+            k=k,
+            cmap=cmap,
             name=name,
             visible=visible,
             **opts,
