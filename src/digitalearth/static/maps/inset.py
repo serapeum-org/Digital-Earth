@@ -28,6 +28,7 @@ import numpy as np
 from matplotlib.patches import Polygon
 from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.crs import is_geographic
 from digitalearth.base.spec.bounds import same_crs
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -91,6 +92,30 @@ _BOX_STYLE: dict[str, Any] = {
     "linewidth": 1.2,
     "zorder": 4.0,
 }
+
+
+def _ring_wraps(ring: np.ndarray, xlim: tuple[float, float]) -> bool:
+    """Whether a box ring jumps further between two samples than the view is wide — a seam crossing.
+
+    A box drawn on a map it fits in moves smoothly along the axes; a ring that leaps more than the whole
+    view's width between consecutive samples has crossed the seam of a wrapping projection and wrapped the
+    long way round the world (review L1). That is the signal a box is being marked across the dateline on a
+    recentred locator from a main map framed with an inverted ``west > east`` axis, which would otherwise
+    draw a near-global box rather than the few-degree one intended.
+
+    Args:
+        ring: The ``(N, 2)`` box outline in the display CRS, as :meth:`_ExtentBox.placed_in` returns it.
+        xlim: The axes' current ``(left, right)`` x-limits, the width the box is drawn against.
+
+    Returns:
+        ``True`` when the largest step between consecutive ring x-coordinates exceeds the view's own x-span
+        — a discontinuity no box that fits the view can have. ``False`` for an empty span or a ring too
+        short to step.
+    """
+    span = abs(float(xlim[1]) - float(xlim[0]))
+    if span <= 0.0 or len(ring) < 2:
+        return False
+    return bool(np.abs(np.diff(np.asarray(ring, dtype=float)[:, 0])).max() > span)
 
 
 @dataclass(frozen=True, eq=False)
@@ -599,25 +624,55 @@ class InsetMixin(_MixinBase):
         return self._locator
 
     def _mark(
-        self, box: _ExtentBox, name: str | None = None, **style: Any
+        self,
+        box: _ExtentBox,
+        name: str | None = None,
+        *,
+        guard_seam: bool = False,
+        **style: Any,
     ) -> Polygon | None:
         """Draw an already-read extent box on this map, in **this** map's CRS.
 
         Args:
             box: The extent to mark, carrying the CRS its four numbers are in.
             name: The id to address the mark by; ``None`` generates ``custom-1``, ``custom-2``, ….
+            guard_seam: Drop the box with a warning when its ring wraps this view's seam (:func:`_ring_wraps`)
+                rather than drawing it ~360 degrees wide. Set only by the **recentred dateline locator**
+                (#395, review L1), where a wrap means the marked map was framed with an inverted axis; left
+                ``False`` for :meth:`mark_extent`, whose legitimately antimeridian-spanning boxes — a polar
+                region on a lon/lat map — cross the seam too and must still draw.
             **style: Patch keywords laid over :data:`_BOX_STYLE`.
 
         Returns:
-            The :class:`~matplotlib.patches.Polygon` put on the axes, or ``None`` when this map's CRS
-            cannot place the box (see :meth:`_ExtentBox.placed_in`) — logged as a warning, because the
-            only other symptom is a locator with no box on it, which looks like the call never happened.
+            The :class:`~matplotlib.patches.Polygon` put on the axes, or ``None`` when this map's CRS cannot
+            place the box (see :meth:`_ExtentBox.placed_in`), or when ``guard_seam`` drops a wrapping one —
+            each logged as a warning, because the only other symptom is a locator with no box on it, which
+            looks like the call never happened.
         """
         ring = box.placed_in(self.crs)
         if ring is None:
             logger.warning(
                 "mark_extent: the extent (%s, %s, %s, %s) in %r has no finite image in %r, so no box was "
                 "drawn — use a locator CRS that covers the extent, or the map's own",
+                box.west,
+                box.south,
+                box.east,
+                box.north,
+                box.crs,
+                self.crs,
+            )
+            return None
+        if guard_seam and _ring_wraps(ring, self.ax.get_xlim()):
+            # The ring jumps further between two samples than the whole view is wide, which only a box that
+            # crosses the seam of a wrapping projection does — most often a main map framed across the
+            # dateline with the inverted ``west > east`` axis form, whose extent samples the long way round
+            # (review L1). Drawing it would stretch a ~340-degree box across the locator, implying the main
+            # map covers the whole world; dropping it with a warning is the honest answer, as for a box the
+            # CRS cannot place at all.
+            logger.warning(
+                "mark_extent: the extent (%s, %s, %s, %s) in %r wraps the seam of %r, so no box was drawn — "
+                "either the marked map is framed with an inverted axis (frame it in continuous longitudes, "
+                "e.g. 178..182 not 178..-179) or its region lies outside the recentred locator's extent",
                 box.west,
                 box.south,
                 box.east,
@@ -769,8 +824,10 @@ class InsetMixin(_MixinBase):
         Args:
             crs: Display CRS of the locator. `None` (default) uses **this map's own** display CRS, which
                 is the one case where the extent box needs no reprojection and so is a true rectangle. A
-                different CRS is honoured and the box is reprojected edge-wise into it; note a geographic
-                locator cannot draw an extent that straddles its antimeridian without the ring wrapping.
+                different CRS is honoured and the box is reprojected edge-wise into it. A geographic locator
+                given a dateline-crossing `extent` (``west > east``) is recentred onto an
+                equidistant-cylindrical CRS over the crossing, so the two longitude bands draw across the
+                frame rather than wrapping around it (#395, see `extent`).
             globe: Whether the locator is drawn on a globe frame — its reference geography re-closed at
                 the projection limb, its boundary drawn, its layers clipped to it. `None` (default)
                 **follows this map**, because a locator that renders differently from the map it sits in
@@ -797,7 +854,11 @@ class InsetMixin(_MixinBase):
                 — it sets the projection's own limits, measured: a globe locator asked for
                 `[-4e6, -4e6, 4e6, 4e6]` came back holding the whole disc — so naming an extent is the
                 caller asking for a flat locator, and naming it beside `globe=True` is refused rather
-                than half-honoured.
+                than half-honoured. On a **geographic** locator a `west > east` pair is a
+                **dateline-crossing** region — a Pacific-centred overview such as `[170, -40, -170, 40]` —
+                and is supported: the locator is recentred onto an equidistant-cylindrical CRS over the
+                crossing so the two longitude bands draw contiguously (#395). On a projected CRS `west > east`
+                has no antimeridian to wrap and stays a refusal.
             reference: The Natural-Earth layers drawn into the locator, in order. Default
                 `("land", "coastlines")`; `()` draws none, for a caller supplying their own geography
                 on the locator afterwards.
@@ -950,10 +1011,20 @@ class InsetMixin(_MixinBase):
                     f"layer; use any of {list(_REFERENCE_LAYERS)}"
                 )
         on_a_globe = self._locator_globe(globe, extent)
-        checked_extent = None if extent is None else self._checked_extent(extent)
+        locator_crs = self.crs if crs is None else crs
+        checked_extent: list[float] | None = None
+        recentred = False
+        if extent is not None:
+            checked_extent, recentre = self._checked_extent(extent, locator_crs)
+            # A dateline-crossing extent recentres the locator onto its own equidistant-cylindrical CRS, so
+            # the two longitude bands sit either side of the frame instead of wrapping (#395). `_mark` then
+            # reprojects this map's extent box into that CRS, the way any `crs=` locator already does.
+            if recentre is not None:
+                locator_crs = recentre
+                recentred = True
         box = _ExtentBox.of(self, caller="inset")
         locator = type(self)(
-            crs=self.crs if crs is None else crs,
+            crs=locator_crs,
             ax=self.ax.inset_axes(frame.as_bounds()),
             fig=self.fig,
             globe=on_a_globe,
@@ -970,7 +1041,9 @@ class InsetMixin(_MixinBase):
             locator.set_global()
         else:
             locator.set_bounds(checked_extent)
-        locator._mark(box)
+        # The seam guard runs only for a recentred locator: there a wrapping box means the marked map was
+        # framed with an inverted axis, while a plain locator's antimeridian-spanning box is legitimate (L1).
+        locator._mark(box, guard_seam=recentred)
         # The frame goes on here rather than at render time: nothing else renders the locator, and the
         # geography and the box have to be on the axes before they can be clipped to the limb. `render`
         # answers a flat locator with nothing, so this is the globe case only.
@@ -978,25 +1051,37 @@ class InsetMixin(_MixinBase):
         self._locator = locator
         return self
 
-    def _checked_extent(self, extent: Sequence[float]) -> list[float]:
-        """Read a caller's locator extent into four display-CRS numbers, refusing the ones that frame nothing.
+    def _checked_extent(
+        self, extent: Sequence[float], crs: Any
+    ) -> tuple[list[float], Any | None]:
+        """Read a locator extent into four display-CRS numbers, recentring one that crosses the dateline.
 
         :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` honours a flipped pair as an
         inverted axis — a deliberate 2-D-tier contract — but a locator's `extent` is the wider rectangle the
-        inset shows, not an axis to invert, so an inverted or zero-area one is a caller's mistake. It is read
-        here, in front of the method with the method's other refusals, so a bad extent leaves nothing
-        half-built (the same invariant every inset refusal keeps) and the message names `inset()` rather
-        than the `set_bounds` it used to forward to.
+        inset shows, not an axis to invert, so a ``west > east`` pair is read here in front of the method,
+        with the method's other refusals, so a bad extent leaves nothing half-built.
+
+        **A ``west > east`` pair is a dateline crossing on a geographic CRS** — a Pacific-centred overview
+        such as ``[170, -40, -170, 40]`` — not a mistake. A geographic locator is then drawn on an
+        equidistant-cylindrical CRS recentred on the crossing, so the two longitude spans ``[west, 180]`` and
+        ``[-180, east]`` sit either side of the frame's centre instead of wrapping, and the extent is
+        returned already in that CRS (#395). On a **projected** CRS ``west > east`` has no antimeridian to
+        wrap around, so it stays the refusal it was.
 
         Args:
             extent: The `(west, south, east, north)` the caller named, in the locator's CRS.
+            crs: The locator's display CRS, to tell a dateline crossing (geographic) from an inverted
+                rectangle (projected).
 
         Returns:
-            The four numbers as a list, ready for `set_bounds`.
+            ``(box, recentre_crs)`` — the four numbers ready for `set_bounds`, and the CRS the locator must
+            be drawn in: ``None`` for an ordinary rectangle (the locator keeps the CRS it was given), or the
+            recentred equidistant-cylindrical CRS when the extent crossed the dateline.
 
         Raises:
-            ValueError: for an extent that is not four finite numbers, whose east is not east of its west,
-                or whose north is not north of its south — each naming `inset(extent=...)`.
+            ValueError: for an extent that is not four finite numbers; whose north is not north of its
+                south; or whose east is not east of its west on a CRS that is not geographic (a projected
+                inverted rectangle) — each naming `inset(extent=...)`.
         """
         try:
             values = [float(value) for value in extent]
@@ -1016,13 +1101,70 @@ class InsetMixin(_MixinBase):
                 "north) has to be a finite number in the locator's CRS"
             )
         west, south, east, north = values
-        if east <= west or north <= south:
+        if north <= south:
             raise ValueError(
-                f"inset(extent={values!r}) frames no area: west has to be below east and south below "
-                "north — the extent is the wider rectangle the locator shows, not an inverted axis. Give "
-                "the corners the right way round, or drop extent= to show the whole projection domain"
+                f"inset(extent={values!r}) frames no area: north has to be above south. Give the corners "
+                "the right way round, or drop extent= to show the whole projection domain"
             )
-        return values
+        if east > west:
+            return values, None
+        if east < west and is_geographic(crs):
+            return self._recentre_dateline(values, crs)
+        raise ValueError(
+            f"inset(extent={values!r}) frames no area: east has to be above west — the extent is the wider "
+            "rectangle the locator shows, not an inverted axis. A west>east pair is read as a "
+            "dateline-crossing region only on a geographic CRS; on this one it is an inverted rectangle. "
+            "Give the corners the right way round, or drop extent= to show the whole projection domain"
+        )
+
+    def _recentre_dateline(
+        self, values: list[float], crs: Any
+    ) -> tuple[list[float], Any]:
+        """Recentre a dateline-crossing geographic extent onto an equidistant-cylindrical CRS.
+
+        A ``west > east`` lon/lat extent spans the two longitude bands ``[west, 180]`` and ``[-180, east]``,
+        which a CRS centred on the prime meridian can only draw by wrapping. Centring an equidistant
+        cylindrical projection on the crossing's own middle longitude turns those two bands into one
+        contiguous span either side of the frame centre, so the reference geography draws across the seam
+        instead of around it (#395). The extent corners are reprojected into that CRS so ``set_bounds`` frames
+        a true ``west < east`` rectangle.
+
+        The locator's *frame* and its geography are always right; the **marked extent box** — this map's own
+        extent, drawn onto the recentred locator — is right when the main map is framed in continuous
+        longitudes (``178..182``, not the inverted ``178..-179`` axis form). A box that would wrap the seam is
+        dropped with a warning rather than drawn near-global (:func:`_ring_wraps`, review L1).
+
+        Args:
+            values: The validated ``[west, south, east, north]`` in ``crs``, with ``east < west``.
+            crs: The locator's geographic display CRS.
+
+        Returns:
+            ``(box, eqc_crs)`` — the extent as ``[x_west, y_south, x_east, y_north]`` in the recentred CRS,
+            and the CRS itself (a proj4 string).
+
+        Raises:
+            ValueError: when the recentred corners do not frame a finite ``west < east`` / ``south < north``
+                rectangle — a crossing the projection could not place.
+        """
+        west, south, east, north = values
+        centre = west + ((east - west) % 360.0) / 2.0
+        if centre > 180.0:
+            centre -= 360.0
+        eqc = f"+proj=eqc +lon_0={centre:g} +datum=WGS84 +units=m +no_defs"
+        xs, ys = reproject_coordinates(
+            [west, east], [south, north], from_crs=crs, to_crs=eqc
+        )
+        box = [float(xs[0]), float(ys[0]), float(xs[1]), float(ys[1])]
+        if not (
+            all(isfinite(value) for value in box)
+            and box[0] < box[2]
+            and box[1] < box[3]
+        ):
+            raise ValueError(
+                f"inset(extent={values!r}) crosses the dateline, but its corners could not be recentred "
+                f"onto {eqc!r} into a frame — check the longitudes are in degrees in the locator's CRS"
+            )
+        return box, eqc
 
     def _locator_globe(self, globe: bool | None, extent: Any) -> bool:
         """Settle whether the locator is drawn on a globe frame, refusing the pair that cannot be.
