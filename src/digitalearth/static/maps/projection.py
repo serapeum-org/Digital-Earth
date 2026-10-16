@@ -835,12 +835,55 @@ def _view_window(scene: Any) -> tuple[float, float, float, float] | None:
     if not seen.any():
         return None
     west, south, east, north = _LABEL_WORLD_WINDOW
+    lon_min = max(float(lon[seen].min()), west)
+    lon_max = min(float(lon[seen].max()), east)
+    if _pole_in_view(scene):
+        # Every meridian converges at an in-view pole, so longitude is unbounded there and the interior
+        # sample under-reports it — on a flat polar/oblique map it missed the antimeridian sector and the
+        # line generation then dropped meridians that cross the view (review R2-M2). Widen longitude to the
+        # whole world so no crossing meridian is dropped; latitude stays as sampled, clipped to the pole.
+        lon_min, lon_max = west, east
     return (
-        max(float(lon[seen].min()), west),
+        lon_min,
         max(float(lat[seen].min()), south),
-        min(float(lon[seen].max()), east),
+        lon_max,
         min(float(lat[seen].max()), north),
     )
+
+
+def _pole_in_view(scene: Any) -> bool:
+    """Whether a geographic pole sits inside the view as a point meridians converge at.
+
+    The test longitude is unbounded needs: a pole is in view **and** the display CRS is one where meridians
+    meet at it (an azimuthal or conic projection), not one where the pole is the top edge (a cylindrical
+    projection, where longitude stays bounded however near the pole the view is). Reproject two opposite
+    meridians at each pole through pyramids: they land on the same point only where the pole is a
+    convergence, and that point is then tested against the axes limits.
+
+    Args:
+        scene: The map whose axes limits and display CRS define the view.
+
+    Returns:
+        ``True`` when the north or south pole is a convergence point inside the current axes limits — the one
+        case where longitude cannot be bounded and the whole meridian set must be drawn.
+    """
+    xmin, xmax = sorted(float(value) for value in scene.ax.get_xlim())
+    ymin, ymax = sorted(float(value) for value in scene.ax.get_ylim())
+    span = max(xmax - xmin, ymax - ymin) or 1.0
+    for pole in (90.0, -90.0):
+        xs, ys = reproject_coordinates(
+            [0.0, 180.0], [pole, pole], from_crs=4326, to_crs=scene.crs
+        )
+        xs = [float(value) for value in xs]
+        ys = [float(value) for value in ys]
+        if not all(isfinite(value) for value in (*xs, *ys)):
+            continue
+        converges = (
+            abs(xs[0] - xs[1]) <= span * 1e-6 and abs(ys[0] - ys[1]) <= span * 1e-6
+        )
+        if converges and xmin <= xs[0] <= xmax and ymin <= ys[0] <= ymax:
+            return True
+    return False
 
 
 def _window_spans(
@@ -1812,7 +1855,7 @@ class ProjectionMixin(_MixinBase):
                 >>> "150°W" in message, "120°E" in message
                 (True, True)
                 >>> len(m.ax.texts)
-                5
+                6
                 >>> m.close()
 
                 ```

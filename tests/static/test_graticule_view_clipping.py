@@ -19,7 +19,7 @@ step a small view now accepts, and the world step every view still refuses — a
 import pytest
 
 from digitalearth.static import Map
-from digitalearth.static.maps.projection import MAX_GRATICULE_LINES
+from digitalearth.static.maps.projection import MAX_GRATICULE_LINES, _view_window
 
 #: A small framed region, as ``(west, south, east, north)`` in EPSG:4326: 2 degrees of longitude by 2 of
 #: latitude, far too narrow to hold anything near the world's line count at a fine step.
@@ -146,6 +146,49 @@ class TestTheRefusalIsWordedForTheSpanItBudgetedAgainst:
                 scene.graticule(lat_step=0.05)
         finally:
             scene.close()
+
+
+class TestAFlatPolarMapKeepsEveryMeridian:
+    """On a flat azimuthal map the pole is in view, so no meridian crossing it is dropped (R2-M2)."""
+
+    def test_the_view_window_covers_every_longitude(self):
+        """A flat polar map framed on the pole widens its view window to the whole ``-180..180``.
+
+        Test scenario:
+            The 5x5 interior sample under-reports longitude when the pole is in view — every meridian
+            converges inside it, yet the sample misses the antimeridian sector (the review measured
+            ``-153..180`` on ``crs=3995``). ``_pole_in_view`` detects the convergence and widens the window
+            to the whole world, which is the mechanism that keeps the clip from dropping meridians.
+        """
+        polar = Map(crs=3995)
+        polar.set_bounds([-3.0e6, -3.0e6, 3.0e6, 3.0e6])
+        window = _view_window(polar)
+        polar.close()
+        assert window is not None, "the polar view produced no window"
+        lon_min, _, lon_max, _ = window
+        assert (lon_min, lon_max) == (-180.0, 180.0), (
+            f"the polar view window under-reported longitude as ({lon_min}, {lon_max}); meridians would drop"
+        )
+
+    def test_the_full_meridian_set_is_drawn(self):
+        """A flat polar map framed on the pole draws every meridian, not the clipped wedge of the bug.
+
+        Test scenario:
+            At ``lon_step=10`` the world has 37 meridians; the pre-fix clip dropped the ones whose anchor the
+            interior sample missed (the review saw -180 and -170 go). The drawn grid holds at least the full
+            meridian set now — parallels only add to the count, so a lower bound catches a dropped meridian
+            without depending on how many parallels the one-step margin pulls in.
+        """
+        full_meridians = len(range(-180, 181, 10))
+        polar = Map(crs=3995)
+        polar.set_bounds([-3.0e6, -3.0e6, 3.0e6, 3.0e6])
+        polar.graticule(lon_step=10.0, lat_step=90.0, labels=False)
+        drawn = len(polar.artist(polar._graticule_id))
+        polar.close()
+        assert drawn >= full_meridians, (
+            f"the flat polar map drew {drawn} lines, fewer than the {full_meridians} meridians the world "
+            "holds; a crossing meridian was dropped"
+        )
 
 
 class TestReframingRecutsTheGrid:
