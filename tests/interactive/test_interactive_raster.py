@@ -82,7 +82,8 @@ class TestImage:
             "element x coordinates must match the pyramids-reprojected cell centres"
         )
 
-    def test_clim_and_cmap_are_recorded(self, m, dataset):
+    def test_limits_cmap_and_opacity_are_recorded(self, m, dataset):
+        """The Core ``limits``/``opacity`` params record under the engine's own ``clim``/``alpha`` keys (#332)."""
         m.field(dataset, cmap="magma", limits=(0.0, 50.0), opacity=0.5)
         opts = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert opts["cmap"] == "magma", f"cmap not honoured: {opts.get('cmap')}"
