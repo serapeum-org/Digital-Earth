@@ -1321,7 +1321,7 @@ class InteractiveMapBase:
         held: Mapping[str, Any] | None = None,
         color_field: str | None = None,
     ) -> Self:
-        """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
+        """Register a HoloViews/GeoViews element as a map layer and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here.
 
@@ -1421,11 +1421,20 @@ class InteractiveMapBase:
         resolved = kind or custom_kind("holoviews")
         layer_id = self._layer_id(resolved.split(":")[-1], name)
         # A custom layer publishes no colour encoding of its own, so `color_field` is the caller's one way to
-        # say what it varies by — recorded as the colour encoding a key hangs on, exactly as a builder's is
-        # (#349). A drawn kind brings its own `symbology`, so this only fills the custom case.
-        if color_field is not None and symbology is None:
+        # say what it varies by — recorded as the colour encoding a key hangs on, exactly as a builder's is,
+        # under the same `via="custom"` marker the static and web tiers set (#349). `custom:holoviews` is a
+        # KEPT kind (drawn by being held, never from a recipe), so the marker is descriptive and never reaches
+        # the via-dispatch in `renderer.make_draw`. A drawn kind carries its own `symbology`, so the two
+        # cannot both be given.
+        if color_field is not None:
+            if symbology is not None:
+                raise ValueError(
+                    "add_layer(color_field=...) names the colour field of a custom layer; it cannot be "
+                    "combined with symbology=, which a drawn kind carries for itself"
+                )
             symbology = Symbology(
-                encodings={"color": Encoding.by_field("color", color_field)}
+                props={"via": "custom"},
+                encodings={"color": Encoding.by_field("color", color_field)},
             )
         # Everything from here to the draw is undone together if any of it raises. The layer is described
         # before its drawer runs, so a drawer that refuses — an off-limb warp, `strict=True`, a column that
