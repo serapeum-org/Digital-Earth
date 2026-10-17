@@ -56,7 +56,8 @@ class TestInteractiveAddLayerColorField:
             ``color_field`` is the custom-layer producer and ``symbology`` is what a drawn kind carries, so
             giving both is a contradiction and raises ``ValueError`` instead of silently ignoring one.
         """
+        m = InteractiveMap()
+        element = _element()
+        sentinel = object()
         with pytest.raises(ValueError, match="cannot be combined with symbology"):
-            InteractiveMap().add_layer(
-                _element(), name="conflict", color_field="elevation", symbology=object()
-            )
+            m.add_layer(element, name="conflict", color_field="elevation", symbology=sentinel)
