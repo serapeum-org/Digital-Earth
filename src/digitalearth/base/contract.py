@@ -181,11 +181,11 @@ ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
 # `set_title`. `colorbar` and `legend` read `layer_id` on every tier that takes a positional argument — the
 # web tier's `legend` is keyword-only, so it spells no first argument at all — a unification order 24 made
 # when the colour key became a guide on its layer's encoding, so declaring `layer_id` holds the tiers rather
-# than dividing them. Two names stay undeclared, and deliberately: `tiles` takes a `url` on one 2-D tier and
-# an overloaded `provider` on the other, and `basemap` a `provider` against a `source` — a divergence issue
-# #268 settles, and each already carries a `KEYWORD_SHORTFALLS` row tracking the keyword half of the same
-# gap. Declaring one side of either would fail the other for a divergence this module did not cause and
-# cannot fix, so the two wait for the change that makes their tiers agree.
+# than dividing them. `tiles` and `basemap` were the last pair to stay undeclared: `tiles` took a `url` on
+# one 2-D tier and an overloaded `provider` on the other, and `basemap` a `provider` against a `source`. #268
+# split the overload — `tiles` reads a literal `url` and `basemap` a named `provider` on every tier that has
+# them — so both now declare their first argument, and the two `KEYWORD_SHORTFALLS` rows that tracked the
+# keyword half of the gap came off with the issue.
 
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
 #: a 3-D scene has no extent to frame — declares that in its `Capabilities` (#294) rather than growing a method
@@ -336,9 +336,17 @@ TIER2: tuple[Method, ...] = (
         frozenset({"lon_step", "lat_step", "spacing"}),
         first_argument="lon_step",
     ),
-    Method("tiles", "Draw raster tiles from a URL template.", frozenset({"url"})),
     Method(
-        "basemap", "Draw a named basemap beneath the data.", frozenset({"provider"})
+        "tiles",
+        "Draw raster tiles from a URL template.",
+        frozenset({"url"}),
+        first_argument="url",
+    ),
+    Method(
+        "basemap",
+        "Draw a named basemap beneath the data.",
+        frozenset({"provider"}),
+        first_argument="provider",
     ),
     Method(
         "contours",

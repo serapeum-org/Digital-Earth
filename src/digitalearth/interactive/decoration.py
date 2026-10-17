@@ -48,10 +48,6 @@ from digitalearth.interactive.style_fold import (
     split_guide_options,
 )
 
-# Note (#247): `tiles()` takes a provider *name*, a keyed preset and a raw XYZ *URL* through the one
-# `provider=` argument. Splitting that collision (a `tiles(url=...)` vs `basemap(provider=...)` rename)
-# is Core-contract work and is deliberately out of this batch.
-
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
@@ -244,7 +240,7 @@ def _catalogued_tiles(name: str, api_key: Any, *, known: Any) -> Any:
     if api_key is None:
         raise ImportError(
             f"tile provider {name!r} needs an api_key ({', '.join(secrets)}); pass "
-            "tiles(provider, api_key=...)"
+            "basemap(provider, api_key=...)"
         )
     # Built rather than handed over, because the credential has to reach the template; the attribution
     # GeoViews would have read off the object is re-attached the way a keyed preset's is.
@@ -423,7 +419,26 @@ class DecorationMixin(_MixinBase):
         digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
-    def tiles(
+    def _refuse_non_mercator_basemap(self, method: str) -> None:
+        """Refuse a tile basemap under a display CRS or projection that cannot render Web-Mercator tiles.
+
+        Both :meth:`tiles` and :meth:`basemap` draw ``gv.WMTS`` tiles, which Bokeh renders in Web Mercator
+        only, so each guards the same two conditions — the message names whichever builder the caller called.
+
+        Args:
+            method: The builder the caller called (``"tiles"`` or ``"basemap"``), named in every refusal.
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator, or when a non-Mercator projection is set.
+        """
+        self._require_web_mercator(method)
+        if getattr(self, "_projection", None) is not None:
+            raise ValueError(
+                f"{method}() cannot compose with a non-Mercator projection() — Bokeh tiles render in "
+                "Web-Mercator only. Drop the projection to use a tile basemap."
+            )
+
+    def basemap(
         self,
         provider: Any = DEFAULT_BASEMAP_PROVIDER,
         *,
@@ -434,7 +449,12 @@ class DecorationMixin(_MixinBase):
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Add a web-tile basemap beneath the data layers (DI.1c + DI.10 catalog / custom WMTS).
+        """Add a named-provider or keyed-preset tile basemap beneath the data (DI.1c + DI.10 catalog).
+
+        The named half of the basemap split (#268): :meth:`basemap` takes a provider **name**, a keyed
+        **preset**, or an ``xyzservices.TileProvider`` object — everything but a raw URL template, which is
+        :meth:`tiles`' one argument. The two were a single overloaded ``tiles(provider=...)`` that could not
+        tell a name from a URL at the call site; they are separate now, each with one job.
 
         A keyed preset's coverage is **not** checked here, unlike the static tier. A Bokeh plot is pannable
         and zoomable, so there is no one extent to check against — refusing a NICFI basemap because the
@@ -445,13 +465,12 @@ class DecorationMixin(_MixinBase):
         Args:
             provider: A ``geoviews.tile_sources`` provider name (``"CartoLight"``/``"OSM"``/
                 ``"EsriImagery"``/…), defaulting to the shared
-                :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` every tier reads (#247);
-                a **keyed** preset name such as ``"Planet.NICFI"`` (see
-                :mod:`digitalearth.base.basemaps`), whose credential is read from the environment; a raw
-                XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``); or an
-                ``xyzservices.TileProvider``. A name GeoViews does not hold falls back to the
-                `xyzservices` catalog, which is why :meth:`list_tile_providers` lists fewer names than
-                this accepts — 32 against 880, measured.
+                :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` every tier reads; a **keyed**
+                preset name such as ``"Planet.NICFI"`` (see :mod:`digitalearth.base.basemaps`), whose
+                credential is read from the environment; or an ``xyzservices.TileProvider``. A name GeoViews
+                does not hold falls back to the `xyzservices` catalog, which is why :meth:`list_tile_providers`
+                lists fewer names than this accepts — 32 against 880, measured. A raw XYZ/WMTS **URL** is
+                refused with a pointer to :meth:`tiles`.
             level: ``"underlay"`` (default) keeps tiles behind the data layers; ``"overlay"`` puts
                 them on top (rare — e.g. a labels overlay).
             api_key: Credential for a keyed provider. For a keyed **preset** (``"Planet.NICFI"``) it is the
@@ -479,7 +498,7 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem).tiles("CartoLight")         # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem).basemap("CartoLight")       # doctest: +SKIP
                 >>> type(m.layers[0]).__name__                                  # doctest: +SKIP
                 'WMTS'
 
@@ -487,33 +506,132 @@ class DecorationMixin(_MixinBase):
             - Use a keyed preset, whose credential comes from the environment:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
-                >>> m = InteractiveMap().tiles(                                # doctest: +SKIP
+                >>> m = InteractiveMap().basemap(                              # doctest: +SKIP
                 ...     "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
                 ... )
-
-                ```
-            - Use a custom XYZ URL template:
-                ```python
-                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
-                >>> url = "https://a.tile.example/{Z}/{X}/{Y}.png"              # doctest: +SKIP
-                >>> InteractiveMap().tiles(url).layers[0]                       # doctest: +SKIP
 
                 ```
 
         Raises:
             ValueError: when the display CRS is not Web Mercator (Bokeh tiles are 3857-only), when a
-                non-Mercator projection is active, or when a provider name is unknown.
+                non-Mercator projection is active, when a provider name is unknown, or when ``provider`` is a
+                raw URL template (use :meth:`tiles`).
             ImportError: when a keyed provider is requested without an ``api_key``.
         """
         _require_holoviz()
-        # Both refusals stay with the builder: each answers the call the caller made.
-        self._require_web_mercator("tiles")
-        if getattr(self, "_projection", None) is not None:
+        self._refuse_non_mercator_basemap("basemap")
+        if isinstance(provider, str) and "://" in provider:
             raise ValueError(
-                "tiles() cannot compose with a non-Mercator projection() — Bokeh tiles render in "
-                "Web-Mercator only. Drop the projection to use a tile basemap."
+                f"basemap(provider=...) takes a named provider or keyed preset, not a URL; got "
+                f"{provider!r} — pass a raw XYZ/WMTS URL template to tiles(url=...) instead."
             )
-        # An explicit tiles() call supersedes any provider passed to the constructor, so render()'s
+        return self._add_basemap(
+            provider,
+            level=level,
+            api_key=api_key,
+            preset=preset,
+            name=name,
+            visible=visible,
+            **opts,
+        )
+
+    def tiles(
+        self,
+        url: str,
+        *,
+        level: str = "underlay",
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a web-tile basemap from a literal XYZ/WMTS URL template beneath the data (DI.1c + DI.10).
+
+        The URL half of the basemap split (#268): :meth:`tiles` takes a **URL template** and only that — a
+        ``"https://…/{Z}/{X}/{Y}.png"`` string. A provider name, a keyed preset or a ``TileProvider`` object
+        is :meth:`basemap`'s job, and one handed here is refused with a pointer to it rather than guessed at.
+
+        Args:
+            url: A raw XYZ/WMTS tile URL template, e.g. ``"https://a.tile.example/{Z}/{X}/{Y}.png"``. It must
+                carry a URL scheme (``"://"``); anything else is taken to be a provider name or object and
+                refused.
+            level: ``"underlay"`` (default) keeps tiles behind the data layers; ``"overlay"`` puts
+                them on top (rare — e.g. a labels overlay).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the tile element.
+
+        Returns:
+            The same map instance, so builder calls chain — the tile layer is drawn *beneath* the data,
+            because the basemap band puts it there, whenever in the chain it was added.
+
+        Examples:
+            - Use a custom XYZ URL template:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> url = "https://a.tile.example/{Z}/{X}/{Y}.png"              # doctest: +SKIP
+                >>> InteractiveMap().tiles(url=url).layers[0]                   # doctest: +SKIP
+
+                ```
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator (Bokeh tiles are 3857-only), or when a
+                non-Mercator projection is active.
+            TypeError: when ``url`` is not a URL template — a provider name or object that belongs to
+                :meth:`basemap` instead.
+        """
+        _require_holoviz()
+        self._refuse_non_mercator_basemap("tiles")
+        if not (isinstance(url, str) and "://" in url):
+            looks_like = url if isinstance(url, str) else type(url).__name__
+            raise TypeError(
+                f"tiles() takes a URL template (an XYZ/WMTS '.../{{Z}}/{{X}}/{{Y}}.png' string); got "
+                f"{looks_like!r}, which looks like a provider name or object — use basemap(provider=...)."
+            )
+        return self._add_basemap(
+            url,
+            level=level,
+            api_key=None,
+            preset=None,
+            name=name,
+            visible=visible,
+            **opts,
+        )
+
+    def _add_basemap(
+        self,
+        provider: Any,
+        *,
+        level: str,
+        api_key: Any,
+        preset: dict | None,
+        name: str | None,
+        visible: bool,
+        **opts: Any,
+    ) -> Self:
+        """Register a tile-basemap layer beneath the data, shared by :meth:`tiles` and :meth:`basemap`.
+
+        Both builders produce the one kind of layer — ``kind="basemap"`` drawn through
+        :func:`draw_tiles` — differing only in what they accept and validate up front: a URL for
+        :meth:`tiles`, a name/preset/object for :meth:`basemap`. This is where the two meet.
+
+        Args:
+            provider: The resolved provider the layer draws — a URL template, a name, a keyed preset, or a
+                ``TileProvider`` object.
+            level: ``"underlay"`` or ``"overlay"`` (see the public builders).
+            api_key: Credential held beside the layer for a keyed provider, or ``None``.
+            preset: A keyed preset's own keywords, or ``None``.
+            name: The caller's own name for the layer, or ``None`` to generate one.
+            visible: Whether the layer is drawn.
+            **opts: Extra HoloViews style options applied to the tile element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+        """
+        # An explicit basemap/tiles call supersedes any provider passed to the constructor, so render()'s
         # one-shot hook does not also prepend a second basemap (L2).
         self._tiles_provider = None
         # A provider object is an `xyzservices.TileProvider`: a `dict` subclass whose fields include the
@@ -589,7 +707,7 @@ class DecorationMixin(_MixinBase):
             )
         if preset:
             raise ValueError(
-                f"tiles({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
+                f"basemap({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
                 f"preset such as 'Planet.NICFI'"
             )
         if isinstance(provider, str) and "://" in provider:  # raw XYZ/WMTS URL template
@@ -605,7 +723,7 @@ class DecorationMixin(_MixinBase):
             if "stadia" in provider.lower() and api_key is None:
                 raise ImportError(
                     f"tile provider {provider!r} needs an api_key (Stadia/Stamen require a key for "
-                    "non-local use); pass tiles(provider, api_key=...)"
+                    "non-local use); pass basemap(provider, api_key=...)"
                 )
             return sources[provider].clone()
         return gv.WMTS(

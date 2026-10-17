@@ -1053,7 +1053,7 @@ class VectorMixin(_MixinBase):
                 >>> from pyramids.feature import FeatureCollection                # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
                 >>> basins = FeatureCollection.read_file("basins.geojson")        # doctest: +SKIP
-                >>> InteractiveMap().polygons(basins).tiles().save("m.html").name  # doctest: +SKIP
+                >>> InteractiveMap().polygons(basins).basemap().save("m.html").name  # doctest: +SKIP
                 'm.html'
 
                 ```

@@ -1,7 +1,7 @@
 # Keyed basemaps
 
 Most basemaps in `digitalearth` need nothing from you — `Map().basemap()`, `WebMap().basemap("CartoDark")` and
-`InteractiveMap().tiles("CartoLight")` all draw token-free public tiles. A **keyed** basemap is one the service
+`InteractiveMap().basemap("CartoLight")` all draw token-free public tiles. A **keyed** basemap is one the service
 will not serve without a credential, so it needs two things you have to know in advance: an environment variable
 to set, and the preset's own keywords.
 
@@ -29,7 +29,7 @@ from digitalearth.web import WebMap
 from digitalearth.interactive import InteractiveMap
 
 WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
-InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
 ```
 
 ### Keywords

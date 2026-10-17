@@ -183,7 +183,7 @@ class TestAFigureNamesEveryLayerItDrew:
             composed twice (review L7).
         """
         interactive_map = (
-            new_map().tiles("CartoLight").graticule().points(point_fc).field(dataset)
+            new_map().basemap("CartoLight").graticule().points(point_fc).field(dataset)
         )
         described = list(interactive_map.figure_spec.layers.ids)
         assert len(described) == 4, described
@@ -209,7 +209,7 @@ class TestAFigureNamesEveryLayerItDrew:
             dataset: A small raster.
         """
         interactive_map = (
-            new_map().tiles("CartoLight").graticule().points(point_fc).field(dataset)
+            new_map().basemap("CartoLight").graticule().points(point_fc).field(dataset)
         )
         assert len(interactive_map.layers) == len(interactive_map.layer_ids), (
             f"{len(interactive_map.layers)} elements for {len(interactive_map.layer_ids)} layers"
@@ -257,7 +257,7 @@ class TestAFigureNamesEveryLayerItDrew:
             record only that a layer existed. A graticule and a basemap now write out in full.
         """
         interactive_map = (
-            new_map().tiles("CartoLight").graticule(lon_step=15, lat_step=15)
+            new_map().basemap("CartoLight").graticule(lon_step=15, lat_step=15)
         )
         written = interactive_map.figure_spec.to_dict()
         layers = {layer["id"]: layer for layer in written["layers"]["layers"]}
@@ -377,7 +377,7 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
         from digitalearth.interactive import decoration
 
         monkeypatch.setattr(decoration, "draw_tiles", lambda *args, **kwargs: None)
-        interactive_map = new_map().tiles(
+        interactive_map = new_map().basemap(
             "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
         )
         assert interactive_map._layer_keys == {}, interactive_map._layer_keys
@@ -589,7 +589,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
             new_map: The map factory.
             dataset: A small raster.
         """
-        interactive_map = new_map().field(dataset).tiles("CartoLight")
+        interactive_map = new_map().field(dataset).basemap("CartoLight")
         figure = interactive_map.figure_spec
         basemap = next(
             figure.layers.get(layer_id)
@@ -611,7 +611,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
         import geoviews as gv
         import holoviews as hv
 
-        interactive_map = new_map().field(dataset).tiles("CartoLight")
+        interactive_map = new_map().field(dataset).basemap("CartoLight")
         types = [type(element) for element in interactive_map.layers]
         assert types.index(gv.element.WMTS) < types.index(hv.Image), types
 
@@ -627,7 +627,7 @@ class TestTheUnderlaysAreDescribedAndStillUnderneath:
             `LayerTree` sorts by band by construction, so it passed with the elements appended in call order
             and the tiles drawn over the raster (review M13). It reads the drawing now.
         """
-        interactive_map = new_map().field(dataset).tiles("CartoLight")
+        interactive_map = new_map().field(dataset).basemap("CartoLight")
         assert _composed_kinds(interactive_map) == ["basemap", "raster"], (
             _composed_kinds(interactive_map)
         )
@@ -696,7 +696,7 @@ class TestAKeyedBasemapKeepsItsCredentialOffTheFigure:
         Args:
             new_map: The map factory.
         """
-        interactive_map = new_map().tiles(
+        interactive_map = new_map().basemap(
             "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
         )
         layer_id = interactive_map.layer_ids[0]
@@ -710,7 +710,7 @@ class TestAKeyedBasemapKeepsItsCredentialOffTheFigure:
         Args:
             new_map: The map factory.
         """
-        interactive_map = new_map().tiles(
+        interactive_map = new_map().basemap(
             "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
         )
         url = interactive_map.layers[0].data
@@ -726,7 +726,7 @@ class TestAKeyedBasemapKeepsItsCredentialOffTheFigure:
             The credential used to be one of the values `tiles()` recorded, so `figure_spec.to_dict()` —
             the thing a caller saves next to their notebook — carried a live API key in plain text.
         """
-        interactive_map = new_map().tiles(
+        interactive_map = new_map().basemap(
             "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
         )
         written = json.dumps(interactive_map.figure_spec.to_dict())
@@ -738,7 +738,7 @@ class TestAKeyedBasemapKeepsItsCredentialOffTheFigure:
         Args:
             new_map: The map factory.
         """
-        interactive_map = new_map().tiles(
+        interactive_map = new_map().basemap(
             "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
         )
         props = interactive_map.figure_spec.layers.get(
@@ -779,7 +779,7 @@ class TestTheBandOfALayerIsItsKinds:
             `LayerTree` sorts by construction, so it passed with the elements appended in call order and with
             only the underlays moved to the front (review M13).
         """
-        interactive_map = new_map().points(point_fc).graticule().tiles("CartoLight")
+        interactive_map = new_map().points(point_fc).graticule().basemap("CartoLight")
         assert band_of("graticule") == "reference", band_of("graticule")
         assert _composed_kinds(interactive_map) == ["basemap", "graticule", "points"], (
             _composed_kinds(interactive_map)
@@ -844,7 +844,7 @@ class TestTheDescribedOrderIsTheDrawnOrder:
             while the drawing did not — reading it alone is a check that cannot fail.
         """
         interactive_map = new_map()
-        interactive_map.tiles()
+        interactive_map.basemap()
         interactive_map.features(land=True)
         drawn = interactive_map._renderer.drawn
         composed = [id(element) for element in interactive_map.layers]
@@ -886,7 +886,7 @@ class TestClosingAMapLetsItsDataGo:
             `close()` forgot the map's data and kept `_layer_keys`, so a keyed basemap's API key lived on in
             a map the caller had finished with (review M6).
         """
-        interactive_map = InteractiveMap().tiles(
+        interactive_map = InteractiveMap().basemap(
             "Planet.NICFI", api_key=FAKE_KEY, preset={"date": "2024-01"}
         )
         assert FAKE_KEY in interactive_map._layer_keys.values(), (

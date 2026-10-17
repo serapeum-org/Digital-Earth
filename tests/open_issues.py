@@ -44,10 +44,11 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
         265: (
             "fix(web): title(), fit_bounds() and labels() introduce third names for existing concepts"
         ),
-        268: (
-            "refactor(api): tiles() takes a name on one tier and a URL on another, through one "
-            "overloaded provider="
-        ),
+        # `268` ("refactor(api): tiles() takes a name on one tier and a URL on another, through one overloaded
+        # provider=") stood here against the two `KEYWORD_SHORTFALLS` rows that named it — static `basemap`
+        # short of `provider` (spelled `source=`) and interactive `tiles` short of `url`. The split landed:
+        # `tiles` reads a literal URL and `basemap` a named provider on every tier, so both rows came off and
+        # nothing names the issue any more.
         # `332` ("refactor(api): static and interactive builders spell opacity and column differently from
         # the Core contract") stood here against the five `KEYWORD_SHORTFALLS` rows that named it. Order
         # 27a's remainder adopted the Core channel names on all five builders, so those rows are off and

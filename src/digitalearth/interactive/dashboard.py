@@ -1096,7 +1096,7 @@ class DashboardMixin(_MixinBase):
             digitalearth.base.controls.resolved_controls: the shared control vocabulary.
         """
         pn = _require_panel()
-        # Before the labels are built. A map built with `tiles=` defers its basemap until something renders,
+        # Before the labels are built. A map built with `basemap=` defers its basemap until something renders,
         # and the flush inserts it at index 0 — so labels frozen beforehand named the layer one place to
         # their left, and the control drew the basemap where the data should be (review H10).
         self._flush_deferred_tiles()

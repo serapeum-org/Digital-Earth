@@ -88,10 +88,11 @@ KEYWORD_SHORTFALLS: Mapping[tuple[str, str], tuple[tuple[str, ...], str]] = (
             # the colour key is a `Guide` on the layer's colour encoding now, so `colorbar` takes the layer by
             # id and `legend` derives its rows from that layer's scale instead of being handed the colours and
             # labels themselves.
-            ("matplotlib", "basemap"): (
-                ("provider",),
-                "the provider is spelled source= here — #268",
-            ),
+            # `("matplotlib", "basemap")` was listed here against `("provider",)` — the static tier spelled the
+            # provider `source=` — and `("interactive", "tiles")` against `("url",)`, where a name and a URL
+            # both arrived through one overloaded `provider=`. #268 split the overload: `tiles` reads a literal
+            # `url` and `basemap` a named `provider` on every tier, so neither is short of a declared keyword
+            # any more and both rows came off — the issue came off `tests/open_issues.py` with them.
             ("matplotlib", "set_title"): (
                 ("subtitle",),
                 "one axes title, with no second line to carry a subtitle — #265",
@@ -106,10 +107,6 @@ KEYWORD_SHORTFALLS: Mapping[tuple[str, str], tuple[tuple[str, ...], str]] = (
             # colorbar". Order 24 built both: each takes `layer_id` and the Core's own `label`/`title`,
             # `labels` and `visible`, and records the answer as a `Guide` on the layer's colour encoding
             # rather than writing an option onto whichever element was added last (#261).
-            ("interactive", "tiles"): (
-                ("url",),
-                "a name and a URL both arrive through one overloaded provider= — #268",
-            ),
         }
     )
 )

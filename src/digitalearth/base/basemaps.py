@@ -17,7 +17,7 @@ collide with cleopatra's on the static tier and with HoloViews' style options on
 
     Map(domain=(-60, -5, -55, 0)).basemap("Planet.NICFI", preset={"date": "2024-01"})
     WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
-    InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+    InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
 
 :func:`get_keyed_basemap` — the resolver the backends call — takes those keywords loose, since it has no
 engine keywords of its own to collide with.
@@ -70,10 +70,6 @@ Extent = tuple[float, float, float, float]
 #:
 #: A light basemap is the default rather than a dark one because data is drawn *on top* of it: most colormaps
 #: are designed to read against white, and a dark ground inverts that contrast.
-#:
-#: Note (#247): ``tiles()`` takes either a provider name or a URL template in the same parameter, so a
-#: provider name and a URL are indistinguishable at the call site. Renaming that parameter is Core-contract
-#: work and is deliberately not done here.
 DEFAULT_BASEMAP_PROVIDER: str = "CartoLight"
 
 #: NICFI publishes the tropics only, roughly 30°N–30°S. Outside this band the tiles 404, and cleopatra

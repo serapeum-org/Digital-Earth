@@ -571,7 +571,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "url",
         "keywords": [
           "url"
         ],
@@ -581,7 +581,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "provider",
         "keywords": [
           "provider"
         ],

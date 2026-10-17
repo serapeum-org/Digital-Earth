@@ -1147,10 +1147,13 @@ def _decorate_interactive(scene: Any, basemap: Any, coastlines: bool) -> None:
     """
     if basemap:
         source = _basemap_source(basemap)
+        # The named-basemap path goes through basemap() now, not tiles(): since #268, tiles() takes a URL
+        # template only, and basemap() takes the provider name / keyed preset / TileProvider that `quickmap`'s
+        # basemap= carries (never a raw URL, per _basemap_source).
         if source is None:
-            scene.tiles()
+            scene.basemap()
         else:
-            scene.tiles(source)
+            scene.basemap(provider=source)
     if coastlines:
         scene.coastlines()
 

@@ -7,7 +7,7 @@ assembles them. Builder methods return ``self`` so calls chain::
 
     from digitalearth.interactive import InteractiveMap
 
-    InteractiveMap().field(dem).choropleth(gdf, column="pop").tiles().save("map.html")
+    InteractiveMap().field(dem).choropleth(gdf, column="pop").basemap().save("map.html")
 """
 
 from digitalearth.interactive.animation import AnimationMixin
@@ -67,7 +67,7 @@ class InteractiveMap(
             ```python
             >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
             >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
-            >>> InteractiveMap().field(dem).tiles().save("map.html").name  # doctest: +SKIP
+            >>> InteractiveMap().field(dem).basemap().save("map.html").name  # doctest: +SKIP
             'map.html'
 
             ```

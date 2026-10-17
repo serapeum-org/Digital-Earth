@@ -432,8 +432,8 @@ class InteractiveMapBase:
             tile basemaps render); use ``4326`` for a non-tiled Plate-Carrée map.
         width: Frame width in pixels for the rendered Bokeh plot.
         height: Frame height in pixels for the rendered Bokeh plot.
-        tiles: Optional tile-provider name drawn beneath the data layers (resolved by the
-            decoration mixin at render time), or ``None`` for no basemap.
+        basemap: Optional tile-provider name (or raw XYZ/WMTS URL) drawn beneath the data layers
+            (resolved by the decoration mixin at render time), or ``None`` for no basemap.
         title: Plot title.
         strict: How a layer whose data the display CRS cannot place is answered (#257). ``False``
             (default) skips that layer with a warning and carries on; ``True`` re-raises the
@@ -469,7 +469,7 @@ class InteractiveMapBase:
             >>> m = InteractiveMapBase()
             >>> m.crs
             3857
-            >>> m._tiles_provider is None  # no basemap requested at construction
+            >>> m._tiles_provider is None  # no basemap requested at construction (basemap=None)
             True
 
             ```
@@ -498,7 +498,7 @@ class InteractiveMapBase:
         crs: int = 3857,
         width: int = 700,
         height: int = 500,
-        tiles: str | None = None,
+        basemap: str | None = None,
         title: str = "",
         strict: bool = False,
         big_data_threshold: int = DEFAULT_BIG_DATA_THRESHOLD,
@@ -517,9 +517,10 @@ class InteractiveMapBase:
                 Bokeh tile basemaps render); ``4326`` gives a non-tiled Plate-Carrée map.
             width: Frame width in pixels for the rendered Bokeh plot.
             height: Frame height in pixels for the rendered Bokeh plot.
-            tiles: Tile-provider name drawn beneath the data layers, applied once at render time,
-                or ``None`` for no basemap. Stored privately because the public ``tiles`` name is
-                the decoration mixin's builder method.
+            basemap: Tile-provider name (or raw XYZ/WMTS URL) drawn beneath the data layers, applied
+                once at render time, or ``None`` for no basemap. A URL is routed to the ``tiles``
+                builder and a name/preset/object to the ``basemap`` builder (#268). Stored privately
+                because the public ``basemap``/``tiles`` names are the decoration mixin's builders.
             title: Plot title, applied to every styled element's Bokeh frame.
             strict: How a layer whose data the display CRS cannot place is answered (#257).
                 ``False`` (default) skips that layer with a warning; ``True`` re-raises the
@@ -535,8 +536,8 @@ class InteractiveMapBase:
         self.strict = strict
         # Big-data cutoff (#250): the map-wide default every builder's per-call override falls back to.
         self.big_data_threshold = big_data_threshold
-        # Stored privately: the public name `tiles` is the DecorationMixin builder method.
-        self._tiles_provider = tiles
+        # Stored privately: the public names `basemap`/`tiles` are the DecorationMixin builder methods.
+        self._tiles_provider = basemap
         self.title = title
         # Display projection for the matplotlib-backend path (DI.9); None = Bokeh Web-Mercator.
         self._projection: Any = None
@@ -1358,7 +1359,7 @@ class InteractiveMapBase:
                 description says everything about it.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.field(dem).tiles().coastlines()``. A drawer
+            The same map instance, so builder calls chain: ``m.field(dem).basemap().coastlines()``. A drawer
             that declined to draw the layer leaves the map as it was — the description, the registered
             source, the held key and the id are all let go again, so nothing names a layer that was never
             drawn.
@@ -1454,7 +1455,7 @@ class InteractiveMapBase:
         """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.
 
         A basemap, land or ocean is drawn beneath the data and carries no colorbar, legend or hover of its
-        own, so `field(dem).tiles().colorbar(False)` means the raster. Before the layer tree, an underlay was
+        own, so `field(dem).basemap().colorbar(False)` means the raster. Before the layer tree, an underlay was
         inserted at the front of `layers` and so never became the layer these acted on; the web tier's
         `_last_layer_id` likewise counts data layers only. An underlay still takes the slot while nothing
         above the underlay band has been added, so a map of tiles alone can be configured at all.
@@ -2187,13 +2188,17 @@ class InteractiveMapBase:
     def _flush_deferred_tiles(self) -> None:
         """Draw a basemap that was asked for before there was a figure to draw it on.
 
-        `InteractiveMap(tiles=...)` records the provider and defers it, because the tile layer has to sit
+        `InteractiveMap(basemap=...)` records the provider and defers it, because the tile layer has to sit
         under layers that do not exist yet. This is where it is applied, once, and it has to run before the
-        layers are read — it adds one.
+        layers are read — it adds one. A raw URL is routed to `tiles(url=...)` and a provider name / keyed
+        preset / `TileProvider` object to `basemap(provider=...)`, the split #268 drew between the two.
         """
-        if self._tiles_provider is not None and hasattr(self, "tiles"):
+        if self._tiles_provider is not None and hasattr(self, "basemap"):
             provider, self._tiles_provider = self._tiles_provider, None  # apply once
-            self.tiles(provider)
+            if isinstance(provider, str) and "://" in provider:
+                self.tiles(url=provider)
+            else:
+                self.basemap(provider=provider)
 
     def _projected(self, obj: Any) -> Any:
         """Return `obj` drawn in the map's projection, when one was asked for.
