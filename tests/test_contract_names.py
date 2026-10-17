@@ -647,42 +647,56 @@ class TestTheCallShapeIsThePromiseToo:
 class TestWhatARoadmapOrderPromises:
     """An order reference is a pointer into a plan the repository does not hold, so the number has to resolve.
 
-    :data:`ROADMAP_ORDERS` is what a `PENDING` reason and a `KEYWORD_SHORTFALLS` row point at when they say
-    "order 27a" instead of naming an issue, and `roadmap_order` is the only way to follow one. The guards
-    above ask whether a cited order is *in* the table; nothing asked what following one gives back, so a
-    lookup that returned the key, or that let a bare `KeyError` out with no message, would still leave both
-    guards green while the pointer answered nothing.
+    :data:`ROADMAP_ORDERS` is what a `PENDING` reason and a `KEYWORD_SHORTFALLS` row point at when they name
+    an order instead of an issue, and `roadmap_order` is the only way to follow one. The guards above ask
+    whether a cited order is *in* the table; nothing asked what following one gives back, so a lookup that
+    returned the key, or that let a bare `KeyError` out with no message, would still leave both guards green
+    while the pointer answered nothing. The table is empty today — order 27a was the last order standing and
+    #348/#332 landed its remainder — so the live check is that finishing an order empties the table, and that
+    following or missing one still answers.
     """
 
-    def test_an_order_the_contract_names_says_what_it_builds(self):
-        """Following a pointer gives the line that tells a waiting caller what they are waiting for.
+    def test_every_declared_order_resolves_to_a_description_not_its_key(self):
+        """Following any pointer the table holds gives a line a waiting caller can act on, never the key.
 
         Test scenario:
-            `order 27a` is what the keyword shortfalls on both 2-D tiers are waiting on. A lookup answering
-            the key back, or the short handle, would read as a plan while saying nothing a reader can
-            act on.
-
-            The example was `order 24` until that order landed and its entry came off the table with the
-            rows that cited it — which is the whole lifecycle this class guards, and the reason the assertion
-            reads the *description* rather than the key.
+            `roadmap_order` must answer what the order builds, not echo the key back and not let a bare
+            `KeyError` out. Vacuous while the table is empty — the test below guards that state — and the
+            check that keeps the lookup honest the moment an order is scheduled again.
         """
-        built = roadmap_order("order 27a")
-        assert built.startswith("the Core contract's remainder"), built
+        for order, description in ROADMAP_ORDERS.items():
+            assert roadmap_order(order) == description, order
+            assert roadmap_order(order) != order, order
 
-    def test_an_order_nobody_wrote_down_is_refused_with_the_ones_there_are(self):
+    def test_the_registry_is_empty_once_every_order_has_landed(self):
+        """Finishing an order means taking its row off, so a fully-adopted contract names no orders at all.
+
+        Test scenario:
+            Order 27a was the last one standing — its rename remainder (#348) and the channel keywords that
+            adoption exposed (#332) have landed, so nothing cites it and its row is gone.
+            `TestAPendingReasonPointsAtLiveWork` refuses a declared order no reason points at, which is what
+            makes this the required end state rather than tidying.
+        """
+        assert dict(ROADMAP_ORDERS) == {}, dict(ROADMAP_ORDERS)
+
+    def test_an_order_nobody_wrote_down_is_refused_naming_the_ones_there_are(self):
         """A number that is not a step of the plan fails loudly rather than reading as one (review R-L3).
 
         Test scenario:
             The defect this table was added for: every guard accepted any `order \\d+`, so a reason naming
-            order 99 passed all three checks in `TestAPendingReasonPointsAtLiveWork`. The refusal has to
-            name the bad order *and* list the real ones — a bare `KeyError('order 99')` would be the
-            unhelpful answer this replaces, and would still satisfy a check that only asserted it raised.
+            order 99 passed all three checks in `TestAPendingReasonPointsAtLiveWork`. The refusal has to name
+            the bad order *and* list the real ones — a bare `KeyError('order 99')` would be the unhelpful
+            answer this replaces. With the table empty, "the real ones" is none, and the message says so in
+            that word rather than trailing off after "it names".
         """
         with pytest.raises(KeyError) as refused:
             roadmap_order("order 99")
         message = refused.value.args[0]
         assert "'order 99' is not a roadmap order" in message, message
-        assert "order 27a" in message, message
+        for order in ROADMAP_ORDERS:
+            assert order in message, message
+        if not ROADMAP_ORDERS:
+            assert "it names none" in message, message
 
 
 class TestTheUnseamedTiersDeclareTheirGap:
