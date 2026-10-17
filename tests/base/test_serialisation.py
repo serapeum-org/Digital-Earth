@@ -103,6 +103,28 @@ def _through_json(value):
     return type(value).from_dict(json.loads(json.dumps(value.to_dict())))
 
 
+def _cyclic_list():
+    """Return a list that holds itself — the container that used to crash `to_json_value` (#335).
+
+    Returns:
+        A one-element list whose only element is the list itself.
+    """
+    cyclic = []
+    cyclic.append(cyclic)
+    return cyclic
+
+
+def _cyclic_mapping():
+    """Return a mapping that holds itself, walking the dict branch rather than the list branch.
+
+    Returns:
+        A one-key dict whose value is the dict itself.
+    """
+    cyclic = {}
+    cyclic["self"] = cyclic
+    return cyclic
+
+
 def _raise_a_decode_error(value):
     """Refuse `value` with a `ValueError` subclass whose constructor needs more than a message.
 
@@ -868,6 +890,59 @@ class TestWhatWritingRefuses:
         """A JSON object's keys are strings, so an int key is refused rather than stringified."""
         with pytest.raises(TypeError, match="non-string key 1"):
             to_json_value({1: "a"}, "props")
+
+    @pytest.mark.parametrize(
+        "build",
+        [
+            _cyclic_list,
+            _cyclic_mapping,
+            lambda: _nested_list(MAX_TRAVELLING_DEPTH + 1),
+        ],
+        ids=["cyclic-list", "cyclic-mapping", "over-deep"],
+    )
+    def test_a_cyclic_or_over_deep_container_is_refused_by_name_not_recursionerror(
+        self, build
+    ):
+        """A container that holds itself, or nests past the depth bound, is a named `TypeError` (#335).
+
+        Args:
+            build: Builds the container under test — a list holding itself, a mapping holding itself, or a
+                list nested one level past :data:`MAX_TRAVELLING_DEPTH`.
+
+        Test scenario:
+            The writer recursed with the interpreter's stack, so `c = []; c.append(c)` raised
+            `RecursionError: maximum recursion depth exceeded` — a traceback naming neither the field nor the
+            value — where every other refusal in the module raises a `TypeError` naming `where`. The depth
+            bound now ends the walk first: a container holding itself reaches it after
+            :data:`MAX_TRAVELLING_DEPTH` visits, so no cycle memory is needed. The assertion that the error is
+            *not* a `RecursionError` is what fails if the depth guard is removed — removing it restores the
+            crash this fixes.
+        """
+        container = build()
+        try:
+            with pytest.raises(TypeError) as caught:
+                to_json_value(container, "Symbology.props")
+        except RecursionError:  # pragma: no cover - only reached if the guard is gone
+            pytest.fail(
+                "to_json_value crashed with RecursionError instead of refusing by name"
+            )
+        message = str(caught.value)
+        assert "Symbology.props" in message, message
+        assert str(MAX_TRAVELLING_DEPTH) in message, message
+
+    def test_an_over_large_flat_container_is_refused_by_name(self):
+        """A value carrying more than the element bound is refused, naming the field (#335).
+
+        Test scenario:
+            The depth bound catches a deep container and a cycle; the element bound is the second budget, and
+            it catches a wide, shallow one — a per-pixel `alpha`, say — that no depth guard would. A builder
+            reaching the writer past the gate must still be refused by a named `TypeError`, not left to write
+            an arbitrarily large payload into the figure. Removing the element guard makes this write a
+            million-element list instead of refusing it.
+        """
+        payload = list(range(MAX_TRAVELLING_ELEMENTS + 5))
+        with pytest.raises(TypeError, match="carries more than"):
+            to_json_value(payload, "Symbology.props")
 
 
 class TestCrsObjectsHashLikeTheirRoundTrip:

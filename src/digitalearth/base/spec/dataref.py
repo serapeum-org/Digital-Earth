@@ -14,7 +14,7 @@ owns a copy.
 `DataRef` is the name; :mod:`digitalearth.base.registry` turns a name into data. A figure then holds
 ``sources: {id: DataRef}`` and a layer holds a `source_id`, which is what makes the source/layer split real.
 
-The payoff lands with `SourceView` in Wave 2: ``SourceView = materialise(DataRef, Selection, ViewRequest)``.
+The payoff lands with `SourceView`: ``SourceView = materialise(DataRef, Selection, ViewRequest)``.
 Until then this is the reference and the registry, with no tier obliged to use it yet.
 """
 

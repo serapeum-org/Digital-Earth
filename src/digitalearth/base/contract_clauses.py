@@ -66,7 +66,7 @@ class Clause:
             rule itself.
         rule: The one wording of the clause. Every tier is held to this text; none of them restates it.
         issues: The issues the clause was settled under, in the order they settled it. Empty where the clause
-            came out of the Wave-0 batch (#246–#257) without a number of its own recorded beside it.
+            came out of the initial batch (#246–#257) without a number of its own recorded beside it.
 
     Examples:
         - A clause states itself, so a citation never has to:

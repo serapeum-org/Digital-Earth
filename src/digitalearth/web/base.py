@@ -1009,7 +1009,8 @@ class WebMapBase:
         self,
         bounds: Any | None = None,
         *,
-        padding: Any = 20,
+        padding: float = 0.0,
+        padding_px: Any = 20,
         animate: bool = False,
     ) -> Self:
         """Frame the map on ``bounds``, or on everything added so far.
@@ -1021,8 +1022,16 @@ class WebMapBase:
             bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added
                 so far, which is what most callers want and is applied automatically anyway (see
                 :meth:`_map_view`).
-            padding: Breathing room left around the extent — a number of pixels, or MapLibre's
-                per-edge mapping (``{"top": 40, "bottom": 10, ...}``).
+            padding: Breathing room around the extent, **as a fraction of its own span** — ``0.05`` leaves a
+                5% margin, exactly as it does on the 2-D tiers, so a call ports between tiers unchanged
+                (#340). It grows the framed rectangle itself, through the shared
+                :meth:`~digitalearth.base.spec.Bounds.padded`, before the view is fitted. ``0.0`` (default)
+                leaves the extent as given. Was a number of screen pixels until #340; that control kept its
+                own honest name, ``padding_px``.
+            padding_px: MapLibre's own viewport padding passed to ``fitBounds`` — a number of pixels, or its
+                per-edge mapping (``{"top": 40, "bottom": 10, ...}``). This is the pixel breathing room the
+                engine leaves inside the viewport, which has no fraction-of-span equivalent, so it keeps a
+                name of its own rather than overloading ``padding``.
             animate: Whether the browser eases into the new view rather than jumping.
 
         Returns:
@@ -1030,7 +1039,9 @@ class WebMapBase:
 
         Raises:
             ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there
-                is nothing to frame on, and silently doing nothing would look like the call was ignored.
+                is nothing to frame on, and silently doing nothing would look like the call was ignored; or
+                when ``padding`` is a fraction that would invert the rectangle (below ``-0.5``), refused by
+                :meth:`~digitalearth.base.spec.Bounds.padded`.
 
         Examples:
             - Frame on an explicit box:
@@ -1053,11 +1064,16 @@ class WebMapBase:
                 f"set_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
             )
         west, south, east, north = values
+        # `padding` is a fraction of the framed span — the one meaning it carries on every tier (#340) — so it
+        # grows the rectangle here, through the shared `Bounds.padded`, which also refuses a fraction that
+        # would invert it. MapLibre's own per-edge pixel padding is a different quantity with no
+        # fraction equivalent, so it keeps its own name and is what reaches `fitBounds`.
+        box = Bounds(west, south, east, north, 4326).padded(float(padding))
         self._fit = {
-            "bounds": [west, south, east, north],
+            "bounds": [box.xmin, box.ymin, box.xmax, box.ymax],
             # Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a
             # TypeError about int() rather than about the argument.
-            "padding": padding if isinstance(padding, dict) else int(padding),
+            "padding": padding_px if isinstance(padding_px, dict) else int(padding_px),
             "animate": bool(animate),
         }
         return self
@@ -2391,7 +2407,12 @@ class WebMapBase:
         return True
 
     def add_layer(
-        self, layer: Any, *, name: str | None = None, band: str = "data"
+        self,
+        layer: Any,
+        *,
+        name: str | None = None,
+        band: str = "data",
+        color_field: str | None = None,
     ) -> Self:
         """Register a layer **you built yourself** and return ``self`` (chainable).
 
@@ -2414,6 +2435,11 @@ class WebMapBase:
             band: Where it is drawn — ``"underlay"``, ``"reference"``, ``"data"`` (the default) or
                 ``"overlay"``. A caller's object can draw anything, so only the caller can say whether it is
                 ground cover or a label.
+            color_field: The name of the value the layer's colour encodes. A hand-built MapLibre layer
+                publishes no classification of its own, so without this the layer has no colour key and
+                :meth:`colorbar`/:meth:`legend` refuse it — the one case the builders cover and the escape
+                hatch did not (#349). Naming it publishes ``Encoding.by_field("color", color_field)`` for the
+                layer. ``None`` (default) leaves the layer keyless, as before.
 
         Returns:
             This map, so builder calls chain: ``m.field(dem).basemap()``.
@@ -2502,6 +2528,15 @@ class WebMapBase:
             # Reserved like an allocated id, so a later `name=` — or an id a later drawer derives — steps
             # around it rather than drawing a second layer under it.
             self._issued_ids.add(layer_id)
+        # A custom layer publishes no colour encoding of its own, so `color_field` is the caller's one way to
+        # say what it varies by — recorded as the colour encoding a key hangs on, exactly as a builder's is
+        # (#349).
+        symbology = None
+        if color_field is not None:
+            symbology = Symbology(
+                props={"via": "custom"},
+                encodings={"color": Encoding.by_field("color", color_field)},
+            )
         # Held before the description is recorded: `draw_custom` reads the object from here, so it has
         # to be in place by the time `_index_layer` draws.
         self._custom[layer_id] = layer
@@ -2511,6 +2546,7 @@ class WebMapBase:
             kind=custom_kind("maplibre"),
             band=band,
             visible=_layer_is_visible(layer),
+            symbology=symbology,
         )
         return self
 

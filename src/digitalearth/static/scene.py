@@ -54,6 +54,7 @@ from digitalearth.base.registry import (
 )
 from digitalearth.base.spec import (
     DataRef,
+    Encoding,
     FigureSpec,
     Guide,
     LayerSpec,
@@ -1245,7 +1246,12 @@ class Scene(WatermarkMixin):
         return self._renderer.drawn[layer_id].artist
 
     def add_layer(
-        self, artist: Any, *, name: str | None = None, band: str | None = None
+        self,
+        layer: Any,
+        *,
+        name: str | None = None,
+        band: str | None = None,
+        color_field: str | None = None,
     ) -> Self:
         """Register an artist **you built yourself** as a layer, and return this scene (chainable).
 
@@ -1260,7 +1266,7 @@ class Scene(WatermarkMixin):
         Drawing straight onto :attr:`ax` is still the escape hatch, and is still invisible to the figure.
 
         Args:
-            artist: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the
+            layer: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the
                 web tier reads it off a MapLibre layer: an artist built with ``visible=False`` is described
                 hidden rather than described as something the figure does not draw (review L10).
             name: The id to address it by; ``None`` generates ``custom-1``, ``custom-2``, …. A name already
@@ -1268,12 +1274,18 @@ class Scene(WatermarkMixin):
             band: Where it is drawn — ``"underlay"``, ``"reference"``, ``"data"`` or ``"overlay"``. ``None``
                 takes the kind's own band, which is ``data``. A caller's artist can draw anything, so only
                 the caller can say whether it is ground cover or a label.
+            color_field: The name of the value the artist's colour encodes. A hand-built artist publishes no
+                colour encoding of its own, so without this the layer has no colour key and
+                :meth:`colorbar`/:meth:`legend` refuse it — the one case the builders cover and the escape
+                hatch did not (#349). Naming it publishes ``Encoding.by_field("color", color_field)`` for the
+                layer, which is all a key needs; the bar reads its range off the artist. ``None`` (default)
+                leaves the layer keyless, as before.
 
         Returns:
             This scene, so calls chain.
 
         Raises:
-            ValueError: if `band` is not one of the four bands.
+            ValueError: if `band` is not one of the four bands, or if `color_field` is given empty.
             TypeError: if `name` is neither a string nor ``None``.
 
         Examples:
@@ -1296,7 +1308,12 @@ class Scene(WatermarkMixin):
                 f"add_layer band must be one of {list(KIND_BANDS)}; got {band!r}"
             )
         self._add_layer(
-            None, artist, name=name, band=band, visible=artist_is_visible(artist)
+            None,
+            layer,
+            name=name,
+            band=band,
+            visible=artist_is_visible(layer),
+            color_field=color_field,
         )
         return self
 
@@ -1600,6 +1617,7 @@ class Scene(WatermarkMixin):
         name: str | None = None,
         band: str | None = None,
         visible: bool = True,
+        color_field: str | None = None,
     ) -> Any:
         """Register an artist the caller built themselves, and describe it as a custom layer.
 
@@ -1624,17 +1642,26 @@ class Scene(WatermarkMixin):
                 nothing about what the artist draws, so a backdrop or a label can only say so here.
             visible: Whether the layer is drawn. ``False`` registers it hidden **and** describes it
                 hidden (#327).
+            color_field: The name of the value the layer's colour encodes, or ``None``. When given, the
+                layer is described with ``Encoding.by_field("color", color_field)``, so the otherwise keyless
+                custom layer carries a colour key for :meth:`colorbar`/:meth:`legend` (#349).
 
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
         """
+        symbology = Symbology(props={"via": "custom"})
+        if color_field is not None:
+            symbology = Symbology(
+                props={"via": "custom"},
+                encodings={"color": Encoding.by_field("color", color_field)},
+            )
         return self._draw(
             LayerRecord(
                 custom_kind(ENGINE),
                 name=name,
                 band=band,
                 visible=visible,
-                symbology=Symbology(props={"via": "custom"}),
+                symbology=symbology,
                 held=(glyph, mappable, label),
             )
         )
@@ -2440,7 +2467,7 @@ class Scene(WatermarkMixin):
         """
         return self._title
 
-    def set_title(self, title: str, **kwargs: Any) -> Self:
+    def set_title(self, heading: str, **kwargs: Any) -> Self:
         """Set the panel's title: draw it above the axes, and record it on the figure's description.
 
         Figure-level decoration rather than a layer — it draws straight onto :attr:`ax`, so removing every
@@ -2454,7 +2481,7 @@ class Scene(WatermarkMixin):
         there (M4).
 
         Args:
-            title: The text to place above the axes. Normalised by :meth:`_recorded_title`, so ``None``,
+            heading: The text to place above the axes. Normalised by :meth:`_recorded_title`, so ``None``,
                 ``""`` and any whitespace-only string (``"   "``, ``"	"``) are the one request "no
                 title": none is recorded **and none is drawn**. Anything else is drawn as the text
                 matplotlib renders for it, and recorded as that same text. The drawing was not normalised
@@ -2536,7 +2563,7 @@ class Scene(WatermarkMixin):
         # recording `None` (R2-L5). `grid(suptitle=)` already normalised its own draw (R1-L4); this is
         # the same rule on the axes. The record is still written *after* the draw, so a `set_title` the
         # axes refuses leaves no record behind.
-        recorded = self._recorded_title(title)
+        recorded = self._recorded_title(heading)
         self.ax.set_title("" if recorded is None else recorded, **kwargs)
         self._title = recorded
         return self

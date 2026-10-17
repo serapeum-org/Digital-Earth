@@ -33,7 +33,7 @@ re-overlays the element the map already holds for a layer it did not touch, beca
 HoloViews' option store against the object it was called on.
 
 **:meth:`Renderer.apply` has a caller.** It reaches the axes and this module's record of what is on it,
-and it reached nothing else for a wave: no code in ``src/`` called it, so a map's description was written by
+and it reached nothing else for a time: no code in ``src/`` called it, so a map's description was written by
 its builders and never by a reconcile. :meth:`~digitalearth.static.scene.Scene._change` is that caller now —
 the path ``add_layer``, ``get_layer``, ``remove_layer``, ``set_visible``, ``move_layer`` and
 ``replace_layer`` take — and it installs the scene's layer tree and its sources once this has returned, so a

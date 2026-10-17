@@ -10,7 +10,7 @@ or how finely. Without that third question a view can only ever be materialised 
 one existing windowed-overview path (`interactive/raster.py`) had to drive its own loop, sizing the canvas and
 choosing the overview at the call site.
 
-The design doc lists this in Wave 6 beside `RenderTarget`. It comes forward here because
+The design doc lists this in a later stage beside `RenderTarget`. It comes forward here because
 :meth:`~digitalearth.base.sources.view.SourceView.reread` has no signature without it; `RenderTarget`, which
 decides *which* request a given output wants, stays there.
 """

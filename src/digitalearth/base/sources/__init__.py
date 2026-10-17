@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+from digitalearth.base.sources.bandname import UNNAMED_BAND, band_field_name
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.extractors import (
     DRAWABLE_FAMILIES,
@@ -29,8 +30,10 @@ from digitalearth.base.types import PlottableData
 
 __all__ = [
     "DRAWABLE_FAMILIES",
+    "UNNAMED_BAND",
     "DimensionInfo",
     "Source",
+    "band_field_name",
     "get_source",
     "get_stack",
     "require_drawable",
