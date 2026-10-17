@@ -40,7 +40,7 @@ class TestTheDefaultBasemapIsTheSharedOne:
             the URL off the element is what proves this tier's resolution lands on the same tile set the
             static tier's ``xyzservices`` path and the web tier's URL template do.
         """
-        element = InteractiveMap().tiles().layers[0]
+        element = InteractiveMap().basemap().layers[0]
         assert CARTO_LIGHT in element.data, element.data
 
 

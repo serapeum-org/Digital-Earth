@@ -219,7 +219,7 @@ class TestTheTitleIsFigureFurniture:
         Args:
             scene: The scene under test.
         """
-        with pytest.raises(TypeError, match="needs the heading as a string"):
+        with pytest.raises(TypeError, match="needs the title as a string"):
             scene.set_title(None)
 
 

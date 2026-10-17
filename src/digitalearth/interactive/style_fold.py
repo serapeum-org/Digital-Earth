@@ -610,7 +610,7 @@ def limits_scale(limits: Any) -> Scale | None:
     """Return the :class:`~digitalearth.base.spec.scale.Scale` a recorded ``(low, high)`` pair states.
 
     The domain half of what a colour key needs, and the only half this tier ever holds when a layer is
-    described: ``field(clim=…)`` and ``choropleth(clim=…)`` are the two places a caller names colour limits,
+    described: ``field(limits=…)`` and ``choropleth(clim=…)`` are the two places a caller names colour limits,
     and every other layer is auto-scaled by HoloViews from the data it draws, at render time. So a layer
     whose caller named no limits publishes a colour encoding with **no** scale — which is the honest answer,
     where a domain measured here would label the key with numbers the layer never draws (the disagreement

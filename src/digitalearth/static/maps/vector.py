@@ -480,6 +480,46 @@ def _draw_missing_neutral(artist: Any) -> None:
     artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))
 
 
+def _categorical_fill(
+    opts: dict[str, Any], values: np.ndarray | None
+) -> tuple[np.ndarray | None, bool]:
+    """Normalize a categorical classify request in ``opts`` (in place), returning ``(values, categorical)``.
+
+    The shared half of the categorical colour path a polygon fill and a point scatter both take, so a
+    categorical ``column`` is coloured and keyed the same way whichever draws it (#332). When ``opts`` asks
+    for ``scheme="categorical"`` in any case:
+
+    - the spelling is normalized to the exact, case-sensitive ``"categorical"`` cleopatra dispatches on — a
+      case variant would set up a categorical render on one side and fall through to the continuous path on
+      the other, dying inside ``np.isfinite`` on a string column;
+    - the colormap is resolved to the one qualitative sentinel all tiers key off, so an explicit
+      ``cmap="viridis"`` is swapped for the qualitative map here rather than being honoured on one tier and
+      not another;
+    - every flavour of null in ``values`` is spelled ``None`` (cleopatra's null test is ``is None`` plus a
+      float-``NaN`` check, so a ``pd.NA`` from a pandas nullable dtype would otherwise become a coloured
+      ``<NA>`` class and shift every other category's colour).
+
+    A non-categorical ``opts`` is left untouched and its ``values`` returned as given — the comparison uses
+    ``isinstance`` so a list/ndarray of explicit bin edges passed as ``scheme`` is never stringified into it.
+
+    Args:
+        opts: The glyph options, mutated in place when the request is categorical (``scheme`` normalized,
+            ``cmap`` resolved).
+        values: The per-feature values to colour by, or ``None`` when the layer colours by nothing.
+
+    Returns:
+        ``(values, categorical)`` — ``values`` with its nulls normalized when categorical, unchanged
+        otherwise; ``categorical`` whether the request was for a categorical fill.
+    """
+    scheme = opts.get("scheme")
+    categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
+    if not categorical:
+        return values, False
+    opts["scheme"] = "categorical"
+    opts["cmap"] = resolve_categorical_cmap(opts.get("cmap"))
+    return (None if values is None else nulls_to_none(values)), True
+
+
 def _skips_off_limb(builder: Callable) -> Callable:
     """Wrap a vector builder so data the display CRS cannot place skips the layer instead of raising (#257).
 
@@ -552,37 +592,61 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     # empty-guard; any geometry (centroid fallback) OK
     fc = scene._vector_input(data, name="points")
     src = get_source(fc)
-    if src.z is None:
-        # points colours by the features' own numeric value; with none, a color= Normalize has nothing to
-        # scale and was silently dropped (#380). Refuse it by name rather than draw in the default colour.
-        _refuse_colour_norm(
-            opts.get("color"),
-            _POINTS_CALLER,
-            "points() colours by the features' own numeric values and this collection carries none; give "
-            "them a numeric column to scale, or pass a matplotlib colour for one constant marker colour.",
-        )
+    column = layer.symbology.props.get("column")
+    if column is not None:
+        # The caller named the column to colour by, so it decides the values rather than the collection's
+        # own auto-detected numeric field — the Core `column` keyword (#332).
+        _require_column(fc, column, "column", _POINTS_CALLER)
+        # Not coerced to float: a categorical column is nominal (strings, region codes), and float-coercing
+        # it crashed `draw_scatter` with "could not convert string to float" before cleopatra ever saw it.
+        # Read untyped exactly as `choropleth`/`polygons` do, so a non-numeric category classifies here too;
+        # a numeric column a continuous/graduated scheme needs still arrives as numbers (#332).
+        values: np.ndarray | None = np.asarray(fc[column])
+        color_field: str | None = column
+    else:
+        values = src.z.values if src.z is not None else None
+        color_field = source_field(src)
+        if values is None:
+            # points colours by the features' own numeric value; with none, a color= Normalize has nothing
+            # to scale and was silently dropped (#380). Refuse it by name rather than draw in the default
+            # colour.
+            _refuse_colour_norm(
+                opts.get("color"),
+                _POINTS_CALLER,
+                "points() colours by the features' own numeric values and this collection carries none; "
+                "give them a numeric column to scale, or pass a matplotlib colour for one constant marker "
+                "colour.",
+            )
     size_column = layer.symbology.props.get("size_column")
     if size_column is not None:
         _require_column(fc, size_column, "size_column", _POINTS_CALLER)
     sizes = (
         np.asarray(fc[size_column], dtype=float) if size_column is not None else None
     )
-    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    # A categorical column is coloured and keyed exactly as `choropleth` does — through the shared
+    # `_categorical_fill` (#332). `add_colorbar` then defaults to True for a categorical layer, so the glyph
+    # draws its own swatch legend: that legend is what `Scene._record_class_edges` reads the layer as
+    # categorical from, and so suppresses the misleading class-code edges (`[-0.5, 0.5, 1.5]`) a categorical
+    # scatter used to record on `last_breaks`. A continuous or graduated scatter keeps add_colorbar False —
+    # the Scene owns its aggregated colorbar.
+    values, categorical = _categorical_fill(opts, values)
+    opts.setdefault("add_colorbar", categorical)
     # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
     plot_style = relocate_flat_style(opts, folds_marker_size=True)
     glyph = ScatterGlyph(
         src.x.values,
         src.y.values,
-        values=src.z.values if src.z is not None else None,
+        values=values,
         sizes=sizes,
         ax=scene.ax,
         fig=scene.fig,
         **opts,
     )
     drawn = scene._render_glyph(glyph, artist="plot", **plot_style)
-    # The numeric column `get_source` read the values from, when it found one. A collection with none draws
-    # uniform markers, and the glyph then carries no value array, so no colour encoding is published for it.
-    return drawn.colored_by(source_field(src))
+    # The column the values came from — the named one, or the field `get_source` auto-detected. A
+    # collection with none draws uniform markers and the glyph carries no value array, so no colour
+    # encoding is published for it.
+    return drawn.colored_by(color_field)
 
 
 def _labelled_features(features: Any, crs: Any) -> Any:
@@ -1676,33 +1740,16 @@ class VectorMixin(_MixinBase):
             What the render produced, as a :class:`~digitalearth.static.renderer.DrawnLayer` — the drawers
             that call this hand it straight back to the renderer, which is what records the layer.
         """
-        scheme = opts.get("scheme")
-        # `isinstance` states the intent: cleopatra's `classify` also accepts a list/ndarray of explicit bin
-        # edges as `scheme`, which must never be stringified into this comparison.
-        categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
         # Any scheme — categorical or graduated — puts a missing value outside every class, so it is the
         # classified layers (not the continuous ramp) that need the neutral "bad" colour.
-        classified = scheme is not None
+        classified = opts.get("scheme") is not None
+        # The categorical spelling/cmap/null normalization a point scatter shares (#332). Done before the
+        # `add_colorbar` default so a categorical fill keeps the glyph's own swatch legend — the key the
+        # Scene reads the layer as categorical from, and which its own colorbar cannot stand in for.
+        values, categorical = _categorical_fill(opts, values)
         opts.setdefault(
             "add_colorbar", categorical
         )  # the Scene owns the colorbar; the glyph owns the legend
-        if categorical:
-            # Normalize the spelling: cleopatra dispatches on an exact, case-sensitive `== "categorical"`, so a
-            # case variant would set up a categorical render here and then fall through to the continuous path
-            # there — dying inside `np.isfinite` on a string column. The web tier accepts any case, so
-            # normalizing (rather than matching cleopatra's exactness) keeps a `scheme` portable across tiers.
-            opts["scheme"] = "categorical"
-            # Resolve the colormap here so all three tiers key off ONE sentinel. cleopatra applies the same
-            # "swap the continuous default for a qualitative one" rule against a *different* sentinel (its own
-            # default, "coolwarm_r"), so left to itself it would honour an explicit cmap="viridis" that the
-            # web/interactive tiers swap for tab10 — one cmap, two maps.
-            opts["cmap"] = resolve_categorical_cmap(opts.get("cmap"))
-            if values is not None:
-                # cleopatra's null test is `is None` plus a float-NaN check, so a `pd.NA` from a pandas
-                # nullable dtype (`string`, `Int64`, …) would survive it and become a coloured `<NA>` class,
-                # shifting every other category's colour — i.e. the same data would render differently
-                # depending only on the column's dtype.
-                values = nulls_to_none(values)
         # scheme/k moved onto the plot() `classify` group; pull them off the constructor kwargs.
         plot_style = relocate_flat_style(opts)
         if values is not None:
@@ -1721,16 +1768,38 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
+        cmap: Any | None = None,
+        size: float | None = None,
+        opacity: float | None = None,
         size_column: str | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Plot a pyramids ``FeatureCollection`` of points, sized by a column (``ScatterGlyph``).
+        """Plot a pyramids ``FeatureCollection`` of points, coloured and sized by a column (``ScatterGlyph``).
 
         Args:
             features: A pyramids ``FeatureCollection`` of point geometries, or a path or URL to one;
                 reprojected to the display CRS. Only a path-backed layer can be written down.
+            column: The column whose values colour the points; ``None`` (default) colours by the
+                collection's own numeric value where it carries one, and draws one flat colour otherwise.
+                The Core spelling, the same one :meth:`choropleth` and the web/interactive tiers use (#332).
+            scheme: How ``column`` is classified — ``None`` (default) is a continuous ramp, a named scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts it into ``k`` classes,
+                and ``"categorical"`` gives every distinct value its own colour. Reaches ``ScatterGlyph``'s
+                classify group, the same path the field and polygon builders use.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``.
+            cmap: The colormap the points are coloured through; ``None`` leaves cleopatra's default.
+            size: The marker's visual size, spelled the same way on every backend (#251); ``None`` leaves
+                cleopatra's default. Reaches ``ScatterGlyph`` as its own ``point_size``.
+            opacity: How opaque the markers are, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use (#332);
+                ``None`` (default) sets no opacity at all, and matplotlib's own ``alpha`` is what it
+                arrives as.
             size_column: Optional column name whose values set the per-point marker size. Pair it with
                 ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
                 legend. ``None`` (default) uses a single uniform marker size — set that size with
@@ -1740,11 +1809,10 @@ class VectorMixin(_MixinBase):
                 ``-2``, ``-3``, … (#321).
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the axes (#327).
-            **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``k``, ``size``,
-                ``size_limits``, ``size_scale``, ``size_legend``, ``size_legend_values``, …).
-                ``size`` is the marker's visual size, spelled the same way on every backend, and
+            **opts: Further ``ScatterGlyph`` styling kwargs (``size_limits``, ``size_scale``,
+                ``size_legend``, ``size_legend_values``, …).
                 :func:`~digitalearth.static.render_compat._fold_marker_size` is the one place that knows
-                cleopatra's constructor calls it ``point_size``.
+                cleopatra's constructor calls the marker size ``point_size``.
 
         Returns:
             This map (chainable). The drawn artist is reached with
@@ -1755,13 +1823,34 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            KeyError: if ``size_column`` names no feature attribute — the refusal names ``Map.points()``
-                and lists the columns the features do have (via :func:`_require_column`).
-            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` but
-                the features carry no numeric value for it to scale; a colour *scaling* needs values, so it
-                is refused rather than dropped.
+            KeyError: if ``column`` or ``size_column`` names no feature attribute — the refusal names
+                ``Map.points()`` and lists the columns the features do have (via :func:`_require_column`).
+            ValueError: if ``scheme`` is given with no ``column`` to classify — a scheme classifies a
+                column, so one with nothing to classify is refused rather than silently dropped (#331); or
+                if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` but the
+                features carry no numeric value for it to scale; a colour *scaling* needs values, so it is
+                refused rather than dropped.
 
         """
+        if scheme is not None and not column:
+            # A scheme classifies a column, so one with no column to classify is a dropped styling request —
+            # the silent-ignore this package has removed everywhere else, and the refusal the interactive
+            # tier already gives for the same call (#331, #332).
+            raise ValueError(
+                f"{_POINTS_CALLER}: scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        if cmap is not None:
+            opts["cmap"] = cmap
+        if scheme is not None:
+            # The classify group ScatterGlyph reads: scheme cuts the values into k classes, the same path
+            # the field and polygon builders take.
+            opts["scheme"], opts["k"] = scheme, k
+        if size is not None:
+            opts["size"] = size
+        if opacity is not None:
+            # Named `opacity` here and `alpha` where it reaches matplotlib, as on choropleth.
+            opts["alpha"] = opacity
         self._draw(
             LayerRecord(
                 "points",
@@ -1771,6 +1860,7 @@ class VectorMixin(_MixinBase):
                 symbology=Symbology(
                     props={
                         "via": "scatter",
+                        "column": column,
                         "size_column": size_column,
                     }
                 ),
@@ -2766,15 +2856,37 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
+        cmap: Any | None = None,
+        opacity: float | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
+        """Draw polygons — outlines, or a fill coloured by ``column`` (pyramids ``FeatureCollection``).
+
+        Without ``column`` this draws outlines with no fill (``PolygonGlyph`` outline mode); with one it
+        fills them coloured by that attribute, the same render :meth:`choropleth` draws — the Core declares
+        ``polygons`` with the full colour vocabulary, so the two are one builder here as on the other tiers
+        (#332).
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons, or a path or URL to one
                 (reprojected to the display CRS). Only a path-backed layer can be written down.
+            column: The column whose values fill the polygons; ``None`` (default) draws unfilled outlines.
+                The Core spelling, the same one :meth:`choropleth` and the web/interactive tiers use.
+            scheme: How ``column`` is classified — ``None`` (default) is a continuous ramp, a named scheme
+                (``"quantiles"``, ``"equal_interval"``, …) cuts it into ``k`` classes, and ``"categorical"``
+                gives every distinct value its own colour. Ignored when ``column`` is ``None``.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``.
+            cmap: The colormap the fill is drawn with; ``None`` leaves cleopatra's default.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use (#332);
+                ``None`` (default) sets no opacity at all, and matplotlib's own ``alpha`` is what it
+                arrives as.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2791,23 +2903,61 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` —
-                ``polygons`` draws a uniform fill with no values to scale, so a colour *scaling* is refused;
-                use :meth:`choropleth` to colour polygons by a column.
+            ValueError: if ``scheme`` is given with no ``column`` to classify — a scheme classifies a
+                column, so one with nothing to classify is refused rather than silently ignored (#331); or
+                if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` while
+                ``column`` is ``None`` — an outline layer draws a uniform fill with no values to scale, so a
+                colour *scaling* is refused; pass ``column=`` to colour polygons by a column.
+            KeyError: if ``column`` names no feature attribute — the refusal names ``choropleth()`` and
+                lists the columns the features do have (via :func:`_require_column`).
         """
-        _refuse_colour_norm(
-            opts.get("color"),
-            _POLYGONS_CALLER,
-            "polygons() draws a uniform fill with no values to scale — use choropleth(column=) to "
-            "colour polygons by a column.",
-        )
+        if scheme is not None and not column:
+            # A scheme classifies a column, so one with no column to classify is a dropped styling request:
+            # an outline-only `polygons` layer silently ignored it. Refuse it by name, as `points` and the
+            # interactive tier do (#331, #332), rather than drawing plain outlines and saying nothing.
+            raise ValueError(
+                f"{_POLYGONS_CALLER}: scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        if cmap is not None:
+            opts["cmap"] = cmap
+        if opacity is not None:
+            opts["alpha"] = opacity
+        if column is None:
+            _refuse_colour_norm(
+                opts.get("color"),
+                _POLYGONS_CALLER,
+                "polygons() draws a uniform fill with no values to scale — pass column= to "
+                "colour polygons by a column.",
+            )
+            self._draw(
+                LayerRecord(
+                    _polygon_kind(
+                        None
+                    ),  # outlines only, whatever the collection carries
+                    source=features,
+                    name=name,
+                    visible=visible,
+                    symbology=Symbology(props={"via": "shapes"}),
+                    opts=opts,
+                )
+            )
+            return self
+        # A filled polygon layer is a choropleth: it records the same kind and is drawn by the same recipe.
         self._draw(
             LayerRecord(
-                _polygon_kind(None),  # outlines only, whatever the collection carries
+                _polygon_kind(column),
                 source=features,
                 name=name,
                 visible=visible,
-                symbology=Symbology(props={"via": "shapes"}),
+                symbology=Symbology(
+                    props={
+                        "via": "choropleth",
+                        "column": column,
+                        "scheme": scheme,
+                        "k": k,
+                    }
+                ),
                 opts=opts,
             )
         )

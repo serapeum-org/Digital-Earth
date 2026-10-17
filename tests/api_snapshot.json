@@ -315,7 +315,7 @@
     "core": [
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "data",
         "keywords": [
           "band",
           "cmap",
@@ -396,7 +396,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "layer_id",
         "keywords": [
           "label",
           "layer_id",
@@ -408,7 +408,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "layer_id",
         "keywords": [
           "labels",
           "layer_id",
@@ -421,7 +421,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "layer",
         "keywords": [
           "band",
           "name"
@@ -571,7 +571,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "url",
         "keywords": [
           "url"
         ],
@@ -581,7 +581,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "provider",
         "keywords": [
           "provider"
         ],
@@ -591,7 +591,7 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "dataset",
         "keywords": [
           "filled",
           "interval",
@@ -614,11 +614,19 @@
       },
       {
         "builds_in": null,
-        "first_argument": null,
+        "first_argument": "title",
         "keywords": [
           "subtitle"
         ],
         "name": "set_title",
+        "returns": "self",
+        "sequence_order": null
+      },
+      {
+        "builds_in": null,
+        "first_argument": "domain",
+        "keywords": [],
+        "name": "set_domain",
         "returns": "self",
         "sequence_order": null
       },

@@ -343,7 +343,7 @@ class ProjectionMixin(_MixinBase):
         ):
             raise ValueError(
                 "projection() cannot compose with tile basemaps — Bokeh tiles render in "
-                "Web-Mercator only. Drop tiles() to use a non-Mercator projection."
+                "Web-Mercator only. Drop tiles()/basemap() to use a non-Mercator projection."
             )
         self._projection = self._resolve_projection(name)
         return self

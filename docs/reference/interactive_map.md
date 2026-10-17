@@ -9,7 +9,7 @@ actually called; importing the module works without it.
 ```python
 from digitalearth.interactive import InteractiveMap
 
-m = InteractiveMap(crs=3857, tiles="CartoLight")
+m = InteractiveMap(crs=3857, basemap="CartoLight")
 m.field(dataset, cmap="terrain")
 m.points(stations, name="obs")
 m.coastlines()

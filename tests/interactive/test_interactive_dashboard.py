@@ -333,7 +333,7 @@ class TestBasemapWidgetIsWired:
 
     def test_dashboard_basemap_replaces_an_existing_basemap(self, dataset):
         """On a map that already called tiles(), the widget swaps the basemap instead of stacking."""
-        built = InteractiveMap().field(dataset).tiles("CartoLight")
+        built = InteractiveMap().field(dataset).basemap("CartoLight")
         out = built._render_with_overrides({"basemap": "OSM"})
         tiles = [e for e in out if type(e).__name__ in ("WMTS", "Tiles")]
         assert len(tiles) == 1, f"exactly one basemap expected, got {len(tiles)}"
@@ -365,7 +365,7 @@ class TestBasemapWidgetIsWired:
             The check compared ``self.crs != 3857``; the constructor keeps the string, so the map was refused
             for not being in the CRS it is in.
         """
-        m = InteractiveMap(crs="EPSG:3857").tiles()
+        m = InteractiveMap(crs="EPSG:3857").basemap()
         assert len(m.layers) == 1, m.layers
 
     def test_the_basemap_select_is_built_for_web_mercator_spelled_as_a_string(self):
@@ -586,7 +586,7 @@ class TestTheLayerControlSeesTheSameLayersItLabels:
             The labels were frozen before the flush, so every one of them named the layer to its left once
             the basemap arrived — and the control drew the basemap where the data should be (review H10).
         """
-        m = InteractiveMap(crs=3857, tiles="OSM").field(dataset, cmap="magma")
+        m = InteractiveMap(crs=3857, basemap="OSM").field(dataset, cmap="magma")
         labels = self._labels(m.layer_control())
         assert labels == ["0: WMTS", "1: Image"], labels
 
@@ -596,7 +596,7 @@ class TestTheLayerControlSeesTheSameLayersItLabels:
         Args:
             dataset: The raster fixture.
         """
-        m = InteractiveMap(crs=3857, tiles="OSM").field(dataset, cmap="magma")
+        m = InteractiveMap(crs=3857, basemap="OSM").field(dataset, cmap="magma")
         m.layer_control()
         drawn = m._compose_visible_layers(list(m.layer_ids))
         assert self._names(drawn) == ["WMTS", "Image"], self._names(drawn)
@@ -702,7 +702,7 @@ class TestTheOverrideBranchIsStillARender:
         ]
 
     def test_a_deferred_basemap_is_drawn_through_the_override_branch(self, dataset):
-        """A map built with `tiles=` defers the basemap until it renders; a widget must not lose it.
+        """A map built with `basemap=` defers the basemap until it renders; a widget must not lose it.
 
         Args:
             dataset: The raster fixture.
@@ -710,9 +710,9 @@ class TestTheOverrideBranchIsStillARender:
         Test scenario:
             Both default widgets produce a value (`cmap='viridis'`, `alpha=1.0`), so the override branch is
             taken on the *first* render — and it skipped the deferred-tiles flush entirely, leaving an
-            `InteractiveMap(tiles="OSM")` dashboard with no basemap for the life of the map.
+            `InteractiveMap(basemap="OSM")` dashboard with no basemap for the life of the map.
         """
-        m = InteractiveMap(crs=3857, tiles="OSM").field(dataset, cmap="magma")
+        m = InteractiveMap(crs=3857, basemap="OSM").field(dataset, cmap="magma")
         names = self._names(m._render_with_overrides({"cmap": "viridis", "alpha": 1.0}))
         assert "WMTS" in names, names
 
@@ -722,8 +722,8 @@ class TestTheOverrideBranchIsStillARender:
         Args:
             dataset: The raster fixture.
         """
-        with_override = InteractiveMap(crs=3857, tiles="OSM").field(dataset)
-        without = InteractiveMap(crs=3857, tiles="OSM").field(dataset)
+        with_override = InteractiveMap(crs=3857, basemap="OSM").field(dataset)
+        without = InteractiveMap(crs=3857, basemap="OSM").field(dataset)
         assert self._names(
             with_override._render_with_overrides({"alpha": 0.5})
         ) == self._names(without._render_with_overrides({})), "the branches must agree"
@@ -890,7 +890,7 @@ class TestOverridesMergeOverRecordedStyle:
             The base used to be one dict merged across every colour-mapped layer; it is each layer's own
             record now, which is what stops two rasters sharing the last one's colours (#300).
         """
-        m = InteractiveMap().field(dataset, cmap="viridis", clim=(0.0, 10.0))
+        m = InteractiveMap().field(dataset, cmap="viridis", limits=(0.0, 10.0))
         m.points(point_fc, column="fid", cmap="magma")
         raster = m._restyled_layers({"alpha": 0.5})[0]
         style = hv.Store.lookup_options("bokeh", raster, "style").kwargs
@@ -904,7 +904,7 @@ class TestOverridesMergeOverRecordedStyle:
 
     def test_override_wins_over_the_recorded_style(self, dataset):
         """The widget value replaces the recorded entry; the untouched entries survive it."""
-        m = InteractiveMap().field(dataset, cmap="viridis", clim=(0.0, 10.0))
+        m = InteractiveMap().field(dataset, cmap="viridis", limits=(0.0, 10.0))
         out = m._render_with_overrides({"cmap": "magma"})
         style = hv.Store.lookup_options("bokeh", out, "style").kwargs
         plot = hv.Store.lookup_options("bokeh", out, "plot").kwargs

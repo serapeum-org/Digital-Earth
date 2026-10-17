@@ -33,7 +33,7 @@ class TestInteractiveTierDispatch:
         """
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         url = m.layers[0].data
         assert "{Z}/{X}/{Y}" in url, f"placeholders were not upper-cased: {url}"
         assert FAKE_KEY in url, "the credential never reached the element"
@@ -51,15 +51,115 @@ class TestInteractiveTierDispatch:
 
         interactive_map = InteractiveMap()
         with pytest.raises(ValueError, match="no preset keywords"):
-            interactive_map.tiles("CartoLight", preset={"date": "2024-01"})
+            interactive_map.basemap("CartoLight", preset={"date": "2024-01"})
 
     def test_ordinary_providers_are_unaffected(self):
         """A catalog name still resolves through the GeoViews tile sources as before."""
         from digitalearth.interactive import InteractiveMap
 
-        assert InteractiveMap().tiles("CartoLight").layers, (
+        assert InteractiveMap().basemap("CartoLight").layers, (
             "the ordinary tile path stopped working"
         )
+
+
+class TestTheBasemapTilesSplit:
+    """#268 split the overloaded ``tiles(provider=...)`` into ``basemap(name)`` and ``tiles(url=)``.
+
+    ``basemap`` takes a provider name, a keyed preset or a ``TileProvider`` object; ``tiles`` takes a raw
+    XYZ/WMTS URL template and only that. Each refuses the other's argument with its own pointer, so a value
+    passed to the wrong builder is corrected rather than guessed at.
+    """
+
+    def test_basemap_with_no_argument_draws_the_default_provider(self):
+        """``basemap()`` reaches for the shared default provider and builds a tile layer from it.
+
+        Test scenario:
+            The named-provider default path — no argument — must resolve to a WMTS rather than error.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        m = InteractiveMap().basemap()
+        assert type(m.layers[0]).__name__ == "WMTS", (
+            f"the default basemap did not build a WMTS: {type(m.layers[0]).__name__}"
+        )
+
+    def test_tiles_with_a_url_builds_a_tile_layer(self):
+        """``tiles(url=...)`` takes a literal XYZ/WMTS template and builds a tile layer from it.
+
+        Test scenario:
+            The positive control for the URL half of the split — a scheme-carrying template is accepted.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        m = InteractiveMap().tiles(url="https://a.tile.example/{Z}/{X}/{Y}.png")
+        assert type(m.layers[0]).__name__ == "WMTS", (
+            f"a URL template did not build a WMTS: {type(m.layers[0]).__name__}"
+        )
+
+    def test_tiles_refuses_a_provider_name(self):
+        """A provider name handed to ``tiles`` is refused with a pointer to ``basemap``.
+
+        Test scenario:
+            ``tiles`` is URL-only now, so ``"CartoLight"`` — which carries no URL scheme — is a provider
+            name that belongs to ``basemap``, not a template.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        with pytest.raises(TypeError, match=r"use basemap\(provider=\.\.\.\)"):
+            interactive_map.tiles("CartoLight")
+
+    def test_basemap_refuses_a_url(self):
+        """A raw URL handed to ``basemap`` is refused with a pointer to ``tiles``.
+
+        Test scenario:
+            The mirror of the check above — ``basemap`` takes a name, so a ``"https://…"`` template is
+            redirected to ``tiles(url=...)`` rather than drawn.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        with pytest.raises(ValueError, match=r"tiles\(url=\.\.\.\)"):
+            interactive_map.basemap("https://a.tile.example/{Z}/{X}/{Y}.png")
+
+    def test_a_keyed_preset_with_a_misspelled_keyword_names_the_preset(self):
+        """A keyed preset called with a bad keyword is refused by the preset's name and its keywords.
+
+        Test scenario:
+            ``Planet.NICFI`` is a keyed preset, so ``preset={"month": ...}`` misspells ``date``; the
+            refusal names the preset the caller asked for rather than the factory behind it.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        interactive_map = InteractiveMap()
+        with pytest.raises(TypeError, match=r"Planet\.NICFI:.*Its keywords are"):
+            interactive_map.basemap("Planet.NICFI", preset={"month": "2024-01"})
+
+    def test_the_three_misuse_errors_are_each_distinct(self):
+        """A typo'd keyed preset, an unknown catalog name and a non-URL in ``tiles`` each read differently.
+
+        Test scenario:
+            The split's value is that each wrong call says what to do next; three different mistakes must
+            not collapse into one generic message.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        preset_map = InteractiveMap()
+        with pytest.raises(TypeError) as keyed:
+            preset_map.basemap("Planet.NICFI", preset={"month": "2024-01"})
+        catalog_map = InteractiveMap()
+        with pytest.raises(ValueError) as catalog:
+            catalog_map.basemap("NotARealProvider")
+        url_map = InteractiveMap()
+        with pytest.raises(TypeError) as non_url:
+            url_map.tiles("CartoLight")
+        messages = {str(keyed.value), str(catalog.value), str(non_url.value)}
+        assert len(messages) == 3, (
+            f"the three misuse errors were not distinct: {messages}"
+        )
+        assert "Its keywords are" in str(keyed.value), str(keyed.value)
+        assert "unknown tile provider" in str(catalog.value), str(catalog.value)
+        assert "use basemap(provider=...)" in str(non_url.value), str(non_url.value)
 
 
 class TestUpperPlaceholders:
@@ -118,7 +218,7 @@ class TestAttributionIsCarried:
         """
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         _, attributions = self._rendered(m.layers[0])
         assert attributions, "the rendered tiles carry no attribution at all"
         assert "Planet Labs" in attributions[0], attributions[0]
@@ -135,7 +235,7 @@ class TestAttributionIsCarried:
 
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         _, attributions = self._rendered(m.layers[0] * hv.Points([(0.0, 0.0)]))
         assert any("Planet Labs" in text for text in attributions), attributions
 
@@ -143,7 +243,7 @@ class TestAttributionIsCarried:
         """The title belongs to the caller; writing the attribution there silently overrode it."""
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         title, _ = self._rendered(m.layers[0])
         assert title == "", f"the attribution hijacked the title: {title!r}"
         assert m.layers[0].label == "", (
@@ -154,7 +254,7 @@ class TestAttributionIsCarried:
         """The attribution is displayed to every viewer; the key must not travel with it."""
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         _, attributions = self._rendered(m.layers[0])
         assert FAKE_KEY not in "".join(attributions), (
             "the credential leaked into the attribution"

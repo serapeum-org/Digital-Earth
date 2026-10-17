@@ -238,7 +238,7 @@ class TestStyleReadBack:
 
     def test_style_of_returns_the_applied_options(self, dataset):
         """A builder's style is readable off the map, keyed by layer index or element."""
-        m = InteractiveMap().field(dataset, cmap="magma", alpha=0.5)
+        m = InteractiveMap().field(dataset, cmap="magma", opacity=0.5)
         by_index = m.style_of(0)
         assert by_index["common"]["cmap"] == "magma", (
             f"cmap not recorded: {by_index['common']}"
@@ -256,7 +256,7 @@ class TestStyleReadBack:
         import holoviews as hv
 
         m = InteractiveMap(title="discharge").field(
-            dataset, cmap="magma", alpha=0.5, clim=(0.0, 10.0)
+            dataset, cmap="magma", opacity=0.5, limits=(0.0, 10.0)
         )
         element = m.layers[0]
         recorded = m.style_of(element)

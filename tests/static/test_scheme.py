@@ -347,17 +347,19 @@ def test_scheme_fisher_jenks(polygons):
     assert isinstance(pc.norm, BoundaryNorm)
 
 
-def test_categorical_scheme_on_outline_only_is_inert(polygons):
-    """An outline-only draw with scheme='categorical' (no values) skips the categorical mapping harmlessly.
+def test_categorical_scheme_without_column_is_refused(polygons):
+    """``polygons(scheme="categorical")`` with no ``column`` is refused, not silently ignored (#332).
 
-    ``polygons`` reaches ``_polygon_layer`` with ``values=None``, so the categorical value-mapping branch must be
-    a no-op — the outlines still draw and nothing crashes on the absent values.
+    A scheme classifies a column, so a categorical scheme with no column to classify is a dropped styling
+    request. ``polygons`` used to draw plain outlines and say nothing; it now refuses, naming the call and
+    ``column=`` — the same answer ``points`` and the interactive tier give.
     """
     m = Map(crs=polygons.epsg)
-    m.polygons(polygons, scheme="categorical")
-    pc = m.artist()
-    assert len(pc.get_paths()) == len(polygons), "outlines must still be drawn"
-    assert m.layers[-1][0].category_legend is None, "no values means no category legend"
+    with pytest.raises(
+        ValueError,
+        match=r"polygons\(\): scheme= classifies column=, which was not given",
+    ):
+        m.polygons(polygons, scheme="categorical")
 
 
 @pytest.mark.parametrize(

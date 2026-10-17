@@ -173,17 +173,19 @@ ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
 )
 
 
-# **Where `first_argument` is left undeclared, and why it is not simply chosen here.** Measured across the
-# four facades, eight declared names take a differently-spelled first positional parameter depending on which
-# one you hold: `field` (`data` on web and interactive, `dataset` on static), `add_layer` (`layer`, `element`,
-# `artist`), `colorbar` (`layer_id`, `show`, `layer`), `legend` (nothing positional, `show`, `colors`),
-# `contours` (`dataset`, `data`, `dataset`), `set_title` (`heading`, `title`), `tiles` (`url`, `provider`) and
-# `basemap` (`provider`, `source`). Declaring one side of each would fail the others for a divergence this
-# module did not cause and cannot fix — the rename belongs to order 27a, which is named for exactly this
-# remainder, and the last four already have a `KEYWORD_SHORTFALLS` row tracking the keyword half of the same
-# gap. So the shape is declared where the tiers already agree, which is what a guard can hold them to today,
-# and the divergences are recorded here rather than settled by fiat. A name gains its declaration in the
-# change that makes the tiers agree.
+# **Where `first_argument` is still left undeclared, and why it is not simply chosen here.** Most of the
+# divergences this note once catalogued are gone: order 27a's remainder renamed the first positional parameter
+# to one spelling on every tier, and the contract now declares each. `field` reads `data`, `add_layer` reads
+# `layer`, `contours` reads `dataset` and `set_title` reads `title` wherever the tier has them — the 3-D tier
+# lists `field` and `add_layer` as pending, which the name checks cover, and the interactive tier has no
+# `set_title`. `colorbar` and `legend` read `layer_id` on every tier that takes a positional argument — the
+# web tier's `legend` is keyword-only, so it spells no first argument at all — a unification order 24 made
+# when the colour key became a guide on its layer's encoding, so declaring `layer_id` holds the tiers rather
+# than dividing them. `tiles` and `basemap` were the last pair to stay undeclared: `tiles` took a `url` on
+# one 2-D tier and an overloaded `provider` on the other, and `basemap` a `provider` against a `source`. #268
+# split the overload — `tiles` reads a literal `url` and `basemap` a named `provider` on every tier that has
+# them — so both now declare their first argument, and the two `KEYWORD_SHORTFALLS` rows that tracked the
+# keyword half of the gap came off with the issue.
 
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
 #: a 3-D scene has no extent to frame — declares that in its `Capabilities` (#294) rather than growing a method
@@ -193,6 +195,7 @@ CORE: tuple[Method, ...] = (
         "field",
         "Draw a raster band as a coloured field.",
         frozenset({"band", "cmap", "limits", "opacity", "name", "visible"}),
+        first_argument="data",
     ),
     Method(
         "points",
@@ -226,16 +229,19 @@ CORE: tuple[Method, ...] = (
         "colorbar",
         "Show the continuous colour key of a layer.",
         frozenset({"layer_id", "label", "visible"}),
+        first_argument="layer_id",
     ),
     Method(
         "legend",
         "Show the keyed colour list of a layer.",
         frozenset({"layer_id", "title", "labels", "visible"}),
+        first_argument="layer_id",
     ),
     Method(
         "add_layer",
         "Add an object the caller built themselves, as a custom layer.",
         frozenset({"name", "band"}),
+        first_argument="layer",
     ),
     Method(
         "get_layer",
@@ -330,21 +336,41 @@ TIER2: tuple[Method, ...] = (
         frozenset({"lon_step", "lat_step", "spacing"}),
         first_argument="lon_step",
     ),
-    Method("tiles", "Draw raster tiles from a URL template.", frozenset({"url"})),
     Method(
-        "basemap", "Draw a named basemap beneath the data.", frozenset({"provider"})
+        "tiles",
+        "Draw raster tiles from a URL template.",
+        frozenset({"url"}),
+        first_argument="url",
+    ),
+    Method(
+        "basemap",
+        "Draw a named basemap beneath the data.",
+        frozenset({"provider"}),
+        first_argument="provider",
     ),
     Method(
         "contours",
         "Trace iso-value lines, or fill between them.",
         frozenset({"levels", "interval", "filled"}),
+        first_argument="dataset",
     ),
     Method(
         "layer_control",
         "Offer the viewer a switch per layer.",
         frozenset({"layers", "position"}),
     ),
-    Method("set_title", "Give the figure a heading.", frozenset({"subtitle"})),
+    Method(
+        "set_title",
+        "Give the figure a heading.",
+        frozenset({"subtitle"}),
+        first_argument="title",
+    ),
+    Method(
+        "set_domain",
+        "Frame the figure on a named region or bbox.",
+        frozenset(),
+        first_argument="domain",
+    ),
     Method(
         "save_animation",
         "Write a sequence of frames to a file.",

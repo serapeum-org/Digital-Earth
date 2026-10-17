@@ -3596,7 +3596,7 @@ class DecorationMixin(_MixinBase):
 
     def basemap(
         self,
-        source: Any = None,
+        provider: Any = None,
         *,
         api_key: str | None = None,
         preset: dict | None = None,
@@ -3606,17 +3606,17 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
 
-        ``source`` is passed through to cleopatra unchanged — a provider name or an
+        ``provider`` is passed through to cleopatra unchanged — a provider name or an
         ``xyzservices.TileProvider`` — with two additions. The name of a **keyed** basemap preset (see
         :mod:`digitalearth.base.basemaps`) is resolved here into a configured provider, with its credential
         read from the environment and its coverage checked against the map's domain first. And the four
         cross-tier basemap names (:data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them)
         are translated into the ``xyzservices`` paths that request the same tiles the interactive and web
-        tiers do — including when ``source`` is omitted, which means the shared default here just as it does
+        tiers do — including when ``provider`` is omitted, which means the shared default here just as it does
         there, rather than cleopatra's own ``OpenStreetMap.Mapnik`` (#247).
 
         Args:
-            source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, a
+            provider: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, a
                 ``cleopatra.basemap.ogc`` ``WMSProvider``/``WMTSProvider``, one of the cross-tier names
                 (``"CartoLight"``/``"CartoDark"``/``"CartoVoyager"``/``"OSM"``), a keyed preset name such as
                 ``"Planet.NICFI"``, or ``None`` for
@@ -3711,22 +3711,22 @@ class DecorationMixin(_MixinBase):
             # These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.
             raise ValueError(
                 f"basemap() takes preset keywords in preset={{...}}, not loose; move {loose} into it — "
-                f"basemap({source!r}, preset={{{loose[0]!r}: ...}})"
+                f"basemap({provider!r}, preset={{{loose[0]!r}: ...}})"
             )
-        if not is_keyed_basemap(source):
+        if not is_keyed_basemap(provider):
             if preset:
                 raise ValueError(
-                    f"basemap({source!r}) takes no preset keywords; {sorted(preset)} apply only to a "
+                    f"basemap({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a "
                     f"keyed preset such as 'Planet.NICFI'"
                 )
             if api_key is not None:
                 # Dropping it silently would leave a caller believing they had authenticated.
                 raise ValueError(
-                    f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
+                    f"basemap({provider!r}) takes no api_key; it is a token-free source. Credentials apply "
                     f"only to a keyed preset such as 'Planet.NICFI'"
                 )
         return self._describe_basemap(
-            source, preset, api_key, kwargs, name=name, visible=visible
+            provider, preset, api_key, kwargs, name=name, visible=visible
         )
 
     def _describe_basemap(

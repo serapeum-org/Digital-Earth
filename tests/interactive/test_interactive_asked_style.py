@@ -12,7 +12,7 @@ This tier answers that question in **two** places, and both are checked here.
   reaches the same bucket through :func:`~digitalearth.interactive.vector.apply_opacity`, which writes it only
   when it was passed. Those need no record, and the probes below pin that they do not get one.
 * A builder *parameter* resolves its default before anything is recorded, and there are exactly two on this
-  tier that drive a declared channel: ``points(size=)`` and ``field(alpha=)``. Those now default to
+  tier that drive a declared channel: ``points(size=)`` and ``field(opacity=)``. Those now default to
   :data:`~digitalearth.base.ask.UNSET` and record the ask under :data:`~digitalearth.base.ask.ASKED_PROP`.
 
 Measured rather than assumed: every builder on this tier was drawn bare and its recorded style read back, and
@@ -123,7 +123,7 @@ PARAMETERS: dict[str, Probe] = {
     ),
     "field": Probe(
         lambda m, style: m.field(_dem(), **style),
-        MappingProxyType({"alpha": 1.0}),
+        MappingProxyType({"opacity": 1.0}),
         "opacity",
         ("alpha",),
     ),
