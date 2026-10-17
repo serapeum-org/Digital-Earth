@@ -57,7 +57,9 @@ class TestAddLayerColorField:
             m.add_layer(self._image(m), name="keyed", color_field="elevation")
             encoding = m._layer_tree.get("keyed").symbology.encoding("color")
             assert encoding is not None, "color_field should publish a colour encoding"
-            assert encoding.field == "elevation", f"expected field 'elevation', got {encoding.field!r}"
+            assert encoding.field == "elevation", (
+                f"expected field 'elevation', got {encoding.field!r}"
+            )
         finally:
             m.close()
 
@@ -71,8 +73,12 @@ class TestAddLayerColorField:
         m = Map()
         try:
             m.add_layer(self._image(m), name="keyed", color_field="elevation")
-            assert m.colorbar("keyed") is m, "colorbar should return the map for chaining"
-            assert "keyed" in m.layer_ids, f"the custom layer should still be listed, got {m.layer_ids}"
+            assert m.colorbar("keyed") is m, (
+                "colorbar should return the map for chaining"
+            )
+            assert "keyed" in m.layer_ids, (
+                f"the custom layer should still be listed, got {m.layer_ids}"
+            )
         finally:
             m.close()
 
@@ -102,6 +108,8 @@ class TestAddLayerColorField:
         try:
             m.add_layer(self._image(m), name="plain")
             encoding = m._layer_tree.get("plain").symbology.encoding("color")
-            assert encoding is None, f"a keyless custom layer should carry no colour encoding, got {encoding!r}"
+            assert encoding is None, (
+                f"a keyless custom layer should carry no colour encoding, got {encoding!r}"
+            )
         finally:
             m.close()

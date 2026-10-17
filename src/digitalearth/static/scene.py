@@ -80,7 +80,6 @@ from digitalearth.static.renderer import (
     Renderer,
     drawing_opts,
 )
-from digitalearth.static.renderer import _detach as detach_artist
 from digitalearth.static.renderer import _detach_guide as detach_guide
 from digitalearth.static.renderer import _is_visible as artist_is_visible
 

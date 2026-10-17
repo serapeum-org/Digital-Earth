@@ -39,7 +39,9 @@ class TestUnnamedBand:
             A fixed value both tiers used independently (web ``_UNNAMED_BAND``, interactive ``UNNAMED_VALUE``);
             pinned so a change to one shared constant is a deliberate, cross-tier decision.
         """
-        assert UNNAMED_BAND == "z", f"the shared placeholder changed to {UNNAMED_BAND!r}"
+        assert UNNAMED_BAND == "z", (
+            f"the shared placeholder changed to {UNNAMED_BAND!r}"
+        )
 
 
 class TestBandFieldName:
@@ -63,7 +65,9 @@ class TestBandFieldName:
             confirming the ``band - 1`` offset.
         """
         result = band_field_name(_Named(band_names=["elevation", "slope"]), 2)
-        assert result == "slope", f"expected 'slope' for the 1-based second band, got {result!r}"
+        assert result == "slope", (
+            f"expected 'slope' for the 1-based second band, got {result!r}"
+        )
 
     def test_the_default_band_is_the_first(self):
         """Called with no band, the default (:data:`DEFAULT_BAND` = 1) picks the first name.
@@ -71,9 +75,13 @@ class TestBandFieldName:
         Test scenario:
             ``band_names=["t2m", "sp"]`` with the default band returns ``"t2m"``.
         """
-        assert DEFAULT_BAND == 1, f"this test assumes DEFAULT_BAND == 1, got {DEFAULT_BAND}"
+        assert DEFAULT_BAND == 1, (
+            f"this test assumes DEFAULT_BAND == 1, got {DEFAULT_BAND}"
+        )
         result = band_field_name(_Named(band_names=["t2m", "sp"]))
-        assert result == "t2m", f"expected the first band 't2m' by default, got {result!r}"
+        assert result == "t2m", (
+            f"expected the first band 't2m' by default, got {result!r}"
+        )
 
     @pytest.mark.parametrize("band", [0, 3, -1, 99])
     def test_a_band_out_of_range_falls_through_to_the_variable(self, band):
@@ -88,7 +96,9 @@ class TestBandFieldName:
         """
         data = _Named(band_names=["a", "b"], variable_names=["v0"])
         result = band_field_name(data, band)
-        assert result == "v0", f"band {band} should fall through to the first variable, got {result!r}"
+        assert result == "v0", (
+            f"band {band} should fall through to the first variable, got {result!r}"
+        )
 
     def test_an_empty_band_name_falls_through(self):
         """A band present but named with the empty string is treated as unnamed.
@@ -98,7 +108,9 @@ class TestBandFieldName:
             and an :class:`~digitalearth.base.spec.encoding.Encoding` refuses the empty string as a field name.
         """
         result = band_field_name(_Named(band_names=[""], variable_names=["flow"]), 1)
-        assert result == "flow", f"an empty band name should fall through to the variable, got {result!r}"
+        assert result == "flow", (
+            f"an empty band name should fall through to the variable, got {result!r}"
+        )
 
     def test_a_netcdf_with_no_bands_uses_its_first_variable(self):
         """With no ``band_names`` at all, the first variable name stands in.
@@ -116,8 +128,12 @@ class TestBandFieldName:
         Test scenario:
             ``band_names=["dem"]`` and ``variable_names=["ignored"]`` returns ``"dem"``.
         """
-        result = band_field_name(_Named(band_names=["dem"], variable_names=["ignored"]), 1)
-        assert result == "dem", f"the band name should win over the variable, got {result!r}"
+        result = band_field_name(
+            _Named(band_names=["dem"], variable_names=["ignored"]), 1
+        )
+        assert result == "dem", (
+            f"the band name should win over the variable, got {result!r}"
+        )
 
     def test_neither_list_yields_the_shared_placeholder(self):
         """A raster declaring neither list falls back to :data:`UNNAMED_BAND`.
@@ -127,7 +143,9 @@ class TestBandFieldName:
             result is the shared placeholder, never an empty string.
         """
         result = band_field_name(object(), 1)
-        assert result == UNNAMED_BAND, f"expected the placeholder {UNNAMED_BAND!r}, got {result!r}"
+        assert result == UNNAMED_BAND, (
+            f"expected the placeholder {UNNAMED_BAND!r}, got {result!r}"
+        )
 
     @pytest.mark.parametrize("empty", [None, []])
     def test_none_or_empty_metadata_falls_back(self, empty):
@@ -141,7 +159,9 @@ class TestBandFieldName:
             missing attribute nor an empty one raises.
         """
         result = band_field_name(_Named(band_names=empty, variable_names=empty), 1)
-        assert result == UNNAMED_BAND, f"falsey metadata {empty!r} should fall back, got {result!r}"
+        assert result == UNNAMED_BAND, (
+            f"falsey metadata {empty!r} should fall back, got {result!r}"
+        )
 
     def test_the_name_is_returned_as_a_plain_string(self):
         """A non-string band name is coerced to ``str``, since a field name must be one.
@@ -151,4 +171,6 @@ class TestBandFieldName:
         """
         result = band_field_name(_Named(band_names=[1]), 1)
         assert result == "1", f"expected the coerced string '1', got {result!r}"
-        assert isinstance(result, str), f"the result must be a str, got {type(result).__name__}"
+        assert isinstance(result, str), (
+            f"the result must be a str, got {type(result).__name__}"
+        )

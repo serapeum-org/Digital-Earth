@@ -26,7 +26,9 @@ class TestWebAddLayerColorField:
         m = WebMap().add_layer("a-layer", name="keyed", color_field="elevation")
         encoding = m._layer_tree.get("keyed").symbology.encoding("color")
         assert encoding is not None, "color_field should publish a colour encoding"
-        assert encoding.field == "elevation", f"expected field 'elevation', got {encoding.field!r}"
+        assert encoding.field == "elevation", (
+            f"expected field 'elevation', got {encoding.field!r}"
+        )
 
     def test_without_color_field_the_custom_layer_is_keyless(self):
         """The default (``color_field=None``) keeps the pre-#349 keyless custom layer.
@@ -36,4 +38,6 @@ class TestWebAddLayerColorField:
         """
         m = WebMap().add_layer("a-layer", name="plain")
         encoding = m._layer_tree.get("plain").symbology.encoding("color")
-        assert encoding is None, f"a keyless custom layer should carry no colour encoding, got {encoding!r}"
+        assert encoding is None, (
+            f"a keyless custom layer should carry no colour encoding, got {encoding!r}"
+        )

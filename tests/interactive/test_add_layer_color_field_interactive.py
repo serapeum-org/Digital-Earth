@@ -9,11 +9,13 @@ with the low-level ``symbology`` parameter. The engine is skipped where absent.
 
 import pytest
 
-hv = pytest.importorskip("holoviews")  # the interactive tier engines; skip in envs without them
+from digitalearth.interactive import InteractiveMap
+
+hv = pytest.importorskip(
+    "holoviews"
+)  # the interactive tier engines; skip in envs without them
 pytest.importorskip("geoviews")
 pytest.importorskip("panel")
-
-from digitalearth.interactive import InteractiveMap
 
 
 def _element():
@@ -35,10 +37,14 @@ class TestInteractiveAddLayerColorField:
             A custom layer added with ``color_field="elevation"`` answers that field from ``_colour_binding``
             (the accessor ``colorbar``/``legend`` resolve the key through), so the guides recognise it.
         """
-        m = InteractiveMap().add_layer(_element(), name="keyed", color_field="elevation")
+        m = InteractiveMap().add_layer(
+            _element(), name="keyed", color_field="elevation"
+        )
         encoding = m._colour_binding("keyed")
         assert encoding is not None, "color_field should publish a colour encoding"
-        assert encoding.field == "elevation", f"expected field 'elevation', got {encoding.field!r}"
+        assert encoding.field == "elevation", (
+            f"expected field 'elevation', got {encoding.field!r}"
+        )
 
     def test_without_color_field_the_custom_layer_is_keyless(self):
         """The default (``color_field=None``) keeps the custom layer keyless.
@@ -47,7 +53,9 @@ class TestInteractiveAddLayerColorField:
             A custom layer added with no ``color_field`` has no colour binding, so the guides refuse it.
         """
         m = InteractiveMap().add_layer(_element(), name="plain")
-        assert m._colour_binding("plain") is None, "a keyless custom layer should have no colour binding"
+        assert m._colour_binding("plain") is None, (
+            "a keyless custom layer should have no colour binding"
+        )
 
     def test_color_field_cannot_be_combined_with_symbology(self):
         """Passing both ``color_field`` and the low-level ``symbology`` is refused rather than dropped.
@@ -60,4 +68,6 @@ class TestInteractiveAddLayerColorField:
         element = _element()
         sentinel = object()
         with pytest.raises(ValueError, match="cannot be combined with symbology"):
-            m.add_layer(element, name="conflict", color_field="elevation", symbology=sentinel)
+            m.add_layer(
+                element, name="conflict", color_field="elevation", symbology=sentinel
+            )
