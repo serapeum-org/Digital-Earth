@@ -1,29 +1,31 @@
 """`clip=(vmin, vmax)` pins a graduated scheme's classes to a value window (#378).
 
-Without a window a few outliers stretch an `equal_interval`/`natural_breaks` scheme so every real value bunches
-into one class. `Scale.breaks_of(..., clip=)` and `classify_band(..., clip=)` instead make the classes span the
-window exactly: every cell is clamped into `[vmin, vmax]` and the bounds are added to the sample, so the edges
-reach `vmin` and `vmax` even when no cell does, and an outlier lands in an end class rather than moving the
-edges. Two bands given the same window therefore cut the same class domain — a comparable scale across maps. The
-window applies to a named graduated scheme alone — categorical codes and an explicit edge list have no window to
-pin, so the clip is left off there and never raises, which lets a pooled-scale `facet` pass `vmin`/`vmax`
-without conflict.
+Without a window a few outliers stretch a scheme so every real value bunches into one class. With one, the
+recorded domain is the window and a cell outside it clamps into an end class. The *interior* is the scheme's
+own: `equal_interval` splits the window itself into equal parts (so the bins are equal over `[vmin, vmax]`
+whatever the data holds), while a data-driven scheme (`quantiles`, `natural_breaks`, …) cuts its interior over
+the clamped data and only has its outer edges pinned to the bounds — the bounds are never mixed into the
+statistic. A reversed window is refused and a zero-width one is widened, as the continuous path treats explicit
+limits. The window applies to a named graduated scheme alone — categorical codes and an explicit edge list have
+no window to pin, so the clip is left off there and never raises, which lets a pooled-scale `facet` pass
+`vmin`/`vmax` without conflict.
 
-Every expected value is computed independently of the classifier under test: `equal_interval` edges split the
-window by hand, and the quantile case asserts only the pinned outer edges and the window bound, not the
-classifier's interior cut.
+Expected values are computed independently of the classifier under test: `equal_interval` edges split the
+window by hand, and the data-driven cases compare a clipped cut against the classifier run on the clamped data
+without the window, so a difference can only be anchor pollution, not the classifier's own interior.
 """
 
 import numpy as np
+import pytest
 
 from digitalearth.base.raster_classes import classify_band
 from digitalearth.base.spec import Scale
 
 
-class TestBreaksOfPinsTheWindow:
-    """`Scale.breaks_of(values, scheme, k, clip=...)` makes the classes span the window, not the data."""
+class TestEqualIntervalPinsTheWindow:
+    """`equal_interval` under a clip splits the window itself, not the surviving data."""
 
-    def test_equal_interval_splits_the_window_not_the_data(self):
+    def test_splits_the_window_not_the_data(self):
         """Data well inside `(0, 100)` still cuts two equal halves of 0..100, not of its own 5..40 extent."""
         edges = Scale.breaks_of(
             [5, 10, 15, 20, 40], "equal_interval", 2, clip=(0.0, 100.0)
@@ -49,36 +51,63 @@ class TestBreaksOfPinsTheWindow:
         )
         assert edges == (0.0, 20.0, 40.0), edges
 
-    def test_a_window_excluding_every_cell_pins_the_window_and_does_not_raise(self):
-        """Every cell above the window clamps into the top class; the edges still span the window, no error."""
-        edges = Scale.breaks_of([5000, 6000.0], "equal_interval", 2, clip=(0.0, 100.0))
-        assert edges == (0.0, 50.0, 100.0), edges
-
-    def test_quantiles_pin_the_outer_edges_to_the_window(self):
-        """A quantile cut's outer edges are the window bounds, and no edge escapes the window.
-
-        Test scenario:
-            0, 100 are the pinned ends; the interior cut is the classifier's business, but nothing may sit
-            outside `[0, 100]`, which is what makes the colorbar span the requested limits.
-        """
-        edges = Scale.breaks_of(
-            [5, 10, 15, 20, 40, 999.0], "quantiles", 3, clip=(0.0, 100.0)
-        )
-        assert edges[0] == 0.0 and edges[-1] == 100.0, edges
-        assert all(0.0 <= edge <= 100.0 for edge in edges), edges
+    def test_a_window_excluding_every_cell_keeps_the_class_count(self):
+        """Every cell above the window clamps into the top class; the k classes still span the window."""
+        edges = Scale.breaks_of([5000, 6000.0], "equal_interval", 4, clip=(0.0, 100.0))
+        assert edges == (0.0, 25.0, 50.0, 75.0, 100.0), edges
 
     def test_both_bounds_open_is_a_no_op_window(self):
-        """`clip=(None, None)` pins nothing — no bound is anchored, so the edges match an unclipped cut."""
+        """`clip=(None, None)` pins nothing — the edges match an unclipped cut."""
         data = [5, 10, 15, 20, 40.0]
-        assert Scale.breaks_of(data, "equal_interval", 2, clip=(None, None)) == Scale.breaks_of(
-            data, "equal_interval", 2
-        )
+        assert Scale.breaks_of(
+            data, "equal_interval", 2, clip=(None, None)
+        ) == Scale.breaks_of(data, "equal_interval", 2)
 
-    def test_masked_cells_are_dropped_before_clamping(self):
-        """A masked outlier is not classified, so it cannot reach the window as a clamped value."""
-        band = np.ma.masked_array([1, 2, 3, 999.0], mask=[False, False, False, True])
-        edges = Scale.breaks_of(band, "equal_interval", 2, clip=(0.0, 10.0))
-        assert edges == (0.0, 5.0, 10.0), edges
+
+class TestDataDrivenSchemesKeepTheirInterior:
+    """A data-driven scheme pins only its outer edges; its interior stays the statistic it names (M2)."""
+
+    def test_quantile_interior_is_untouched_by_the_window(self):
+        """The interior breaks equal the quantiles of the clamped data; only the outer edges are the bounds.
+
+        Test scenario:
+            A clipped cut is compared against the classifier on the clamped data with no window — the two
+            synthetic bound points must not shift the interior, so only edges[0]/edges[-1] may differ.
+        """
+        windowed = Scale.breaks_of(
+            [5, 10, 15, 20, 40], "quantiles", 3, clip=(0.0, 100.0)
+        )
+        clamped_only = Scale.breaks_of(
+            np.clip([5, 10, 15, 20, 40], 0.0, 100.0), "quantiles", 3
+        )
+        assert windowed[1:-1] == clamped_only[1:-1], (windowed, clamped_only)
+        assert (windowed[0], windowed[-1]) == (0.0, 100.0), windowed
+
+    def test_the_class_count_is_preserved(self):
+        """`quantiles k=4` under a window still cuts four classes — the bounds do not collapse them."""
+        edges = Scale.breaks_of(
+            [5, 10, 15, 20, 40, 60, 80], "quantiles", 4, clip=(0.0, 100.0)
+        )
+        assert len(edges) - 1 == 4, edges
+
+    def test_a_window_holding_fewer_than_two_values_is_refused_by_name(self):
+        """Every cell outside the window leaves one clamped value, which a data-driven scheme cannot cut."""
+        with pytest.raises(ValueError, match=r"window \[0.0, 100.0\]"):
+            Scale.breaks_of([5000, 6000.0], "quantiles", 4, clip=(0.0, 100.0))
+
+
+class TestClipWindowValidation:
+    """A reversed window is refused and a zero-width one is widened, as the continuous path does (M1, L1)."""
+
+    def test_a_reversed_window_is_refused(self):
+        """`clip=(80, 20)` is a transposed pair, refused with the same message explicit limits get."""
+        with pytest.raises(ValueError, match="vmin <= vmax"):
+            Scale.breaks_of([30.0, 50.0], "equal_interval", 2, clip=(80.0, 20.0))
+
+    def test_a_zero_width_window_is_widened_for_equal_interval(self):
+        """`clip=(5, 5)` widens to a unit span rather than raising, matching `from_limits`."""
+        edges = Scale.breaks_of([1, 2, 3, 50.0], "equal_interval", 2, clip=(5.0, 5.0))
+        assert edges == (5.0, 5.5, 6.0), edges
 
 
 class TestClassifyBandClip:
@@ -112,6 +141,24 @@ class TestClassifyBandClip:
             classes.scale.vmin,
             classes.scale.vmax,
         )
+
+    def test_masked_cells_are_dropped_before_clamping(self):
+        """A masked outlier is dropped, not clamped — a data-driven cut proves it took no part.
+
+        Test scenario:
+            The same band with and without the masked 999 must give the same quantiles; if the mask leaked,
+            the clamped 999 (→10) would shift them.
+        """
+        band = np.ma.masked_array(
+            [1, 2, 3, 4, 5, 999.0], mask=[False, False, False, False, False, True]
+        )
+        with_mask = classify_band(
+            band, "quantiles", 2, "viridis", clip=(0.0, 10.0)
+        ).edges
+        without = classify_band(
+            np.array([1, 2, 3, 4, 5.0]), "quantiles", 2, "viridis", clip=(0.0, 10.0)
+        ).edges
+        assert with_mask == without, (with_mask, without)
 
     def test_categorical_ignores_the_window_and_does_not_raise(self):
         """Categorical has no window to pin, so a clip is ignored rather than refused (facet relies on this).

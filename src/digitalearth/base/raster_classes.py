@@ -357,14 +357,21 @@ def classify_band(
             tuple(code_edges(codes)),
             tuple(colors),
         )
-    valid = np.ma.compressed(np.ma.masked_invalid(np.ma.asarray(values, dtype=float)))
     # The clip window pins a *graduated* scheme's classes to span it exactly. An explicit edge list already
     # fixes the domain, so the window has nothing to pin and is left off — `vmin`/`vmax` there are the colour
     # domain, not a window, which is why a `facet` pooling edges passes them without conflict.
     window = clip if isinstance(scheme, str) else None
-    edges = Scale.breaks_of(
-        valid, scheme, DEFAULT_CLASS_COUNT if k is None else k, clip=window
-    )
+    count = DEFAULT_CLASS_COUNT if k is None else k
+    if window is None:
+        # `breaks_of` does not drop non-finite cells (the clip path does), so compact here for the plain path.
+        valid = np.ma.compressed(
+            np.ma.masked_invalid(np.ma.asarray(values, dtype=float))
+        )
+        edges = Scale.breaks_of(valid, scheme, count)
+    else:
+        # `breaks_of(clip=...)` compacts and clamps in one pass, so hand it the raw values — compacting here
+        # too would be a second full pass over the band for no gain.
+        edges = Scale.breaks_of(values, scheme, count, clip=window)
     scale = Scale(edges[0], edges[-1], scheme=edges, breaks=edges)
     colors = sample_cmap(DEFAULT_CLASS_CMAP if cmap is None else cmap, len(edges) - 1)
     return BandClasses(scale, edges, tuple(colors))
