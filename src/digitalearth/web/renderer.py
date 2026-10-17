@@ -27,7 +27,7 @@ against: :meth:`Renderer.apply` reconciles the renderer's own *record* of what i
 :attr:`Renderer.drawn` — and the contract it signs is the one the shared renderer conformance suite states
 for all four tiers.
 
-**`apply` reaches what the page is built from.** It was record-only for a wave: it changed neither what
+**`apply` reaches what the page is built from.** It was record-only for a time: it changed neither what
 `WebMap` queues — which is what the widget is built from — nor what `figure_spec` reports, so a layer it
 added was in the record and never reached the widget, and one it removed left the record and stayed on the
 page. :meth:`Renderer._arrange` brings the queue to the applied figure's layers, in its draw order, band by

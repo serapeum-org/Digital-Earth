@@ -205,8 +205,8 @@ class Symbology:
 
         Returns:
             A hash over the encodings and the properties. `Bounds`, `Scale`, `Selection` and `Encoding` all
-            hash; a symbology that did not would be the odd one out the moment Wave 2 wants to key a set or
-            a cache on a layer's style.
+            hash; a symbology that did not would be the odd one out the moment the data tier wants to key a set
+            or a cache on a layer's style.
 
         Raises:
             TypeError: if any value in it is itself unhashable — and that alone. Neither a list nor a dict is

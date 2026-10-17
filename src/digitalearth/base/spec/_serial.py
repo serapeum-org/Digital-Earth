@@ -398,6 +398,14 @@ def to_json_value(value: Any, where: str) -> Any:
             refuses them with `allow_nan=False`, and JavaScript's `JSON.parse`, which is what reads an exported
             page, raises a `SyntaxError` on them.
 
+            A container that nests deeper than :data:`MAX_TRAVELLING_DEPTH` or carries more than
+            :data:`MAX_TRAVELLING_ELEMENTS` values is refused the same way, naming `where` — the two bounds
+            :func:`travels_in_a_figure` already sets for what a figure carries, reused so the writer refuses
+            what the gate would. The depth bound is what makes a cyclic or very deep container refuse *by name*
+            instead of running the walk into `RecursionError`, a traceback that names neither the field nor the
+            value (#335): a container holding itself reaches the bound after :data:`MAX_TRAVELLING_DEPTH` visits,
+            so the refusal wins the race against the interpreter's own stack with no set of seen ids needed.
+
     Examples:
         - Tuples, arrays and numpy scalars come back as the JSON-native types:
             ```python
@@ -426,7 +434,67 @@ def to_json_value(value: Any, where: str) -> Any:
             TypeError: Scale.breaks[1] is nan, which has no JSON form; strict JSON readers refuse NaN and Infinity
 
             ```
+        - A container that holds itself is refused by name, where an unbounded walk would hit `RecursionError`:
+            ```python
+            >>> from digitalearth.base.spec._serial import to_json_value
+            >>> cyclic = []
+            >>> cyclic.append(cyclic)
+            >>> to_json_value(cyclic, "Symbology.props")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            TypeError: Symbology.props...nests deeper than 32 containers...
+
+            ```
     """
+    # The walk carries the depth it has reached and one element budget shared across the whole value, so a
+    # cyclic or very deep container is refused by name (#335) rather than left to run into `RecursionError`.
+    return _to_json_value(value, where, 0, [MAX_TRAVELLING_ELEMENTS])
+
+
+def _to_json_value(value: Any, where: str, depth: int, budget: list[int]) -> Any:
+    """Convert one value, carrying the depth it sits at and the element budget it shares with its siblings.
+
+    The recursion behind :func:`to_json_value`. It walks with the interpreter's stack, so it still reads the
+    per-field `where` down to ``props['k'][0]`` the way the public function always has — but it bounds that
+    recursion itself rather than leaving it to run into `RecursionError`, which names neither the field nor
+    the value. The two bounds are the ones :func:`travels_in_a_figure` already sets for what a figure carries,
+    reused here so the writer refuses what the gate would also refuse:
+
+    * **Depth** (:data:`MAX_TRAVELLING_DEPTH`) refuses a container nested past the bound. At 32, an order of
+      magnitude below CPython's 1,000-frame recursion limit, the named `TypeError` always wins the race
+      against the interpreter's own `RecursionError`. It is also what ends a cycle: a container holding itself
+      reaches the bound after :data:`MAX_TRAVELLING_DEPTH` visits, so no set of seen ids is needed to notice
+      it — the same reason :func:`_travelling_budget` keeps none.
+    * **Elements** (:data:`MAX_TRAVELLING_ELEMENTS`) refuses a value that carries more than the bound, every
+      value at every depth counted against one budget shared across the walk — so a wide, shallow container is
+      refused as surely as a deep one. The budget is spent before a value is looked at, so a million-element
+      container is refused after the first thousand rather than after all of them.
+
+    The two differ from the gate's only in reach, not in number: the gate refuses a tuple, an array and a
+    `list`/`dict` subclass by type before either budget is spent, whereas this writer converts a tuple and an
+    array to a list and so counts their items too. The budgets themselves are the same two constants, which is
+    what "the writer refuses what the gate would" rests on.
+
+    Args:
+        value: A field's value, or a part of one.
+        where: The field, naming the path down to this part — ``"Symbology.props['levels'][0]"``.
+        depth: How many containers enclose this value; 0 at the top.
+        budget: A one-element list holding how many values may still be converted, mutated in place so the
+            whole walk spends one budget rather than one per branch.
+
+    Returns:
+        The converted value, exactly as :func:`to_json_value` documents it.
+
+    Raises:
+        TypeError: every refusal :func:`to_json_value` documents, and the two budget refusals above, each
+            naming `where`.
+    """
+    budget[0] -= 1
+    if budget[0] < 0:
+        raise TypeError(
+            f"{where} carries more than {MAX_TRAVELLING_ELEMENTS} values, which a figure description does "
+            "not hold; a container this large is the layer's data, not its style"
+        )
     if isinstance(value, (np.datetime64, np.timedelta64)) or (
         isinstance(value, np.ndarray) and value.dtype.kind in "Mm"
     ):
@@ -439,14 +507,29 @@ def to_json_value(value: Any, where: str) -> Any:
     scalar = _json_scalar(value, where)
     if scalar is not _NOT_A_SCALAR:
         return scalar
+    # Past the scalar check the value is a container this writer walks — an array, a tuple, a list or a
+    # mapping — or a live object the final refusal names. A container sitting at the depth bound is refused
+    # here, before the recursion that would descend into it, so the named `TypeError` is raised in place of
+    # the `RecursionError` an unbounded walk would hit far deeper (#335). The same bound ends a cycle: a
+    # container holding itself reaches this depth after MAX_TRAVELLING_DEPTH visits, no cycle memory needed.
+    if (
+        isinstance(value, (np.ndarray, list, tuple, Mapping))
+        and depth >= MAX_TRAVELLING_DEPTH
+    ):
+        raise TypeError(
+            f"{where} nests deeper than {MAX_TRAVELLING_DEPTH} containers, past what a figure description "
+            "carries; a value this deep is the layer's data, not its style, and a container holding itself "
+            "reaches this bound in place of overflowing the interpreter's stack"
+        )
     if isinstance(value, np.ndarray):
         return [
-            to_json_value(item, f"{where}[{index}]")
+            _to_json_value(item, f"{where}[{index}]", depth + 1, budget)
             for index, item in enumerate(value.tolist())
         ]
     if isinstance(value, (list, tuple)):
         return [
-            to_json_value(item, f"{where}[{index}]") for index, item in enumerate(value)
+            _to_json_value(item, f"{where}[{index}]", depth + 1, budget)
+            for index, item in enumerate(value)
         ]
     if isinstance(value, Mapping):
         out: dict[str, Any] = {}
@@ -455,7 +538,7 @@ def to_json_value(value: Any, where: str) -> Any:
                 raise TypeError(
                     f"{where} has the non-string key {key!r}; a JSON object's keys are strings"
                 )
-            out[str(key)] = to_json_value(item, f"{where}[{key!r}]")
+            out[str(key)] = _to_json_value(item, f"{where}[{key!r}]", depth + 1, budget)
         return out
     raise TypeError(
         f"{where} holds a {type(value).__name__}, which has no JSON form. A figure description holds plain "
@@ -550,8 +633,10 @@ MAX_TRAVELLING_ELEMENTS: int = 1000
 #: Making the four writers iterative instead was the other way to make the two agree, and it loses: it is
 #: four rewrites on the hot record path, it trades a stated bound for an unstated one (whatever stack is
 #: left at the call site), and it would leave the gate promising a depth that still cannot be written down.
-#: Hardening `to_json_value` against its own recursion remains worth doing for callers that reach it
-#: directly — that is #335, and it is not this.
+#: `to_json_value` reuses this bound and :data:`MAX_TRAVELLING_ELEMENTS` for its own recursion, so a caller
+#: that reaches the writer directly — past the gate — is refused by a named `TypeError` rather than a
+#: `RecursionError` on a cyclic or very deep container (#335); the other three writers stay recursive, and
+#: the gate in front of them is what keeps a value they are handed within this bound.
 MAX_TRAVELLING_DEPTH: int = 32
 
 

@@ -47,6 +47,7 @@ from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import (
     DEFAULT_BAND,
     DataRef,
+    Encoding,
     FigureSpec,
     LayerSpec,
     LayerTree,
@@ -1308,7 +1309,7 @@ class InteractiveMapBase:
 
     def add_layer(
         self,
-        element: Any,
+        layer: Any,
         *,
         kind: str | None = None,
         name: str | None = None,
@@ -1318,12 +1319,13 @@ class InteractiveMapBase:
         symbology: Any = None,
         key: Any = None,
         held: Mapping[str, Any] | None = None,
+        color_field: str | None = None,
     ) -> Self:
-        """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
+        """Register a HoloViews/GeoViews element as a map layer and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here.
 
-        A builder of a drawn kind passes ``element=None`` and a ``symbology``: the layer is described first
+        A builder of a drawn kind passes ``layer=None`` and a ``symbology``: the layer is described first
         and its drawer builds the element from that description, which is what "render from the description"
         means here.
 
@@ -1334,7 +1336,7 @@ class InteractiveMapBase:
         (:mod:`digitalearth.base.custom` says which case a reader is in).
 
         Args:
-            element: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a
+            layer: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a
                 kind this tier draws — that one is built by its drawer from ``symbology``.
             kind: The registered, engine-neutral kind the layer is — ``"raster"``, ``"points"``, … A kind
                 listed in :data:`~digitalearth.interactive.renderer.DRAWN_KINDS` is drawn from its
@@ -1356,9 +1358,14 @@ class InteractiveMapBase:
                 :func:`held_props` merges each into the described mapping of the same name. Held on the
                 map for the same reason ``key`` is; see :func:`describe`. ``None`` for a layer whose
                 description says everything about it.
+            color_field: The name of the value a **custom** layer's colour encodes. A hand-built element
+                publishes no colour encoding of its own, so without this the layer has no colour key and
+                :meth:`colorbar`/:meth:`legend` refuse it (#349). Naming it publishes
+                ``Encoding.by_field("color", color_field)`` for the layer; it fills only the custom case,
+                since a drawn kind brings its own ``symbology``. ``None`` (default) leaves the layer keyless.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.field(dem).tiles().coastlines()``. A drawer
+            The same map instance, so builder calls chain: ``m.field(dem).basemap().coastlines()``. A drawer
             that declined to draw the layer leaves the map as it was — the description, the registered
             source, the held key and the id are all let go again, so nothing names a layer that was never
             drawn.
@@ -1410,9 +1417,25 @@ class InteractiveMapBase:
         # (:mod:`digitalearth.base.custom`).
         from digitalearth.interactive.renderer import DRAWN_KINDS
 
-        self._guard_element_crs(element, caller="add_layer")
+        self._guard_element_crs(layer, caller="add_layer")
         resolved = kind or custom_kind("holoviews")
         layer_id = self._layer_id(resolved.split(":")[-1], name)
+        # A custom layer publishes no colour encoding of its own, so `color_field` is the caller's one way to
+        # say what it varies by — recorded as the colour encoding a key hangs on, exactly as a builder's is,
+        # under the same `via="custom"` marker the static and web tiers set (#349). `custom:holoviews` is a
+        # KEPT kind (drawn by being held, never from a recipe), so the marker is descriptive and never reaches
+        # the via-dispatch in `renderer.make_draw`. A drawn kind carries its own `symbology`, so the two
+        # cannot both be given.
+        if color_field is not None:
+            if symbology is not None or resolved in DRAWN_KINDS:
+                raise ValueError(
+                    "add_layer(color_field=...) names the colour field of a custom layer, so it takes no "
+                    "kind= and no symbology=; a drawn kind carries its own colour"
+                )
+            symbology = Symbology(
+                props={"via": "custom"},
+                encodings={"color": Encoding.by_field("color", color_field)},
+            )
         # Everything from here to the draw is undone together if any of it raises. The layer is described
         # before its drawer runs, so a drawer that refuses — an off-limb warp, `strict=True`, a column that
         # is not there — would otherwise leave the figure naming a layer nothing drew, its data registered
@@ -1438,7 +1461,7 @@ class InteractiveMapBase:
                 if drawn is None:
                     self._forget_layer(layer_id)
                     return self
-                element = drawn.element
+                layer = drawn.element
         except BaseException:
             self._forget_layer(layer_id)
             raise
@@ -1446,7 +1469,7 @@ class InteractiveMapBase:
         # draw-order band, so a basemap added last still goes under the data and a graticule added first
         # still goes over it — and the list `_compose` overlays cannot disagree with the figure the map
         # reports, which is what it did when a builder had to remember to insert at the front itself.
-        self.layers.insert(self._layer_tree.ids.index(layer_id), element)
+        self.layers.insert(self._layer_tree.ids.index(layer_id), layer)
         self._note_last_layer(layer_id)
         return self
 
@@ -1454,7 +1477,7 @@ class InteractiveMapBase:
         """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.
 
         A basemap, land or ocean is drawn beneath the data and carries no colorbar, legend or hover of its
-        own, so `field(dem).tiles().colorbar(False)` means the raster. Before the layer tree, an underlay was
+        own, so `field(dem).basemap().colorbar(False)` means the raster. Before the layer tree, an underlay was
         inserted at the front of `layers` and so never became the layer these acted on; the web tier's
         `_last_layer_id` likewise counts data layers only. An underlay still takes the slot while nothing
         above the underlay band has been added, so a map of tiles alone can be configured at all.
@@ -2191,9 +2214,14 @@ class InteractiveMapBase:
         under layers that do not exist yet. This is where it is applied, once, and it has to run before the
         layers are read — it adds one.
         """
-        if self._tiles_provider is not None and hasattr(self, "tiles"):
+        if self._tiles_provider is not None and hasattr(self, "basemap"):
             provider, self._tiles_provider = self._tiles_provider, None  # apply once
-            self.tiles(provider)
+            # The constructor's `tiles=` takes whatever the two methods take between them (#268), so it is
+            # routed the same way they split it: a raw URL template to `tiles`, anything else to `basemap`.
+            if isinstance(provider, str) and "://" in provider:
+                self.tiles(provider)
+            else:
+                self.basemap(provider)
 
     def _projected(self, obj: Any) -> Any:
         """Return `obj` drawn in the map's projection, when one was asked for.

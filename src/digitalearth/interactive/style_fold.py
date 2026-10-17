@@ -7,7 +7,7 @@ misspelt, or belongs to another element, or to another backend: `.opts()` checks
 element exists, only in HoloViews' spelling, and — without a backend named — across every backend that happens
 to be registered, so `interpolation="nearest"` on a Bokeh image is accepted and then ignored.
 
-This module is the fold that replaces that, and the second engine the Wave 1 style vocabulary is tested against:
+This module is the fold that replaces that, and the second engine the declared style vocabulary is tested against:
 
 * :data:`INTERACTIVE_STYLE_SCHEMA` declares the flat keywords the builders accept, each tied to the channel it
   drives, so a misspelling is answered with a suggestion before anything is built.

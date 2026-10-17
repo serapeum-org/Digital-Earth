@@ -794,7 +794,7 @@ class TestAnElementBokehGivesNoWayToHide:
             The keyword list is read off the backend's own option store rather than hard-coded, so a
             HoloViews release that gave tiles a `visible` option would be picked up rather than missed.
         """
-        interactive_map = InteractiveMap().tiles("OSM")
+        interactive_map = InteractiveMap().basemap("OSM")
         element = interactive_map._renderer.drawn["basemap-1"].element
         keywords = _visibility_keywords(element)
         interactive_map.close()
@@ -812,7 +812,7 @@ class TestAnElementBokehGivesNoWayToHide:
             `set_visible` returned without doing anything and without saying so, so a stored figure that
             switched the basemap off drew it back on with nothing to tell the caller why.
         """
-        interactive_map = InteractiveMap().tiles("OSM")
+        interactive_map = InteractiveMap().basemap("OSM")
         interactive_map._renderer.set_visible("basemap-1", False)
         interactive_map.close()
         warned = [
@@ -832,7 +832,7 @@ class TestAnElementBokehGivesNoWayToHide:
             Reading `False` for it would make the conformance suite's "is this layer drawn hidden?"
             answer yes for a basemap that is plainly on the screen.
         """
-        interactive_map = InteractiveMap().tiles("OSM")
+        interactive_map = InteractiveMap().basemap("OSM")
         element = interactive_map._renderer.drawn["basemap-1"].element
         answer = _is_shown(element)
         interactive_map.close()

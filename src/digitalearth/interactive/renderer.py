@@ -27,7 +27,7 @@ place; HoloViews elements are immutable values composed into an overlay on every
 and the observable contract it signs is the one the shared renderer conformance suite states, which is why
 all four tiers can sign it.
 
-**`apply` reaches what the map draws.** It was record-only for a wave: it changed neither *which*
+**`apply` reaches what the map draws.** It was record-only for a time: it changed neither *which*
 elements `render()` overlays — the map's `layers` — nor what `figure_spec` reports, so a caller who applied
 a figure had moved a record and nothing a viewer sees. Two halves close that. :meth:`Renderer._arrange`
 re-lays `InteractiveMap.layers` from the applied figure's draw order, so a removed layer leaves the overlay,

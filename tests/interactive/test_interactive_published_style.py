@@ -180,7 +180,7 @@ UNSTYLED: dict[str, Callable[[Any], Any]] = {
     "rasterize": lambda m: m.rasterize(_points()),
     "datashade": lambda m: m.datashade(_points()),
     "trajectory": lambda m: m.trajectory(_points()),
-    "tiles": lambda m: m.tiles(),
+    "tiles": lambda m: m.basemap(),
     "coastlines": lambda m: m.coastlines(),
     "graticule": lambda m: m.graticule(),
     "text": lambda m: m.text(5.0, 52.0, "Amsterdam"),

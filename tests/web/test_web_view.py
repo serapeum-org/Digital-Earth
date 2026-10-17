@@ -147,16 +147,50 @@ class TestWhoDecidesTheView:
         m = WebMap(zoom=7).basemap().choropleth(boxes, column="pop").set_bounds()
         assert m._map_view()["bounds"] == [4.0, 51.0, 7.0, 53.0]
 
-    def test_padding_and_animate_reach_the_view(self, boxes):
-        """Both are the caller's to set, so neither may be dropped on the way through."""
+    def test_padding_px_and_animate_reach_the_view(self, boxes):
+        """Both are the caller's to set, so neither may be dropped on the way through.
+
+        ``padding_px`` is MapLibre's own viewport padding (pixels); ``padding`` is now the fraction-of-span
+        shared with the 2-D tiers (#340), so the pixel value travels under its own name.
+        """
         from digitalearth.web import WebMap
 
         m = (
             WebMap()
             .basemap()
-            .set_bounds((0.0, 0.0, 1.0, 1.0), padding=64, animate=True)
+            .set_bounds((0.0, 0.0, 1.0, 1.0), padding_px=64, animate=True)
         )
         assert (m._map_view()["padding"], m._map_view()["animate"]) == (64, True)
+
+    def test_padding_fraction_grows_the_framed_box(self, boxes):
+        """``padding`` is a fraction of the span now, so it widens the fitted rectangle itself (#340)."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().set_bounds((0.0, 0.0, 10.0, 10.0), padding=0.1)
+        assert m._map_view()["bounds"] == [-1.0, -1.0, 11.0, 11.0]
+
+    def test_a_dateline_crossing_box_frames_at_the_default_padding(self):
+        """An antimeridian-crossing box (west > east) still frames at the default padding (round-2 M1).
+
+        The web tier is the one that accepts a ``west > east`` lon/lat box — MapLibre's ``fitBounds`` reads it
+        across the dateline. At ``padding=0.0`` the bounds pass straight through, unchanged, as before #340.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().set_bounds((170.0, -10.0, -170.0, 10.0))
+        assert m._map_view()["bounds"] == [170.0, -10.0, -170.0, 10.0]
+
+    def test_a_dateline_crossing_box_with_fraction_padding_is_refused(self):
+        """A non-zero fraction padding routes a dateline box through ``Bounds``, which refuses ``west > east``.
+
+        The refusal is the documented trade-off (round-2 M1): a fraction of the span has no meaning for a box
+        whose span wraps the antimeridian, so it is rejected by name rather than framed wrong.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap()
+        with pytest.raises(ValueError, match="xmin <= xmax"):
+            m.set_bounds((170.0, -10.0, -170.0, 10.0), padding=0.1)
 
 
 def _payload(html):

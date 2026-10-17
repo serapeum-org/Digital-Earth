@@ -163,14 +163,14 @@ class TestProjectionTileGuards:
     """tiles and a non-Mercator projection are mutually exclusive (both directions)."""
 
     def test_projection_after_tiles_raises(self, m, dataset):
-        m.field(dataset).tiles("CartoLight")
+        m.field(dataset).basemap("CartoLight")
         with pytest.raises(ValueError, match="Web-Mercator only"):
             m.projection("Robinson")
 
     def test_tiles_after_projection_raises(self, m, dataset):
         m.projection("Robinson").field(dataset)
         with pytest.raises(ValueError, match="Web-Mercator only"):
-            m.tiles("CartoLight")
+            m.basemap("CartoLight")
 
     def test_constructor_tiles_block_projection(self):
         m = InteractiveMap(tiles="CartoLight")

@@ -1148,9 +1148,9 @@ def _decorate_interactive(scene: Any, basemap: Any, coastlines: bool) -> None:
     if basemap:
         source = _basemap_source(basemap)
         if source is None:
-            scene.tiles()
+            scene.basemap()
         else:
-            scene.tiles(source)
+            scene.basemap(source)
     if coastlines:
         scene.coastlines()
 

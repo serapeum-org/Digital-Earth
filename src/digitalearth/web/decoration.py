@@ -31,8 +31,8 @@ from digitalearth.base.controls import check_control_position, resolved_controls
 from digitalearth.base.spec import Guide, LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
 
-# Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
-# collision belongs to the Core contract, not here.
+# #268: `tiles()` takes a URL while `basemap()` takes a provider name — the split that settles the overloaded
+# `provider=` collision, now applied on every tier (the interactive tier was the last to carry it).
 
 #: The attribution every OpenStreetMap-derived tile set must carry, and the CARTO variant three of them add
 #: to it. Written once because they are a legal requirement rather than a label: a typo in one copy is a

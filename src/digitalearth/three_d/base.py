@@ -914,7 +914,14 @@ class Scene3DBase:
         return auto_cmap(source, cmap, fallback)
 
     def _add_custom(
-        self, obj: Any, *, name: Any, band: Any, volume: bool, **kwargs: Any
+        self,
+        obj: Any,
+        *,
+        name: Any,
+        band: Any,
+        volume: bool,
+        color_field: str | None = None,
+        **kwargs: Any,
     ) -> Any:
         """Register an object the caller built, and draw it.
 
@@ -923,11 +930,20 @@ class Scene3DBase:
             name: The id to address it by; `None` numbers it.
             band: Where it is drawn (#292); `None` draws it among the data.
             volume: Whether it is ray-cast (`add_volume`) rather than surfaced (`add_mesh`).
+            color_field: The field the object's colour encodes, published as a colour `Encoding` on the
+                layer so a key can explain it (#349); `None` records no colour encoding.
             **kwargs: Forwarded to PyVista.
 
         Returns:
             The actor PyVista produced.
         """
+        # Built before the object is held, so an empty `color_field` is refused by `Encoding.by_field`
+        # without leaving a held object under an id no layer owns.
+        encodings = (
+            {"color": Encoding.by_field("color", color_field)}
+            if color_field is not None
+            else None
+        )
         layer_id = next_layer_id(self._figure.layers, custom_kind("pyvista"), name)
         self._custom[layer_id] = obj
         # The object is held before the draw, because the drawer reads it from there — so every way out of
@@ -939,6 +955,7 @@ class Scene3DBase:
                 name=layer_id,
                 band=band,
                 volume=volume,
+                encodings=encodings,
                 **kwargs,
             )
         except BaseException:
@@ -954,7 +971,13 @@ class Scene3DBase:
         return actor
 
     def add_mesh(
-        self, mesh: Any, *, name: Any = None, band: Any = None, **kwargs: Any
+        self,
+        mesh: Any,
+        *,
+        name: Any = None,
+        band: Any = None,
+        color_field: str | None = None,
+        **kwargs: Any,
     ) -> Any:
         """Add a PyVista ``mesh`` to the scene and register it as a layer.
 
@@ -965,11 +988,14 @@ class Scene3DBase:
         kind `custom:pyvista`, a label, a band and whether it is visible — and never the object, which has no
         description to write. The object stays with the scene that was handed it, so a figure saved and loaded
         again names the layer but cannot rebuild it, and another backend cannot draw it at all
-        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
-        layer tree as its seam lands (#295); until then the object is drawn and nothing else is kept.
+        (:mod:`digitalearth.base.custom` says which case a reader is in). Name what the object's colour
+        encodes with ``color_field`` and the layer carries a colour key, published as
+        ``Encoding.by_field("color", color_field)`` the way a builder's is (#349).
 
         Args:
             mesh: Any PyVista dataset (``ImageData``/``StructuredGrid``/``PolyData``/``UnstructuredGrid``).
+            color_field: The name of the value the mesh's colour encodes. Names it so the custom layer carries
+                a colour key for :meth:`colorbar`/:meth:`legend` (#349); ``None`` leaves it keyless.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
 
         Returns:
@@ -1006,10 +1032,18 @@ class Scene3DBase:
         See Also:
             add_volume: the ray-cast counterpart, for scalar fields rather than surfaces.
         """
-        return self._add_custom(mesh, name=name, band=band, volume=False, **kwargs)
+        return self._add_custom(
+            mesh, name=name, band=band, volume=False, color_field=color_field, **kwargs
+        )
 
     def add_volume(
-        self, volume: Any, *, name: Any = None, band: Any = None, **kwargs: Any
+        self,
+        volume: Any,
+        *,
+        name: Any = None,
+        band: Any = None,
+        color_field: str | None = None,
+        **kwargs: Any,
     ) -> Any:
         """Add a volumetric ``volume`` (ray-cast rendering) and register it as a layer.
 
@@ -1017,11 +1051,14 @@ class Scene3DBase:
         kind `custom:pyvista`, a label, a band and whether it is visible — and never the object, which has no
         description to write. The object stays with the scene that was handed it, so a figure saved and loaded
         again names the layer but cannot rebuild it, and another backend cannot draw it at all
-        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
-        layer tree as its seam lands (#295); until then the object is drawn and nothing else is kept.
+        (:mod:`digitalearth.base.custom` says which case a reader is in). Name what the object's colour
+        encodes with ``color_field`` and the layer carries a colour key, published as
+        ``Encoding.by_field("color", color_field)`` the way a builder's is (#349).
 
         Args:
             volume: An ``ImageData``/``UnstructuredGrid`` carrying a scalar field to ray-cast.
+            color_field: The name of the value the volume's colour encodes. Names it so the custom layer
+                carries a colour key for :meth:`colorbar`/:meth:`legend` (#349); ``None`` leaves it keyless.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_volume`.
 
         Returns:
@@ -1059,7 +1096,9 @@ class Scene3DBase:
         See Also:
             add_mesh: the surface counterpart, and the method the capability mixins call.
         """
-        return self._add_custom(volume, name=name, band=band, volume=True, **kwargs)
+        return self._add_custom(
+            volume, name=name, band=band, volume=True, color_field=color_field, **kwargs
+        )
 
     @property
     def figure_spec(self) -> FigureSpec:

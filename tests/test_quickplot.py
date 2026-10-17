@@ -242,21 +242,22 @@ def test_interactive_basemap_branches_reach_the_tier(
 
     Args:
         dataset: The raster to draw.
-        mocker: Patches the tile builder so no engine or network is needed.
+        mocker: Patches the basemap builder so no engine or network is needed.
         basemap: The spelling under test.
-        expected_args: What the tile builder must be called with.
+        expected_args: What the basemap builder must be called with.
 
     Test scenario:
         The two spellings take different branches — ``True`` means "the backend's default", a name means that
         source — and only one was covered. Reducing a named preset such as ``"Planet.NICFI"`` to the default
-        would silently draw the wrong map, which is exactly the kind of failure that leaves no trace.
+        would silently draw the wrong map, which is exactly the kind of failure that leaves no trace. Since the
+        #268 split, a named provider reaches the tier through ``basemap``, not the URL-only ``tiles``.
     """
     interactive = pytest.importorskip("digitalearth.interactive")
-    tiles = mocker.patch.object(interactive.InteractiveMap, "tiles")
+    basemap_builder = mocker.patch.object(interactive.InteractiveMap, "basemap")
     mocker.patch.object(interactive.InteractiveMap, "field")
     qp.quickmap(dataset, backend="interactive", basemap=basemap)
-    assert tiles.call_args.args == expected_args, (
-        f"basemap={basemap!r} must call tiles{expected_args}, got {tiles.call_args!r}"
+    assert basemap_builder.call_args.args == expected_args, (
+        f"basemap={basemap!r} must call basemap{expected_args}, got {basemap_builder.call_args!r}"
     )
 
 

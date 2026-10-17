@@ -44,10 +44,6 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
         265: (
             "fix(web): title(), fit_bounds() and labels() introduce third names for existing concepts"
         ),
-        268: (
-            "refactor(api): tiles() takes a name on one tier and a URL on another, through one "
-            "overloaded provider="
-        ),
         332: (
             "refactor(api): static and interactive builders spell opacity and column differently from "
             "the Core contract"
