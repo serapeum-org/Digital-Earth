@@ -1820,9 +1820,9 @@ class RasterMixin(_MixinBase):
             # Codes take the categorical palette unless the caller names one; graduated classes the colormap
             # the band resolved, the one a ramp would have used.
             palette = cmap if asks_categorical(scheme) else cmap_name
-            # `vmin`/`vmax` (the resolved `limits=`) confine a graduated scheme's classes to that window so
-            # outliers cannot stretch them (#378); `classify_band` refuses the pair for a categorical scheme
-            # or explicit edges, which have no range to clip.
+            # `vmin`/`vmax` (the resolved `limits=`) pin a graduated scheme's classes to span that window, so
+            # the colorbar reads the requested limits and outliers land in an end class (#378); `classify_band`
+            # leaves the pair off for a categorical scheme or explicit edges, which have no range to pin.
             clip = (vmin, vmax) if vmin is not None or vmax is not None else None
             classes = classify_band(source.z.values, scheme, k, palette, clip=clip)
         layer_id = self._layer_id("raster", name)

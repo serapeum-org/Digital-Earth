@@ -1013,12 +1013,12 @@ def _classified(
     # `categories` (pooled class codes from a shared scale, e.g. facet) is this tier's own keyword — never a
     # glyph option — so take it out before cleopatra sees anything; it only directs the categorical classify.
     categories = opts.pop("categories", None)
-    # `vmin`/`vmax` under a *graduated* scheme are the value window the classifier is confined to (#378): the
-    # classes are cut over only the in-range values, so a few outliers cannot stretch them, and out-of-range
-    # cells clamp into the end classes. They are taken out here so they drive the classify and do not also
-    # reach the glyph as a continuous `clim` the classified render would ignore. A categorical or explicit-edge
-    # scheme has no window to cut, so they stay in `opts` as the colour domain (which is also why a `facet`
-    # pooling edges can pin a shared range without conflict); with no scheme they stay for the ramp.
+    # `vmin`/`vmax` under a *graduated* scheme are the value window the classes are pinned to (#378): the
+    # classes span the window exactly and out-of-range cells clamp into the end classes. They are taken out
+    # here so they drive the classify and do not also reach the glyph as a continuous `clim` the classified
+    # render would ignore. A categorical or explicit-edge scheme has no window to pin, so they are left in
+    # `opts` (which is why a `facet` pooling edges or codes can pass them without conflict); with no scheme
+    # they stay in `opts` as the continuous ramp's `clim`.
     graduated = isinstance(scheme, str) and not asks_categorical(scheme)
     clip = _clip_window(opts) if graduated else None
     classes: BandClasses | None

@@ -245,10 +245,10 @@ def _band_classes(
         k: Classes for a named graduated scheme.
         cmap: The caller's colormap — a categorical palette for codes, the colormap graduated classes are
             sampled from otherwise — or ``None``.
-        clip: The caller's ``clim`` as the ``(vmin, vmax)`` window a graduated scheme classifies within
-            (#378), so outliers do not stretch the classes; ``None`` cuts them over the whole band. Refused
-            by :func:`~digitalearth.base.raster_classes.classify_band` for a categorical scheme or explicit
-            edges, which have no range to clip.
+        clip: The caller's ``clim`` as the ``(vmin, vmax)`` window a graduated scheme is pinned to (#378), so
+            the classes span the window and outliers land in an end class; ``None`` cuts them over the whole
+            band. Ignored by :func:`~digitalearth.base.raster_classes.classify_band` for a categorical scheme
+            or explicit edges, which have no range to pin.
 
     Returns:
         The band's classes.
@@ -633,7 +633,13 @@ class RasterMixin(_MixinBase):
         """
         scale = limits_scale(clim)
         if scheme is not None:
-            scale = _band_classes(self, data, band, scheme, k, cmap, clip=clim).scale
+            # Pin the classes to `clim` only when it is a real `(lo, hi)` pair; a malformed `clim` is left to
+            # `limits_scale`'s tolerant handling above (it draws rather than raising), so the classify path
+            # must not turn the same bad value into a cryptic unpack error (review L3).
+            window = (
+                clim if isinstance(clim, (tuple, list)) and len(clim) == 2 else None
+            )
+            scale = _band_classes(self, data, band, scheme, k, cmap, clip=window).scale
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
         # into the description, and what has no JSON form — a colormap object, a callable — is held beside
         # the layer, because a figure is saved as JSON.
