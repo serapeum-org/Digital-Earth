@@ -8,9 +8,12 @@ Two small operations from earthkit-plots' pipeline that prepare global gridded d
   antimeridian. This is pure array bookkeeping (numpy), so it lives in the digitalearth wiring.
 
 It lives in the **static** backend rather than in ``base/`` because the static raster builders are its only
-consumer: ``base/`` holds what two or more backends share, and nothing outside this tier wraps a longitude or
-closes a cyclic seam today (#169). It is pure numpy with no renderer import, so moving it back to ``base/`` is
-trivial the day the web or interactive tier needs antimeridian handling too.
+consumer in the package: :func:`add_cyclic_column` closes the antimeridian seam for the tier's global
+``contours``/``pcolormesh``, and :func:`wrap_longitude` is a thin public delegate to pyramids kept for callers
+(reached only by the tests in-tree today). ``base/`` holds what two or more backends share, and nothing
+outside this tier reaches either helper (#169). Both are pure numpy / pyramids delegates with no renderer
+import, so moving them back to ``base/`` is trivial the day the web or interactive tier needs antimeridian
+handling too.
 """
 
 from typing import Any

@@ -55,7 +55,7 @@ What lives here:
 * :mod:`~digitalearth.base.types` — the ``RasterLike`` / ``VectorLike`` structural Protocols.
 
 Anything a *single* backend needs belongs in that backend instead: the matplotlib figure lookup that used to sit
-beside :mod:`~digitalearth.base.arrays` lives in :mod:`digitalearth.static.figures` for exactly that reason, and
-the longitude-wrap / cyclic-column helpers a single consumer used live in :mod:`digitalearth.static.preprocess`
-for the same one (#169) — they move back here the day a second backend wraps a longitude.
+beside :mod:`~digitalearth.base.arrays` lives in :mod:`digitalearth.static.figures`. For the same reason the
+longitude-wrap / cyclic-column helpers a single consumer used moved to :mod:`digitalearth.static.preprocess`
+(#169); they move back here the day a second backend wraps a longitude.
 """
