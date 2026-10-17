@@ -162,6 +162,5 @@ class TestOpacityAndBandReachTheEngineDescription:
         """
         drawn.field(dem, limits=LIMITS)
         opts = _props(drawn)["opts"]
-        assert (opts["vmin"], opts["vmax"]) == LIMITS, (
-            f"limits did not travel as vmin/vmax: {opts}"
-        )
+        assert opts["vmin"] == LIMITS[0], f"limits low did not travel as vmin: {opts}"
+        assert opts["vmax"] == LIMITS[1], f"limits high did not travel as vmax: {opts}"
