@@ -787,6 +787,11 @@ class VectorMixin(_MixinBase):
         # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
         # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
         # the count without the geometry, so naming a file still costs no open.
+        # Clear any breaks a prior categorical call recorded, as `choropleth` does — above the rasterize
+        # early-return as well, so a density layer (which records no class edges) does not keep reporting a
+        # prior categorical call's breaks on the legacy `last_breaks` accessor (#332 L3, round-2 M2). Only the
+        # categorical and graduated branches below record one; every other path leaves it cleared.
+        self.last_breaks = None
         if rasterize is True or (
             rasterize == "auto"
             and _route_through_rasterize("points", _feature_count(features), threshold)
@@ -802,10 +807,6 @@ class VectorMixin(_MixinBase):
         # while no `column` was given: those points are one flat colour, and a key over them would label
         # nothing.
         colour: Encoding | None = None
-        # Clear any breaks a prior categorical call recorded, as `choropleth` does: only the categorical and
-        # graduated branches below record class edges, so a flat or continuous layer must not keep reporting
-        # stale ones on the legacy `last_breaks` accessor (#332 L3).
-        self.last_breaks = None
         if column and isinstance(scheme, str) and scheme.lower() == "categorical":
             # Categorical colouring works off the string form of the value, so it has to relabel the frame
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so

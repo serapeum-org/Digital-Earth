@@ -315,6 +315,25 @@ class TestPathClassify:
             f"a flat points layer left stale breaks: {m.last_breaks}"
         )
 
+    def test_a_rasterized_points_layer_clears_stale_last_breaks(self, m, point_fc):
+        """A density (rasterized) ``points`` layer also clears ``last_breaks`` (#332 round-2 M2).
+
+        Args:
+            m: The map under test.
+            point_fc: A point FeatureCollection.
+
+        Test scenario:
+            ``points`` short-circuits to ``rasterize()`` before the classify chain, and ``rasterize`` records
+            no class edges, so the reset has to sit above that early-return — otherwise a prior categorical
+            call's breaks kept reporting on the density layer.
+        """
+        pytest.importorskip("datashader")
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        m.points(point_fc, rasterize=True)
+        assert m.last_breaks is None, (
+            f"a rasterized points layer left stale breaks: {m.last_breaks}"
+        )
+
 
 class TestPolygonsAndChoropleth:
     """``polygons`` / ``choropleth`` — polygon layers and colour-by-attribute fills."""
