@@ -1041,7 +1041,10 @@ class WebMapBase:
             ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there
                 is nothing to frame on, and silently doing nothing would look like the call was ignored; or
                 when ``padding`` is a fraction that would invert the rectangle (below ``-0.5``), refused by
-                :meth:`~digitalearth.base.spec.Bounds.padded`.
+                :meth:`~digitalearth.base.spec.Bounds.padded`. A **non-zero** ``padding`` also routes the
+                bounds through :class:`~digitalearth.base.spec.Bounds`, which refuses a non-finite edge or an
+                inverted (``west > east``) box — so an antimeridian-crossing frame must be requested with the
+                default ``padding=0.0`` (``padding_px`` still applies to it).
 
         Examples:
             - Frame on an explicit box:
@@ -1064,13 +1067,18 @@ class WebMapBase:
                 f"set_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
             )
         west, south, east, north = values
-        # `padding` is a fraction of the framed span — the one meaning it carries on every tier (#340) — so it
-        # grows the rectangle here, through the shared `Bounds.padded`, which also refuses a fraction that
-        # would invert it. MapLibre's own per-edge pixel padding is a different quantity with no
-        # fraction equivalent, so it keeps its own name and is what reaches `fitBounds`.
-        box = Bounds(west, south, east, north, 4326).padded(float(padding))
+        # `padding` is a fraction of the framed span — the one meaning it carries on every tier (#340) — grown
+        # here through the shared `Bounds.padded`, but only when asked for. At the default 0.0 the bounds pass
+        # straight to `fitBounds` as they did before #340, so an antimeridian-crossing box (west > east) —
+        # which only this tier accepts — still frames; a non-zero fraction routes through `Bounds`, whose
+        # constructor requires west <= east and finite edges. MapLibre's own per-edge pixel padding is a
+        # different quantity with no fraction equivalent, so it keeps its own name and is what reaches
+        # `fitBounds`.
+        if padding:
+            box = Bounds(west, south, east, north, 4326).padded(float(padding))
+            west, south, east, north = box.xmin, box.ymin, box.xmax, box.ymax
         self._fit = {
-            "bounds": [box.xmin, box.ymin, box.xmax, box.ymax],
+            "bounds": [west, south, east, north],
             # Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a
             # TypeError about int() rather than about the argument.
             "padding": padding_px if isinstance(padding_px, dict) else int(padding_px),
