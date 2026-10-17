@@ -1147,11 +1147,13 @@ def _decorate_interactive(scene: Any, basemap: Any, coastlines: bool) -> None:
     """
     if basemap:
         source = _basemap_source(basemap)
-        # The named-basemap path goes through basemap() now, not tiles(): since #268, tiles() takes a URL
-        # template only, and basemap() takes the provider name / keyed preset / TileProvider that `quickmap`'s
-        # basemap= carries (never a raw URL, per _basemap_source).
         if source is None:
             scene.basemap()
+        elif isinstance(source, str) and "://" in source:
+            # A raw XYZ/WMTS URL goes to tiles(), a provider name / keyed preset / TileProvider to basemap()
+            # — the same split the interactive constructor's deferred-tiles flush makes. Since #268, tiles()
+            # is URL-only and basemap() refuses a URL, so a URL handed to quickmap(basemap=) must land here.
+            scene.tiles(url=source)
         else:
             scene.basemap(provider=source)
     if coastlines:

@@ -238,6 +238,21 @@ class TestQuickplotBackend:
             "Tiles",
         }, f"basemap must add a tile layer first, got {type(out.layers[0])}"
 
+    def test_basemap_raw_url_routes_to_tiles(self, dataset):
+        """A raw-URL ``basemap=`` reaches ``tiles(url=)``, not ``basemap(provider=)`` which rejects a URL (#268).
+
+        Test scenario:
+            After the tiles/basemap split, basemap(provider=) refuses a URL; quickmap's decorate path must
+            route a ``"://"`` string to tiles(url=) instead, the same split the constructor makes.
+        """
+        from digitalearth.api import quickplot
+
+        url = "https://a.tile.example/{Z}/{X}/{Y}.png"
+        out = quickplot(dataset, crs=3857, backend="interactive", basemap=url)
+        assert type(out.layers[0]).__name__ in {"WMTS", "Tiles"}, (
+            f"a raw-URL basemap must add a tile layer first, got {type(out.layers[0])}"
+        )
+
     def test_coastlines_overlays_feature(self, dataset):
         """coastlines=True overlays a Natural-Earth feature on top of the data."""
         from digitalearth.api import quickplot
