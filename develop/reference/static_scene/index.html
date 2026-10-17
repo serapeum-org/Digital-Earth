@@ -9149,7 +9149,7 @@ title filed beside each pair — see :meth:<code>_registered_index</code>.</p>
 <a id="__codelineno-0-1245" name="__codelineno-0-1245"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">drawn</span><span class="p">[</span><span class="n">layer_id</span><span class="p">]</span><span class="o">.</span><span class="n">artist</span>
 <a id="__codelineno-0-1246" name="__codelineno-0-1246"></a>
 <a id="__codelineno-0-1247" name="__codelineno-0-1247"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-1248" name="__codelineno-0-1248"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">band</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-1248" name="__codelineno-0-1248"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">artist</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">band</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 <a id="__codelineno-0-1249" name="__codelineno-0-1249"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
 <a id="__codelineno-0-1250" name="__codelineno-0-1250"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Register an artist **you built yourself** as a layer, and return this scene (chainable).</span>
 <a id="__codelineno-0-1251" name="__codelineno-0-1251"></a>
@@ -9164,7 +9164,7 @@ title filed beside each pair — see :meth:<code>_registered_index</code>.</p>
 <a id="__codelineno-0-1260" name="__codelineno-0-1260"></a><span class="sd">        Drawing straight onto :attr:`ax` is still the escape hatch, and is still invisible to the figure.</span>
 <a id="__codelineno-0-1261" name="__codelineno-0-1261"></a>
 <a id="__codelineno-0-1262" name="__codelineno-0-1262"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-1263" name="__codelineno-0-1263"></a><span class="sd">            layer: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the</span>
+<a id="__codelineno-0-1263" name="__codelineno-0-1263"></a><span class="sd">            artist: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the</span>
 <a id="__codelineno-0-1264" name="__codelineno-0-1264"></a><span class="sd">                web tier reads it off a MapLibre layer: an artist built with ``visible=False`` is described</span>
 <a id="__codelineno-0-1265" name="__codelineno-0-1265"></a><span class="sd">                hidden rather than described as something the figure does not draw (review L10).</span>
 <a id="__codelineno-0-1266" name="__codelineno-0-1266"></a><span class="sd">            name: The id to address it by; ``None`` generates ``custom-1``, ``custom-2``, …. A name already</span>
@@ -9200,7 +9200,7 @@ title filed beside each pair — see :meth:<code>_registered_index</code>.</p>
 <a id="__codelineno-0-1296" name="__codelineno-0-1296"></a>                <span class="sa">f</span><span class="s2">&quot;add_layer band must be one of </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">KIND_BANDS</span><span class="p">)</span><span class="si">}</span><span class="s2">; got </span><span class="si">{</span><span class="n">band</span><span class="si">!r}</span><span class="s2">&quot;</span>
 <a id="__codelineno-0-1297" name="__codelineno-0-1297"></a>            <span class="p">)</span>
 <a id="__codelineno-0-1298" name="__codelineno-0-1298"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-1299" name="__codelineno-0-1299"></a>            <span class="kc">None</span><span class="p">,</span> <span class="n">layer</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">artist_is_visible</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-1299" name="__codelineno-0-1299"></a>            <span class="kc">None</span><span class="p">,</span> <span class="n">artist</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">artist_is_visible</span><span class="p">(</span><span class="n">artist</span><span class="p">)</span>
 <a id="__codelineno-0-1300" name="__codelineno-0-1300"></a>        <span class="p">)</span>
 <a id="__codelineno-0-1301" name="__codelineno-0-1301"></a>        <span class="k">return</span> <span class="bp">self</span>
 <a id="__codelineno-0-1302" name="__codelineno-0-1302"></a>
@@ -11460,7 +11460,7 @@ with the CRS, domain and globe flag it was built with.</p>
 
 
 <h3 id="digitalearth.static.scene.Scene.add_layer" class="doc doc-heading"><a href="#digitalearth.static.scene.Scene.add_layer" class="toclink">
-            <code class="highlight language-python"><span class="n">add_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">add_layer</span><span class="p">(</span><span class="n">artist</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </a><a href="#digitalearth.static.scene.Scene.add_layer" class="headerlink" title="Permanent link">#</a></h3>
 
@@ -11491,7 +11491,7 @@ a figure read back elsewhere names the layer and cannot rebuild it
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>layer</code>
+                <code>artist</code>
             </td>
             <td>
                   <code><span title="typing.Any">Any</span></code>
@@ -11675,7 +11675,7 @@ the caller can say whether it is ground cover or a label.</p>
 <span class="normal"><a href="#__codelineno-0-1299">1299</a></span>
 <span class="normal"><a href="#__codelineno-0-1300">1300</a></span>
 <span class="normal"><a href="#__codelineno-0-1301">1301</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1247" name="__codelineno-0-1247"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-1248" name="__codelineno-0-1248"></a>    <span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">band</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-1248" name="__codelineno-0-1248"></a>    <span class="bp">self</span><span class="p">,</span> <span class="n">artist</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">band</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 <a id="__codelineno-0-1249" name="__codelineno-0-1249"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
 <a id="__codelineno-0-1250" name="__codelineno-0-1250"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Register an artist **you built yourself** as a layer, and return this scene (chainable).</span>
 <a id="__codelineno-0-1251" name="__codelineno-0-1251"></a>
@@ -11690,7 +11690,7 @@ the caller can say whether it is ground cover or a label.</p>
 <a id="__codelineno-0-1260" name="__codelineno-0-1260"></a><span class="sd">    Drawing straight onto :attr:`ax` is still the escape hatch, and is still invisible to the figure.</span>
 <a id="__codelineno-0-1261" name="__codelineno-0-1261"></a>
 <a id="__codelineno-0-1262" name="__codelineno-0-1262"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1263" name="__codelineno-0-1263"></a><span class="sd">        layer: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the</span>
+<a id="__codelineno-0-1263" name="__codelineno-0-1263"></a><span class="sd">        artist: The matplotlib artist you drew. Whether it is **visible** is read off the object, as the</span>
 <a id="__codelineno-0-1264" name="__codelineno-0-1264"></a><span class="sd">            web tier reads it off a MapLibre layer: an artist built with ``visible=False`` is described</span>
 <a id="__codelineno-0-1265" name="__codelineno-0-1265"></a><span class="sd">            hidden rather than described as something the figure does not draw (review L10).</span>
 <a id="__codelineno-0-1266" name="__codelineno-0-1266"></a><span class="sd">        name: The id to address it by; ``None`` generates ``custom-1``, ``custom-2``, …. A name already</span>
@@ -11726,7 +11726,7 @@ the caller can say whether it is ground cover or a label.</p>
 <a id="__codelineno-0-1296" name="__codelineno-0-1296"></a>            <span class="sa">f</span><span class="s2">&quot;add_layer band must be one of </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">KIND_BANDS</span><span class="p">)</span><span class="si">}</span><span class="s2">; got </span><span class="si">{</span><span class="n">band</span><span class="si">!r}</span><span class="s2">&quot;</span>
 <a id="__codelineno-0-1297" name="__codelineno-0-1297"></a>        <span class="p">)</span>
 <a id="__codelineno-0-1298" name="__codelineno-0-1298"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-1299" name="__codelineno-0-1299"></a>        <span class="kc">None</span><span class="p">,</span> <span class="n">layer</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">artist_is_visible</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-1299" name="__codelineno-0-1299"></a>        <span class="kc">None</span><span class="p">,</span> <span class="n">artist</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">artist_is_visible</span><span class="p">(</span><span class="n">artist</span><span class="p">)</span>
 <a id="__codelineno-0-1300" name="__codelineno-0-1300"></a>    <span class="p">)</span>
 <a id="__codelineno-0-1301" name="__codelineno-0-1301"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
