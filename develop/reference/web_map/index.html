@@ -5638,7 +5638,7 @@ caller could not address a layer afterwards to hide, remove or switch it.</p>
 
 
 <h3 id="digitalearth.web.map.WebMap.set_bounds" class="doc doc-heading"><a href="#digitalearth.web.map.WebMap.set_bounds" class="toclink">
-            <code class="highlight language-python"><span class="n">set_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">animate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">set_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">padding_px</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">animate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </a><a href="#digitalearth.web.map.WebMap.set_bounds" class="headerlink" title="Permanent link">#</a></h3>
 
@@ -5684,12 +5684,35 @@ so far, which is what most callers want and is applied automatically anyway (see
                 <code>padding</code>
             </td>
             <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Breathing room around the extent, <strong>as a fraction of its own span</strong> — <code>0.05</code> leaves a
+5% margin, exactly as it does on the 2-D tiers, so a call ports between tiers unchanged
+(#340). It grows the framed rectangle itself, through the shared
+:meth:<code>~digitalearth.base.spec.Bounds.padded</code>, before the view is fitted. <code>0.0</code> (default)
+leaves the extent as given. Was a number of screen pixels until #340; that control kept its
+own honest name, <code>padding_px</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>padding_px</code>
+            </td>
+            <td>
                   <code><span title="typing.Any">Any</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Breathing room left around the extent — a number of pixels, or MapLibre's
-per-edge mapping (<code>{"top": 40, "bottom": 10, ...}</code>).</p>
+                <p>MapLibre's own viewport padding passed to <code>fitBounds</code> — a number of pixels, or its
+per-edge mapping (<code>{"top": 40, "bottom": 10, ...}</code>). This is the pixel breathing room the
+engine leaves inside the viewport, which has no fraction-of-span equivalent, so it keeps a
+name of its own rather than overloading <code>padding</code>.</p>
               </div>
             </td>
             <td>
@@ -5755,7 +5778,9 @@ per-edge mapping (<code>{"top": 40, "bottom": 10, ...}</code>).</p>
             <td>
               <div class="doc-md-description">
                 <p>when <code>bounds</code> is <code>None</code> and nothing with an extent has been added yet — there
-is nothing to frame on, and silently doing nothing would look like the call was ignored.</p>
+is nothing to frame on, and silently doing nothing would look like the call was ignored; or
+when <code>padding</code> is a fraction that would invert the rectangle (below <code>-0.5</code>), refused by
+:meth:<code>~digitalearth.base.spec.Bounds.padded</code>.</p>
               </div>
             </td>
           </tr>
@@ -5829,62 +5854,94 @@ is nothing to frame on, and silently doing nothing would look like the call was 
 <span class="normal"><a href="#__codelineno-0-1060">1060</a></span>
 <span class="normal"><a href="#__codelineno-0-1061">1061</a></span>
 <span class="normal"><a href="#__codelineno-0-1062">1062</a></span>
-<span class="normal"><a href="#__codelineno-0-1063">1063</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1008" name="__codelineno-0-1008"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_bounds</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-1063">1063</a></span>
+<span class="normal"><a href="#__codelineno-0-1064">1064</a></span>
+<span class="normal"><a href="#__codelineno-0-1065">1065</a></span>
+<span class="normal"><a href="#__codelineno-0-1066">1066</a></span>
+<span class="normal"><a href="#__codelineno-0-1067">1067</a></span>
+<span class="normal"><a href="#__codelineno-0-1068">1068</a></span>
+<span class="normal"><a href="#__codelineno-0-1069">1069</a></span>
+<span class="normal"><a href="#__codelineno-0-1070">1070</a></span>
+<span class="normal"><a href="#__codelineno-0-1071">1071</a></span>
+<span class="normal"><a href="#__codelineno-0-1072">1072</a></span>
+<span class="normal"><a href="#__codelineno-0-1073">1073</a></span>
+<span class="normal"><a href="#__codelineno-0-1074">1074</a></span>
+<span class="normal"><a href="#__codelineno-0-1075">1075</a></span>
+<span class="normal"><a href="#__codelineno-0-1076">1076</a></span>
+<span class="normal"><a href="#__codelineno-0-1077">1077</a></span>
+<span class="normal"><a href="#__codelineno-0-1078">1078</a></span>
+<span class="normal"><a href="#__codelineno-0-1079">1079</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1008" name="__codelineno-0-1008"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_bounds</span><span class="p">(</span>
 <a id="__codelineno-0-1009" name="__codelineno-0-1009"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-1010" name="__codelineno-0-1010"></a>    <span class="n">bounds</span><span class="p">:</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-1011" name="__codelineno-0-1011"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1012" name="__codelineno-0-1012"></a>    <span class="n">padding</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
-<a id="__codelineno-0-1013" name="__codelineno-0-1013"></a>    <span class="n">animate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-1014" name="__codelineno-0-1014"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-1015" name="__codelineno-0-1015"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Frame the map on ``bounds``, or on everything added so far.</span>
-<a id="__codelineno-0-1016" name="__codelineno-0-1016"></a>
-<a id="__codelineno-0-1017" name="__codelineno-0-1017"></a><span class="sd">    Without this the view comes only from the ``center``/``zoom`` given to the constructor, so a map of</span>
-<a id="__codelineno-0-1018" name="__codelineno-0-1018"></a><span class="sd">    one country opened on the whole world unless the caller worked out a centre themselves.</span>
-<a id="__codelineno-0-1019" name="__codelineno-0-1019"></a>
-<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><span class="sd">        bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added</span>
-<a id="__codelineno-0-1022" name="__codelineno-0-1022"></a><span class="sd">            so far, which is what most callers want and is applied automatically anyway (see</span>
-<a id="__codelineno-0-1023" name="__codelineno-0-1023"></a><span class="sd">            :meth:`_map_view`).</span>
-<a id="__codelineno-0-1024" name="__codelineno-0-1024"></a><span class="sd">        padding: Breathing room left around the extent — a number of pixels, or MapLibre&#39;s</span>
-<a id="__codelineno-0-1025" name="__codelineno-0-1025"></a><span class="sd">            per-edge mapping (``{&quot;top&quot;: 40, &quot;bottom&quot;: 10, ...}``).</span>
-<a id="__codelineno-0-1026" name="__codelineno-0-1026"></a><span class="sd">        animate: Whether the browser eases into the new view rather than jumping.</span>
-<a id="__codelineno-0-1027" name="__codelineno-0-1027"></a>
-<a id="__codelineno-0-1028" name="__codelineno-0-1028"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1029" name="__codelineno-0-1029"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-1030" name="__codelineno-0-1030"></a>
-<a id="__codelineno-0-1031" name="__codelineno-0-1031"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1032" name="__codelineno-0-1032"></a><span class="sd">        ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there</span>
-<a id="__codelineno-0-1033" name="__codelineno-0-1033"></a><span class="sd">            is nothing to frame on, and silently doing nothing would look like the call was ignored.</span>
-<a id="__codelineno-0-1034" name="__codelineno-0-1034"></a>
-<a id="__codelineno-0-1035" name="__codelineno-0-1035"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1036" name="__codelineno-0-1036"></a><span class="sd">        - Frame on an explicit box:</span>
-<a id="__codelineno-0-1037" name="__codelineno-0-1037"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1038" name="__codelineno-0-1038"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                     # doctest: +SKIP</span>
-<a id="__codelineno-0-1039" name="__codelineno-0-1039"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().set_bounds((4.0, 51.0, 7.0, 54.0))  # doctest: +SKIP</span>
-<a id="__codelineno-0-1040" name="__codelineno-0-1040"></a>
-<a id="__codelineno-0-1041" name="__codelineno-0-1041"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1042" name="__codelineno-0-1042"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1043" name="__codelineno-0-1043"></a>    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1044" name="__codelineno-0-1044"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1045" name="__codelineno-0-1045"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-1046" name="__codelineno-0-1046"></a>                <span class="s2">&quot;set_bounds() has nothing to frame on: no layer with an extent has been added yet. &quot;</span>
-<a id="__codelineno-0-1047" name="__codelineno-0-1047"></a>                <span class="s2">&quot;Add the data first, or pass bounds=(west, south, east, north).&quot;</span>
-<a id="__codelineno-0-1048" name="__codelineno-0-1048"></a>            <span class="p">)</span>
-<a id="__codelineno-0-1049" name="__codelineno-0-1049"></a>        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span><span class="p">)</span>
-<a id="__codelineno-0-1050" name="__codelineno-0-1050"></a>    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">bounds</span><span class="p">]</span>
-<a id="__codelineno-0-1051" name="__codelineno-0-1051"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
-<a id="__codelineno-0-1052" name="__codelineno-0-1052"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-1053" name="__codelineno-0-1053"></a>            <span class="sa">f</span><span class="s2">&quot;set_bounds(bounds=...) takes (west, south, east, north); got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2"> values&quot;</span>
-<a id="__codelineno-0-1054" name="__codelineno-0-1054"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1055" name="__codelineno-0-1055"></a>    <span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span> <span class="o">=</span> <span class="n">values</span>
-<a id="__codelineno-0-1056" name="__codelineno-0-1056"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_fit</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-1057" name="__codelineno-0-1057"></a>        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span><span class="p">],</span>
-<a id="__codelineno-0-1058" name="__codelineno-0-1058"></a>        <span class="c1"># Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a</span>
-<a id="__codelineno-0-1059" name="__codelineno-0-1059"></a>        <span class="c1"># TypeError about int() rather than about the argument.</span>
-<a id="__codelineno-0-1060" name="__codelineno-0-1060"></a>        <span class="s2">&quot;padding&quot;</span><span class="p">:</span> <span class="n">padding</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">padding</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">padding</span><span class="p">),</span>
-<a id="__codelineno-0-1061" name="__codelineno-0-1061"></a>        <span class="s2">&quot;animate&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">animate</span><span class="p">),</span>
-<a id="__codelineno-0-1062" name="__codelineno-0-1062"></a>    <span class="p">}</span>
-<a id="__codelineno-0-1063" name="__codelineno-0-1063"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-1012" name="__codelineno-0-1012"></a>    <span class="n">padding</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-1013" name="__codelineno-0-1013"></a>    <span class="n">padding_px</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-0-1014" name="__codelineno-0-1014"></a>    <span class="n">animate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-1015" name="__codelineno-0-1015"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-1016" name="__codelineno-0-1016"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Frame the map on ``bounds``, or on everything added so far.</span>
+<a id="__codelineno-0-1017" name="__codelineno-0-1017"></a>
+<a id="__codelineno-0-1018" name="__codelineno-0-1018"></a><span class="sd">    Without this the view comes only from the ``center``/``zoom`` given to the constructor, so a map of</span>
+<a id="__codelineno-0-1019" name="__codelineno-0-1019"></a><span class="sd">    one country opened on the whole world unless the caller worked out a centre themselves.</span>
+<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a>
+<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1022" name="__codelineno-0-1022"></a><span class="sd">        bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added</span>
+<a id="__codelineno-0-1023" name="__codelineno-0-1023"></a><span class="sd">            so far, which is what most callers want and is applied automatically anyway (see</span>
+<a id="__codelineno-0-1024" name="__codelineno-0-1024"></a><span class="sd">            :meth:`_map_view`).</span>
+<a id="__codelineno-0-1025" name="__codelineno-0-1025"></a><span class="sd">        padding: Breathing room around the extent, **as a fraction of its own span** — ``0.05`` leaves a</span>
+<a id="__codelineno-0-1026" name="__codelineno-0-1026"></a><span class="sd">            5% margin, exactly as it does on the 2-D tiers, so a call ports between tiers unchanged</span>
+<a id="__codelineno-0-1027" name="__codelineno-0-1027"></a><span class="sd">            (#340). It grows the framed rectangle itself, through the shared</span>
+<a id="__codelineno-0-1028" name="__codelineno-0-1028"></a><span class="sd">            :meth:`~digitalearth.base.spec.Bounds.padded`, before the view is fitted. ``0.0`` (default)</span>
+<a id="__codelineno-0-1029" name="__codelineno-0-1029"></a><span class="sd">            leaves the extent as given. Was a number of screen pixels until #340; that control kept its</span>
+<a id="__codelineno-0-1030" name="__codelineno-0-1030"></a><span class="sd">            own honest name, ``padding_px``.</span>
+<a id="__codelineno-0-1031" name="__codelineno-0-1031"></a><span class="sd">        padding_px: MapLibre&#39;s own viewport padding passed to ``fitBounds`` — a number of pixels, or its</span>
+<a id="__codelineno-0-1032" name="__codelineno-0-1032"></a><span class="sd">            per-edge mapping (``{&quot;top&quot;: 40, &quot;bottom&quot;: 10, ...}``). This is the pixel breathing room the</span>
+<a id="__codelineno-0-1033" name="__codelineno-0-1033"></a><span class="sd">            engine leaves inside the viewport, which has no fraction-of-span equivalent, so it keeps a</span>
+<a id="__codelineno-0-1034" name="__codelineno-0-1034"></a><span class="sd">            name of its own rather than overloading ``padding``.</span>
+<a id="__codelineno-0-1035" name="__codelineno-0-1035"></a><span class="sd">        animate: Whether the browser eases into the new view rather than jumping.</span>
+<a id="__codelineno-0-1036" name="__codelineno-0-1036"></a>
+<a id="__codelineno-0-1037" name="__codelineno-0-1037"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1038" name="__codelineno-0-1038"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-1039" name="__codelineno-0-1039"></a>
+<a id="__codelineno-0-1040" name="__codelineno-0-1040"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1041" name="__codelineno-0-1041"></a><span class="sd">        ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there</span>
+<a id="__codelineno-0-1042" name="__codelineno-0-1042"></a><span class="sd">            is nothing to frame on, and silently doing nothing would look like the call was ignored; or</span>
+<a id="__codelineno-0-1043" name="__codelineno-0-1043"></a><span class="sd">            when ``padding`` is a fraction that would invert the rectangle (below ``-0.5``), refused by</span>
+<a id="__codelineno-0-1044" name="__codelineno-0-1044"></a><span class="sd">            :meth:`~digitalearth.base.spec.Bounds.padded`.</span>
+<a id="__codelineno-0-1045" name="__codelineno-0-1045"></a>
+<a id="__codelineno-0-1046" name="__codelineno-0-1046"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1047" name="__codelineno-0-1047"></a><span class="sd">        - Frame on an explicit box:</span>
+<a id="__codelineno-0-1048" name="__codelineno-0-1048"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1049" name="__codelineno-0-1049"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                     # doctest: +SKIP</span>
+<a id="__codelineno-0-1050" name="__codelineno-0-1050"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().set_bounds((4.0, 51.0, 7.0, 54.0))  # doctest: +SKIP</span>
+<a id="__codelineno-0-1051" name="__codelineno-0-1051"></a>
+<a id="__codelineno-0-1052" name="__codelineno-0-1052"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1053" name="__codelineno-0-1053"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1054" name="__codelineno-0-1054"></a>    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1055" name="__codelineno-0-1055"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1056" name="__codelineno-0-1056"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-1057" name="__codelineno-0-1057"></a>                <span class="s2">&quot;set_bounds() has nothing to frame on: no layer with an extent has been added yet. &quot;</span>
+<a id="__codelineno-0-1058" name="__codelineno-0-1058"></a>                <span class="s2">&quot;Add the data first, or pass bounds=(west, south, east, north).&quot;</span>
+<a id="__codelineno-0-1059" name="__codelineno-0-1059"></a>            <span class="p">)</span>
+<a id="__codelineno-0-1060" name="__codelineno-0-1060"></a>        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span><span class="p">)</span>
+<a id="__codelineno-0-1061" name="__codelineno-0-1061"></a>    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">bounds</span><span class="p">]</span>
+<a id="__codelineno-0-1062" name="__codelineno-0-1062"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+<a id="__codelineno-0-1063" name="__codelineno-0-1063"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-1064" name="__codelineno-0-1064"></a>            <span class="sa">f</span><span class="s2">&quot;set_bounds(bounds=...) takes (west, south, east, north); got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2"> values&quot;</span>
+<a id="__codelineno-0-1065" name="__codelineno-0-1065"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1066" name="__codelineno-0-1066"></a>    <span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span> <span class="o">=</span> <span class="n">values</span>
+<a id="__codelineno-0-1067" name="__codelineno-0-1067"></a>    <span class="c1"># `padding` is a fraction of the framed span — the one meaning it carries on every tier (#340) — so it</span>
+<a id="__codelineno-0-1068" name="__codelineno-0-1068"></a>    <span class="c1"># grows the rectangle here, through the shared `Bounds.padded`, which also refuses a fraction that</span>
+<a id="__codelineno-0-1069" name="__codelineno-0-1069"></a>    <span class="c1"># would invert it. MapLibre&#39;s own per-edge pixel padding is a different quantity with no</span>
+<a id="__codelineno-0-1070" name="__codelineno-0-1070"></a>    <span class="c1"># fraction equivalent, so it keeps its own name and is what reaches `fitBounds`.</span>
+<a id="__codelineno-0-1071" name="__codelineno-0-1071"></a>    <span class="n">box</span> <span class="o">=</span> <span class="n">Bounds</span><span class="p">(</span><span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span><span class="p">,</span> <span class="mi">4326</span><span class="p">)</span><span class="o">.</span><span class="n">padded</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">padding</span><span class="p">))</span>
+<a id="__codelineno-0-1072" name="__codelineno-0-1072"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_fit</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-1073" name="__codelineno-0-1073"></a>        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">box</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="n">box</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="n">box</span><span class="o">.</span><span class="n">xmax</span><span class="p">,</span> <span class="n">box</span><span class="o">.</span><span class="n">ymax</span><span class="p">],</span>
+<a id="__codelineno-0-1074" name="__codelineno-0-1074"></a>        <span class="c1"># Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a</span>
+<a id="__codelineno-0-1075" name="__codelineno-0-1075"></a>        <span class="c1"># TypeError about int() rather than about the argument.</span>
+<a id="__codelineno-0-1076" name="__codelineno-0-1076"></a>        <span class="s2">&quot;padding&quot;</span><span class="p">:</span> <span class="n">padding_px</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">padding_px</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">padding_px</span><span class="p">),</span>
+<a id="__codelineno-0-1077" name="__codelineno-0-1077"></a>        <span class="s2">&quot;animate&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">animate</span><span class="p">),</span>
+<a id="__codelineno-0-1078" name="__codelineno-0-1078"></a>    <span class="p">}</span>
+<a id="__codelineno-0-1079" name="__codelineno-0-1079"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -6660,23 +6717,7 @@ look exactly like a layer that refused to go away.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2152">2152</a></span>
-<span class="normal"><a href="#__codelineno-0-2153">2153</a></span>
-<span class="normal"><a href="#__codelineno-0-2154">2154</a></span>
-<span class="normal"><a href="#__codelineno-0-2155">2155</a></span>
-<span class="normal"><a href="#__codelineno-0-2156">2156</a></span>
-<span class="normal"><a href="#__codelineno-0-2157">2157</a></span>
-<span class="normal"><a href="#__codelineno-0-2158">2158</a></span>
-<span class="normal"><a href="#__codelineno-0-2159">2159</a></span>
-<span class="normal"><a href="#__codelineno-0-2160">2160</a></span>
-<span class="normal"><a href="#__codelineno-0-2161">2161</a></span>
-<span class="normal"><a href="#__codelineno-0-2162">2162</a></span>
-<span class="normal"><a href="#__codelineno-0-2163">2163</a></span>
-<span class="normal"><a href="#__codelineno-0-2164">2164</a></span>
-<span class="normal"><a href="#__codelineno-0-2165">2165</a></span>
-<span class="normal"><a href="#__codelineno-0-2166">2166</a></span>
-<span class="normal"><a href="#__codelineno-0-2167">2167</a></span>
-<span class="normal"><a href="#__codelineno-0-2168">2168</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2168">2168</a></span>
 <span class="normal"><a href="#__codelineno-0-2169">2169</a></span>
 <span class="normal"><a href="#__codelineno-0-2170">2170</a></span>
 <span class="normal"><a href="#__codelineno-0-2171">2171</a></span>
@@ -6796,143 +6837,159 @@ look exactly like a layer that refused to go away.</p>
 <span class="normal"><a href="#__codelineno-0-2285">2285</a></span>
 <span class="normal"><a href="#__codelineno-0-2286">2286</a></span>
 <span class="normal"><a href="#__codelineno-0-2287">2287</a></span>
-<span class="normal"><a href="#__codelineno-0-2288">2288</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2152" name="__codelineno-0-2152"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-2153" name="__codelineno-0-2153"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop a previously added layer from the map.</span>
-<a id="__codelineno-0-2154" name="__codelineno-0-2154"></a>
-<a id="__codelineno-0-2155" name="__codelineno-0-2155"></a><span class="sd">    Building a `WebMap` was one-way: a mistake meant starting over, which in a notebook — where these</span>
-<a id="__codelineno-0-2156" name="__codelineno-0-2156"></a><span class="sd">    maps are built — is the normal workflow.</span>
-<a id="__codelineno-0-2157" name="__codelineno-0-2157"></a>
-<a id="__codelineno-0-2158" name="__codelineno-0-2158"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2159" name="__codelineno-0-2159"></a><span class="sd">        layer_id: An id from :attr:`layer_ids`.</span>
-<a id="__codelineno-0-2160" name="__codelineno-0-2160"></a>
-<a id="__codelineno-0-2161" name="__codelineno-0-2161"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2162" name="__codelineno-0-2162"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-2163" name="__codelineno-0-2163"></a>
-<a id="__codelineno-0-2164" name="__codelineno-0-2164"></a><span class="sd">    Note:</span>
-<a id="__codelineno-0-2165" name="__codelineno-0-2165"></a><span class="sd">        **The colour key goes with the layer.** A key is asked for by hanging a</span>
-<a id="__codelineno-0-2166" name="__codelineno-0-2166"></a><span class="sd">        :class:`~digitalearth.base.spec.encoding.Guide` on the layer&#39;s own ``color`` encoding</span>
-<a id="__codelineno-0-2167" name="__codelineno-0-2167"></a><span class="sd">        (:meth:`~digitalearth.web.decoration.DecorationMixin.legend`), so removing the layer removes the</span>
-<a id="__codelineno-0-2168" name="__codelineno-0-2168"></a><span class="sd">        guide, and the panel — derived from the guides the live layers carry — is rebuilt without it. A</span>
-<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a><span class="sd">        surviving layer that carries its own guide then shows its own key. Nothing has to be rebuilt by</span>
-<a id="__codelineno-0-2170" name="__codelineno-0-2170"></a><span class="sd">        hand, and no key describes a layer that is gone.</span>
-<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a>
-<a id="__codelineno-0-2172" name="__codelineno-0-2172"></a><span class="sd">        The **running data extent** is not like that, and is not cleared until the last layer goes. It is</span>
-<a id="__codelineno-0-2173" name="__codelineno-0-2173"></a><span class="sd">        a &quot;most recent&quot; accessor rather than a model of what is on the map, so after removing one layer</span>
-<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a><span class="sd">        of several it still spans the removed one; call :meth:`set_bounds` if that matters.</span>
-<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a><span class="sd">        :attr:`last_legend` and :attr:`last_breaks` are &quot;most recent&quot; accessors too — that is what they</span>
-<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a><span class="sd">        are for — but they no longer decide what is drawn: both are handed to the most recent</span>
-<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a><span class="sd">        *surviving* classification here, **together**, so neither describes a removed layer and the two</span>
-<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a><span class="sd">        cannot answer for different layers (review L7); the key is drawn from the guides regardless.</span>
+<span class="normal"><a href="#__codelineno-0-2288">2288</a></span>
+<span class="normal"><a href="#__codelineno-0-2289">2289</a></span>
+<span class="normal"><a href="#__codelineno-0-2290">2290</a></span>
+<span class="normal"><a href="#__codelineno-0-2291">2291</a></span>
+<span class="normal"><a href="#__codelineno-0-2292">2292</a></span>
+<span class="normal"><a href="#__codelineno-0-2293">2293</a></span>
+<span class="normal"><a href="#__codelineno-0-2294">2294</a></span>
+<span class="normal"><a href="#__codelineno-0-2295">2295</a></span>
+<span class="normal"><a href="#__codelineno-0-2296">2296</a></span>
+<span class="normal"><a href="#__codelineno-0-2297">2297</a></span>
+<span class="normal"><a href="#__codelineno-0-2298">2298</a></span>
+<span class="normal"><a href="#__codelineno-0-2299">2299</a></span>
+<span class="normal"><a href="#__codelineno-0-2300">2300</a></span>
+<span class="normal"><a href="#__codelineno-0-2301">2301</a></span>
+<span class="normal"><a href="#__codelineno-0-2302">2302</a></span>
+<span class="normal"><a href="#__codelineno-0-2303">2303</a></span>
+<span class="normal"><a href="#__codelineno-0-2304">2304</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2168" name="__codelineno-0-2168"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop a previously added layer from the map.</span>
+<a id="__codelineno-0-2170" name="__codelineno-0-2170"></a>
+<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a><span class="sd">    Building a `WebMap` was one-way: a mistake meant starting over, which in a notebook — where these</span>
+<a id="__codelineno-0-2172" name="__codelineno-0-2172"></a><span class="sd">    maps are built — is the normal workflow.</span>
+<a id="__codelineno-0-2173" name="__codelineno-0-2173"></a>
+<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a><span class="sd">        layer_id: An id from :attr:`layer_ids`.</span>
+<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a>
+<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a><span class="sd">        The same map instance, so builder calls chain.</span>
 <a id="__codelineno-0-2179" name="__codelineno-0-2179"></a>
-<a id="__codelineno-0-2180" name="__codelineno-0-2180"></a><span class="sd">        The **id** is not one of those either: it goes back to the pool, so a name removed and asked for</span>
-<a id="__codelineno-0-2181" name="__codelineno-0-2181"></a><span class="sd">        again is handed back unsuffixed. That is the lifetime all four tiers share —</span>
-<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a><span class="sd">        :func:`~digitalearth.base.spec.layer.free_layer_id` states it.</span>
-<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a>
-<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a><span class="sd">        KeyError: when no such layer was added, listing the ids that were — a silent no-op here would</span>
-<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a><span class="sd">            look exactly like a layer that refused to go away.</span>
+<a id="__codelineno-0-2180" name="__codelineno-0-2180"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-2181" name="__codelineno-0-2181"></a><span class="sd">        **The colour key goes with the layer.** A key is asked for by hanging a</span>
+<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a><span class="sd">        :class:`~digitalearth.base.spec.encoding.Guide` on the layer&#39;s own ``color`` encoding</span>
+<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a><span class="sd">        (:meth:`~digitalearth.web.decoration.DecorationMixin.legend`), so removing the layer removes the</span>
+<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a><span class="sd">        guide, and the panel — derived from the guides the live layers carry — is rebuilt without it. A</span>
+<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a><span class="sd">        surviving layer that carries its own guide then shows its own key. Nothing has to be rebuilt by</span>
+<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a><span class="sd">        hand, and no key describes a layer that is gone.</span>
 <a id="__codelineno-0-2187" name="__codelineno-0-2187"></a>
-<a id="__codelineno-0-2188" name="__codelineno-0-2188"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a><span class="sd">        - Remove one layer; the map is returned, so calls chain:</span>
-<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
-<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a><span class="sd">            &gt;&gt;&gt; m = WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).text(2.35, 48.86, &quot;Paris&quot;, name=&quot;paris&quot;)</span>
-<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a><span class="sd">            &gt;&gt;&gt; m.remove_layer(&quot;amsterdam&quot;) is m, m.layer_ids, len(m.layers)</span>
-<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a><span class="sd">            (True, [&#39;paris&#39;], 1)</span>
+<a id="__codelineno-0-2188" name="__codelineno-0-2188"></a><span class="sd">        The **running data extent** is not like that, and is not cleared until the last layer goes. It is</span>
+<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a><span class="sd">        a &quot;most recent&quot; accessor rather than a model of what is on the map, so after removing one layer</span>
+<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a><span class="sd">        of several it still spans the removed one; call :meth:`set_bounds` if that matters.</span>
+<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a><span class="sd">        :attr:`last_legend` and :attr:`last_breaks` are &quot;most recent&quot; accessors too — that is what they</span>
+<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a><span class="sd">        are for — but they no longer decide what is drawn: both are handed to the most recent</span>
+<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a><span class="sd">        *surviving* classification here, **together**, so neither describes a removed layer and the two</span>
+<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a><span class="sd">        cannot answer for different layers (review L7); the key is drawn from the guides regardless.</span>
 <a id="__codelineno-0-2195" name="__codelineno-0-2195"></a>
-<a id="__codelineno-0-2196" name="__codelineno-0-2196"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2197" name="__codelineno-0-2197"></a><span class="sd">        - An id that was never added is refused, naming the ids that were:</span>
-<a id="__codelineno-0-2198" name="__codelineno-0-2198"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2199" name="__codelineno-0-2199"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
-<a id="__codelineno-0-2200" name="__codelineno-0-2200"></a><span class="sd">            &gt;&gt;&gt; WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).remove_layer(&quot;paris&quot;)</span>
-<a id="__codelineno-0-2201" name="__codelineno-0-2201"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-2202" name="__codelineno-0-2202"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-2203" name="__codelineno-0-2203"></a><span class="sd">            KeyError: &quot;no layer &#39;paris&#39; on this map; added layers are [&#39;amsterdam&#39;]&quot;</span>
-<a id="__codelineno-0-2204" name="__codelineno-0-2204"></a>
-<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2206" name="__codelineno-0-2206"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2207" name="__codelineno-0-2207"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">derived_ids</span>
-<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a>
-<a id="__codelineno-0-2209" name="__codelineno-0-2209"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_require_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a>    <span class="c1"># The id is free again the moment it addresses nothing — the lifetime</span>
-<a id="__codelineno-0-2211" name="__codelineno-0-2211"></a>    <span class="c1"># :func:`~digitalearth.base.spec.layer.free_layer_id` states, and the one the 3-D tier already had</span>
-<a id="__codelineno-0-2212" name="__codelineno-0-2212"></a>    <span class="c1"># by reading its ids off the live tree. This tier reserved a removed layer&#39;s id for the life of the</span>
-<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a>    <span class="c1"># map, so `remove_layer(&quot;wells&quot;)` followed by a new `wells` drew `wells-2` with nothing called</span>
-<a id="__codelineno-0-2214" name="__codelineno-0-2214"></a>    <span class="c1"># `wells` on the map — and on this tier the id is the caption the layer switcher shows (review</span>
-<a id="__codelineno-0-2215" name="__codelineno-0-2215"></a>    <span class="c1"># R2-M9). The ids its drawer derived were reserved with it, so they go back with it too.</span>
-<a id="__codelineno-0-2216" name="__codelineno-0-2216"></a>    <span class="n">freed</span> <span class="o">=</span> <span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="o">*</span><span class="n">derived_ids</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">))</span>
-<a id="__codelineno-0-2217" name="__codelineno-0-2217"></a>    <span class="c1"># Read above but given back below, because the removal can still be refused: `LayerTree.remove` turns</span>
-<a id="__codelineno-0-2218" name="__codelineno-0-2218"></a>    <span class="c1"># down a layer another one takes its elevation from. Freeing the ids first left the pool one id short</span>
-<a id="__codelineno-0-2219" name="__codelineno-0-2219"></a>    <span class="c1"># of a tree that still held the layer, so the next builder call under that name died inside</span>
-<a id="__codelineno-0-2220" name="__codelineno-0-2220"></a>    <span class="c1"># `LayerTree.add` — &quot;already in the tree&quot; — instead of being suffixed the way every other tier</span>
-<a id="__codelineno-0-2221" name="__codelineno-0-2221"></a>    <span class="c1"># suffixes it (review R2-M8). The other three tiers evaluate the tree change inside the `_change(...)`</span>
-<a id="__codelineno-0-2222" name="__codelineno-0-2222"></a>    <span class="c1"># argument, which is what keeps the question in one place there.</span>
-<a id="__codelineno-0-2223" name="__codelineno-0-2223"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-2224" name="__codelineno-0-2224"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_issued_ids</span><span class="o">.</span><span class="n">difference_update</span><span class="p">(</span><span class="n">freed</span><span class="p">)</span>
-<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a>    <span class="c1"># A caller&#39;s own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker</span>
-<a id="__codelineno-0-2226" name="__codelineno-0-2226"></a>    <span class="c1"># attribute the builders&#39; closures carry, so there is nothing on it to compare by id.</span>
-<a id="__codelineno-0-2227" name="__codelineno-0-2227"></a>    <span class="n">held</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_custom</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-2228" name="__codelineno-0-2228"></a>    <span class="c1"># The reference goes out of *this* map&#39;s figure, and the object stays registered: a `FigureSpec`</span>
-<a id="__codelineno-0-2229" name="__codelineno-0-2229"></a>    <span class="c1"># captured before the removal still names it, and forgetting here made every such figure dangle</span>
-<a id="__codelineno-0-2230" name="__codelineno-0-2230"></a>    <span class="c1"># (review M6). `close()` is where a map lets its data go, which is the caller saying they are</span>
-<a id="__codelineno-0-2231" name="__codelineno-0-2231"></a>    <span class="c1"># finished with every figure it produced.</span>
-<a id="__codelineno-0-2232" name="__codelineno-0-2232"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_sources</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-2233" name="__codelineno-0-2233"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_legend</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-2234" name="__codelineno-0-2234"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_slider_frame</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-2235" name="__codelineno-0-2235"></a>
-<a id="__codelineno-0-2236" name="__codelineno-0-2236"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<a id="__codelineno-0-2237" name="__codelineno-0-2237"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether a queued layer is the one being removed.</span>
-<a id="__codelineno-0-2238" name="__codelineno-0-2238"></a>
-<a id="__codelineno-0-2239" name="__codelineno-0-2239"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a><span class="sd">            layer: The queued closure or object.</span>
-<a id="__codelineno-0-2241" name="__codelineno-0-2241"></a>
-<a id="__codelineno-0-2242" name="__codelineno-0-2242"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-2243" name="__codelineno-0-2243"></a><span class="sd">            `True` for the builder closure that carries this id, or for the caller&#39;s own held object.</span>
-<a id="__codelineno-0-2244" name="__codelineno-0-2244"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2245" name="__codelineno-0-2245"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="s2">&quot;_digitalearth_layer_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="n">layer_id</span><span class="p">:</span>
-<a id="__codelineno-0-2246" name="__codelineno-0-2246"></a>            <span class="k">return</span> <span class="kc">True</span>
-<a id="__codelineno-0-2247" name="__codelineno-0-2247"></a>        <span class="k">return</span> <span class="n">held</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">layer</span> <span class="ow">is</span> <span class="n">held</span>
-<a id="__codelineno-0-2248" name="__codelineno-0-2248"></a>
-<a id="__codelineno-0-2249" name="__codelineno-0-2249"></a>    <span class="c1"># The reference band is addressed by a count, so a layer removed from it gives its slot back. Otherwise the</span>
-<a id="__codelineno-0-2250" name="__codelineno-0-2250"></a>    <span class="c1"># next `add_reference` inserts one place too high — above data it belongs beneath.</span>
-<a id="__codelineno-0-2251" name="__codelineno-0-2251"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
-<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a>        <span class="mi">1</span>
-<a id="__codelineno-0-2253" name="__codelineno-0-2253"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">[</span>
-<a id="__codelineno-0-2254" name="__codelineno-0-2254"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span>
-<a id="__codelineno-0-2255" name="__codelineno-0-2255"></a>        <span class="p">]</span>
-<a id="__codelineno-0-2256" name="__codelineno-0-2256"></a>        <span class="k">if</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
-<a id="__codelineno-0-2257" name="__codelineno-0-2257"></a>    <span class="p">)</span>
-<a id="__codelineno-0-2258" name="__codelineno-0-2258"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
-<a id="__codelineno-0-2259" name="__codelineno-0-2259"></a>        <span class="mi">1</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span><span class="p">]</span> <span class="k">if</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
-<a id="__codelineno-0-2260" name="__codelineno-0-2260"></a>    <span class="p">)</span>
-<a id="__codelineno-0-2261" name="__codelineno-0-2261"></a>    <span class="c1"># The overlay band is counted from the top, for the same reason: remove a label and the next data layer</span>
-<a id="__codelineno-0-2262" name="__codelineno-0-2262"></a>    <span class="c1"># would otherwise be queued one place too low, beneath a label that is no longer there.</span>
-<a id="__codelineno-0-2263" name="__codelineno-0-2263"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_overlay_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
-<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a>        <span class="mi">1</span>
-<a id="__codelineno-0-2265" name="__codelineno-0-2265"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_overlay_count</span> <span class="p">:]</span>
-<a id="__codelineno-0-2266" name="__codelineno-0-2266"></a>        <span class="k">if</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
-<a id="__codelineno-0-2267" name="__codelineno-0-2267"></a>    <span class="p">)</span>
-<a id="__codelineno-0-2268" name="__codelineno-0-2268"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span> <span class="o">=</span> <span class="p">[</span><span class="n">layer</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)]</span>
-<a id="__codelineno-0-2269" name="__codelineno-0-2269"></a>    <span class="c1"># The renderer keeps its own record of what it drew, and nothing else clears it: `_reconcile` only</span>
-<a id="__codelineno-0-2270" name="__codelineno-0-2270"></a>    <span class="c1"># removes ids that `diff` reports, and a layer removed here is in neither figure it compares. Left</span>
-<a id="__codelineno-0-2271" name="__codelineno-0-2271"></a>    <span class="c1"># alone, the MapLibre source and layer objects of every removed layer are held for the map&#39;s life.</span>
-<a id="__codelineno-0-2272" name="__codelineno-0-2272"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-2273" name="__codelineno-0-2273"></a>    <span class="n">remaining</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
-<a id="__codelineno-0-2274" name="__codelineno-0-2274"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">==</span> <span class="n">layer_id</span><span class="p">:</span>
-<a id="__codelineno-0-2275" name="__codelineno-0-2275"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">=</span> <span class="n">remaining</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">remaining</span> <span class="k">else</span> <span class="kc">None</span>
-<a id="__codelineno-0-2276" name="__codelineno-0-2276"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_temporal_step</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-2277" name="__codelineno-0-2277"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">remaining</span><span class="p">:</span>
-<a id="__codelineno-0-2278" name="__codelineno-0-2278"></a>        <span class="c1"># Nothing is drawn any more, so the classification a legend would describe is gone with it.</span>
-<a id="__codelineno-0-2279" name="__codelineno-0-2279"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-2280" name="__codelineno-0-2280"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_breaks</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-2281" name="__codelineno-0-2281"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-2282" name="__codelineno-0-2282"></a>    <span class="c1"># The guide went with the layer&#39;s description, so the key is rebuilt from what is left. This is the</span>
-<a id="__codelineno-0-2283" name="__codelineno-0-2283"></a>    <span class="c1"># one layer-management method that does not go through `_change` — the tree is written above, in a</span>
-<a id="__codelineno-0-2284" name="__codelineno-0-2284"></a>    <span class="c1"># sequence that also frees ids and unqueues closures — so it asks for the rebuild itself.</span>
-<a id="__codelineno-0-2285" name="__codelineno-0-2285"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web.decoration</span><span class="w"> </span><span class="kn">import</span> <span class="n">refresh_legend_panel</span>
-<a id="__codelineno-0-2286" name="__codelineno-0-2286"></a>
-<a id="__codelineno-0-2287" name="__codelineno-0-2287"></a>    <span class="n">refresh_legend_panel</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-<a id="__codelineno-0-2288" name="__codelineno-0-2288"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-2196" name="__codelineno-0-2196"></a><span class="sd">        The **id** is not one of those either: it goes back to the pool, so a name removed and asked for</span>
+<a id="__codelineno-0-2197" name="__codelineno-0-2197"></a><span class="sd">        again is handed back unsuffixed. That is the lifetime all four tiers share —</span>
+<a id="__codelineno-0-2198" name="__codelineno-0-2198"></a><span class="sd">        :func:`~digitalearth.base.spec.layer.free_layer_id` states it.</span>
+<a id="__codelineno-0-2199" name="__codelineno-0-2199"></a>
+<a id="__codelineno-0-2200" name="__codelineno-0-2200"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2201" name="__codelineno-0-2201"></a><span class="sd">        KeyError: when no such layer was added, listing the ids that were — a silent no-op here would</span>
+<a id="__codelineno-0-2202" name="__codelineno-0-2202"></a><span class="sd">            look exactly like a layer that refused to go away.</span>
+<a id="__codelineno-0-2203" name="__codelineno-0-2203"></a>
+<a id="__codelineno-0-2204" name="__codelineno-0-2204"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">        - Remove one layer; the map is returned, so calls chain:</span>
+<a id="__codelineno-0-2206" name="__codelineno-0-2206"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2207" name="__codelineno-0-2207"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
+<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">            &gt;&gt;&gt; m = WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).text(2.35, 48.86, &quot;Paris&quot;, name=&quot;paris&quot;)</span>
+<a id="__codelineno-0-2209" name="__codelineno-0-2209"></a><span class="sd">            &gt;&gt;&gt; m.remove_layer(&quot;amsterdam&quot;) is m, m.layer_ids, len(m.layers)</span>
+<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a><span class="sd">            (True, [&#39;paris&#39;], 1)</span>
+<a id="__codelineno-0-2211" name="__codelineno-0-2211"></a>
+<a id="__codelineno-0-2212" name="__codelineno-0-2212"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">        - An id that was never added is refused, naming the ids that were:</span>
+<a id="__codelineno-0-2214" name="__codelineno-0-2214"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2215" name="__codelineno-0-2215"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
+<a id="__codelineno-0-2216" name="__codelineno-0-2216"></a><span class="sd">            &gt;&gt;&gt; WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).remove_layer(&quot;paris&quot;)</span>
+<a id="__codelineno-0-2217" name="__codelineno-0-2217"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-2218" name="__codelineno-0-2218"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-2219" name="__codelineno-0-2219"></a><span class="sd">            KeyError: &quot;no layer &#39;paris&#39; on this map; added layers are [&#39;amsterdam&#39;]&quot;</span>
+<a id="__codelineno-0-2220" name="__codelineno-0-2220"></a>
+<a id="__codelineno-0-2221" name="__codelineno-0-2221"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2222" name="__codelineno-0-2222"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2223" name="__codelineno-0-2223"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">derived_ids</span>
+<a id="__codelineno-0-2224" name="__codelineno-0-2224"></a>
+<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_require_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-2226" name="__codelineno-0-2226"></a>    <span class="c1"># The id is free again the moment it addresses nothing — the lifetime</span>
+<a id="__codelineno-0-2227" name="__codelineno-0-2227"></a>    <span class="c1"># :func:`~digitalearth.base.spec.layer.free_layer_id` states, and the one the 3-D tier already had</span>
+<a id="__codelineno-0-2228" name="__codelineno-0-2228"></a>    <span class="c1"># by reading its ids off the live tree. This tier reserved a removed layer&#39;s id for the life of the</span>
+<a id="__codelineno-0-2229" name="__codelineno-0-2229"></a>    <span class="c1"># map, so `remove_layer(&quot;wells&quot;)` followed by a new `wells` drew `wells-2` with nothing called</span>
+<a id="__codelineno-0-2230" name="__codelineno-0-2230"></a>    <span class="c1"># `wells` on the map — and on this tier the id is the caption the layer switcher shows (review</span>
+<a id="__codelineno-0-2231" name="__codelineno-0-2231"></a>    <span class="c1"># R2-M9). The ids its drawer derived were reserved with it, so they go back with it too.</span>
+<a id="__codelineno-0-2232" name="__codelineno-0-2232"></a>    <span class="n">freed</span> <span class="o">=</span> <span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="o">*</span><span class="n">derived_ids</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">))</span>
+<a id="__codelineno-0-2233" name="__codelineno-0-2233"></a>    <span class="c1"># Read above but given back below, because the removal can still be refused: `LayerTree.remove` turns</span>
+<a id="__codelineno-0-2234" name="__codelineno-0-2234"></a>    <span class="c1"># down a layer another one takes its elevation from. Freeing the ids first left the pool one id short</span>
+<a id="__codelineno-0-2235" name="__codelineno-0-2235"></a>    <span class="c1"># of a tree that still held the layer, so the next builder call under that name died inside</span>
+<a id="__codelineno-0-2236" name="__codelineno-0-2236"></a>    <span class="c1"># `LayerTree.add` — &quot;already in the tree&quot; — instead of being suffixed the way every other tier</span>
+<a id="__codelineno-0-2237" name="__codelineno-0-2237"></a>    <span class="c1"># suffixes it (review R2-M8). The other three tiers evaluate the tree change inside the `_change(...)`</span>
+<a id="__codelineno-0-2238" name="__codelineno-0-2238"></a>    <span class="c1"># argument, which is what keeps the question in one place there.</span>
+<a id="__codelineno-0-2239" name="__codelineno-0-2239"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_issued_ids</span><span class="o">.</span><span class="n">difference_update</span><span class="p">(</span><span class="n">freed</span><span class="p">)</span>
+<a id="__codelineno-0-2241" name="__codelineno-0-2241"></a>    <span class="c1"># A caller&#39;s own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker</span>
+<a id="__codelineno-0-2242" name="__codelineno-0-2242"></a>    <span class="c1"># attribute the builders&#39; closures carry, so there is nothing on it to compare by id.</span>
+<a id="__codelineno-0-2243" name="__codelineno-0-2243"></a>    <span class="n">held</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_custom</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-2244" name="__codelineno-0-2244"></a>    <span class="c1"># The reference goes out of *this* map&#39;s figure, and the object stays registered: a `FigureSpec`</span>
+<a id="__codelineno-0-2245" name="__codelineno-0-2245"></a>    <span class="c1"># captured before the removal still names it, and forgetting here made every such figure dangle</span>
+<a id="__codelineno-0-2246" name="__codelineno-0-2246"></a>    <span class="c1"># (review M6). `close()` is where a map lets its data go, which is the caller saying they are</span>
+<a id="__codelineno-0-2247" name="__codelineno-0-2247"></a>    <span class="c1"># finished with every figure it produced.</span>
+<a id="__codelineno-0-2248" name="__codelineno-0-2248"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_sources</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-2249" name="__codelineno-0-2249"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_legend</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-2250" name="__codelineno-0-2250"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_slider_frame</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-2251" name="__codelineno-0-2251"></a>
+<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="__codelineno-0-2253" name="__codelineno-0-2253"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether a queued layer is the one being removed.</span>
+<a id="__codelineno-0-2254" name="__codelineno-0-2254"></a>
+<a id="__codelineno-0-2255" name="__codelineno-0-2255"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-2256" name="__codelineno-0-2256"></a><span class="sd">            layer: The queued closure or object.</span>
+<a id="__codelineno-0-2257" name="__codelineno-0-2257"></a>
+<a id="__codelineno-0-2258" name="__codelineno-0-2258"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-2259" name="__codelineno-0-2259"></a><span class="sd">            `True` for the builder closure that carries this id, or for the caller&#39;s own held object.</span>
+<a id="__codelineno-0-2260" name="__codelineno-0-2260"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2261" name="__codelineno-0-2261"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="s2">&quot;_digitalearth_layer_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="n">layer_id</span><span class="p">:</span>
+<a id="__codelineno-0-2262" name="__codelineno-0-2262"></a>            <span class="k">return</span> <span class="kc">True</span>
+<a id="__codelineno-0-2263" name="__codelineno-0-2263"></a>        <span class="k">return</span> <span class="n">held</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">layer</span> <span class="ow">is</span> <span class="n">held</span>
+<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a>
+<a id="__codelineno-0-2265" name="__codelineno-0-2265"></a>    <span class="c1"># The reference band is addressed by a count, so a layer removed from it gives its slot back. Otherwise the</span>
+<a id="__codelineno-0-2266" name="__codelineno-0-2266"></a>    <span class="c1"># next `add_reference` inserts one place too high — above data it belongs beneath.</span>
+<a id="__codelineno-0-2267" name="__codelineno-0-2267"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
+<a id="__codelineno-0-2268" name="__codelineno-0-2268"></a>        <span class="mi">1</span>
+<a id="__codelineno-0-2269" name="__codelineno-0-2269"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">[</span>
+<a id="__codelineno-0-2270" name="__codelineno-0-2270"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span>
+<a id="__codelineno-0-2271" name="__codelineno-0-2271"></a>        <span class="p">]</span>
+<a id="__codelineno-0-2272" name="__codelineno-0-2272"></a>        <span class="k">if</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-2273" name="__codelineno-0-2273"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2274" name="__codelineno-0-2274"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
+<a id="__codelineno-0-2275" name="__codelineno-0-2275"></a>        <span class="mi">1</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span><span class="p">]</span> <span class="k">if</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-2276" name="__codelineno-0-2276"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2277" name="__codelineno-0-2277"></a>    <span class="c1"># The overlay band is counted from the top, for the same reason: remove a label and the next data layer</span>
+<a id="__codelineno-0-2278" name="__codelineno-0-2278"></a>    <span class="c1"># would otherwise be queued one place too low, beneath a label that is no longer there.</span>
+<a id="__codelineno-0-2279" name="__codelineno-0-2279"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_overlay_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
+<a id="__codelineno-0-2280" name="__codelineno-0-2280"></a>        <span class="mi">1</span>
+<a id="__codelineno-0-2281" name="__codelineno-0-2281"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_queued</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_overlay_count</span> <span class="p">:]</span>
+<a id="__codelineno-0-2282" name="__codelineno-0-2282"></a>        <span class="k">if</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-2283" name="__codelineno-0-2283"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2284" name="__codelineno-0-2284"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span> <span class="o">=</span> <span class="p">[</span><span class="n">layer</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queued</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)]</span>
+<a id="__codelineno-0-2285" name="__codelineno-0-2285"></a>    <span class="c1"># The renderer keeps its own record of what it drew, and nothing else clears it: `_reconcile` only</span>
+<a id="__codelineno-0-2286" name="__codelineno-0-2286"></a>    <span class="c1"># removes ids that `diff` reports, and a layer removed here is in neither figure it compares. Left</span>
+<a id="__codelineno-0-2287" name="__codelineno-0-2287"></a>    <span class="c1"># alone, the MapLibre source and layer objects of every removed layer are held for the map&#39;s life.</span>
+<a id="__codelineno-0-2288" name="__codelineno-0-2288"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-2289" name="__codelineno-0-2289"></a>    <span class="n">remaining</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
+<a id="__codelineno-0-2290" name="__codelineno-0-2290"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">==</span> <span class="n">layer_id</span><span class="p">:</span>
+<a id="__codelineno-0-2291" name="__codelineno-0-2291"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">=</span> <span class="n">remaining</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">remaining</span> <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-0-2292" name="__codelineno-0-2292"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_temporal_step</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-2293" name="__codelineno-0-2293"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">remaining</span><span class="p">:</span>
+<a id="__codelineno-0-2294" name="__codelineno-0-2294"></a>        <span class="c1"># Nothing is drawn any more, so the classification a legend would describe is gone with it.</span>
+<a id="__codelineno-0-2295" name="__codelineno-0-2295"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-2296" name="__codelineno-0-2296"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_breaks</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-2297" name="__codelineno-0-2297"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-2298" name="__codelineno-0-2298"></a>    <span class="c1"># The guide went with the layer&#39;s description, so the key is rebuilt from what is left. This is the</span>
+<a id="__codelineno-0-2299" name="__codelineno-0-2299"></a>    <span class="c1"># one layer-management method that does not go through `_change` — the tree is written above, in a</span>
+<a id="__codelineno-0-2300" name="__codelineno-0-2300"></a>    <span class="c1"># sequence that also frees ids and unqueues closures — so it asks for the rebuild itself.</span>
+<a id="__codelineno-0-2301" name="__codelineno-0-2301"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web.decoration</span><span class="w"> </span><span class="kn">import</span> <span class="n">refresh_legend_panel</span>
+<a id="__codelineno-0-2302" name="__codelineno-0-2302"></a>
+<a id="__codelineno-0-2303" name="__codelineno-0-2303"></a>    <span class="n">refresh_legend_panel</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<a id="__codelineno-0-2304" name="__codelineno-0-2304"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -9998,7 +10055,24 @@ digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</p
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2001">2001</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1984">1984</a></span>
+<span class="normal"><a href="#__codelineno-0-1985">1985</a></span>
+<span class="normal"><a href="#__codelineno-0-1986">1986</a></span>
+<span class="normal"><a href="#__codelineno-0-1987">1987</a></span>
+<span class="normal"><a href="#__codelineno-0-1988">1988</a></span>
+<span class="normal"><a href="#__codelineno-0-1989">1989</a></span>
+<span class="normal"><a href="#__codelineno-0-1990">1990</a></span>
+<span class="normal"><a href="#__codelineno-0-1991">1991</a></span>
+<span class="normal"><a href="#__codelineno-0-1992">1992</a></span>
+<span class="normal"><a href="#__codelineno-0-1993">1993</a></span>
+<span class="normal"><a href="#__codelineno-0-1994">1994</a></span>
+<span class="normal"><a href="#__codelineno-0-1995">1995</a></span>
+<span class="normal"><a href="#__codelineno-0-1996">1996</a></span>
+<span class="normal"><a href="#__codelineno-0-1997">1997</a></span>
+<span class="normal"><a href="#__codelineno-0-1998">1998</a></span>
+<span class="normal"><a href="#__codelineno-0-1999">1999</a></span>
+<span class="normal"><a href="#__codelineno-0-2000">2000</a></span>
+<span class="normal"><a href="#__codelineno-0-2001">2001</a></span>
 <span class="normal"><a href="#__codelineno-0-2002">2002</a></span>
 <span class="normal"><a href="#__codelineno-0-2003">2003</a></span>
 <span class="normal"><a href="#__codelineno-0-2004">2004</a></span>
@@ -10062,105 +10136,88 @@ digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</p
 <span class="normal"><a href="#__codelineno-0-2062">2062</a></span>
 <span class="normal"><a href="#__codelineno-0-2063">2063</a></span>
 <span class="normal"><a href="#__codelineno-0-2064">2064</a></span>
-<span class="normal"><a href="#__codelineno-0-2065">2065</a></span>
-<span class="normal"><a href="#__codelineno-0-2066">2066</a></span>
-<span class="normal"><a href="#__codelineno-0-2067">2067</a></span>
-<span class="normal"><a href="#__codelineno-0-2068">2068</a></span>
-<span class="normal"><a href="#__codelineno-0-2069">2069</a></span>
-<span class="normal"><a href="#__codelineno-0-2070">2070</a></span>
-<span class="normal"><a href="#__codelineno-0-2071">2071</a></span>
-<span class="normal"><a href="#__codelineno-0-2072">2072</a></span>
-<span class="normal"><a href="#__codelineno-0-2073">2073</a></span>
-<span class="normal"><a href="#__codelineno-0-2074">2074</a></span>
-<span class="normal"><a href="#__codelineno-0-2075">2075</a></span>
-<span class="normal"><a href="#__codelineno-0-2076">2076</a></span>
-<span class="normal"><a href="#__codelineno-0-2077">2077</a></span>
-<span class="normal"><a href="#__codelineno-0-2078">2078</a></span>
-<span class="normal"><a href="#__codelineno-0-2079">2079</a></span>
-<span class="normal"><a href="#__codelineno-0-2080">2080</a></span>
-<span class="normal"><a href="#__codelineno-0-2081">2081</a></span>
-<span class="normal"><a href="#__codelineno-0-2082">2082</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2001" name="__codelineno-0-2001"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
-<a id="__codelineno-0-2002" name="__codelineno-0-2002"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-2004" name="__codelineno-0-2004"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
-<a id="__codelineno-0-2005" name="__codelineno-0-2005"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2007" name="__codelineno-0-2007"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2008" name="__codelineno-0-2008"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Maybe</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
-<a id="__codelineno-0-2009" name="__codelineno-0-2009"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-2010" name="__codelineno-0-2010"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2011" name="__codelineno-0-2011"></a>    <span class="n">tiles</span><span class="p">:</span> <span class="n">TileRoute</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-2012" name="__codelineno-0-2012"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-2013" name="__codelineno-0-2013"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
-<a id="__codelineno-0-2014" name="__codelineno-0-2014"></a>
-<a id="__codelineno-0-2015" name="__codelineno-0-2015"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
-<a id="__codelineno-0-2016" name="__codelineno-0-2016"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
-<a id="__codelineno-0-2017" name="__codelineno-0-2017"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
-<a id="__codelineno-0-2018" name="__codelineno-0-2018"></a>
-<a id="__codelineno-0-2019" name="__codelineno-0-2019"></a><span class="sd">    The three channels are read straight as red, green and blue; :meth:`hsv_composite` reads the same</span>
-<a id="__codelineno-0-2020" name="__codelineno-0-2020"></a><span class="sd">    three as hue, saturation and value.</span>
-<a id="__codelineno-0-2021" name="__codelineno-0-2021"></a>
-<a id="__codelineno-0-2022" name="__codelineno-0-2022"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2023" name="__codelineno-0-2023"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
-<a id="__codelineno-0-2024" name="__codelineno-0-2024"></a><span class="sd">            A path or URL to one is taken too, and is the only input this layer can be</span>
-<a id="__codelineno-0-2025" name="__codelineno-0-2025"></a><span class="sd">            written down with — a pyramids object does not know where it came from. The reference</span>
-<a id="__codelineno-0-2026" name="__codelineno-0-2026"></a><span class="sd">            is opened at the display choke point</span>
-<a id="__codelineno-0-2027" name="__codelineno-0-2027"></a><span class="sd">            (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller&#39;s own path is what</span>
-<a id="__codelineno-0-2028" name="__codelineno-0-2028"></a><span class="sd">            the figure records.</span>
-<a id="__codelineno-0-2029" name="__codelineno-0-2029"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
-<a id="__codelineno-0-2030" name="__codelineno-0-2030"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
-<a id="__codelineno-0-2031" name="__codelineno-0-2031"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
-<a id="__codelineno-0-2032" name="__codelineno-0-2032"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
-<a id="__codelineno-0-2033" name="__codelineno-0-2033"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
-<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
-<a id="__codelineno-0-2035" name="__codelineno-0-2035"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
-<a id="__codelineno-0-2036" name="__codelineno-0-2036"></a><span class="sd">        tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,</span>
-<a id="__codelineno-0-2037" name="__codelineno-0-2037"></a><span class="sd">            and is refused above :data:`_LARGE_RASTER_PIXELS` cells; a :class:`TileRoute` writes them</span>
-<a id="__codelineno-0-2038" name="__codelineno-0-2038"></a><span class="sd">            beside the page — ``TileRoute(&quot;xyz&quot;, path, zooms)`` a ``{z}/{x}/{y}.png`` pyramid,</span>
-<a id="__codelineno-0-2039" name="__codelineno-0-2039"></a><span class="sd">            ``TileRoute(&quot;cog&quot;, path)`` one Cloud-Optimized GeoTIFF the page reads windows from. Either makes</span>
-<a id="__codelineno-0-2040" name="__codelineno-0-2040"></a><span class="sd">            the output a **folder** rather than one file. A tiled composite is stretched on one set of</span>
-<a id="__codelineno-0-2041" name="__codelineno-0-2041"></a><span class="sd">            bounds for the whole pyramid — ``limits`` when given, otherwise measured from a decimated read —</span>
-<a id="__codelineno-0-2042" name="__codelineno-0-2042"></a><span class="sd">            because a tile stretched over its own percentiles disagrees with its neighbour across their</span>
-<a id="__codelineno-0-2043" name="__codelineno-0-2043"></a><span class="sd">            shared edge.</span>
-<a id="__codelineno-0-2044" name="__codelineno-0-2044"></a>
-<a id="__codelineno-0-2045" name="__codelineno-0-2045"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2046" name="__codelineno-0-2046"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
-<a id="__codelineno-0-2047" name="__codelineno-0-2047"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
-<a id="__codelineno-0-2048" name="__codelineno-0-2048"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
+<span class="normal"><a href="#__codelineno-0-2065">2065</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1984" name="__codelineno-0-1984"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
+<a id="__codelineno-0-1985" name="__codelineno-0-1985"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-1986" name="__codelineno-0-1986"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1987" name="__codelineno-0-1987"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
+<a id="__codelineno-0-1988" name="__codelineno-0-1988"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-1989" name="__codelineno-0-1989"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1990" name="__codelineno-0-1990"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1991" name="__codelineno-0-1991"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="n">Maybe</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+<a id="__codelineno-0-1992" name="__codelineno-0-1992"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1993" name="__codelineno-0-1993"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1994" name="__codelineno-0-1994"></a>    <span class="n">tiles</span><span class="p">:</span> <span class="n">TileRoute</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1995" name="__codelineno-0-1995"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-1996" name="__codelineno-0-1996"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
+<a id="__codelineno-0-1997" name="__codelineno-0-1997"></a>
+<a id="__codelineno-0-1998" name="__codelineno-0-1998"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
+<a id="__codelineno-0-1999" name="__codelineno-0-1999"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
+<a id="__codelineno-0-2000" name="__codelineno-0-2000"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
+<a id="__codelineno-0-2001" name="__codelineno-0-2001"></a>
+<a id="__codelineno-0-2002" name="__codelineno-0-2002"></a><span class="sd">    The three channels are read straight as red, green and blue; :meth:`hsv_composite` reads the same</span>
+<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a><span class="sd">    three as hue, saturation and value.</span>
+<a id="__codelineno-0-2004" name="__codelineno-0-2004"></a>
+<a id="__codelineno-0-2005" name="__codelineno-0-2005"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
+<a id="__codelineno-0-2007" name="__codelineno-0-2007"></a><span class="sd">            A path or URL to one is taken too, and is the only input this layer can be</span>
+<a id="__codelineno-0-2008" name="__codelineno-0-2008"></a><span class="sd">            written down with — a pyramids object does not know where it came from. The reference</span>
+<a id="__codelineno-0-2009" name="__codelineno-0-2009"></a><span class="sd">            is opened at the display choke point</span>
+<a id="__codelineno-0-2010" name="__codelineno-0-2010"></a><span class="sd">            (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller&#39;s own path is what</span>
+<a id="__codelineno-0-2011" name="__codelineno-0-2011"></a><span class="sd">            the figure records.</span>
+<a id="__codelineno-0-2012" name="__codelineno-0-2012"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
+<a id="__codelineno-0-2013" name="__codelineno-0-2013"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
+<a id="__codelineno-0-2014" name="__codelineno-0-2014"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
+<a id="__codelineno-0-2015" name="__codelineno-0-2015"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
+<a id="__codelineno-0-2016" name="__codelineno-0-2016"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
+<a id="__codelineno-0-2017" name="__codelineno-0-2017"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
+<a id="__codelineno-0-2018" name="__codelineno-0-2018"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
+<a id="__codelineno-0-2019" name="__codelineno-0-2019"></a><span class="sd">        tiles: How the pixels reach the page, as on :meth:`field`: ``None`` (the default) inlines them,</span>
+<a id="__codelineno-0-2020" name="__codelineno-0-2020"></a><span class="sd">            and is refused above :data:`_LARGE_RASTER_PIXELS` cells; a :class:`TileRoute` writes them</span>
+<a id="__codelineno-0-2021" name="__codelineno-0-2021"></a><span class="sd">            beside the page — ``TileRoute(&quot;xyz&quot;, path, zooms)`` a ``{z}/{x}/{y}.png`` pyramid,</span>
+<a id="__codelineno-0-2022" name="__codelineno-0-2022"></a><span class="sd">            ``TileRoute(&quot;cog&quot;, path)`` one Cloud-Optimized GeoTIFF the page reads windows from. Either makes</span>
+<a id="__codelineno-0-2023" name="__codelineno-0-2023"></a><span class="sd">            the output a **folder** rather than one file. A tiled composite is stretched on one set of</span>
+<a id="__codelineno-0-2024" name="__codelineno-0-2024"></a><span class="sd">            bounds for the whole pyramid — ``limits`` when given, otherwise measured from a decimated read —</span>
+<a id="__codelineno-0-2025" name="__codelineno-0-2025"></a><span class="sd">            because a tile stretched over its own percentiles disagrees with its neighbour across their</span>
+<a id="__codelineno-0-2026" name="__codelineno-0-2026"></a><span class="sd">            shared edge.</span>
+<a id="__codelineno-0-2027" name="__codelineno-0-2027"></a>
+<a id="__codelineno-0-2028" name="__codelineno-0-2028"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2029" name="__codelineno-0-2029"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
+<a id="__codelineno-0-2030" name="__codelineno-0-2030"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
+<a id="__codelineno-0-2031" name="__codelineno-0-2031"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
+<a id="__codelineno-0-2032" name="__codelineno-0-2032"></a>
+<a id="__codelineno-0-2033" name="__codelineno-0-2033"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the</span>
+<a id="__codelineno-0-2035" name="__codelineno-0-2035"></a><span class="sd">            composite has no finite pixels to draw, or when ``opacity`` is not a finite number —</span>
+<a id="__codelineno-0-2036" name="__codelineno-0-2036"></a><span class="sd">            refused at this call, because a figure holding NaN or infinity could not be written down.</span>
+<a id="__codelineno-0-2037" name="__codelineno-0-2037"></a><span class="sd">        FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver</span>
+<a id="__codelineno-0-2038" name="__codelineno-0-2038"></a><span class="sd">            is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.</span>
+<a id="__codelineno-0-2039" name="__codelineno-0-2039"></a><span class="sd">        TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;</span>
+<a id="__codelineno-0-2040" name="__codelineno-0-2040"></a><span class="sd">            see :meth:`field`, whose tiled route shares this one&#39;s writer.</span>
+<a id="__codelineno-0-2041" name="__codelineno-0-2041"></a>
+<a id="__codelineno-0-2042" name="__codelineno-0-2042"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2043" name="__codelineno-0-2043"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
+<a id="__codelineno-0-2044" name="__codelineno-0-2044"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2045" name="__codelineno-0-2045"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
+<a id="__codelineno-0-2046" name="__codelineno-0-2046"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
+<a id="__codelineno-0-2047" name="__codelineno-0-2047"></a>
+<a id="__codelineno-0-2048" name="__codelineno-0-2048"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-2049" name="__codelineno-0-2049"></a>
-<a id="__codelineno-0-2050" name="__codelineno-0-2050"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2051" name="__codelineno-0-2051"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, when the</span>
-<a id="__codelineno-0-2052" name="__codelineno-0-2052"></a><span class="sd">            composite has no finite pixels to draw, or when ``opacity`` is not a finite number —</span>
-<a id="__codelineno-0-2053" name="__codelineno-0-2053"></a><span class="sd">            refused at this call, because a figure holding NaN or infinity could not be written down.</span>
-<a id="__codelineno-0-2054" name="__codelineno-0-2054"></a><span class="sd">        FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver</span>
-<a id="__codelineno-0-2055" name="__codelineno-0-2055"></a><span class="sd">            is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.</span>
-<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a><span class="sd">        TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;</span>
-<a id="__codelineno-0-2057" name="__codelineno-0-2057"></a><span class="sd">            see :meth:`field`, whose tiled route shares this one&#39;s writer.</span>
-<a id="__codelineno-0-2058" name="__codelineno-0-2058"></a>
-<a id="__codelineno-0-2059" name="__codelineno-0-2059"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2060" name="__codelineno-0-2060"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
-<a id="__codelineno-0-2061" name="__codelineno-0-2061"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2062" name="__codelineno-0-2062"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
-<a id="__codelineno-0-2063" name="__codelineno-0-2063"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
-<a id="__codelineno-0-2064" name="__codelineno-0-2064"></a>
-<a id="__codelineno-0-2065" name="__codelineno-0-2065"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2066" name="__codelineno-0-2066"></a>
-<a id="__codelineno-0-2067" name="__codelineno-0-2067"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2068" name="__codelineno-0-2068"></a><span class="sd">        digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.</span>
-<a id="__codelineno-0-2069" name="__codelineno-0-2069"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
-<a id="__codelineno-0-2070" name="__codelineno-0-2070"></a><span class="sd">        digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</span>
-<a id="__codelineno-0-2071" name="__codelineno-0-2071"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2072" name="__codelineno-0-2072"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite</span><span class="p">(</span>
-<a id="__codelineno-0-2073" name="__codelineno-0-2073"></a>        <span class="n">_RGB_RECIPE</span><span class="p">,</span>
-<a id="__codelineno-0-2074" name="__codelineno-0-2074"></a>        <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-0-2075" name="__codelineno-0-2075"></a>        <span class="n">bands</span><span class="p">,</span>
-<a id="__codelineno-0-2076" name="__codelineno-0-2076"></a>        <span class="n">mask_nodata</span><span class="o">=</span><span class="n">mask_nodata</span><span class="p">,</span>
-<a id="__codelineno-0-2077" name="__codelineno-0-2077"></a>        <span class="n">limits</span><span class="o">=</span><span class="n">limits</span><span class="p">,</span>
-<a id="__codelineno-0-2078" name="__codelineno-0-2078"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
-<a id="__codelineno-0-2079" name="__codelineno-0-2079"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-2080" name="__codelineno-0-2080"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-2081" name="__codelineno-0-2081"></a>        <span class="n">tiles</span><span class="o">=</span><span class="n">tiles</span><span class="p">,</span>
-<a id="__codelineno-0-2082" name="__codelineno-0-2082"></a>    <span class="p">)</span>
+<a id="__codelineno-0-2050" name="__codelineno-0-2050"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2051" name="__codelineno-0-2051"></a><span class="sd">        digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.</span>
+<a id="__codelineno-0-2052" name="__codelineno-0-2052"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
+<a id="__codelineno-0-2053" name="__codelineno-0-2053"></a><span class="sd">        digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.</span>
+<a id="__codelineno-0-2054" name="__codelineno-0-2054"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2055" name="__codelineno-0-2055"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite</span><span class="p">(</span>
+<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a>        <span class="n">_RGB_RECIPE</span><span class="p">,</span>
+<a id="__codelineno-0-2057" name="__codelineno-0-2057"></a>        <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-2058" name="__codelineno-0-2058"></a>        <span class="n">bands</span><span class="p">,</span>
+<a id="__codelineno-0-2059" name="__codelineno-0-2059"></a>        <span class="n">mask_nodata</span><span class="o">=</span><span class="n">mask_nodata</span><span class="p">,</span>
+<a id="__codelineno-0-2060" name="__codelineno-0-2060"></a>        <span class="n">limits</span><span class="o">=</span><span class="n">limits</span><span class="p">,</span>
+<a id="__codelineno-0-2061" name="__codelineno-0-2061"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
+<a id="__codelineno-0-2062" name="__codelineno-0-2062"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-2063" name="__codelineno-0-2063"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-2064" name="__codelineno-0-2064"></a>        <span class="n">tiles</span><span class="o">=</span><span class="n">tiles</span><span class="p">,</span>
+<a id="__codelineno-0-2065" name="__codelineno-0-2065"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
