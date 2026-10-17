@@ -276,7 +276,9 @@ class TestPathClassify:
             ``choropleth`` clears it on its own flat/continuous path. The new ``lines`` builder must match.
         """
         m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
-        assert m.last_breaks is not None, "precondition: the categorical fill records breaks"
+        assert m.last_breaks is not None, (
+            "precondition: the categorical fill records breaks"
+        )
         m.lines(_flow_lines((1.0, 9.0)))
         assert m.last_breaks is None, (
             f"a flat lines layer left stale breaks: {m.last_breaks}"
