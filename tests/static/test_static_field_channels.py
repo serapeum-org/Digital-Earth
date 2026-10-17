@@ -132,7 +132,8 @@ class TestOpacityAndBandReachTheEngineDescription:
         """
         drawn.field(dem)
         engine_opts = _props(drawn).get("opts") or {}
-        assert engine_opts.get("alpha") is None, (
+        absent = object()
+        assert engine_opts.get("alpha", absent) is absent, (
             f"an unstyled field invented an alpha: {engine_opts}"
         )
 
