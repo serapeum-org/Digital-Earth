@@ -296,11 +296,12 @@ def classify_band(
             codes over the stack and passes them here, so every band records the same categorical scale and
             the gap-filling codes get the same colour on each; ``None`` (default) reads the codes from
             ``values`` (a single band classes itself).
-        clip: An optional ``(vmin, vmax)`` window a **graduated** scheme is confined to (#378): the classes
-            are cut over the in-range values so outliers cannot stretch them, and out-of-range cells clamp
-            into the end classes at draw time. It applies only to a named graduated scheme — for
-            ``"categorical"`` (codes, not a range) and for explicit edges (the list already is the domain)
-            there is no window to cut, so it is left off and ``vmin``/``vmax`` act as the colour domain alone.
+        clip: An optional ``(vmin, vmax)`` window a **graduated** scheme is pinned to (#378): the classes
+            span exactly the window, a cell outside it lands in an end class instead of stretching the
+            classes, and the recorded scale's domain is the window — so two bands given the same window share
+            one comparable scale. It applies only to a named graduated scheme — for ``"categorical"`` (codes,
+            not a range) and for explicit edges (the list already is the domain) there is no window to pin, so
+            it is left off and ``vmin``/``vmax`` act as the colour domain alone.
 
     Returns:
         The band's :class:`BandClasses`.
@@ -357,9 +358,9 @@ def classify_band(
             tuple(colors),
         )
     valid = np.ma.compressed(np.ma.masked_invalid(np.ma.asarray(values, dtype=float)))
-    # The clip window confines a *graduated* scheme's classes to the values inside it. An explicit edge list
-    # already fixes the domain, so the window has nothing to cut and is left off — `vmin`/`vmax` there are the
-    # colour domain, not a window, which is why a `facet` pooling edges passes them without conflict.
+    # The clip window pins a *graduated* scheme's classes to span it exactly. An explicit edge list already
+    # fixes the domain, so the window has nothing to pin and is left off — `vmin`/`vmax` there are the colour
+    # domain, not a window, which is why a `facet` pooling edges passes them without conflict.
     window = clip if isinstance(scheme, str) else None
     edges = Scale.breaks_of(
         valid, scheme, DEFAULT_CLASS_COUNT if k is None else k, clip=window

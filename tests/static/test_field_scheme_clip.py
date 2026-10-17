@@ -1,11 +1,11 @@
 """`Map.field(scheme=, vmin=, vmax=)` confines a graduated raster to the value window (#378).
 
 Before, `vmin`/`vmax` were accepted and then silently ignored once a `scheme` classified the band, so a few
-outliers could stretch the classes and the limits read as supported without being so. Now they clip the
-classification window: the classes are cut over the in-range values and out-of-range cells clamp into the end
-classes. With no scheme the limits still set the continuous ramp, exactly as before.
+outliers could stretch the classes and the limits read as supported without being so. Now they pin the classes
+to the window: the classes span exactly `[vmin, vmax]` and out-of-range cells clamp into the end classes, so two
+maps given the same limits are comparable. With no scheme the limits still set the continuous ramp, as before.
 
-Edges are computed with numpy over the in-range subset, never read back from the figure under test.
+Edges are computed with numpy as an even split of the window, never read back from the figure under test.
 """
 
 import numpy as np
@@ -35,20 +35,19 @@ class TestClipWindow:
 
 
 class TestFieldSchemeClip:
-    """`Map.field` cuts a graduated raster's classes inside `vmin`/`vmax`, and leaves the ramp alone."""
+    """`Map.field` pins a graduated raster's classes to `vmin`/`vmax`, and leaves the ramp alone."""
 
-    def test_vmin_vmax_confine_a_graduated_field_to_the_window(self, dataset):
-        """`scheme="equal_interval"` with `vmin`/`vmax` steps at edges cut over the in-range cells only.
+    def test_vmin_vmax_pin_a_graduated_field_to_the_window(self, dataset):
+        """`scheme="equal_interval"` with `vmin`/`vmax` steps at an even split of the window itself.
 
         Test scenario:
             A window at the 20th/80th percentiles; the drawn `BoundaryNorm` must step at the four equal
-            intervals over the in-range values, not over the whole band.
+            intervals of `[vmin, vmax]`, so the colorbar spans the requested limits whatever the data holds.
         """
         vals = _values(dataset)
         lo, hi = (float(x) for x in np.percentile(vals, [20, 80]))
         m = Map().field(dataset, scheme="equal_interval", k=4, vmin=lo, vmax=hi)
-        in_range = vals[(vals >= lo) & (vals <= hi)]
-        expected = list(np.linspace(in_range.min(), in_range.max(), 5))
+        expected = list(np.linspace(lo, hi, 5))
         drawn = list(m.ax.images[-1].norm.boundaries)
         assert drawn == pytest.approx(expected), (drawn, expected)
 

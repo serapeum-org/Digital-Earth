@@ -288,13 +288,14 @@ class Scale:
             values: The data to classify.
             scheme: Classification scheme name.
             k: Number of classes.
-            clip: An optional ``(vmin, vmax)`` window the classifier is confined to (#378). When given, only
-                the values inside ``[vmin, vmax]`` are classified, so a few outliers cannot stretch the
-                classes; either bound may be ``None`` to leave that side open. Cells outside the window are
-                not dropped by the scale — the drawing side clamps them into the first or last class, exactly
-                as it does for any value past the end edges. Quantiles are computed over the in-range values
-                rather than over a clamped copy, so the outliers do not pile up at the window edges and skew
-                the very breaks the window was meant to stabilise.
+            clip: An optional ``(vmin, vmax)`` window the classes are pinned to (#378). When given, the
+                classes span exactly the window: every cell is clamped into ``[vmin, vmax]`` before the
+                classifier runs and the bounds are added to the sample, so the edges reach ``vmin`` and
+                ``vmax`` even when no cell does. Two bands given the same window therefore cut the same class
+                domain — a comparable scale across maps — and a `equal_interval` window is split into equal
+                parts of the window, not of the surviving data. A value outside the window is pulled to the
+                nearer bound, so an outlier lands in the first or last class instead of stretching the
+                classes. Either bound may be ``None`` to leave that side at the data's own extent.
 
         Returns:
             The class edges, ``k + 1`` of them for ``k`` classes.
@@ -311,11 +312,12 @@ class Scale:
                 4
 
                 ```
-            - A clip window cuts the classes over only the in-range values, not the outliers:
+            - A clip window splits the window itself into equal parts; the 999 outlier lands in the top
+              class rather than stretching the edges:
                 ```python
                 >>> from digitalearth.base.spec import Scale
-                >>> Scale.breaks_of([0, 1, 2, 3, 4, 999], "equal_interval", 2, clip=(0.0, 4.0))
-                (0.0, 2.0, 4.0)
+                >>> Scale.breaks_of([5, 10, 15, 20, 40, 999], "equal_interval", 2, clip=(0.0, 100.0))
+                (0.0, 50.0, 100.0)
 
                 ```
         """
@@ -325,24 +327,30 @@ class Scale:
 
     @staticmethod
     def _clipped_to(values: Any, clip: tuple[float | None, float | None]) -> Any:
-        """Return the finite values inside the ``(vmin, vmax)`` window, either bound optional.
+        """Clamp the finite values into the ``(vmin, vmax)`` window and anchor the window's bounds.
+
+        This pins a graduated scheme's classes to the window rather than to the surviving data (#378): a
+        cell outside the window is pulled to the nearer bound (so it lands in an end class, not stretching
+        the classes), and the given bounds are added to the sample so the class domain reaches them even
+        when no cell does — which is what lets two bands with the same window share one comparable scale.
 
         Args:
-            values: The data to confine.
-            clip: A ``(vmin, vmax)`` pair; ``None`` on a side leaves it open.
+            values: The data to confine. Non-finite and masked cells are dropped before clamping.
+            clip: A ``(vmin, vmax)`` pair; ``None`` on a side leaves it at the data's own extent.
 
         Returns:
-            A 1-D float array of the values within the window. Non-finite cells are dropped, as the
-            classifier drops them anyway; out-of-range cells are left for the drawing side to clamp.
+            A 1-D float array clamped into the window, with each given bound appended so the extent reaches
+            it. Empty only when every cell was non-finite or masked and both bounds are ``None``.
         """
-        array = np.asarray(values, dtype="float64").ravel()
+        array = np.ma.compressed(
+            np.ma.masked_invalid(np.ma.asarray(values, dtype="float64"))
+        )
         lo, hi = clip
-        keep = np.isfinite(array)
-        if lo is not None:
-            keep &= array >= float(lo)
-        if hi is not None:
-            keep &= array <= float(hi)
-        return array[keep]
+        clamped = np.clip(array, lo, hi)
+        anchors = [float(bound) for bound in (lo, hi) if bound is not None]
+        if anchors:
+            clamped = np.concatenate([clamped, np.asarray(anchors, dtype="float64")])
+        return clamped
 
     @classmethod
     def from_limits(
