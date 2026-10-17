@@ -1427,10 +1427,10 @@ class InteractiveMapBase:
         # the via-dispatch in `renderer.make_draw`. A drawn kind carries its own `symbology`, so the two
         # cannot both be given.
         if color_field is not None:
-            if symbology is not None:
+            if symbology is not None or resolved in DRAWN_KINDS:
                 raise ValueError(
-                    "add_layer(color_field=...) names the colour field of a custom layer; it cannot be "
-                    "combined with symbology=, which a drawn kind carries for itself"
+                    "add_layer(color_field=...) names the colour field of a custom layer, so it takes no "
+                    "kind= and no symbology=; a drawn kind carries its own colour"
                 )
             symbology = Symbology(
                 props={"via": "custom"},
