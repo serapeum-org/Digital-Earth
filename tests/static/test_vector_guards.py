@@ -329,3 +329,115 @@ class TestColourNormWithoutValuesRefused:
         scaling = ColorScaling()
         with pytest.raises(ValueError, match=r"polygons\(\): color= is a ColorScaling"):
             canvas.polygons(polygons_fc, color=scaling)
+
+
+class TestSchemeWithoutColumnRefused:
+    """#332 — a ``scheme`` with no ``column`` to classify is refused, not silently acted on.
+
+    Before this, static ``points`` silently classified an auto-detected field and static ``polygons``
+    silently ignored the scheme — two different wrong answers to one call, where interactive ``lines`` /
+    ``points`` / ``polygons`` already refuse it (#331). The message is the interactive tier's, in the static
+    tier's own spelling of the caller.
+    """
+
+    def test_points_scheme_without_column(self, points_fc):
+        """``points(scheme=)`` with no ``column`` is refused, naming the call and ``column=``.
+
+        Args:
+            points_fc: Two points carrying a numeric ``pop`` column that the call does not name.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"Map\.points\(\): scheme= classifies column=, which was not given",
+        ):
+            canvas.points(points_fc, scheme="quantiles")
+
+    def test_polygons_scheme_without_column(self, polygons_fc):
+        """``polygons(scheme=)`` with no ``column`` is refused rather than drawing plain outlines.
+
+        Args:
+            polygons_fc: Two polygons carrying a numeric ``pop`` column that the call does not name.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"polygons\(\): scheme= classifies column=, which was not given",
+        ):
+            canvas.polygons(polygons_fc, scheme="quantiles")
+
+    def test_points_scheme_with_column_is_not_refused(self, points_fc):
+        """The guard does not over-reach: ``scheme`` paired with a ``column`` still classifies.
+
+        Args:
+            points_fc: Two points carrying a numeric ``pop`` column.
+        """
+        artist = (
+            Map(crs=4326).points(points_fc, column="pop", scheme="quantiles").artist()
+        )
+        assert artist is not None, (
+            "points(column=, scheme=) must still draw a classified layer"
+        )
+
+    def test_polygons_without_scheme_is_not_refused(self, polygons_fc):
+        """A plain outline ``polygons`` (no ``scheme``, no ``column``) is unaffected by the guard.
+
+        Args:
+            polygons_fc: Two polygons; neither ``scheme`` nor ``column`` is given.
+        """
+        artist = Map(crs=4326).polygons(polygons_fc).artist()
+        assert artist is not None, "plain polygons outlines must still draw"
+
+
+class TestCategoricalStringColumnDraws:
+    """#332 — a categorical ``points`` layer coloured by a non-numeric column draws, like ``choropleth``.
+
+    A string/object category column used to crash ``draw_scatter`` with numpy's "could not convert string to
+    float", because the scatter path force-coerced the colour values to float before cleopatra saw them.
+    ``choropleth``/``polygons`` read the column untyped and classify a nominal column fine; ``points`` now
+    does too.
+    """
+
+    def test_string_category_column_does_not_crash(self, text_points_fc):
+        """``points(column=<string>, scheme="categorical")`` draws an artist instead of raising.
+
+        Args:
+            text_points_fc: Two points whose only column, ``label``, holds the strings ``"a"``/``"b"``.
+        """
+        artist = (
+            Map(crs=4326)
+            .points(text_points_fc, column="label", scheme="categorical")
+            .artist()
+        )
+        assert artist is not None, "a categorical string column must draw a point layer"
+
+    def test_string_category_column_is_keyed_by_a_swatch_legend(self, text_points_fc):
+        """The categorical scatter builds the glyph's own swatch legend, one swatch per distinct label.
+
+        Args:
+            text_points_fc: Two points whose only column, ``label``, holds the strings ``"a"``/``"b"``.
+
+        Test scenario:
+            A real categorical render keys itself by a disjoint swatch legend (``category_legend``) rather
+            than a colorbar over opaque class codes — the same key ``choropleth(scheme="categorical")``
+            draws — so the labels read back are the caller's categories.
+        """
+        canvas = Map(crs=4326)
+        canvas.points(text_points_fc, column="label", scheme="categorical")
+        legend = canvas.layers[-1][0].category_legend
+        labels = [text.get_text() for text in legend.get_texts()]
+        assert labels == ["a", "b"], (
+            f"the swatch legend keyed {labels!r}, not the categories ['a', 'b']"
+        )
+
+    def test_string_category_column_records_no_numeric_edges(self, text_points_fc):
+        """A categorical scatter records no numeric ``last_breaks`` — codes are not categories.
+
+        Args:
+            text_points_fc: Two points whose only column, ``label``, holds the strings ``"a"``/``"b"``.
+        """
+        canvas = Map(crs=4326)
+        canvas.points(text_points_fc, column="label", scheme="categorical")
+        assert canvas.last_breaks is None, (
+            f"a categorical point column recorded {canvas.last_breaks!r}, which are codes not categories"
+        )
