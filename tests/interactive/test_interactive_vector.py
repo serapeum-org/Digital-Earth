@@ -264,6 +264,57 @@ class TestPathClassify:
             f"opacity did not reach alpha: {style.get('alpha')}"
         )
 
+    def test_a_flat_lines_layer_clears_stale_last_breaks(self, m):
+        """A flat ``lines`` layer resets ``last_breaks``, the way ``choropleth`` does (#332 L3).
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            ``last_breaks`` is a legacy raw-numbers accessor. A categorical fill records its categories on
+            it; a following flat ``lines`` (no ``column``) left those stale categories reported, while
+            ``choropleth`` clears it on its own flat/continuous path. The new ``lines`` builder must match.
+        """
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        assert m.last_breaks is not None, "precondition: the categorical fill records breaks"
+        m.lines(_flow_lines((1.0, 9.0)))
+        assert m.last_breaks is None, (
+            f"a flat lines layer left stale breaks: {m.last_breaks}"
+        )
+
+    def test_a_continuous_lines_layer_clears_stale_last_breaks(self, m):
+        """A continuous (column, no scheme) ``lines`` layer also resets ``last_breaks`` (#332 L3).
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            The continuous ramp records no class edges, so a prior categorical fill's breaks must not keep
+            reporting on ``last_breaks`` after it.
+        """
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        m.lines(_flow_lines((1.0, 9.0)), column="flow")
+        assert m.last_breaks is None, (
+            f"a continuous lines layer left stale breaks: {m.last_breaks}"
+        )
+
+    def test_a_flat_points_layer_clears_stale_last_breaks(self, m, point_fc):
+        """The ``points`` sibling of the reset: a flat ``points`` layer also clears ``last_breaks`` (#332 L3).
+
+        Args:
+            m: The map under test.
+            point_fc: A point FeatureCollection whose ``fid`` column is not used here (flat layer).
+
+        Test scenario:
+            ``points`` shared the ``lines`` gap — only its categorical/graduated branches touched
+            ``last_breaks`` — so a flat points layer after a categorical fill reported stale categories.
+        """
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        m.points(point_fc)
+        assert m.last_breaks is None, (
+            f"a flat points layer left stale breaks: {m.last_breaks}"
+        )
+
 
 class TestPolygonsAndChoropleth:
     """``polygons`` / ``choropleth`` — polygon layers and colour-by-attribute fills."""

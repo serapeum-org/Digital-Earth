@@ -802,6 +802,10 @@ class VectorMixin(_MixinBase):
         # while no `column` was given: those points are one flat colour, and a key over them would label
         # nothing.
         colour: Encoding | None = None
+        # Clear any breaks a prior categorical call recorded, as `choropleth` does: only the categorical and
+        # graduated branches below record class edges, so a flat or continuous layer must not keep reporting
+        # stale ones on the legacy `last_breaks` accessor (#332 L3).
+        self.last_breaks = None
         if column and isinstance(scheme, str) and scheme.lower() == "categorical":
             # Categorical colouring works off the string form of the value, so it has to relabel the frame
             # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
@@ -900,7 +904,10 @@ class VectorMixin(_MixinBase):
                 hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
                 element while the figure went on calling it visible (#327).
             **opts: Extra HoloViews style options applied to the element. Anything written here **wins**
-                over the option a ``scheme`` derived, the same precedence :meth:`points` applies.
+                over the option a ``scheme`` derived, the same precedence :meth:`points` applies. A
+                continuous ramp (a ``column`` with no ``scheme``) reads ``clim=(lo, hi)`` from here to pin
+                its colour range — the spelling :meth:`choropleth` forwards it under on this tier; without
+                one HoloViews measures the range from the data.
 
         Examples:
             - Draw river reaches as an interactive line layer:
@@ -936,6 +943,10 @@ class VectorMixin(_MixinBase):
         # key can hang on the layer (order 24). `None` while no `column` was given: those lines are one flat
         # colour, and a key over them would label nothing.
         colour: Encoding | None = None
+        # Clear any breaks a prior categorical call recorded, as `choropleth` does: only the categorical and
+        # graduated branches below record class edges, so a flat or continuous layer must not keep reporting
+        # stale ones on the legacy `last_breaks` accessor (#332 L3).
+        self.last_breaks = None
         if column and isinstance(scheme, str) and scheme.lower() == "categorical":
             styling, categories, labels = self._categorical_style(
                 features, column, cmap=cmap
