@@ -19170,16 +19170,7 @@ dict. <code>None</code> clears the theme back to Bokeh's default.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2090">2090</a></span>
-<span class="normal"><a href="#__codelineno-0-2091">2091</a></span>
-<span class="normal"><a href="#__codelineno-0-2092">2092</a></span>
-<span class="normal"><a href="#__codelineno-0-2093">2093</a></span>
-<span class="normal"><a href="#__codelineno-0-2094">2094</a></span>
-<span class="normal"><a href="#__codelineno-0-2095">2095</a></span>
-<span class="normal"><a href="#__codelineno-0-2096">2096</a></span>
-<span class="normal"><a href="#__codelineno-0-2097">2097</a></span>
-<span class="normal"><a href="#__codelineno-0-2098">2098</a></span>
-<span class="normal"><a href="#__codelineno-0-2099">2099</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2099">2099</a></span>
 <span class="normal"><a href="#__codelineno-0-2100">2100</a></span>
 <span class="normal"><a href="#__codelineno-0-2101">2101</a></span>
 <span class="normal"><a href="#__codelineno-0-2102">2102</a></span>
@@ -19213,50 +19204,59 @@ dict. <code>None</code> clears the theme back to Bokeh's default.</p>
 <span class="normal"><a href="#__codelineno-0-2130">2130</a></span>
 <span class="normal"><a href="#__codelineno-0-2131">2131</a></span>
 <span class="normal"><a href="#__codelineno-0-2132">2132</a></span>
-<span class="normal"><a href="#__codelineno-0-2133">2133</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2090" name="__codelineno-0-2090"></a><span class="k">def</span><span class="w"> </span><span class="nf">theme</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theme</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-2091" name="__codelineno-0-2091"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the Bokeh theme every render of this map draws under (IN-18).</span>
-<a id="__codelineno-0-2092" name="__codelineno-0-2092"></a>
-<a id="__codelineno-0-2093" name="__codelineno-0-2093"></a><span class="sd">    A dark-mode map used to be expressible only by threading ``bgcolor`` through ``**opts`` at every</span>
-<a id="__codelineno-0-2094" name="__codelineno-0-2094"></a><span class="sd">    builder call; this records one theme on the map instead, applied to the Bokeh renderer whenever the</span>
-<a id="__codelineno-0-2095" name="__codelineno-0-2095"></a><span class="sd">    map composes (:meth:`render`, the dashboard widgets, :meth:`save`). It is a builder, so it chains with</span>
-<a id="__codelineno-0-2096" name="__codelineno-0-2096"></a><span class="sd">    the rest.</span>
-<a id="__codelineno-0-2097" name="__codelineno-0-2097"></a>
-<a id="__codelineno-0-2098" name="__codelineno-0-2098"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="sd">        theme: A Bokeh built-in theme name — one of :data:`_BUILTIN_THEMES` (``&quot;dark_minimal&quot;``,</span>
-<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="sd">            ``&quot;night_sky&quot;``, …) — or a ``bokeh.themes.Theme`` instance built from a YAML/JSON file or a</span>
-<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a><span class="sd">            dict. ``None`` clears the theme back to Bokeh&#39;s default.</span>
-<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a>
-<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a>
-<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">        ValueError: for a string that is not one of the built-in theme names.</span>
-<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a>
-<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a><span class="sd">        - A built-in dark theme, set once and kept for every render:</span>
-<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
-<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().theme(&quot;dark_minimal&quot;)._theme</span>
-<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a><span class="sd">            &#39;dark_minimal&#39;</span>
-<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a>
-<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a><span class="sd">        - An unknown name is refused, with the built-ins named:</span>
-<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2119" name="__codelineno-0-2119"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
-<a id="__codelineno-0-2120" name="__codelineno-0-2120"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().theme(&quot;darkmode&quot;)  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-2121" name="__codelineno-0-2121"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-2122" name="__codelineno-0-2122"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a><span class="sd">            ValueError: unknown Bokeh theme &#39;darkmode&#39;; choose one of [...] or pass a bokeh.themes.Theme</span>
+<span class="normal"><a href="#__codelineno-0-2133">2133</a></span>
+<span class="normal"><a href="#__codelineno-0-2134">2134</a></span>
+<span class="normal"><a href="#__codelineno-0-2135">2135</a></span>
+<span class="normal"><a href="#__codelineno-0-2136">2136</a></span>
+<span class="normal"><a href="#__codelineno-0-2137">2137</a></span>
+<span class="normal"><a href="#__codelineno-0-2138">2138</a></span>
+<span class="normal"><a href="#__codelineno-0-2139">2139</a></span>
+<span class="normal"><a href="#__codelineno-0-2140">2140</a></span>
+<span class="normal"><a href="#__codelineno-0-2141">2141</a></span>
+<span class="normal"><a href="#__codelineno-0-2142">2142</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2099" name="__codelineno-0-2099"></a><span class="k">def</span><span class="w"> </span><span class="nf">theme</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theme</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-2100" name="__codelineno-0-2100"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the Bokeh theme every render of this map draws under (IN-18).</span>
+<a id="__codelineno-0-2101" name="__codelineno-0-2101"></a>
+<a id="__codelineno-0-2102" name="__codelineno-0-2102"></a><span class="sd">    A dark-mode map used to be expressible only by threading ``bgcolor`` through ``**opts`` at every</span>
+<a id="__codelineno-0-2103" name="__codelineno-0-2103"></a><span class="sd">    builder call; this records one theme on the map instead, applied to the Bokeh renderer whenever the</span>
+<a id="__codelineno-0-2104" name="__codelineno-0-2104"></a><span class="sd">    map composes (:meth:`render`, the dashboard widgets, :meth:`save`). It is a builder, so it chains with</span>
+<a id="__codelineno-0-2105" name="__codelineno-0-2105"></a><span class="sd">    the rest.</span>
+<a id="__codelineno-0-2106" name="__codelineno-0-2106"></a>
+<a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2108" name="__codelineno-0-2108"></a><span class="sd">        theme: A Bokeh built-in theme name — one of :data:`_BUILTIN_THEMES` (``&quot;dark_minimal&quot;``,</span>
+<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">            ``&quot;night_sky&quot;``, …) — or a ``bokeh.themes.Theme`` instance built from a YAML/JSON file or a</span>
+<a id="__codelineno-0-2110" name="__codelineno-0-2110"></a><span class="sd">            dict. ``None`` clears the theme back to Bokeh&#39;s default.</span>
+<a id="__codelineno-0-2111" name="__codelineno-0-2111"></a>
+<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2113" name="__codelineno-0-2113"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-2114" name="__codelineno-0-2114"></a>
+<a id="__codelineno-0-2115" name="__codelineno-0-2115"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2116" name="__codelineno-0-2116"></a><span class="sd">        ValueError: for a string that is not one of the built-in theme names.</span>
+<a id="__codelineno-0-2117" name="__codelineno-0-2117"></a>
+<a id="__codelineno-0-2118" name="__codelineno-0-2118"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2119" name="__codelineno-0-2119"></a><span class="sd">        - A built-in dark theme, set once and kept for every render:</span>
+<a id="__codelineno-0-2120" name="__codelineno-0-2120"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2121" name="__codelineno-0-2121"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
+<a id="__codelineno-0-2122" name="__codelineno-0-2122"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().theme(&quot;dark_minimal&quot;)._theme</span>
+<a id="__codelineno-0-2123" name="__codelineno-0-2123"></a><span class="sd">            &#39;dark_minimal&#39;</span>
 <a id="__codelineno-0-2124" name="__codelineno-0-2124"></a>
 <a id="__codelineno-0-2125" name="__codelineno-0-2125"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">theme</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">theme</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_BUILTIN_THEMES</span><span class="p">:</span>
-<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a>            <span class="sa">f</span><span class="s2">&quot;unknown Bokeh theme </span><span class="si">{</span><span class="n">theme</span><span class="si">!r}</span><span class="s2">; choose one of </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_BUILTIN_THEMES</span><span class="p">)</span><span class="si">}</span><span class="s2"> or pass a &quot;</span>
-<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a>            <span class="sa">f</span><span class="s2">&quot;bokeh.themes.Theme&quot;</span>
-<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_theme</span> <span class="o">=</span> <span class="n">theme</span>
-<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">        - An unknown name is refused, with the built-ins named:</span>
+<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
+<a id="__codelineno-0-2129" name="__codelineno-0-2129"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().theme(&quot;darkmode&quot;)  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-2130" name="__codelineno-0-2130"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-2131" name="__codelineno-0-2131"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-2132" name="__codelineno-0-2132"></a><span class="sd">            ValueError: unknown Bokeh theme &#39;darkmode&#39;; choose one of [...] or pass a bokeh.themes.Theme</span>
+<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a>
+<a id="__codelineno-0-2134" name="__codelineno-0-2134"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2135" name="__codelineno-0-2135"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2136" name="__codelineno-0-2136"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">theme</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">theme</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_BUILTIN_THEMES</span><span class="p">:</span>
+<a id="__codelineno-0-2137" name="__codelineno-0-2137"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2138" name="__codelineno-0-2138"></a>            <span class="sa">f</span><span class="s2">&quot;unknown Bokeh theme </span><span class="si">{</span><span class="n">theme</span><span class="si">!r}</span><span class="s2">; choose one of </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_BUILTIN_THEMES</span><span class="p">)</span><span class="si">}</span><span class="s2"> or pass a &quot;</span>
+<a id="__codelineno-0-2139" name="__codelineno-0-2139"></a>            <span class="sa">f</span><span class="s2">&quot;bokeh.themes.Theme&quot;</span>
+<a id="__codelineno-0-2140" name="__codelineno-0-2140"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2141" name="__codelineno-0-2141"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_theme</span> <span class="o">=</span> <span class="n">theme</span>
+<a id="__codelineno-0-2142" name="__codelineno-0-2142"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -25077,7 +25077,7 @@ even the warning above (review H8).</p>
 
     <div class="doc doc-contents ">
 
-        <p>Register a HoloViews/GeoViews <code>element</code> as a layer and return <code>self</code> (chainable).</p>
+        <p>Register a HoloViews/GeoViews element as a map layer and return <code>self</code> (chainable).</p>
 <p>The low-level entry point the capability mixins build on — every builder method ends here.</p>
 <p>A builder of a drawn kind passes <code>layer=None</code> and a <code>symbology</code>: the layer is described first
 and its drawer builds the element from that description, which is what "render from the description"
@@ -25559,7 +25559,16 @@ declined one is.</p>
 <span class="normal"><a href="#__codelineno-0-1462">1462</a></span>
 <span class="normal"><a href="#__codelineno-0-1463">1463</a></span>
 <span class="normal"><a href="#__codelineno-0-1464">1464</a></span>
-<span class="normal"><a href="#__codelineno-0-1465">1465</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1310" name="__codelineno-0-1310"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_layer</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-1465">1465</a></span>
+<span class="normal"><a href="#__codelineno-0-1466">1466</a></span>
+<span class="normal"><a href="#__codelineno-0-1467">1467</a></span>
+<span class="normal"><a href="#__codelineno-0-1468">1468</a></span>
+<span class="normal"><a href="#__codelineno-0-1469">1469</a></span>
+<span class="normal"><a href="#__codelineno-0-1470">1470</a></span>
+<span class="normal"><a href="#__codelineno-0-1471">1471</a></span>
+<span class="normal"><a href="#__codelineno-0-1472">1472</a></span>
+<span class="normal"><a href="#__codelineno-0-1473">1473</a></span>
+<span class="normal"><a href="#__codelineno-0-1474">1474</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1310" name="__codelineno-0-1310"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_layer</span><span class="p">(</span>
 <a id="__codelineno-0-1311" name="__codelineno-0-1311"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-1312" name="__codelineno-0-1312"></a>    <span class="n">layer</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-1313" name="__codelineno-0-1313"></a>    <span class="o">*</span><span class="p">,</span>
@@ -25573,7 +25582,7 @@ declined one is.</p>
 <a id="__codelineno-0-1321" name="__codelineno-0-1321"></a>    <span class="n">held</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-1322" name="__codelineno-0-1322"></a>    <span class="n">color_field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-1323" name="__codelineno-0-1323"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-1324" name="__codelineno-0-1324"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).</span>
+<a id="__codelineno-0-1324" name="__codelineno-0-1324"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a HoloViews/GeoViews element as a map layer and return ``self`` (chainable).</span>
 <a id="__codelineno-0-1325" name="__codelineno-0-1325"></a>
 <a id="__codelineno-0-1326" name="__codelineno-0-1326"></a><span class="sd">    The low-level entry point the capability mixins build on — every builder method ends here.</span>
 <a id="__codelineno-0-1327" name="__codelineno-0-1327"></a>
@@ -25673,48 +25682,57 @@ declined one is.</p>
 <a id="__codelineno-0-1421" name="__codelineno-0-1421"></a>    <span class="n">resolved</span> <span class="o">=</span> <span class="n">kind</span> <span class="ow">or</span> <span class="n">custom_kind</span><span class="p">(</span><span class="s2">&quot;holoviews&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-1422" name="__codelineno-0-1422"></a>    <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="n">resolved</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">name</span><span class="p">)</span>
 <a id="__codelineno-0-1423" name="__codelineno-0-1423"></a>    <span class="c1"># A custom layer publishes no colour encoding of its own, so `color_field` is the caller&#39;s one way to</span>
-<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a>    <span class="c1"># say what it varies by — recorded as the colour encoding a key hangs on, exactly as a builder&#39;s is</span>
-<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a>    <span class="c1"># (#349). A drawn kind brings its own `symbology`, so this only fills the custom case.</span>
-<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a>    <span class="k">if</span> <span class="n">color_field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">symbology</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a>        <span class="n">symbology</span> <span class="o">=</span> <span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span><span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">color_field</span><span class="p">)}</span>
-<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a>    <span class="c1"># Everything from here to the draw is undone together if any of it raises. The layer is described</span>
-<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a>    <span class="c1"># before its drawer runs, so a drawer that refuses — an off-limb warp, `strict=True`, a column that</span>
-<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a>    <span class="c1"># is not there — would otherwise leave the figure naming a layer nothing drew, its data registered</span>
-<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a>    <span class="c1"># for the life of the process, and every later layer inserted at an index counted past the ghost.</span>
-<a id="__codelineno-0-1434" name="__codelineno-0-1434"></a>    <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-1435" name="__codelineno-0-1435"></a>        <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1436" name="__codelineno-0-1436"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span><span class="p">[</span><span class="n">layer_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">key</span>
-<a id="__codelineno-0-1437" name="__codelineno-0-1437"></a>        <span class="k">if</span> <span class="n">held</span><span class="p">:</span>
-<a id="__codelineno-0-1438" name="__codelineno-0-1438"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_layer_held</span><span class="p">[</span><span class="n">layer_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">held</span><span class="p">)</span>
-<a id="__codelineno-0-1439" name="__codelineno-0-1439"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span>
-<a id="__codelineno-0-1440" name="__codelineno-0-1440"></a>            <span class="n">layer_id</span><span class="p">,</span>
-<a id="__codelineno-0-1441" name="__codelineno-0-1441"></a>            <span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-1442" name="__codelineno-0-1442"></a>            <span class="n">kind</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span>
-<a id="__codelineno-0-1443" name="__codelineno-0-1443"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-1444" name="__codelineno-0-1444"></a>            <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span>
-<a id="__codelineno-0-1445" name="__codelineno-0-1445"></a>            <span class="n">source</span><span class="o">=</span><span class="n">source</span><span class="p">,</span>
-<a id="__codelineno-0-1446" name="__codelineno-0-1446"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">symbology</span><span class="p">,</span>
-<a id="__codelineno-0-1447" name="__codelineno-0-1447"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1448" name="__codelineno-0-1448"></a>        <span class="k">if</span> <span class="n">resolved</span> <span class="ow">in</span> <span class="n">DRAWN_KINDS</span><span class="p">:</span>
-<a id="__codelineno-0-1449" name="__codelineno-0-1449"></a>            <span class="c1"># The element is built from the description rather than handed in: the builder passed `None`</span>
-<a id="__codelineno-0-1450" name="__codelineno-0-1450"></a>            <span class="c1"># and its drawer makes the real one, which is what &quot;render from the description&quot; means.</span>
-<a id="__codelineno-0-1451" name="__codelineno-0-1451"></a>            <span class="n">drawn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">draw_layer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">figure_spec</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a>            <span class="k">if</span> <span class="n">drawn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1453" name="__codelineno-0-1453"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">_forget_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-1454" name="__codelineno-0-1454"></a>                <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-1455" name="__codelineno-0-1455"></a>            <span class="n">layer</span> <span class="o">=</span> <span class="n">drawn</span><span class="o">.</span><span class="n">element</span>
-<a id="__codelineno-0-1456" name="__codelineno-0-1456"></a>    <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
-<a id="__codelineno-0-1457" name="__codelineno-0-1457"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_forget_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-1458" name="__codelineno-0-1458"></a>        <span class="k">raise</span>
-<a id="__codelineno-0-1459" name="__codelineno-0-1459"></a>    <span class="c1"># Placed where the description puts it, not where the call happened to arrive. The tree orders by</span>
-<a id="__codelineno-0-1460" name="__codelineno-0-1460"></a>    <span class="c1"># draw-order band, so a basemap added last still goes under the data and a graticule added first</span>
-<a id="__codelineno-0-1461" name="__codelineno-0-1461"></a>    <span class="c1"># still goes over it — and the list `_compose` overlays cannot disagree with the figure the map</span>
-<a id="__codelineno-0-1462" name="__codelineno-0-1462"></a>    <span class="c1"># reports, which is what it did when a builder had to remember to insert at the front itself.</span>
-<a id="__codelineno-0-1463" name="__codelineno-0-1463"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">layer_id</span><span class="p">),</span> <span class="n">layer</span><span class="p">)</span>
-<a id="__codelineno-0-1464" name="__codelineno-0-1464"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_note_last_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-1465" name="__codelineno-0-1465"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-1424" name="__codelineno-0-1424"></a>    <span class="c1"># say what it varies by — recorded as the colour encoding a key hangs on, exactly as a builder&#39;s is,</span>
+<a id="__codelineno-0-1425" name="__codelineno-0-1425"></a>    <span class="c1"># under the same `via=&quot;custom&quot;` marker the static and web tiers set (#349). `custom:holoviews` is a</span>
+<a id="__codelineno-0-1426" name="__codelineno-0-1426"></a>    <span class="c1"># KEPT kind (drawn by being held, never from a recipe), so the marker is descriptive and never reaches</span>
+<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a>    <span class="c1"># the via-dispatch in `renderer.make_draw`. A drawn kind carries its own `symbology`, so the two</span>
+<a id="__codelineno-0-1428" name="__codelineno-0-1428"></a>    <span class="c1"># cannot both be given.</span>
+<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a>    <span class="k">if</span> <span class="n">color_field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a>        <span class="k">if</span> <span class="n">symbology</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1431" name="__codelineno-0-1431"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a>                <span class="s2">&quot;add_layer(color_field=...) names the colour field of a custom layer; it cannot be &quot;</span>
+<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a>                <span class="s2">&quot;combined with symbology=, which a drawn kind carries for itself&quot;</span>
+<a id="__codelineno-0-1434" name="__codelineno-0-1434"></a>            <span class="p">)</span>
+<a id="__codelineno-0-1435" name="__codelineno-0-1435"></a>        <span class="n">symbology</span> <span class="o">=</span> <span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-1436" name="__codelineno-0-1436"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;custom&quot;</span><span class="p">},</span>
+<a id="__codelineno-0-1437" name="__codelineno-0-1437"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span><span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">color_field</span><span class="p">)},</span>
+<a id="__codelineno-0-1438" name="__codelineno-0-1438"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1439" name="__codelineno-0-1439"></a>    <span class="c1"># Everything from here to the draw is undone together if any of it raises. The layer is described</span>
+<a id="__codelineno-0-1440" name="__codelineno-0-1440"></a>    <span class="c1"># before its drawer runs, so a drawer that refuses — an off-limb warp, `strict=True`, a column that</span>
+<a id="__codelineno-0-1441" name="__codelineno-0-1441"></a>    <span class="c1"># is not there — would otherwise leave the figure naming a layer nothing drew, its data registered</span>
+<a id="__codelineno-0-1442" name="__codelineno-0-1442"></a>    <span class="c1"># for the life of the process, and every later layer inserted at an index counted past the ghost.</span>
+<a id="__codelineno-0-1443" name="__codelineno-0-1443"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-1444" name="__codelineno-0-1444"></a>        <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1445" name="__codelineno-0-1445"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span><span class="p">[</span><span class="n">layer_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">key</span>
+<a id="__codelineno-0-1446" name="__codelineno-0-1446"></a>        <span class="k">if</span> <span class="n">held</span><span class="p">:</span>
+<a id="__codelineno-0-1447" name="__codelineno-0-1447"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_layer_held</span><span class="p">[</span><span class="n">layer_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">held</span><span class="p">)</span>
+<a id="__codelineno-0-1448" name="__codelineno-0-1448"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span>
+<a id="__codelineno-0-1449" name="__codelineno-0-1449"></a>            <span class="n">layer_id</span><span class="p">,</span>
+<a id="__codelineno-0-1450" name="__codelineno-0-1450"></a>            <span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-1451" name="__codelineno-0-1451"></a>            <span class="n">kind</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span>
+<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-1453" name="__codelineno-0-1453"></a>            <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span>
+<a id="__codelineno-0-1454" name="__codelineno-0-1454"></a>            <span class="n">source</span><span class="o">=</span><span class="n">source</span><span class="p">,</span>
+<a id="__codelineno-0-1455" name="__codelineno-0-1455"></a>            <span class="n">symbology</span><span class="o">=</span><span class="n">symbology</span><span class="p">,</span>
+<a id="__codelineno-0-1456" name="__codelineno-0-1456"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1457" name="__codelineno-0-1457"></a>        <span class="k">if</span> <span class="n">resolved</span> <span class="ow">in</span> <span class="n">DRAWN_KINDS</span><span class="p">:</span>
+<a id="__codelineno-0-1458" name="__codelineno-0-1458"></a>            <span class="c1"># The element is built from the description rather than handed in: the builder passed `None`</span>
+<a id="__codelineno-0-1459" name="__codelineno-0-1459"></a>            <span class="c1"># and its drawer makes the real one, which is what &quot;render from the description&quot; means.</span>
+<a id="__codelineno-0-1460" name="__codelineno-0-1460"></a>            <span class="n">drawn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_renderer</span><span class="o">.</span><span class="n">draw_layer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">figure_spec</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-1461" name="__codelineno-0-1461"></a>            <span class="k">if</span> <span class="n">drawn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1462" name="__codelineno-0-1462"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">_forget_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-1463" name="__codelineno-0-1463"></a>                <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-1464" name="__codelineno-0-1464"></a>            <span class="n">layer</span> <span class="o">=</span> <span class="n">drawn</span><span class="o">.</span><span class="n">element</span>
+<a id="__codelineno-0-1465" name="__codelineno-0-1465"></a>    <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+<a id="__codelineno-0-1466" name="__codelineno-0-1466"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_forget_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-1467" name="__codelineno-0-1467"></a>        <span class="k">raise</span>
+<a id="__codelineno-0-1468" name="__codelineno-0-1468"></a>    <span class="c1"># Placed where the description puts it, not where the call happened to arrive. The tree orders by</span>
+<a id="__codelineno-0-1469" name="__codelineno-0-1469"></a>    <span class="c1"># draw-order band, so a basemap added last still goes under the data and a graticule added first</span>
+<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a>    <span class="c1"># still goes over it — and the list `_compose` overlays cannot disagree with the figure the map</span>
+<a id="__codelineno-0-1471" name="__codelineno-0-1471"></a>    <span class="c1"># reports, which is what it did when a builder had to remember to insert at the front itself.</span>
+<a id="__codelineno-0-1472" name="__codelineno-0-1472"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">ids</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">layer_id</span><span class="p">),</span> <span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-1473" name="__codelineno-0-1473"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_note_last_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-1474" name="__codelineno-0-1474"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -25833,16 +25851,7 @@ declined one is.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2159">2159</a></span>
-<span class="normal"><a href="#__codelineno-0-2160">2160</a></span>
-<span class="normal"><a href="#__codelineno-0-2161">2161</a></span>
-<span class="normal"><a href="#__codelineno-0-2162">2162</a></span>
-<span class="normal"><a href="#__codelineno-0-2163">2163</a></span>
-<span class="normal"><a href="#__codelineno-0-2164">2164</a></span>
-<span class="normal"><a href="#__codelineno-0-2165">2165</a></span>
-<span class="normal"><a href="#__codelineno-0-2166">2166</a></span>
-<span class="normal"><a href="#__codelineno-0-2167">2167</a></span>
-<span class="normal"><a href="#__codelineno-0-2168">2168</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2168">2168</a></span>
 <span class="normal"><a href="#__codelineno-0-2169">2169</a></span>
 <span class="normal"><a href="#__codelineno-0-2170">2170</a></span>
 <span class="normal"><a href="#__codelineno-0-2171">2171</a></span>
@@ -25868,42 +25877,51 @@ declined one is.</p>
 <span class="normal"><a href="#__codelineno-0-2191">2191</a></span>
 <span class="normal"><a href="#__codelineno-0-2192">2192</a></span>
 <span class="normal"><a href="#__codelineno-0-2193">2193</a></span>
-<span class="normal"><a href="#__codelineno-0-2194">2194</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2159" name="__codelineno-0-2159"></a><span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2160" name="__codelineno-0-2160"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compose the registered layers into one HoloViews object (overlaid with ``*``).</span>
-<a id="__codelineno-0-2161" name="__codelineno-0-2161"></a>
-<a id="__codelineno-0-2162" name="__codelineno-0-2162"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2163" name="__codelineno-0-2163"></a><span class="sd">        The single element when one layer is registered, an ``hv.Overlay`` of all layers in draw</span>
-<a id="__codelineno-0-2164" name="__codelineno-0-2164"></a><span class="sd">        order otherwise (an empty map renders as a blank ``hv.Overlay``). The overlay&#39;s order is the</span>
-<a id="__codelineno-0-2165" name="__codelineno-0-2165"></a><span class="sd">        order :attr:`figure_spec` describes, because each element was placed where its layer&#39;s band</span>
-<a id="__codelineno-0-2166" name="__codelineno-0-2166"></a><span class="sd">        put it rather than where the builder call happened to arrive.</span>
-<a id="__codelineno-0-2167" name="__codelineno-0-2167"></a>
-<a id="__codelineno-0-2168" name="__codelineno-0-2168"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
+<span class="normal"><a href="#__codelineno-0-2194">2194</a></span>
+<span class="normal"><a href="#__codelineno-0-2195">2195</a></span>
+<span class="normal"><a href="#__codelineno-0-2196">2196</a></span>
+<span class="normal"><a href="#__codelineno-0-2197">2197</a></span>
+<span class="normal"><a href="#__codelineno-0-2198">2198</a></span>
+<span class="normal"><a href="#__codelineno-0-2199">2199</a></span>
+<span class="normal"><a href="#__codelineno-0-2200">2200</a></span>
+<span class="normal"><a href="#__codelineno-0-2201">2201</a></span>
+<span class="normal"><a href="#__codelineno-0-2202">2202</a></span>
+<span class="normal"><a href="#__codelineno-0-2203">2203</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2168" name="__codelineno-0-2168"></a><span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2169" name="__codelineno-0-2169"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compose the registered layers into one HoloViews object (overlaid with ``*``).</span>
 <a id="__codelineno-0-2170" name="__codelineno-0-2170"></a>
-<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2172" name="__codelineno-0-2172"></a><span class="sd">        - Two registered layers compose into an overlay in draw order (needs the engine):</span>
-<a id="__codelineno-0-2173" name="__codelineno-0-2173"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a><span class="sd">            &gt;&gt;&gt; import holoviews as hv                                   # doctest: +SKIP</span>
-<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap      # doctest: +SKIP</span>
-<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap()                                     # doctest: +SKIP</span>
-<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a><span class="sd">            &gt;&gt;&gt; _ = m.add_layer(hv.Points([(0, 0)]))                   # doctest: +SKIP</span>
-<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a><span class="sd">            &gt;&gt;&gt; _ = m.add_layer(hv.Points([(1, 1)]))                   # doctest: +SKIP</span>
-<a id="__codelineno-0-2179" name="__codelineno-0-2179"></a><span class="sd">            &gt;&gt;&gt; overlay = m.render()                                     # doctest: +SKIP</span>
-<a id="__codelineno-0-2180" name="__codelineno-0-2180"></a><span class="sd">            &gt;&gt;&gt; len(overlay)                                             # doctest: +SKIP</span>
-<a id="__codelineno-0-2181" name="__codelineno-0-2181"></a><span class="sd">            2</span>
-<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a>
-<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a><span class="sd">        - An empty map renders as a blank overlay rather than raising:</span>
-<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap      # doctest: +SKIP</span>
-<a id="__codelineno-0-2187" name="__codelineno-0-2187"></a><span class="sd">            &gt;&gt;&gt; len(InteractiveMap().render())                           # doctest: +SKIP</span>
-<a id="__codelineno-0-2188" name="__codelineno-0-2188"></a><span class="sd">            0</span>
-<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a>
-<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_flush_deferred_tiles</span><span class="p">()</span>
-<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_theme</span><span class="p">()</span>
-<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_projected</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_compose</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">))</span>
+<a id="__codelineno-0-2171" name="__codelineno-0-2171"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2172" name="__codelineno-0-2172"></a><span class="sd">        The single element when one layer is registered, an ``hv.Overlay`` of all layers in draw</span>
+<a id="__codelineno-0-2173" name="__codelineno-0-2173"></a><span class="sd">        order otherwise (an empty map renders as a blank ``hv.Overlay``). The overlay&#39;s order is the</span>
+<a id="__codelineno-0-2174" name="__codelineno-0-2174"></a><span class="sd">        order :attr:`figure_spec` describes, because each element was placed where its layer&#39;s band</span>
+<a id="__codelineno-0-2175" name="__codelineno-0-2175"></a><span class="sd">        put it rather than where the builder call happened to arrive.</span>
+<a id="__codelineno-0-2176" name="__codelineno-0-2176"></a>
+<a id="__codelineno-0-2177" name="__codelineno-0-2177"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2178" name="__codelineno-0-2178"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
+<a id="__codelineno-0-2179" name="__codelineno-0-2179"></a>
+<a id="__codelineno-0-2180" name="__codelineno-0-2180"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2181" name="__codelineno-0-2181"></a><span class="sd">        - Two registered layers compose into an overlay in draw order (needs the engine):</span>
+<a id="__codelineno-0-2182" name="__codelineno-0-2182"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2183" name="__codelineno-0-2183"></a><span class="sd">            &gt;&gt;&gt; import holoviews as hv                                   # doctest: +SKIP</span>
+<a id="__codelineno-0-2184" name="__codelineno-0-2184"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap      # doctest: +SKIP</span>
+<a id="__codelineno-0-2185" name="__codelineno-0-2185"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap()                                     # doctest: +SKIP</span>
+<a id="__codelineno-0-2186" name="__codelineno-0-2186"></a><span class="sd">            &gt;&gt;&gt; _ = m.add_layer(hv.Points([(0, 0)]))                   # doctest: +SKIP</span>
+<a id="__codelineno-0-2187" name="__codelineno-0-2187"></a><span class="sd">            &gt;&gt;&gt; _ = m.add_layer(hv.Points([(1, 1)]))                   # doctest: +SKIP</span>
+<a id="__codelineno-0-2188" name="__codelineno-0-2188"></a><span class="sd">            &gt;&gt;&gt; overlay = m.render()                                     # doctest: +SKIP</span>
+<a id="__codelineno-0-2189" name="__codelineno-0-2189"></a><span class="sd">            &gt;&gt;&gt; len(overlay)                                             # doctest: +SKIP</span>
+<a id="__codelineno-0-2190" name="__codelineno-0-2190"></a><span class="sd">            2</span>
+<a id="__codelineno-0-2191" name="__codelineno-0-2191"></a>
+<a id="__codelineno-0-2192" name="__codelineno-0-2192"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2193" name="__codelineno-0-2193"></a><span class="sd">        - An empty map renders as a blank overlay rather than raising:</span>
+<a id="__codelineno-0-2194" name="__codelineno-0-2194"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2195" name="__codelineno-0-2195"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap      # doctest: +SKIP</span>
+<a id="__codelineno-0-2196" name="__codelineno-0-2196"></a><span class="sd">            &gt;&gt;&gt; len(InteractiveMap().render())                           # doctest: +SKIP</span>
+<a id="__codelineno-0-2197" name="__codelineno-0-2197"></a><span class="sd">            0</span>
+<a id="__codelineno-0-2198" name="__codelineno-0-2198"></a>
+<a id="__codelineno-0-2199" name="__codelineno-0-2199"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2200" name="__codelineno-0-2200"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2201" name="__codelineno-0-2201"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_flush_deferred_tiles</span><span class="p">()</span>
+<a id="__codelineno-0-2202" name="__codelineno-0-2202"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_apply_theme</span><span class="p">()</span>
+<a id="__codelineno-0-2203" name="__codelineno-0-2203"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_projected</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_compose</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">))</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -26071,16 +26089,7 @@ file.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2231">2231</a></span>
-<span class="normal"><a href="#__codelineno-0-2232">2232</a></span>
-<span class="normal"><a href="#__codelineno-0-2233">2233</a></span>
-<span class="normal"><a href="#__codelineno-0-2234">2234</a></span>
-<span class="normal"><a href="#__codelineno-0-2235">2235</a></span>
-<span class="normal"><a href="#__codelineno-0-2236">2236</a></span>
-<span class="normal"><a href="#__codelineno-0-2237">2237</a></span>
-<span class="normal"><a href="#__codelineno-0-2238">2238</a></span>
-<span class="normal"><a href="#__codelineno-0-2239">2239</a></span>
-<span class="normal"><a href="#__codelineno-0-2240">2240</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2240">2240</a></span>
 <span class="normal"><a href="#__codelineno-0-2241">2241</a></span>
 <span class="normal"><a href="#__codelineno-0-2242">2242</a></span>
 <span class="normal"><a href="#__codelineno-0-2243">2243</a></span>
@@ -26133,69 +26142,78 @@ file.</p>
 <span class="normal"><a href="#__codelineno-0-2290">2290</a></span>
 <span class="normal"><a href="#__codelineno-0-2291">2291</a></span>
 <span class="normal"><a href="#__codelineno-0-2292">2292</a></span>
-<span class="normal"><a href="#__codelineno-0-2293">2293</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2231" name="__codelineno-0-2231"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-<a id="__codelineno-0-2232" name="__codelineno-0-2232"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the composed map — interactive HTML (Bokeh) or a raster via the matplotlib backend.</span>
-<a id="__codelineno-0-2233" name="__codelineno-0-2233"></a>
-<a id="__codelineno-0-2234" name="__codelineno-0-2234"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-2235" name="__codelineno-0-2235"></a><span class="sd">        path: Output file (``str`` or ``pathlib.Path``). ``*.html`` writes a self-contained</span>
-<a id="__codelineno-0-2236" name="__codelineno-0-2236"></a><span class="sd">            interactive Bokeh page; ``.png`` and the other raster suffixes render through HoloViews&#39;</span>
-<a id="__codelineno-0-2237" name="__codelineno-0-2237"></a><span class="sd">            matplotlib backend (headless, no browser/selenium needed). A vector suffix is refused —</span>
-<a id="__codelineno-0-2238" name="__codelineno-0-2238"></a><span class="sd">            see below.</span>
-<a id="__codelineno-0-2239" name="__codelineno-0-2239"></a><span class="sd">        **kwargs: Forwarded to :func:`holoviews.save` (e.g. ``fmt``, ``dpi``).</span>
-<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a>
-<a id="__codelineno-0-2241" name="__codelineno-0-2241"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2242" name="__codelineno-0-2242"></a><span class="sd">        pathlib.Path: the file written — every tier&#39;s ``save`` returns a ``Path`` (#248), so the</span>
-<a id="__codelineno-0-2243" name="__codelineno-0-2243"></a><span class="sd">        result can be opened, moved or asserted on without re-wrapping it.</span>
-<a id="__codelineno-0-2244" name="__codelineno-0-2244"></a>
-<a id="__codelineno-0-2245" name="__codelineno-0-2245"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2246" name="__codelineno-0-2246"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
-<a id="__codelineno-0-2247" name="__codelineno-0-2247"></a><span class="sd">        ValueError: for a vector suffix (``.svg``/``.pdf``/``.pgf``). This tier declares</span>
-<a id="__codelineno-0-2248" name="__codelineno-0-2248"></a><span class="sd">            ``export_vector`` absent, because its figure is a Bokeh canvas and a vector export is the</span>
-<a id="__codelineno-0-2249" name="__codelineno-0-2249"></a><span class="sd">            static tier&#39;s — and the static tier declares that capability as its own alone. The</span>
-<a id="__codelineno-0-2250" name="__codelineno-0-2250"></a><span class="sd">            matplotlib fallback the raster suffixes use would write those three too, so a caller asking</span>
-<a id="__codelineno-0-2251" name="__codelineno-0-2251"></a><span class="sd">            for one got a file the declaration says the tier cannot produce, drawn by a renderer that</span>
-<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a><span class="sd">            is not this tier&#39;s (review L3). Build the same map with ``digitalearth.Map`` for a vector</span>
-<a id="__codelineno-0-2253" name="__codelineno-0-2253"></a><span class="sd">            file.</span>
-<a id="__codelineno-0-2254" name="__codelineno-0-2254"></a>
-<a id="__codelineno-0-2255" name="__codelineno-0-2255"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2256" name="__codelineno-0-2256"></a><span class="sd">        - The suffix picks the backend — ``.html`` is interactive Bokeh, ``.png`` renders</span>
-<a id="__codelineno-0-2257" name="__codelineno-0-2257"></a><span class="sd">          headless through matplotlib (needs the engine):</span>
-<a id="__codelineno-0-2258" name="__codelineno-0-2258"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2259" name="__codelineno-0-2259"></a><span class="sd">            &gt;&gt;&gt; import holoviews as hv                                   # doctest: +SKIP</span>
-<a id="__codelineno-0-2260" name="__codelineno-0-2260"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap      # doctest: +SKIP</span>
-<a id="__codelineno-0-2261" name="__codelineno-0-2261"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().add_layer(hv.Points([(0, 0)]))    # doctest: +SKIP</span>
-<a id="__codelineno-0-2262" name="__codelineno-0-2262"></a><span class="sd">            &gt;&gt;&gt; m.save(&quot;map.html&quot;).name                                  # doctest: +SKIP</span>
-<a id="__codelineno-0-2263" name="__codelineno-0-2263"></a><span class="sd">            &#39;map.html&#39;</span>
-<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a><span class="sd">            &gt;&gt;&gt; m.save(&quot;map.png&quot;).suffix                                 # doctest: +SKIP</span>
-<a id="__codelineno-0-2265" name="__codelineno-0-2265"></a><span class="sd">            &#39;.png&#39;</span>
-<a id="__codelineno-0-2266" name="__codelineno-0-2266"></a>
-<a id="__codelineno-0-2267" name="__codelineno-0-2267"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2268" name="__codelineno-0-2268"></a><span class="sd">        - A vector file is the static tier&#39;s, and the refusal says so rather than writing one (it</span>
-<a id="__codelineno-0-2269" name="__codelineno-0-2269"></a><span class="sd">          needs no engine: nothing is rendered for a call that cannot be honoured):</span>
-<a id="__codelineno-0-2270" name="__codelineno-0-2270"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2271" name="__codelineno-0-2271"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
-<a id="__codelineno-0-2272" name="__codelineno-0-2272"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().save(&quot;map.svg&quot;)           # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-2273" name="__codelineno-0-2273"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-2274" name="__codelineno-0-2274"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-2275" name="__codelineno-0-2275"></a><span class="sd">            ValueError: InteractiveMap.save(&#39;map.svg&#39;) cannot write a vector file: ...</span>
-<a id="__codelineno-0-2276" name="__codelineno-0-2276"></a>
-<a id="__codelineno-0-2277" name="__codelineno-0-2277"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2278" name="__codelineno-0-2278"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2279" name="__codelineno-0-2279"></a>    <span class="n">suffix</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-<a id="__codelineno-0-2280" name="__codelineno-0-2280"></a>    <span class="k">if</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="n">VECTOR_SUFFIXES</span><span class="p">:</span>
-<a id="__codelineno-0-2281" name="__codelineno-0-2281"></a>        <span class="c1"># Refused before the figure is rendered, so nothing is drawn and nothing is written for a call</span>
-<a id="__codelineno-0-2282" name="__codelineno-0-2282"></a>        <span class="c1"># that cannot be honoured. The reason is read from the declaration rather than repeated, so the</span>
-<a id="__codelineno-0-2283" name="__codelineno-0-2283"></a>        <span class="c1"># two cannot say different things (review L3).</span>
-<a id="__codelineno-0-2284" name="__codelineno-0-2284"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-2285" name="__codelineno-0-2285"></a>            <span class="sa">f</span><span class="s2">&quot;InteractiveMap.save(</span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="si">!r}</span><span class="s2">) cannot write a vector file: the interactive tier &quot;</span>
-<a id="__codelineno-0-2286" name="__codelineno-0-2286"></a>            <span class="sa">f</span><span class="s2">&quot;declares export_vector absent - </span><span class="si">{</span><span class="n">CAPABILITIES</span><span class="o">.</span><span class="n">reason</span><span class="p">(</span><span class="s1">&#39;export_vector&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">. Build the map &quot;</span>
-<a id="__codelineno-0-2287" name="__codelineno-0-2287"></a>            <span class="sa">f</span><span class="s2">&quot;with digitalearth.Map for </span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">, or save .png or .html here.&quot;</span>
-<a id="__codelineno-0-2288" name="__codelineno-0-2288"></a>        <span class="p">)</span>
-<a id="__codelineno-0-2289" name="__codelineno-0-2289"></a>    <span class="n">_</span><span class="p">,</span> <span class="n">hv</span> <span class="o">=</span> <span class="n">_require_holoviz</span><span class="p">()</span>
-<a id="__codelineno-0-2290" name="__codelineno-0-2290"></a>    <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
-<a id="__codelineno-0-2291" name="__codelineno-0-2291"></a>    <span class="n">backend</span> <span class="o">=</span> <span class="s2">&quot;bokeh&quot;</span> <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.html&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;matplotlib&quot;</span>
-<a id="__codelineno-0-2292" name="__codelineno-0-2292"></a>    <span class="n">hv</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-<a id="__codelineno-0-2293" name="__codelineno-0-2293"></a>    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-2293">2293</a></span>
+<span class="normal"><a href="#__codelineno-0-2294">2294</a></span>
+<span class="normal"><a href="#__codelineno-0-2295">2295</a></span>
+<span class="normal"><a href="#__codelineno-0-2296">2296</a></span>
+<span class="normal"><a href="#__codelineno-0-2297">2297</a></span>
+<span class="normal"><a href="#__codelineno-0-2298">2298</a></span>
+<span class="normal"><a href="#__codelineno-0-2299">2299</a></span>
+<span class="normal"><a href="#__codelineno-0-2300">2300</a></span>
+<span class="normal"><a href="#__codelineno-0-2301">2301</a></span>
+<span class="normal"><a href="#__codelineno-0-2302">2302</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2240" name="__codelineno-0-2240"></a><span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-0-2241" name="__codelineno-0-2241"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the composed map — interactive HTML (Bokeh) or a raster via the matplotlib backend.</span>
+<a id="__codelineno-0-2242" name="__codelineno-0-2242"></a>
+<a id="__codelineno-0-2243" name="__codelineno-0-2243"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-2244" name="__codelineno-0-2244"></a><span class="sd">        path: Output file (``str`` or ``pathlib.Path``). ``*.html`` writes a self-contained</span>
+<a id="__codelineno-0-2245" name="__codelineno-0-2245"></a><span class="sd">            interactive Bokeh page; ``.png`` and the other raster suffixes render through HoloViews&#39;</span>
+<a id="__codelineno-0-2246" name="__codelineno-0-2246"></a><span class="sd">            matplotlib backend (headless, no browser/selenium needed). A vector suffix is refused —</span>
+<a id="__codelineno-0-2247" name="__codelineno-0-2247"></a><span class="sd">            see below.</span>
+<a id="__codelineno-0-2248" name="__codelineno-0-2248"></a><span class="sd">        **kwargs: Forwarded to :func:`holoviews.save` (e.g. ``fmt``, ``dpi``).</span>
+<a id="__codelineno-0-2249" name="__codelineno-0-2249"></a>
+<a id="__codelineno-0-2250" name="__codelineno-0-2250"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2251" name="__codelineno-0-2251"></a><span class="sd">        pathlib.Path: the file written — every tier&#39;s ``save`` returns a ``Path`` (#248), so the</span>
+<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a><span class="sd">        result can be opened, moved or asserted on without re-wrapping it.</span>
+<a id="__codelineno-0-2253" name="__codelineno-0-2253"></a>
+<a id="__codelineno-0-2254" name="__codelineno-0-2254"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2255" name="__codelineno-0-2255"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
+<a id="__codelineno-0-2256" name="__codelineno-0-2256"></a><span class="sd">        ValueError: for a vector suffix (``.svg``/``.pdf``/``.pgf``). This tier declares</span>
+<a id="__codelineno-0-2257" name="__codelineno-0-2257"></a><span class="sd">            ``export_vector`` absent, because its figure is a Bokeh canvas and a vector export is the</span>
+<a id="__codelineno-0-2258" name="__codelineno-0-2258"></a><span class="sd">            static tier&#39;s — and the static tier declares that capability as its own alone. The</span>
+<a id="__codelineno-0-2259" name="__codelineno-0-2259"></a><span class="sd">            matplotlib fallback the raster suffixes use would write those three too, so a caller asking</span>
+<a id="__codelineno-0-2260" name="__codelineno-0-2260"></a><span class="sd">            for one got a file the declaration says the tier cannot produce, drawn by a renderer that</span>
+<a id="__codelineno-0-2261" name="__codelineno-0-2261"></a><span class="sd">            is not this tier&#39;s (review L3). Build the same map with ``digitalearth.Map`` for a vector</span>
+<a id="__codelineno-0-2262" name="__codelineno-0-2262"></a><span class="sd">            file.</span>
+<a id="__codelineno-0-2263" name="__codelineno-0-2263"></a>
+<a id="__codelineno-0-2264" name="__codelineno-0-2264"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2265" name="__codelineno-0-2265"></a><span class="sd">        - The suffix picks the backend — ``.html`` is interactive Bokeh, ``.png`` renders</span>
+<a id="__codelineno-0-2266" name="__codelineno-0-2266"></a><span class="sd">          headless through matplotlib (needs the engine):</span>
+<a id="__codelineno-0-2267" name="__codelineno-0-2267"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2268" name="__codelineno-0-2268"></a><span class="sd">            &gt;&gt;&gt; import holoviews as hv                                   # doctest: +SKIP</span>
+<a id="__codelineno-0-2269" name="__codelineno-0-2269"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap      # doctest: +SKIP</span>
+<a id="__codelineno-0-2270" name="__codelineno-0-2270"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().add_layer(hv.Points([(0, 0)]))    # doctest: +SKIP</span>
+<a id="__codelineno-0-2271" name="__codelineno-0-2271"></a><span class="sd">            &gt;&gt;&gt; m.save(&quot;map.html&quot;).name                                  # doctest: +SKIP</span>
+<a id="__codelineno-0-2272" name="__codelineno-0-2272"></a><span class="sd">            &#39;map.html&#39;</span>
+<a id="__codelineno-0-2273" name="__codelineno-0-2273"></a><span class="sd">            &gt;&gt;&gt; m.save(&quot;map.png&quot;).suffix                                 # doctest: +SKIP</span>
+<a id="__codelineno-0-2274" name="__codelineno-0-2274"></a><span class="sd">            &#39;.png&#39;</span>
+<a id="__codelineno-0-2275" name="__codelineno-0-2275"></a>
+<a id="__codelineno-0-2276" name="__codelineno-0-2276"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2277" name="__codelineno-0-2277"></a><span class="sd">        - A vector file is the static tier&#39;s, and the refusal says so rather than writing one (it</span>
+<a id="__codelineno-0-2278" name="__codelineno-0-2278"></a><span class="sd">          needs no engine: nothing is rendered for a call that cannot be honoured):</span>
+<a id="__codelineno-0-2279" name="__codelineno-0-2279"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2280" name="__codelineno-0-2280"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
+<a id="__codelineno-0-2281" name="__codelineno-0-2281"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().save(&quot;map.svg&quot;)           # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-2282" name="__codelineno-0-2282"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-2283" name="__codelineno-0-2283"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-2284" name="__codelineno-0-2284"></a><span class="sd">            ValueError: InteractiveMap.save(&#39;map.svg&#39;) cannot write a vector file: ...</span>
+<a id="__codelineno-0-2285" name="__codelineno-0-2285"></a>
+<a id="__codelineno-0-2286" name="__codelineno-0-2286"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2287" name="__codelineno-0-2287"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2288" name="__codelineno-0-2288"></a>    <span class="n">suffix</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+<a id="__codelineno-0-2289" name="__codelineno-0-2289"></a>    <span class="k">if</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="n">VECTOR_SUFFIXES</span><span class="p">:</span>
+<a id="__codelineno-0-2290" name="__codelineno-0-2290"></a>        <span class="c1"># Refused before the figure is rendered, so nothing is drawn and nothing is written for a call</span>
+<a id="__codelineno-0-2291" name="__codelineno-0-2291"></a>        <span class="c1"># that cannot be honoured. The reason is read from the declaration rather than repeated, so the</span>
+<a id="__codelineno-0-2292" name="__codelineno-0-2292"></a>        <span class="c1"># two cannot say different things (review L3).</span>
+<a id="__codelineno-0-2293" name="__codelineno-0-2293"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-2294" name="__codelineno-0-2294"></a>            <span class="sa">f</span><span class="s2">&quot;InteractiveMap.save(</span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="si">!r}</span><span class="s2">) cannot write a vector file: the interactive tier &quot;</span>
+<a id="__codelineno-0-2295" name="__codelineno-0-2295"></a>            <span class="sa">f</span><span class="s2">&quot;declares export_vector absent - </span><span class="si">{</span><span class="n">CAPABILITIES</span><span class="o">.</span><span class="n">reason</span><span class="p">(</span><span class="s1">&#39;export_vector&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">. Build the map &quot;</span>
+<a id="__codelineno-0-2296" name="__codelineno-0-2296"></a>            <span class="sa">f</span><span class="s2">&quot;with digitalearth.Map for </span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">, or save .png or .html here.&quot;</span>
+<a id="__codelineno-0-2297" name="__codelineno-0-2297"></a>        <span class="p">)</span>
+<a id="__codelineno-0-2298" name="__codelineno-0-2298"></a>    <span class="n">_</span><span class="p">,</span> <span class="n">hv</span> <span class="o">=</span> <span class="n">_require_holoviz</span><span class="p">()</span>
+<a id="__codelineno-0-2299" name="__codelineno-0-2299"></a>    <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
+<a id="__codelineno-0-2300" name="__codelineno-0-2300"></a>    <span class="n">backend</span> <span class="o">=</span> <span class="s2">&quot;bokeh&quot;</span> <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.html&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;matplotlib&quot;</span>
+<a id="__codelineno-0-2301" name="__codelineno-0-2301"></a>    <span class="n">hv</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-2302" name="__codelineno-0-2302"></a>    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -26264,16 +26282,7 @@ file.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2295">2295</a></span>
-<span class="normal"><a href="#__codelineno-0-2296">2296</a></span>
-<span class="normal"><a href="#__codelineno-0-2297">2297</a></span>
-<span class="normal"><a href="#__codelineno-0-2298">2298</a></span>
-<span class="normal"><a href="#__codelineno-0-2299">2299</a></span>
-<span class="normal"><a href="#__codelineno-0-2300">2300</a></span>
-<span class="normal"><a href="#__codelineno-0-2301">2301</a></span>
-<span class="normal"><a href="#__codelineno-0-2302">2302</a></span>
-<span class="normal"><a href="#__codelineno-0-2303">2303</a></span>
-<span class="normal"><a href="#__codelineno-0-2304">2304</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2304">2304</a></span>
 <span class="normal"><a href="#__codelineno-0-2305">2305</a></span>
 <span class="normal"><a href="#__codelineno-0-2306">2306</a></span>
 <span class="normal"><a href="#__codelineno-0-2307">2307</a></span>
@@ -26282,25 +26291,34 @@ file.</p>
 <span class="normal"><a href="#__codelineno-0-2310">2310</a></span>
 <span class="normal"><a href="#__codelineno-0-2311">2311</a></span>
 <span class="normal"><a href="#__codelineno-0-2312">2312</a></span>
-<span class="normal"><a href="#__codelineno-0-2313">2313</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2295" name="__codelineno-0-2295"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-2296" name="__codelineno-0-2296"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render the map and display it inline when IPython is available.</span>
-<a id="__codelineno-0-2297" name="__codelineno-0-2297"></a>
-<a id="__codelineno-0-2298" name="__codelineno-0-2298"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-2299" name="__codelineno-0-2299"></a><span class="sd">        The composed HoloViews object (which a notebook front-end renders richly).</span>
-<a id="__codelineno-0-2300" name="__codelineno-0-2300"></a>
-<a id="__codelineno-0-2301" name="__codelineno-0-2301"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-2302" name="__codelineno-0-2302"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
-<a id="__codelineno-0-2303" name="__codelineno-0-2303"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2304" name="__codelineno-0-2304"></a>    <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
-<a id="__codelineno-0-2305" name="__codelineno-0-2305"></a>    <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-2306" name="__codelineno-0-2306"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">IPython.display</span><span class="w"> </span><span class="kn">import</span> <span class="n">display</span>
-<a id="__codelineno-0-2307" name="__codelineno-0-2307"></a>
-<a id="__codelineno-0-2308" name="__codelineno-0-2308"></a>        <span class="n">display</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-<a id="__codelineno-0-2309" name="__codelineno-0-2309"></a>    <span class="k">except</span> <span class="p">(</span>
-<a id="__codelineno-0-2310" name="__codelineno-0-2310"></a>        <span class="ne">ImportError</span>
-<a id="__codelineno-0-2311" name="__codelineno-0-2311"></a>    <span class="p">):</span>  <span class="c1"># plain-script use: returning the object is all there is to show</span>
-<a id="__codelineno-0-2312" name="__codelineno-0-2312"></a>        <span class="k">pass</span>
-<a id="__codelineno-0-2313" name="__codelineno-0-2313"></a>    <span class="k">return</span> <span class="n">obj</span>
+<span class="normal"><a href="#__codelineno-0-2313">2313</a></span>
+<span class="normal"><a href="#__codelineno-0-2314">2314</a></span>
+<span class="normal"><a href="#__codelineno-0-2315">2315</a></span>
+<span class="normal"><a href="#__codelineno-0-2316">2316</a></span>
+<span class="normal"><a href="#__codelineno-0-2317">2317</a></span>
+<span class="normal"><a href="#__codelineno-0-2318">2318</a></span>
+<span class="normal"><a href="#__codelineno-0-2319">2319</a></span>
+<span class="normal"><a href="#__codelineno-0-2320">2320</a></span>
+<span class="normal"><a href="#__codelineno-0-2321">2321</a></span>
+<span class="normal"><a href="#__codelineno-0-2322">2322</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2304" name="__codelineno-0-2304"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-2305" name="__codelineno-0-2305"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render the map and display it inline when IPython is available.</span>
+<a id="__codelineno-0-2306" name="__codelineno-0-2306"></a>
+<a id="__codelineno-0-2307" name="__codelineno-0-2307"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-2308" name="__codelineno-0-2308"></a><span class="sd">        The composed HoloViews object (which a notebook front-end renders richly).</span>
+<a id="__codelineno-0-2309" name="__codelineno-0-2309"></a>
+<a id="__codelineno-0-2310" name="__codelineno-0-2310"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-2311" name="__codelineno-0-2311"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
+<a id="__codelineno-0-2312" name="__codelineno-0-2312"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2313" name="__codelineno-0-2313"></a>    <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
+<a id="__codelineno-0-2314" name="__codelineno-0-2314"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-2315" name="__codelineno-0-2315"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">IPython.display</span><span class="w"> </span><span class="kn">import</span> <span class="n">display</span>
+<a id="__codelineno-0-2316" name="__codelineno-0-2316"></a>
+<a id="__codelineno-0-2317" name="__codelineno-0-2317"></a>        <span class="n">display</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+<a id="__codelineno-0-2318" name="__codelineno-0-2318"></a>    <span class="k">except</span> <span class="p">(</span>
+<a id="__codelineno-0-2319" name="__codelineno-0-2319"></a>        <span class="ne">ImportError</span>
+<a id="__codelineno-0-2320" name="__codelineno-0-2320"></a>    <span class="p">):</span>  <span class="c1"># plain-script use: returning the object is all there is to show</span>
+<a id="__codelineno-0-2321" name="__codelineno-0-2321"></a>        <span class="k">pass</span>
+<a id="__codelineno-0-2322" name="__codelineno-0-2322"></a>    <span class="k">return</span> <span class="n">obj</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -26351,16 +26369,7 @@ acts on a layer that is still there, which is why the pointer is not cleared her
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2315">2315</a></span>
-<span class="normal"><a href="#__codelineno-0-2316">2316</a></span>
-<span class="normal"><a href="#__codelineno-0-2317">2317</a></span>
-<span class="normal"><a href="#__codelineno-0-2318">2318</a></span>
-<span class="normal"><a href="#__codelineno-0-2319">2319</a></span>
-<span class="normal"><a href="#__codelineno-0-2320">2320</a></span>
-<span class="normal"><a href="#__codelineno-0-2321">2321</a></span>
-<span class="normal"><a href="#__codelineno-0-2322">2322</a></span>
-<span class="normal"><a href="#__codelineno-0-2323">2323</a></span>
-<span class="normal"><a href="#__codelineno-0-2324">2324</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2324">2324</a></span>
 <span class="normal"><a href="#__codelineno-0-2325">2325</a></span>
 <span class="normal"><a href="#__codelineno-0-2326">2326</a></span>
 <span class="normal"><a href="#__codelineno-0-2327">2327</a></span>
@@ -26402,58 +26411,67 @@ acts on a layer that is still there, which is why the pointer is not cleared her
 <span class="normal"><a href="#__codelineno-0-2363">2363</a></span>
 <span class="normal"><a href="#__codelineno-0-2364">2364</a></span>
 <span class="normal"><a href="#__codelineno-0-2365">2365</a></span>
-<span class="normal"><a href="#__codelineno-0-2366">2366</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2315" name="__codelineno-0-2315"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2316" name="__codelineno-0-2316"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Let go of the in-memory data this map registered.</span>
-<a id="__codelineno-0-2317" name="__codelineno-0-2317"></a>
-<a id="__codelineno-0-2318" name="__codelineno-0-2318"></a><span class="sd">    The object registry is process-global and holds strong references, so a session that builds maps</span>
-<a id="__codelineno-0-2319" name="__codelineno-0-2319"></a><span class="sd">    keeps every dataset they drew until something says otherwise. This is the caller saying so. Closing</span>
-<a id="__codelineno-0-2320" name="__codelineno-0-2320"></a><span class="sd">    twice is harmless, and a map that registered nothing has nothing to forget.</span>
-<a id="__codelineno-0-2321" name="__codelineno-0-2321"></a>
-<a id="__codelineno-0-2322" name="__codelineno-0-2322"></a><span class="sd">    An `object:` source in a `figure_spec` captured from this map cannot be opened afterwards — which is</span>
-<a id="__codelineno-0-2323" name="__codelineno-0-2323"></a><span class="sd">    what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and reference</span>
-<a id="__codelineno-0-2324" name="__codelineno-0-2324"></a><span class="sd">    it by path to keep such a figure readable.</span>
-<a id="__codelineno-0-2325" name="__codelineno-0-2325"></a>
-<a id="__codelineno-0-2326" name="__codelineno-0-2326"></a><span class="sd">    The credentials held for keyed basemaps go too, and with them the engine values held beside each</span>
-<a id="__codelineno-0-2327" name="__codelineno-0-2327"></a><span class="sd">    layer: they are kept off the figure so it can be written down without them, and a closed map has</span>
-<a id="__codelineno-0-2328" name="__codelineno-0-2328"></a><span class="sd">    nothing left to draw with them.</span>
-<a id="__codelineno-0-2329" name="__codelineno-0-2329"></a>
-<a id="__codelineno-0-2330" name="__codelineno-0-2330"></a><span class="sd">    What does **not** go is the figure: the layer tree, the elements already built and the pointer the</span>
-<a id="__codelineno-0-2331" name="__codelineno-0-2331"></a><span class="sd">    toggles follow all survive, so a closed map still renders, saves and can have its colorbar or</span>
-<a id="__codelineno-0-2332" name="__codelineno-0-2332"></a><span class="sd">    legend switched. Closing lets go of the *data*, not of the picture — a `colorbar()` after `close()`</span>
-<a id="__codelineno-0-2333" name="__codelineno-0-2333"></a><span class="sd">    acts on a layer that is still there, which is why the pointer is not cleared here as it is in</span>
-<a id="__codelineno-0-2334" name="__codelineno-0-2334"></a><span class="sd">    :meth:`_forget_layer` (review N8). Only a layer that was forgotten takes the pointer with it.</span>
-<a id="__codelineno-0-2335" name="__codelineno-0-2335"></a>
-<a id="__codelineno-0-2336" name="__codelineno-0-2336"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-2337" name="__codelineno-0-2337"></a><span class="sd">        - A map that drew nothing closes quietly, with no engine installed:</span>
-<a id="__codelineno-0-2338" name="__codelineno-0-2338"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2339" name="__codelineno-0-2339"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
-<a id="__codelineno-0-2340" name="__codelineno-0-2340"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().close()</span>
-<a id="__codelineno-0-2341" name="__codelineno-0-2341"></a>
-<a id="__codelineno-0-2342" name="__codelineno-0-2342"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-2343" name="__codelineno-0-2343"></a>
-<a id="__codelineno-0-2344" name="__codelineno-0-2344"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2345" name="__codelineno-0-2345"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
-<a id="__codelineno-0-2346" name="__codelineno-0-2346"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-2347" name="__codelineno-0-2347"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
-<a id="__codelineno-0-2348" name="__codelineno-0-2348"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_held</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-<a id="__codelineno-0-2350" name="__codelineno-0-2350"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_live_streams</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-<a id="__codelineno-0-2351" name="__codelineno-0-2351"></a>    <span class="c1"># Release the two registries the capability rows added (review L1): a `pn.state` periodic callback</span>
-<a id="__codelineno-0-2352" name="__codelineno-0-2352"></a>    <span class="c1"># (IN-10) keeps the event loop pinning the whole map after close unless it is stopped, and a linked</span>
-<a id="__codelineno-0-2353" name="__codelineno-0-2353"></a>    <span class="c1"># attribute table (IN-5) holds the map through its Selection1D subscriber. Stop each periodic</span>
-<a id="__codelineno-0-2354" name="__codelineno-0-2354"></a>    <span class="c1"># callback best-effort — a handle registered off-server may never have started — then drop both.</span>
-<a id="__codelineno-0-2355" name="__codelineno-0-2355"></a>    <span class="k">for</span> <span class="n">callback</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session_callbacks</span><span class="p">:</span>
-<a id="__codelineno-0-2356" name="__codelineno-0-2356"></a>        <span class="n">stop</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span> <span class="s2">&quot;stop&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-2357" name="__codelineno-0-2357"></a>        <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">stop</span><span class="p">):</span>
-<a id="__codelineno-0-2358" name="__codelineno-0-2358"></a>            <span class="k">try</span><span class="p">:</span>
-<a id="__codelineno-0-2359" name="__codelineno-0-2359"></a>                <span class="n">stop</span><span class="p">()</span>
-<a id="__codelineno-0-2360" name="__codelineno-0-2360"></a>            <span class="k">except</span> <span class="p">(</span>
-<a id="__codelineno-0-2361" name="__codelineno-0-2361"></a>                <span class="ne">ValueError</span><span class="p">,</span>
-<a id="__codelineno-0-2362" name="__codelineno-0-2362"></a>                <span class="ne">RuntimeError</span><span class="p">,</span>
-<a id="__codelineno-0-2363" name="__codelineno-0-2363"></a>            <span class="p">):</span>  <span class="c1"># already stopped / no running loop to detach from</span>
-<a id="__codelineno-0-2364" name="__codelineno-0-2364"></a>                <span class="k">pass</span>
-<a id="__codelineno-0-2365" name="__codelineno-0-2365"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_session_callbacks</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-<a id="__codelineno-0-2366" name="__codelineno-0-2366"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_table_links</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<span class="normal"><a href="#__codelineno-0-2366">2366</a></span>
+<span class="normal"><a href="#__codelineno-0-2367">2367</a></span>
+<span class="normal"><a href="#__codelineno-0-2368">2368</a></span>
+<span class="normal"><a href="#__codelineno-0-2369">2369</a></span>
+<span class="normal"><a href="#__codelineno-0-2370">2370</a></span>
+<span class="normal"><a href="#__codelineno-0-2371">2371</a></span>
+<span class="normal"><a href="#__codelineno-0-2372">2372</a></span>
+<span class="normal"><a href="#__codelineno-0-2373">2373</a></span>
+<span class="normal"><a href="#__codelineno-0-2374">2374</a></span>
+<span class="normal"><a href="#__codelineno-0-2375">2375</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-2324" name="__codelineno-0-2324"></a><span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2325" name="__codelineno-0-2325"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Let go of the in-memory data this map registered.</span>
+<a id="__codelineno-0-2326" name="__codelineno-0-2326"></a>
+<a id="__codelineno-0-2327" name="__codelineno-0-2327"></a><span class="sd">    The object registry is process-global and holds strong references, so a session that builds maps</span>
+<a id="__codelineno-0-2328" name="__codelineno-0-2328"></a><span class="sd">    keeps every dataset they drew until something says otherwise. This is the caller saying so. Closing</span>
+<a id="__codelineno-0-2329" name="__codelineno-0-2329"></a><span class="sd">    twice is harmless, and a map that registered nothing has nothing to forget.</span>
+<a id="__codelineno-0-2330" name="__codelineno-0-2330"></a>
+<a id="__codelineno-0-2331" name="__codelineno-0-2331"></a><span class="sd">    An `object:` source in a `figure_spec` captured from this map cannot be opened afterwards — which is</span>
+<a id="__codelineno-0-2332" name="__codelineno-0-2332"></a><span class="sd">    what &quot;closed&quot; means for a figure whose data lived only in this process. Save the data and reference</span>
+<a id="__codelineno-0-2333" name="__codelineno-0-2333"></a><span class="sd">    it by path to keep such a figure readable.</span>
+<a id="__codelineno-0-2334" name="__codelineno-0-2334"></a>
+<a id="__codelineno-0-2335" name="__codelineno-0-2335"></a><span class="sd">    The credentials held for keyed basemaps go too, and with them the engine values held beside each</span>
+<a id="__codelineno-0-2336" name="__codelineno-0-2336"></a><span class="sd">    layer: they are kept off the figure so it can be written down without them, and a closed map has</span>
+<a id="__codelineno-0-2337" name="__codelineno-0-2337"></a><span class="sd">    nothing left to draw with them.</span>
+<a id="__codelineno-0-2338" name="__codelineno-0-2338"></a>
+<a id="__codelineno-0-2339" name="__codelineno-0-2339"></a><span class="sd">    What does **not** go is the figure: the layer tree, the elements already built and the pointer the</span>
+<a id="__codelineno-0-2340" name="__codelineno-0-2340"></a><span class="sd">    toggles follow all survive, so a closed map still renders, saves and can have its colorbar or</span>
+<a id="__codelineno-0-2341" name="__codelineno-0-2341"></a><span class="sd">    legend switched. Closing lets go of the *data*, not of the picture — a `colorbar()` after `close()`</span>
+<a id="__codelineno-0-2342" name="__codelineno-0-2342"></a><span class="sd">    acts on a layer that is still there, which is why the pointer is not cleared here as it is in</span>
+<a id="__codelineno-0-2343" name="__codelineno-0-2343"></a><span class="sd">    :meth:`_forget_layer` (review N8). Only a layer that was forgotten takes the pointer with it.</span>
+<a id="__codelineno-0-2344" name="__codelineno-0-2344"></a>
+<a id="__codelineno-0-2345" name="__codelineno-0-2345"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-2346" name="__codelineno-0-2346"></a><span class="sd">        - A map that drew nothing closes quietly, with no engine installed:</span>
+<a id="__codelineno-0-2347" name="__codelineno-0-2347"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-2348" name="__codelineno-0-2348"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
+<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().close()</span>
+<a id="__codelineno-0-2350" name="__codelineno-0-2350"></a>
+<a id="__codelineno-0-2351" name="__codelineno-0-2351"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-2352" name="__codelineno-0-2352"></a>
+<a id="__codelineno-0-2353" name="__codelineno-0-2353"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-2354" name="__codelineno-0-2354"></a><span class="sd">        __exit__: calls this on the way out of a ``with`` block.</span>
+<a id="__codelineno-0-2355" name="__codelineno-0-2355"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-2356" name="__codelineno-0-2356"></a>    <span class="n">forget_namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_objects_ns</span><span class="p">)</span>
+<a id="__codelineno-0-2357" name="__codelineno-0-2357"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_keys</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<a id="__codelineno-0-2358" name="__codelineno-0-2358"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_held</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<a id="__codelineno-0-2359" name="__codelineno-0-2359"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_live_streams</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<a id="__codelineno-0-2360" name="__codelineno-0-2360"></a>    <span class="c1"># Release the two registries the capability rows added (review L1): a `pn.state` periodic callback</span>
+<a id="__codelineno-0-2361" name="__codelineno-0-2361"></a>    <span class="c1"># (IN-10) keeps the event loop pinning the whole map after close unless it is stopped, and a linked</span>
+<a id="__codelineno-0-2362" name="__codelineno-0-2362"></a>    <span class="c1"># attribute table (IN-5) holds the map through its Selection1D subscriber. Stop each periodic</span>
+<a id="__codelineno-0-2363" name="__codelineno-0-2363"></a>    <span class="c1"># callback best-effort — a handle registered off-server may never have started — then drop both.</span>
+<a id="__codelineno-0-2364" name="__codelineno-0-2364"></a>    <span class="k">for</span> <span class="n">callback</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session_callbacks</span><span class="p">:</span>
+<a id="__codelineno-0-2365" name="__codelineno-0-2365"></a>        <span class="n">stop</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span> <span class="s2">&quot;stop&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-2366" name="__codelineno-0-2366"></a>        <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">stop</span><span class="p">):</span>
+<a id="__codelineno-0-2367" name="__codelineno-0-2367"></a>            <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-2368" name="__codelineno-0-2368"></a>                <span class="n">stop</span><span class="p">()</span>
+<a id="__codelineno-0-2369" name="__codelineno-0-2369"></a>            <span class="k">except</span> <span class="p">(</span>
+<a id="__codelineno-0-2370" name="__codelineno-0-2370"></a>                <span class="ne">ValueError</span><span class="p">,</span>
+<a id="__codelineno-0-2371" name="__codelineno-0-2371"></a>                <span class="ne">RuntimeError</span><span class="p">,</span>
+<a id="__codelineno-0-2372" name="__codelineno-0-2372"></a>            <span class="p">):</span>  <span class="c1"># already stopped / no running loop to detach from</span>
+<a id="__codelineno-0-2373" name="__codelineno-0-2373"></a>                <span class="k">pass</span>
+<a id="__codelineno-0-2374" name="__codelineno-0-2374"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_session_callbacks</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<a id="__codelineno-0-2375" name="__codelineno-0-2375"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_table_links</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
