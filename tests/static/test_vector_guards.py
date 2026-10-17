@@ -223,6 +223,43 @@ class TestNonNumericColumnIsNamed:
         ):
             canvas.sankey(text_lines_fc, column="label")
 
+    def test_points_column_non_numeric_without_categorical_scheme(self, text_points_fc):
+        """points(column=<text>) with no categorical scheme is named, not a numpy conversion error (#332 L4).
+
+        Args:
+            text_points_fc: Two points whose only column, ``label``, holds strings.
+
+        Test scenario:
+            The ``column=`` keyword routes a text column straight into the continuous ramp, which coerced to
+            float and died in cleopatra as "could not convert string to float". The refusal names the call,
+            the column and the ``scheme="categorical"`` way out instead.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"Map\.points\(\) needs column='label' to name a column of numbers",
+        ):
+            canvas.points(text_points_fc, column="label")
+
+    def test_choropleth_column_non_numeric_without_categorical_scheme(
+        self, text_polygons_fc
+    ):
+        """choropleth(<text column>) with no categorical scheme is named, not a numpy error (#332 L4).
+
+        Args:
+            text_polygons_fc: Two polygons whose only column, ``label``, holds strings.
+
+        Test scenario:
+            The continuous choropleth ramp over a string column crashed the same way ``points`` did; it now
+            refuses by name, consistently with ``points`` and with the ``scheme="categorical"`` remedy.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"choropleth\(\) needs column='label' to name a column of numbers",
+        ):
+            canvas.choropleth(text_polygons_fc, "label")
+
 
 class TestColourNormWithoutValuesRefused:
     """#380 — a Normalize under color= is refused when the call has no values to scale, honoured otherwise."""

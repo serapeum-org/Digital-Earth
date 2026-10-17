@@ -520,6 +520,43 @@ def _categorical_fill(
     return (None if values is None else nulls_to_none(values)), True
 
 
+def _is_categorical_scheme(scheme: Any) -> bool:
+    """Return whether ``scheme`` asks for the categorical fill (case-insensitive ``"categorical"``)."""
+    return isinstance(scheme, str) and scheme.lower() == "categorical"
+
+
+def _require_numeric_ramp(values: np.ndarray | None, column: str, caller: str) -> None:
+    """Refuse a continuous or graduated colour ramp over a non-numeric column, by name (#332).
+
+    The categorical fill colours string categories, so it reads the column untyped; every other request —
+    a continuous ramp (no ``scheme``) or a graduated one (``quantiles`` and the rest) — needs numbers. A
+    text column handed to one coerced to float and died inside cleopatra as ``ufunc 'isfinite' not
+    supported`` / ``could not convert string to float``, naming neither the call, the keyword, nor the
+    column. Called only once the request is known not to be categorical, so a categorical layer over the
+    same strings is untouched. ``values`` is ``None`` when the layer colours by nothing, which this leaves
+    to the callers' own no-values handling.
+
+    Args:
+        values: The per-feature values the ramp would colour by, or ``None`` when nothing colours the layer.
+        column: The column they came from, for the message.
+        caller: The public call, for the message.
+
+    Raises:
+        ValueError: when ``values`` is a non-numeric dtype, naming all three the way :func:`_numeric_column`
+            does for the width/scale builders, and pointing at the ``scheme="categorical"`` way out.
+    """
+    if values is None:
+        return
+    dtype = np.asarray(values).dtype
+    if dtype.kind in "biufc":
+        return
+    raise ValueError(
+        f"{caller} needs column={column!r} to name a column of numbers for a continuous or graduated "
+        f'ramp, and it holds {dtype} values that are not numbers; pass scheme="categorical" to colour '
+        "each distinct value instead"
+    )
+
+
 def _skips_off_limb(builder: Callable) -> Callable:
     """Wrap a vector builder so data the display CRS cannot place skips the layer instead of raising (#257).
 
@@ -603,6 +640,10 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # a numeric column a continuous/graduated scheme needs still arrives as numbers (#332).
         values: np.ndarray | None = np.asarray(fc[column])
         color_field: str | None = column
+        # A continuous/graduated ramp needs numbers; only the categorical fill reads the strings. Refuse a
+        # text column by name here rather than let it die inside cleopatra's numeric path (#332).
+        if not _is_categorical_scheme(opts.get("scheme")):
+            _require_numeric_ramp(values, column, _POINTS_CALLER)
     else:
         values = src.z.values if src.z is not None else None
         color_field = source_field(src)
@@ -1016,6 +1057,10 @@ def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     _require_column(gdf, props["column"], "column", _CHOROPLETH_CALLER)
     polygons, repeats = scene._polygon_vertices(gdf.geometry)
     values = np.repeat(gdf[props["column"]].to_numpy(), repeats)
+    # A continuous/graduated ramp needs numbers; only the categorical fill reads the strings. Refuse a text
+    # column by name, the same way `points` does, rather than crash in cleopatra's numeric path (#332).
+    if not _is_categorical_scheme(props["scheme"]):
+        _require_numeric_ramp(values, props["column"], _CHOROPLETH_CALLER)
     # drop far-side polygons on a globe
     polygons, values = scene._finite_polygons(polygons, values)
     scheme = props["scheme"]
