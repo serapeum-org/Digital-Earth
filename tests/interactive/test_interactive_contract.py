@@ -520,7 +520,9 @@ class TestBasemapDefault:
 
     def test_basemap_defaults_to_the_shared_constant(self):
         """``basemap()``'s default *is* the shared constant object, not a copy of its value."""
-        default = inspect.signature(InteractiveMap.basemap).parameters["provider"].default
+        default = (
+            inspect.signature(InteractiveMap.basemap).parameters["provider"].default
+        )
         assert default == interactive_decoration.DEFAULT_BASEMAP_PROVIDER, default
 
     def test_the_constant_comes_from_base(self):
