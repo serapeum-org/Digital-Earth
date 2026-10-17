@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -9770,7 +9770,7 @@ a CRS other than EPSG:4326.</p>
 
 
 <h3 id="digitalearth.three_d.scene3d.Scene3D.set_title" class="doc doc-heading"><a href="#digitalearth.three_d.scene3d.Scene3D.set_title" class="toclink">
-            <code class="highlight language-python"><span class="n">set_title</span><span class="p">(</span><span class="n">heading</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">subtitle</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">font_size</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">set_title</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">subtitle</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">font_size</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </a><a href="#digitalearth.three_d.scene3d.Scene3D.set_title" class="headerlink" title="Permanent link">#</a></h3>
 
@@ -9801,7 +9801,7 @@ ground, it is not in the layer tree, and removing a layer never takes it with it
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>heading</code>
+                <code>title</code>
             </td>
             <td>
                   <code><span title="str">str</span></code>
@@ -9908,7 +9908,7 @@ web tier records its own subtitle.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>when <code>heading</code> is not a string. A title is the one piece of a figure a reader is
+                <p>when <code>title</code> is not a string. A title is the one piece of a figure a reader is
 certain to read, and <code>None</code> drawn as <code>"None"</code> is worse than no title.</p>
               </div>
             </td>
@@ -10026,7 +10026,7 @@ certain to read, and <code>None</code> drawn as <code>"None"</code> is worse tha
 <span class="normal"><a href="#__codelineno-0-630">630</a></span>
 <span class="normal"><a href="#__codelineno-0-631">631</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-555" name="__codelineno-0-555"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_title</span><span class="p">(</span>
 <a id="__codelineno-0-556" name="__codelineno-0-556"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-557" name="__codelineno-0-557"></a>    <span class="n">heading</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-0-557" name="__codelineno-0-557"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <a id="__codelineno-0-558" name="__codelineno-0-558"></a>    <span class="o">*</span><span class="p">,</span>
 <a id="__codelineno-0-559" name="__codelineno-0-559"></a>    <span class="n">subtitle</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-560" name="__codelineno-0-560"></a>    <span class="n">font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">18</span><span class="p">,</span>
@@ -10045,7 +10045,7 @@ certain to read, and <code>None</code> drawn as <code>"None"</code> is worse tha
 <a id="__codelineno-0-573" name="__codelineno-0-573"></a><span class="sd">    ground, it is not in the layer tree, and removing a layer never takes it with it.</span>
 <a id="__codelineno-0-574" name="__codelineno-0-574"></a>
 <a id="__codelineno-0-575" name="__codelineno-0-575"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-576" name="__codelineno-0-576"></a><span class="sd">        heading: The title text, drawn centred along the top of the render window.</span>
+<a id="__codelineno-0-576" name="__codelineno-0-576"></a><span class="sd">        title: The title text, drawn centred along the top of the render window.</span>
 <a id="__codelineno-0-577" name="__codelineno-0-577"></a><span class="sd">        subtitle: A smaller second line — a date, a source, a unit. Drawn in the **upper-left corner**</span>
 <a id="__codelineno-0-578" name="__codelineno-0-578"></a><span class="sd">            rather than under the heading: a render window has one centred title band and the two lines in</span>
 <a id="__codelineno-0-579" name="__codelineno-0-579"></a><span class="sd">            it cannot be sized apart. Recorded as drawing state rather than on the figure, exactly as the</span>
@@ -10057,7 +10057,7 @@ certain to read, and <code>None</code> drawn as <code>"None"</code> is worse tha
 <a id="__codelineno-0-585" name="__codelineno-0-585"></a><span class="sd">        This scene, so decoration chains.</span>
 <a id="__codelineno-0-586" name="__codelineno-0-586"></a>
 <a id="__codelineno-0-587" name="__codelineno-0-587"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588"></a><span class="sd">        TypeError: when `heading` is not a string. A title is the one piece of a figure a reader is</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a><span class="sd">        TypeError: when `title` is not a string. A title is the one piece of a figure a reader is</span>
 <a id="__codelineno-0-589" name="__codelineno-0-589"></a><span class="sd">            certain to read, and `None` drawn as `&quot;None&quot;` is worse than no title.</span>
 <a id="__codelineno-0-590" name="__codelineno-0-590"></a>
 <a id="__codelineno-0-591" name="__codelineno-0-591"></a><span class="sd">    Examples:</span>
@@ -10088,11 +10088,11 @@ certain to read, and <code>None</code> drawn as <code>"None"</code> is worse tha
 <a id="__codelineno-0-616" name="__codelineno-0-616"></a><span class="sd">    See Also:</span>
 <a id="__codelineno-0-617" name="__codelineno-0-617"></a><span class="sd">        digitalearth.web.decoration.DecorationMixin.set_title: the same name on the web tier.</span>
 <a id="__codelineno-0-618" name="__codelineno-0-618"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-619" name="__codelineno-0-619"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">heading</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
 <a id="__codelineno-0-620" name="__codelineno-0-620"></a>        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-<a id="__codelineno-0-621" name="__codelineno-0-621"></a>            <span class="sa">f</span><span class="s2">&quot;set_title() needs the heading as a string; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">heading</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a>            <span class="sa">f</span><span class="s2">&quot;set_title() needs the title as a string; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">title</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
 <a id="__codelineno-0-622" name="__codelineno-0-622"></a>        <span class="p">)</span>
-<a id="__codelineno-0-623" name="__codelineno-0-623"></a>    <span class="n">panel</span> <span class="o">=</span> <span class="n">with_fields</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="n">heading</span><span class="p">)</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a>    <span class="n">panel</span> <span class="o">=</span> <span class="n">with_fields</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_figure</span><span class="o">.</span><span class="n">panels</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">)</span>
 <a id="__codelineno-0-624" name="__codelineno-0-624"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_figure</span> <span class="o">=</span> <span class="n">with_fields</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_figure</span><span class="p">,</span> <span class="n">panels</span><span class="o">=</span><span class="p">(</span><span class="n">panel</span><span class="p">,))</span>
 <a id="__codelineno-0-625" name="__codelineno-0-625"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_decoration</span><span class="p">[</span><span class="s2">&quot;title&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
 <a id="__codelineno-0-626" name="__codelineno-0-626"></a>        <span class="s2">&quot;font_size&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">font_size</span><span class="p">),</span>
