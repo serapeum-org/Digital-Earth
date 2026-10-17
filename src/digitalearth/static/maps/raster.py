@@ -28,7 +28,6 @@ from matplotlib.colors import BoundaryNorm, ListedColormap, to_hex
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.levels import levels_every
-from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.raster_classes import (
     BandClasses,
     asks_categorical,
@@ -53,6 +52,7 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static.guides import drawn_scale, source_field
 from digitalearth.static.maps.base import OffLimbError
+from digitalearth.static.preprocess import add_cyclic_column
 from digitalearth.static.render_compat import (
     CENTER_KEY,
     EXTREME_KEYS,

@@ -49,12 +49,13 @@ What lives here:
   is sampled the same way whichever tier animates it. What that measurement means as a domain — the
   fallback for an unmeasurable stack, the widening of a constant one — is
   :class:`~digitalearth.base.spec.scale.Scale`'s, which the stack paths reach through ``stack_scale``.
-* :mod:`~digitalearth.base.preprocess` — longitude wrapping and the cyclic column for global fields.
 * :mod:`~digitalearth.base.stretch` — the composite contrast stretch: per-channel bounds every backend
   shares, so a true-colour render is identical across tiers and a sequence of frames can be frozen on
   one stretch.
 * :mod:`~digitalearth.base.types` — the ``RasterLike`` / ``VectorLike`` structural Protocols.
 
 Anything a *single* backend needs belongs in that backend instead: the matplotlib figure lookup that used to sit
-beside :mod:`~digitalearth.base.arrays` lives in :mod:`digitalearth.static.figures` for exactly that reason.
+beside :mod:`~digitalearth.base.arrays` lives in :mod:`digitalearth.static.figures`. For the same reason the
+longitude-wrap / cyclic-column helpers a single consumer used moved to :mod:`digitalearth.static.preprocess`
+(#169); they move back here the day a second backend wraps a longitude.
 """

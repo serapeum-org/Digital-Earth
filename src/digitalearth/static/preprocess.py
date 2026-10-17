@@ -1,4 +1,4 @@
-"""preprocess — longitude/cyclic helpers for global fields.
+"""preprocess — longitude/cyclic helpers the static raster builders prepare global fields with.
 
 Two small operations from earthkit-plots' pipeline that prepare global gridded data for plotting:
 
@@ -6,6 +6,14 @@ Two small operations from earthkit-plots' pipeline that prepare global gridded d
   ``Dataset.wrap_longitude`` — the CRS-aware operation belongs there, not here).
 - :func:`add_cyclic_column` appends the first data column so a global contour/pcolormesh has no seam at the
   antimeridian. This is pure array bookkeeping (numpy), so it lives in the digitalearth wiring.
+
+It lives in the **static** backend rather than in ``base/`` because the static raster builders are its only
+consumer in the package: :func:`add_cyclic_column` closes the antimeridian seam for the tier's global
+``contours``/``pcolormesh``, and :func:`wrap_longitude` is a thin public delegate to pyramids kept for callers
+(reached only by the tests in-tree today). ``base/`` holds what two or more backends share, and nothing
+outside this tier reaches either helper (#169). Both are pure numpy / pyramids delegates with no renderer
+import, so moving them back to ``base/`` is trivial the day the web or interactive tier needs antimeridian
+handling too.
 """
 
 from typing import Any
@@ -40,7 +48,7 @@ def add_cyclic_column(z: np.ndarray, x: np.ndarray) -> tuple[np.ndarray, np.ndar
         - Closing a 2x3 global field adds one wrap-around column:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.base.preprocess import add_cyclic_column
+            >>> from digitalearth.static.preprocess import add_cyclic_column
             >>> z = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
             >>> x = np.array([0.0, 120.0, 240.0])
             >>> z2, x2 = add_cyclic_column(z, x)

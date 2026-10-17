@@ -1,10 +1,10 @@
-"""Tests for T5.2 — longitude wrap, cyclic column, and the cyclic field option."""
+"""Tests for the static preprocess helpers — longitude wrap, cyclic column, and the cyclic field option."""
 
 import numpy as np
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.base.preprocess import add_cyclic_column, wrap_longitude
 from digitalearth.static import Map
+from digitalearth.static.preprocess import add_cyclic_column, wrap_longitude
 
 
 class TestAddCyclicColumn:
