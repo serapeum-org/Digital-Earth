@@ -109,6 +109,11 @@ class TestClipWindowValidation:
         edges = Scale.breaks_of([1, 2, 3, 50.0], "equal_interval", 2, clip=(5.0, 5.0))
         assert edges == (5.0, 5.5, 6.0), edges
 
+    def test_a_one_sided_window_degenerate_after_clamping_is_widened(self):
+        """`clip=(5, None)` on data all below 5 clamps to one value, widened rather than left zero-width."""
+        edges = Scale.breaks_of([1, 2, 3.0], "equal_interval", 2, clip=(5.0, None))
+        assert edges == (5.0, 5.5, 6.0), edges
+
 
 class TestClassifyBandClip:
     """`classify_band(values, scheme, k, cmap, clip=...)` pins the edges and the recorded scale domain."""
