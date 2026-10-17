@@ -556,8 +556,9 @@ class RasterMixin(_MixinBase):
             clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales. A list is taken too,
                 and is the spelling the figure records — a tuple is what the travel rule refuses, so the
                 documented pair used to be dropped from every saved figure (review R2-M13). The drawer
-                hands HoloViews the tuple its own option is declared with either way. Ignored when
-                ``scheme`` classifies the band, whose limits are its class edges.
+                hands HoloViews the tuple its own option is declared with either way. Under a graduated
+                ``scheme`` it pins the classes to this window (#378): they span it exactly and an outlier
+                lands in an end class; ``"categorical"`` and explicit edges ignore it, having no range to pin.
             scheme: Colour the band class by class rather than along a ramp. A named graduated scheme
                 (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) or an explicit list of edges cuts
                 classes coloured from ``cmap``; ``"categorical"`` gives each integer code a class of its own,

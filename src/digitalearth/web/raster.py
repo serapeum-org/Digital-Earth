@@ -1629,7 +1629,9 @@ class RasterMixin(_MixinBase):
                 the autostyle default for the variable.
             limits: The contract's name for the colour limits, as ``(vmin, vmax)`` — the one spelling every
                 tier answers to (#299). ``vmin``/``vmax`` remain, and naming both is refused rather than
-                silently resolved one way.
+                silently resolved one way. Under a graduated ``scheme`` they pin the classes to this window
+                (#378): the classes span it exactly, an outlier lands in an end class, and the colorbar reads
+                the requested limits; ``"categorical"`` and explicit edges ignore them, having no range to pin.
             units: What the band's values are measured in, recorded as
                 :attr:`~digitalearth.web.base.WebMapBase.last_units` so a key built from them can say so.
                 ``None`` (the default) takes the variable's units from
