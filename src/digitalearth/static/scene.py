@@ -1649,12 +1649,12 @@ class Scene(WatermarkMixin):
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
         """
-        symbology = Symbology(props={"via": "custom"})
-        if color_field is not None:
-            symbology = Symbology(
-                props={"via": "custom"},
-                encodings={"color": Encoding.by_field("color", color_field)},
-            )
+        encodings = (
+            {"color": Encoding.by_field("color", color_field)}
+            if color_field is not None
+            else {}
+        )
+        symbology = Symbology(props={"via": "custom"}, encodings=encodings)
         return self._draw(
             LayerRecord(
                 custom_kind(ENGINE),
