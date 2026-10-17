@@ -480,6 +480,46 @@ def _draw_missing_neutral(artist: Any) -> None:
     artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))
 
 
+def _categorical_fill(
+    opts: dict[str, Any], values: np.ndarray | None
+) -> tuple[np.ndarray | None, bool]:
+    """Normalize a categorical classify request in ``opts`` (in place), returning ``(values, categorical)``.
+
+    The shared half of the categorical colour path a polygon fill and a point scatter both take, so a
+    categorical ``column`` is coloured and keyed the same way whichever draws it (#332). When ``opts`` asks
+    for ``scheme="categorical"`` in any case:
+
+    - the spelling is normalized to the exact, case-sensitive ``"categorical"`` cleopatra dispatches on — a
+      case variant would set up a categorical render on one side and fall through to the continuous path on
+      the other, dying inside ``np.isfinite`` on a string column;
+    - the colormap is resolved to the one qualitative sentinel all tiers key off, so an explicit
+      ``cmap="viridis"`` is swapped for the qualitative map here rather than being honoured on one tier and
+      not another;
+    - every flavour of null in ``values`` is spelled ``None`` (cleopatra's null test is ``is None`` plus a
+      float-``NaN`` check, so a ``pd.NA`` from a pandas nullable dtype would otherwise become a coloured
+      ``<NA>`` class and shift every other category's colour).
+
+    A non-categorical ``opts`` is left untouched and its ``values`` returned as given — the comparison uses
+    ``isinstance`` so a list/ndarray of explicit bin edges passed as ``scheme`` is never stringified into it.
+
+    Args:
+        opts: The glyph options, mutated in place when the request is categorical (``scheme`` normalized,
+            ``cmap`` resolved).
+        values: The per-feature values to colour by, or ``None`` when the layer colours by nothing.
+
+    Returns:
+        ``(values, categorical)`` — ``values`` with its nulls normalized when categorical, unchanged
+        otherwise; ``categorical`` whether the request was for a categorical fill.
+    """
+    scheme = opts.get("scheme")
+    categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
+    if not categorical:
+        return values, False
+    opts["scheme"] = "categorical"
+    opts["cmap"] = resolve_categorical_cmap(opts.get("cmap"))
+    return (None if values is None else nulls_to_none(values)), True
+
+
 def _skips_off_limb(builder: Callable) -> Callable:
     """Wrap a vector builder so data the display CRS cannot place skips the layer instead of raising (#257).
 
@@ -557,7 +597,11 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         # The caller named the column to colour by, so it decides the values rather than the collection's
         # own auto-detected numeric field — the Core `column` keyword (#332).
         _require_column(fc, column, "column", _POINTS_CALLER)
-        values: np.ndarray | None = np.asarray(fc[column], dtype=float)
+        # Not coerced to float: a categorical column is nominal (strings, region codes), and float-coercing
+        # it crashed `draw_scatter` with "could not convert string to float" before cleopatra ever saw it.
+        # Read untyped exactly as `choropleth`/`polygons` do, so a non-numeric category classifies here too;
+        # a numeric column a continuous/graduated scheme needs still arrives as numbers (#332).
+        values: np.ndarray | None = np.asarray(fc[column])
         color_field: str | None = column
     else:
         values = src.z.values if src.z is not None else None
@@ -579,7 +623,14 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     sizes = (
         np.asarray(fc[size_column], dtype=float) if size_column is not None else None
     )
-    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    # A categorical column is coloured and keyed exactly as `choropleth` does — through the shared
+    # `_categorical_fill` (#332). `add_colorbar` then defaults to True for a categorical layer, so the glyph
+    # draws its own swatch legend: that legend is what `Scene._record_class_edges` reads the layer as
+    # categorical from, and so suppresses the misleading class-code edges (`[-0.5, 0.5, 1.5]`) a categorical
+    # scatter used to record on `last_breaks`. A continuous or graduated scatter keeps add_colorbar False —
+    # the Scene owns its aggregated colorbar.
+    values, categorical = _categorical_fill(opts, values)
+    opts.setdefault("add_colorbar", categorical)
     # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
     plot_style = relocate_flat_style(opts, folds_marker_size=True)
     glyph = ScatterGlyph(
@@ -1689,33 +1740,16 @@ class VectorMixin(_MixinBase):
             What the render produced, as a :class:`~digitalearth.static.renderer.DrawnLayer` — the drawers
             that call this hand it straight back to the renderer, which is what records the layer.
         """
-        scheme = opts.get("scheme")
-        # `isinstance` states the intent: cleopatra's `classify` also accepts a list/ndarray of explicit bin
-        # edges as `scheme`, which must never be stringified into this comparison.
-        categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
         # Any scheme — categorical or graduated — puts a missing value outside every class, so it is the
         # classified layers (not the continuous ramp) that need the neutral "bad" colour.
-        classified = scheme is not None
+        classified = opts.get("scheme") is not None
+        # The categorical spelling/cmap/null normalization a point scatter shares (#332). Done before the
+        # `add_colorbar` default so a categorical fill keeps the glyph's own swatch legend — the key the
+        # Scene reads the layer as categorical from, and which its own colorbar cannot stand in for.
+        values, categorical = _categorical_fill(opts, values)
         opts.setdefault(
             "add_colorbar", categorical
         )  # the Scene owns the colorbar; the glyph owns the legend
-        if categorical:
-            # Normalize the spelling: cleopatra dispatches on an exact, case-sensitive `== "categorical"`, so a
-            # case variant would set up a categorical render here and then fall through to the continuous path
-            # there — dying inside `np.isfinite` on a string column. The web tier accepts any case, so
-            # normalizing (rather than matching cleopatra's exactness) keeps a `scheme` portable across tiers.
-            opts["scheme"] = "categorical"
-            # Resolve the colormap here so all three tiers key off ONE sentinel. cleopatra applies the same
-            # "swap the continuous default for a qualitative one" rule against a *different* sentinel (its own
-            # default, "coolwarm_r"), so left to itself it would honour an explicit cmap="viridis" that the
-            # web/interactive tiers swap for tab10 — one cmap, two maps.
-            opts["cmap"] = resolve_categorical_cmap(opts.get("cmap"))
-            if values is not None:
-                # cleopatra's null test is `is None` plus a float-NaN check, so a `pd.NA` from a pandas
-                # nullable dtype (`string`, `Int64`, …) would survive it and become a coloured `<NA>` class,
-                # shifting every other category's colour — i.e. the same data would render differently
-                # depending only on the column's dtype.
-                values = nulls_to_none(values)
         # scheme/k moved onto the plot() `classify` group; pull them off the constructor kwargs.
         plot_style = relocate_flat_style(opts)
         if values is not None:
@@ -1791,11 +1825,21 @@ class VectorMixin(_MixinBase):
         Raises:
             KeyError: if ``column`` or ``size_column`` names no feature attribute — the refusal names
                 ``Map.points()`` and lists the columns the features do have (via :func:`_require_column`).
-            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` but
-                the features carry no numeric value for it to scale; a colour *scaling* needs values, so it
-                is refused rather than dropped.
+            ValueError: if ``scheme`` is given with no ``column`` to classify — a scheme classifies a
+                column, so one with nothing to classify is refused rather than silently dropped (#331); or
+                if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` but the
+                features carry no numeric value for it to scale; a colour *scaling* needs values, so it is
+                refused rather than dropped.
 
         """
+        if scheme is not None and not column:
+            # A scheme classifies a column, so one with no column to classify is a dropped styling request —
+            # the silent-ignore this package has removed everywhere else, and the refusal the interactive
+            # tier already gives for the same call (#331, #332).
+            raise ValueError(
+                f"{_POINTS_CALLER}: scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
         if cmap is not None:
             opts["cmap"] = cmap
         if scheme is not None:
@@ -2859,12 +2903,22 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling``
-                while ``column`` is ``None`` — an outline layer draws a uniform fill with no values to
-                scale, so a colour *scaling* is refused; pass ``column=`` to colour polygons by a column.
+            ValueError: if ``scheme`` is given with no ``column`` to classify — a scheme classifies a
+                column, so one with nothing to classify is refused rather than silently ignored (#331); or
+                if ``color`` is a ``matplotlib.colors.Normalize`` or cleopatra ``ColorScaling`` while
+                ``column`` is ``None`` — an outline layer draws a uniform fill with no values to scale, so a
+                colour *scaling* is refused; pass ``column=`` to colour polygons by a column.
             KeyError: if ``column`` names no feature attribute — the refusal names ``choropleth()`` and
                 lists the columns the features do have (via :func:`_require_column`).
         """
+        if scheme is not None and not column:
+            # A scheme classifies a column, so one with no column to classify is a dropped styling request:
+            # an outline-only `polygons` layer silently ignored it. Refuse it by name, as `points` and the
+            # interactive tier do (#331, #332), rather than drawing plain outlines and saying nothing.
+            raise ValueError(
+                f"{_POLYGONS_CALLER}: scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
         if cmap is not None:
             opts["cmap"] = cmap
         if opacity is not None:

@@ -142,9 +142,11 @@ class TestAGraduatedLayerRecordsTheEdgesItWasDrawnWith:
         Test scenario:
             `choropleth` declares `scheme=`; `points` takes it through `**opts`. A record written into one
             builder would have left the other silent, which is the "fixed the instance, described the class
-            as fixed" shape. Two points valued 1 and 9, cut the same way, give the same three edges.
+            as fixed" shape. Two points valued 1 and 9, cut the same way, give the same three edges. The
+            column is named: a `scheme` with no `column` to classify is now refused (#332), so the supported
+            way to classify a point layer is the column that holds the values.
         """
-        drawn.points(_points(VALUES), scheme=SCHEME, k=CLASSES)
+        drawn.points(_points(VALUES), column=COLUMN, scheme=SCHEME, k=CLASSES)
         assert tuple(drawn.last_breaks) == EXPECTED_EDGES, (
             f"a graduated point layer recorded {drawn.last_breaks!r}"
         )
@@ -207,6 +209,24 @@ class TestTheColumnKeywordClassifiesTheSameWayChoroplethDoes:
         )
         assert through_polygons == through_choropleth, (
             f"polygons recorded {through_polygons}, choropleth recorded {through_choropleth}"
+        )
+
+    def test_a_categorical_point_column_records_no_numeric_edges(self, drawn):
+        """A categorical ``points`` column records ``None``, matching the categorical choropleth.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            A categorical scatter's ``BoundaryNorm`` bins class *codes* — ``[-0.5, 0.5, 1.5]`` for two
+            categories — which are not the caller's categories, so publishing them as class edges would be
+            publishing a wrong answer. ``points`` records ``None`` exactly as
+            ``choropleth(..., scheme="categorical")`` does. Numeric category labels, so the reading is
+            isolated from the non-numeric-column handling.
+        """
+        drawn.points(_points((0.0, 1.0, 0.0)), column=COLUMN, scheme="categorical")
+        assert drawn.last_breaks is None, (
+            f"a categorical point column recorded {drawn.last_breaks!r}, which are codes not categories"
         )
 
     def test_a_polygon_column_fill_with_no_scheme_has_no_class_edges(self, drawn):
