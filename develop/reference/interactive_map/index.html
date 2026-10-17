@@ -25688,10 +25688,10 @@ declined one is.</p>
 <a id="__codelineno-0-1427" name="__codelineno-0-1427"></a>    <span class="c1"># the via-dispatch in `renderer.make_draw`. A drawn kind carries its own `symbology`, so the two</span>
 <a id="__codelineno-0-1428" name="__codelineno-0-1428"></a>    <span class="c1"># cannot both be given.</span>
 <a id="__codelineno-0-1429" name="__codelineno-0-1429"></a>    <span class="k">if</span> <span class="n">color_field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a>        <span class="k">if</span> <span class="n">symbology</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-1430" name="__codelineno-0-1430"></a>        <span class="k">if</span> <span class="n">symbology</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">resolved</span> <span class="ow">in</span> <span class="n">DRAWN_KINDS</span><span class="p">:</span>
 <a id="__codelineno-0-1431" name="__codelineno-0-1431"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a>                <span class="s2">&quot;add_layer(color_field=...) names the colour field of a custom layer; it cannot be &quot;</span>
-<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a>                <span class="s2">&quot;combined with symbology=, which a drawn kind carries for itself&quot;</span>
+<a id="__codelineno-0-1432" name="__codelineno-0-1432"></a>                <span class="s2">&quot;add_layer(color_field=...) names the colour field of a custom layer, so it takes no &quot;</span>
+<a id="__codelineno-0-1433" name="__codelineno-0-1433"></a>                <span class="s2">&quot;kind= and no symbology=; a drawn kind carries its own colour&quot;</span>
 <a id="__codelineno-0-1434" name="__codelineno-0-1434"></a>            <span class="p">)</span>
 <a id="__codelineno-0-1435" name="__codelineno-0-1435"></a>        <span class="n">symbology</span> <span class="o">=</span> <span class="n">Symbology</span><span class="p">(</span>
 <a id="__codelineno-0-1436" name="__codelineno-0-1436"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;custom&quot;</span><span class="p">},</span>
