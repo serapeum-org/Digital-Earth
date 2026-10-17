@@ -67,6 +67,13 @@ class TestBreaksOfPinsTheWindow:
         assert edges[0] == 0.0 and edges[-1] == 100.0, edges
         assert all(0.0 <= edge <= 100.0 for edge in edges), edges
 
+    def test_both_bounds_open_is_a_no_op_window(self):
+        """`clip=(None, None)` pins nothing — no bound is anchored, so the edges match an unclipped cut."""
+        data = [5, 10, 15, 20, 40.0]
+        assert Scale.breaks_of(data, "equal_interval", 2, clip=(None, None)) == Scale.breaks_of(
+            data, "equal_interval", 2
+        )
+
     def test_masked_cells_are_dropped_before_clamping(self):
         """A masked outlier is not classified, so it cannot reach the window as a clamped value."""
         band = np.ma.masked_array([1, 2, 3, 999.0], mask=[False, False, False, True])
