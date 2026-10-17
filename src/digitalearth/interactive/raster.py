@@ -222,7 +222,13 @@ def _class_options(classes: BandClasses) -> dict[str, Any]:
 
 
 def _band_classes(
-    interactive_map: Any, data: Any, band: int, scheme: Any, k: int | None, cmap: Any
+    interactive_map: Any,
+    data: Any,
+    band: int,
+    scheme: Any,
+    k: int | None,
+    cmap: Any,
+    clip: tuple[float | None, float | None] | None = None,
 ) -> BandClasses:
     """Classify a band at build time, so the layer's description carries its classes.
 
@@ -239,6 +245,10 @@ def _band_classes(
         k: Classes for a named graduated scheme.
         cmap: The caller's colormap — a categorical palette for codes, the colormap graduated classes are
             sampled from otherwise — or ``None``.
+        clip: The caller's ``clim`` as the ``(vmin, vmax)`` window a graduated scheme classifies within
+            (#378), so outliers do not stretch the classes; ``None`` cuts them over the whole band. Refused
+            by :func:`~digitalearth.base.raster_classes.classify_band` for a categorical scheme or explicit
+            edges, which have no range to clip.
 
     Returns:
         The band's classes.
@@ -284,7 +294,7 @@ def _band_classes(
     palette = (
         cmap if asks_categorical(scheme) else interactive_map._auto_cmap(src, cmap)
     )
-    return classify_band(src.z.values, scheme, k, palette)
+    return classify_band(src.z.values, scheme, k, palette, clip=clip)
 
 
 def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
@@ -623,7 +633,7 @@ class RasterMixin(_MixinBase):
         """
         scale = limits_scale(clim)
         if scheme is not None:
-            scale = _band_classes(self, data, band, scheme, k, cmap).scale
+            scale = _band_classes(self, data, band, scheme, k, cmap, clip=clim).scale
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
         # into the description, and what has no JSON form — a colormap object, a callable — is held beside
         # the layer, because a figure is saved as JSON.

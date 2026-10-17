@@ -1820,7 +1820,11 @@ class RasterMixin(_MixinBase):
             # Codes take the categorical palette unless the caller names one; graduated classes the colormap
             # the band resolved, the one a ramp would have used.
             palette = cmap if asks_categorical(scheme) else cmap_name
-            classes = classify_band(source.z.values, scheme, k, palette)
+            # `vmin`/`vmax` (the resolved `limits=`) confine a graduated scheme's classes to that window so
+            # outliers cannot stretch them (#378); `classify_band` refuses the pair for a categorical scheme
+            # or explicit edges, which have no range to clip.
+            clip = (vmin, vmax) if vmin is not None or vmax is not None else None
+            classes = classify_band(source.z.values, scheme, k, palette, clip=clip)
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
         # caller's request as much as `cmap=` is. The image — orientation included — is encoded by

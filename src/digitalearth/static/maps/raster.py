@@ -901,6 +901,41 @@ def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     return drawn.colored_by(source_field(identity, props["band"]))
 
 
+def _clip_window(opts: dict[str, Any]) -> tuple[float | None, float | None] | None:
+    """Pull a classified layer's ``vmin``/``vmax`` out of the glyph options as a clip window (#378).
+
+    Args:
+        opts: The glyph options; ``vmin``/``vmax`` are removed when present, so they drive the classify
+            instead of reaching the glyph as a continuous ``clim``.
+
+    Returns:
+        A ``(vmin, vmax)`` pair when either limit was given, else ``None``. Each side is ``None`` when that
+        limit was not set, so a one-sided window — only a floor, or only a ceiling — is preserved.
+
+    Examples:
+        - Both limits become the window and leave ``opts``:
+            ```python
+            >>> from digitalearth.static.maps.raster import _clip_window
+            >>> opts = {"vmin": -100, "vmax": 100, "cmap": "viridis"}
+            >>> _clip_window(opts), opts
+            ((-100, 100), {'cmap': 'viridis'})
+
+            ```
+        - No limits means no window:
+            ```python
+            >>> from digitalearth.static.maps.raster import _clip_window
+            >>> _clip_window({"cmap": "viridis"}) is None
+            True
+
+            ```
+    """
+    vmin = opts.pop("vmin", None)
+    vmax = opts.pop("vmax", None)
+    if vmin is None and vmax is None:
+        return None
+    return (vmin, vmax)
+
+
 def _classified(
     opts: dict[str, Any],
     values: Any,
@@ -978,6 +1013,14 @@ def _classified(
     # `categories` (pooled class codes from a shared scale, e.g. facet) is this tier's own keyword — never a
     # glyph option — so take it out before cleopatra sees anything; it only directs the categorical classify.
     categories = opts.pop("categories", None)
+    # `vmin`/`vmax` under a *graduated* scheme are the value window the classifier is confined to (#378): the
+    # classes are cut over only the in-range values, so a few outliers cannot stretch them, and out-of-range
+    # cells clamp into the end classes. They are taken out here so they drive the classify and do not also
+    # reach the glyph as a continuous `clim` the classified render would ignore. A categorical or explicit-edge
+    # scheme has no window to cut, so they stay in `opts` as the colour domain (which is also why a `facet`
+    # pooling edges can pin a shared range without conflict); with no scheme they stay for the ramp.
+    graduated = isinstance(scheme, str) and not asks_categorical(scheme)
+    clip = _clip_window(opts) if graduated else None
     classes: BandClasses | None
     if scheme is None:
         classes = classes_of(described, opts.get("cmap"))
@@ -993,7 +1036,9 @@ def _classified(
             # `classes_of` reads the colours off the recorded scale — the ones the figure was drawn in.
             classes = classes_of(described, None)
     else:
-        classes = classify_band(values, scheme, opts.get("k"), opts.get("cmap"))
+        classes = classify_band(
+            values, scheme, opts.get("k"), opts.get("cmap"), clip=clip
+        )
     if classes is None:
         return None
     edges = list(classes.edges)

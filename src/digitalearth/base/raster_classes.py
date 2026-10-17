@@ -270,7 +270,13 @@ def _is_code(category: Any) -> bool:
 
 
 def classify_band(
-    values: Any, scheme: Any, k: Any, cmap: Any, categories: Any = None
+    values: Any,
+    scheme: Any,
+    k: Any,
+    cmap: Any,
+    categories: Any = None,
+    *,
+    clip: tuple[float | None, float | None] | None = None,
 ) -> BandClasses:
     """Cut a band into the classes ``scheme`` asks for, and colour each one.
 
@@ -290,6 +296,11 @@ def classify_band(
             codes over the stack and passes them here, so every band records the same categorical scale and
             the gap-filling codes get the same colour on each; ``None`` (default) reads the codes from
             ``values`` (a single band classes itself).
+        clip: An optional ``(vmin, vmax)`` window a **graduated** scheme is confined to (#378): the classes
+            are cut over the in-range values so outliers cannot stretch them, and out-of-range cells clamp
+            into the end classes at draw time. It applies only to a named graduated scheme — for
+            ``"categorical"`` (codes, not a range) and for explicit edges (the list already is the domain)
+            there is no window to cut, so it is left off and ``vmin``/``vmax`` act as the colour domain alone.
 
     Returns:
         The band's :class:`BandClasses`.
@@ -346,7 +357,13 @@ def classify_band(
             tuple(colors),
         )
     valid = np.ma.compressed(np.ma.masked_invalid(np.ma.asarray(values, dtype=float)))
-    edges = Scale.breaks_of(valid, scheme, DEFAULT_CLASS_COUNT if k is None else k)
+    # The clip window confines a *graduated* scheme's classes to the values inside it. An explicit edge list
+    # already fixes the domain, so the window has nothing to cut and is left off — `vmin`/`vmax` there are the
+    # colour domain, not a window, which is why a `facet` pooling edges passes them without conflict.
+    window = clip if isinstance(scheme, str) else None
+    edges = Scale.breaks_of(
+        valid, scheme, DEFAULT_CLASS_COUNT if k is None else k, clip=window
+    )
     scale = Scale(edges[0], edges[-1], scheme=edges, breaks=edges)
     colors = sample_cmap(DEFAULT_CLASS_CMAP if cmap is None else cmap, len(edges) - 1)
     return BandClasses(scale, edges, tuple(colors))
