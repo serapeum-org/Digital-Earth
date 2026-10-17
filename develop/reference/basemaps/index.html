@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -5358,7 +5358,7 @@ the static backend is the only place an <code>xyzservices.TileProvider</code> is
 collide with cleopatra's on the static tier and with HoloViews' style options on the interactive one::</p>
 <div class="highlight"><pre><span></span><code>Map(domain=(-60, -5, -55, 0)).basemap(&quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;})
 WebMap().basemap(&quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;})
-InteractiveMap().tiles(&quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;})
+InteractiveMap().basemap(&quot;Planet.NICFI&quot;, preset={&quot;date&quot;: &quot;2024-01&quot;})
 </code></pre></div>
 <p>:func:<code>get_keyed_basemap</code> — the resolver the backends call — takes those keywords loose, since it has no
 engine keywords of its own to collide with.</p>
