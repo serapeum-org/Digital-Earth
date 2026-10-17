@@ -914,18 +914,13 @@ class TestWhatWritingRefuses:
             `RecursionError: maximum recursion depth exceeded` — a traceback naming neither the field nor the
             value — where every other refusal in the module raises a `TypeError` naming `where`. The depth
             bound now ends the walk first: a container holding itself reaches it after
-            :data:`MAX_TRAVELLING_DEPTH` visits, so no cycle memory is needed. The assertion that the error is
-            *not* a `RecursionError` is what fails if the depth guard is removed — removing it restores the
-            crash this fixes.
+            :data:`MAX_TRAVELLING_DEPTH` visits, so no cycle memory is needed. A `RecursionError` would not
+            match ``pytest.raises(TypeError)``, so removing the depth guard — which restores that crash —
+            fails this test.
         """
         container = build()
-        try:
-            with pytest.raises(TypeError) as caught:
-                to_json_value(container, "Symbology.props")
-        except RecursionError:  # pragma: no cover - only reached if the guard is gone
-            pytest.fail(
-                "to_json_value crashed with RecursionError instead of refusing by name"
-            )
+        with pytest.raises(TypeError) as caught:
+            to_json_value(container, "Symbology.props")
         message = str(caught.value)
         assert "Symbology.props" in message, message
         assert str(MAX_TRAVELLING_DEPTH) in message, message
