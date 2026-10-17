@@ -67,7 +67,7 @@ class TestInteractiveAddLayerColorField:
         m = InteractiveMap()
         element = _element()
         sentinel = object()
-        with pytest.raises(ValueError, match="cannot be combined with symbology"):
+        with pytest.raises(ValueError, match="takes no kind= and no symbology="):
             m.add_layer(
                 element, name="conflict", color_field="elevation", symbology=sentinel
             )
