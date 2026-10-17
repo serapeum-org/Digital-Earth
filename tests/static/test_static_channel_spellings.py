@@ -13,7 +13,7 @@ held colormap four builders never read, a ``visible=False`` that hid the element
 import geopandas as gpd
 import pytest
 from pyramids.feature import FeatureCollection
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 
 from digitalearth.static import Map
 
@@ -39,6 +39,22 @@ def polygons():
                 Polygon([(4.0, 52.0), (4.1, 52.0), (4.1, 52.1), (4.0, 52.1)]),
                 Polygon([(4.2, 52.0), (4.3, 52.0), (4.3, 52.1), (4.2, 52.1)]),
             ],
+            crs=4326,
+        )
+    )
+
+
+@pytest.fixture
+def points():
+    """Return two point features carrying a numeric column.
+
+    Returns:
+        A pyramids ``FeatureCollection`` in EPSG:4326.
+    """
+    return FeatureCollection(
+        gpd.GeoDataFrame(
+            {COLUMN: [1.0, 9.0]},
+            geometry=[Point(4.0, 52.0), Point(4.1, 52.1)],
             crs=4326,
         )
     )
@@ -85,3 +101,46 @@ class TestTheCoreSpellingReachesTheArtist:
         drawn.choropleth(polygons, COLUMN)
         artist = drawn.artist()
         assert artist.get_alpha() is None, artist.get_alpha()
+
+
+class TestPointsAndPolygonsAdoptTheCoreChannels:
+    """``points`` and ``polygons`` grew named ``cmap`` / ``size`` / ``opacity`` parameters (#332, #251)."""
+
+    def test_points_cmap_size_and_opacity_reach_the_artist(self, drawn, points):
+        """The three named channels arrive on the ``ScatterGlyph`` artist together.
+
+        Args:
+            drawn: The map under test.
+            points: The point fixture.
+
+        Test scenario:
+            ``cmap`` names the colormap, ``opacity`` is matplotlib's ``alpha``, and ``size`` is the marker
+            size cleopatra's constructor calls ``point_size`` — each spelled the Core way on the call.
+        """
+        drawn.points(points, column=COLUMN, cmap="plasma", opacity=OPACITY, size=120.0)
+        artist = drawn.artist()
+        assert artist.cmap.name == "plasma", (
+            f"cmap did not reach the markers: {artist.cmap.name}"
+        )
+        assert artist.get_alpha() == OPACITY, (
+            f"opacity did not reach the markers: {artist.get_alpha()}"
+        )
+        assert list(artist.get_sizes()) == [120.0], (
+            f"size did not reach the markers: {artist.get_sizes()}"
+        )
+
+    def test_polygons_cmap_and_opacity_reach_the_artist(self, drawn, polygons):
+        """``polygons(column=)`` carries its ``cmap`` and ``opacity`` onto the fill artist.
+
+        Args:
+            drawn: The map under test.
+            polygons: The polygon fixture.
+        """
+        drawn.polygons(polygons, column=COLUMN, cmap="cividis", opacity=OPACITY)
+        artist = drawn.artist()
+        assert artist.cmap.name == "cividis", (
+            f"cmap did not reach the fill: {artist.cmap.name}"
+        )
+        assert artist.get_alpha() == OPACITY, (
+            f"opacity did not reach the fill: {artist.get_alpha()}"
+        )

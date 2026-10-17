@@ -113,6 +113,34 @@ class TestMissingColumnIsNamed:
         with pytest.raises(KeyError, match=r"choropleth\(\): column='nope'"):
             canvas.choropleth(polygons_fc, "nope")
 
+    def test_points_column(self, points_fc):
+        """points(column=) names ``Map.points()`` when the colour column is absent (#332 draw path).
+
+        Args:
+            points_fc: Two points carrying only the ``pop`` column.
+
+        Test scenario:
+            The ``column=`` keyword picks the values to colour by; a name the features do not carry is
+            refused by name in ``draw_scatter`` rather than failing later inside numpy.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(KeyError, match=r"Map\.points\(\): column='nope'"):
+            canvas.points(points_fc, column="nope")
+
+    def test_polygons_column(self, polygons_fc):
+        """polygons(column=) routes to the fill recipe, so a missing column is named ``choropleth()`` (#332).
+
+        Args:
+            polygons_fc: Two polygons carrying only the ``pop`` column.
+
+        Test scenario:
+            A filled ``polygons(column=)`` layer is drawn by the choropleth recipe, so its column guard is
+            the choropleth one and names that call — the entry point differs, the refusal does not.
+        """
+        canvas = Map(crs=4326)
+        with pytest.raises(KeyError, match=r"choropleth\(\): column='nope'"):
+            canvas.polygons(polygons_fc, column="nope")
+
     def test_voronoi_column(self, points_fc):
         """voronoi(column=) is named in the refusal."""
         canvas = Map(crs=4326)
@@ -226,6 +254,40 @@ class TestColourNormWithoutValuesRefused:
         norm = LogNorm(vmin=1, vmax=10)
         with pytest.raises(ValueError, match=r"Map\.points\(\): color= is a LogNorm"):
             canvas.points(bare_points_fc, color=norm)
+
+    def test_polygons_refusal_points_at_column(self, polygons_fc):
+        """The no-column refusal now points at ``column=``, not at ``choropleth`` (#332 message).
+
+        Args:
+            polygons_fc: Two polygons carrying a numeric ``pop`` column.
+
+        Test scenario:
+            ``polygons`` grew a ``column=`` keyword, so the way to colour by an attribute is that keyword
+            on the same builder; the refusal names it rather than redirecting to ``choropleth(column=)``.
+        """
+        canvas = Map(crs=4326)
+        norm = LogNorm(vmin=1, vmax=10)
+        with pytest.raises(ValueError, match=r"pass column= to colour polygons"):
+            canvas.polygons(polygons_fc, color=norm)
+
+    def test_polygons_with_column_honours_a_norm(self, polygons_fc):
+        """With a ``column``, a ``Normalize`` colour is honoured, as on the other filled builders (#332).
+
+        Args:
+            polygons_fc: Two polygons carrying a numeric ``pop`` column.
+
+        Test scenario:
+            A filled ``polygons(column=)`` layer has values to scale, so the colour scaling that an
+            outline layer refuses is carried on the artist here instead.
+        """
+        artist = (
+            Map(crs=4326)
+            .polygons(polygons_fc, column="pop", color=LogNorm(vmin=1, vmax=10))
+            .artist()
+        )
+        assert artist.norm.__class__.__name__ == "LogNorm", (
+            f"a filled polygons layer must keep the norm, got {artist.norm.__class__.__name__}"
+        )
 
     def test_lines_with_column_honoured(self, lines_fc):
         """With a column, a Normalize color is honoured — the artist carries that norm, not a refusal."""

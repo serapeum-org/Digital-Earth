@@ -150,6 +150,92 @@ class TestAGraduatedLayerRecordsTheEdgesItWasDrawnWith:
         )
 
 
+class TestTheColumnKeywordClassifiesTheSameWayChoroplethDoes:
+    """``points(column=)`` and ``polygons(column=)`` gained the Core colour vocabulary (#332).
+
+    ``points`` and ``polygons`` now name the colour ``column`` and its ``scheme``/``k`` directly, rather than
+    reaching the classify group through ``**opts`` or deferring to ``choropleth``. A classified layer built
+    through either keyword must record the same class edges a choropleth of the same values does.
+    """
+
+    def test_a_point_layer_coloured_by_a_column_has_no_class_edges(self, drawn):
+        """A continuous ``column`` colours along a ramp, so there is nothing classified to record.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.points(_points(VALUES), column=COLUMN)
+        assert drawn.last_breaks is None, (
+            f"an unclassified point layer recorded {drawn.last_breaks!r} as its class edges"
+        )
+
+    def test_a_graduated_point_column_records_the_choropleth_edges(self, drawn):
+        """``points(column=, scheme=)`` cuts the named column into the same edges a choropleth does.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            Two values cut into two quantile classes give the three hand-known edges, the same answer
+            :data:`EXPECTED_EDGES` holds for the choropleth of the same values.
+        """
+        drawn.points(_points(VALUES), column=COLUMN, scheme=SCHEME, k=CLASSES)
+        assert tuple(drawn.last_breaks) == EXPECTED_EDGES, (
+            f"a graduated point column recorded {drawn.last_breaks!r}, not {EXPECTED_EDGES}"
+        )
+
+    def test_a_polygon_column_fill_matches_the_choropleth_of_the_same_values(
+        self, drawn
+    ):
+        """``polygons(column=, scheme=)`` is the choropleth recipe, so it records identical edges.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The filled ``polygons(column=)`` layer and a ``choropleth`` of the same values and scheme must
+            record the one classification — the builders differ, the edges do not.
+        """
+        drawn.polygons(_polygons(VALUES), column=COLUMN, scheme=SCHEME, k=CLASSES)
+        through_polygons = tuple(drawn.last_breaks)
+        reference = Map(crs=4326)
+        reference.choropleth(_polygons(VALUES), COLUMN, scheme=SCHEME, k=CLASSES)
+        through_choropleth = tuple(reference.last_breaks)
+        reference.close()
+        assert through_polygons == EXPECTED_EDGES, (
+            f"a graduated polygons column recorded {through_polygons}, not {EXPECTED_EDGES}"
+        )
+        assert through_polygons == through_choropleth, (
+            f"polygons recorded {through_polygons}, choropleth recorded {through_choropleth}"
+        )
+
+    def test_a_polygon_column_fill_with_no_scheme_has_no_class_edges(self, drawn):
+        """A continuous fill classifies nothing, matching the continuous choropleth.
+
+        Args:
+            drawn: The map under test.
+        """
+        drawn.polygons(_polygons(VALUES), column=COLUMN)
+        assert drawn.last_breaks is None, (
+            f"a continuous polygons fill recorded {drawn.last_breaks!r} as its class edges"
+        )
+
+    def test_a_categorical_polygon_fill_records_no_numeric_edges(self, drawn):
+        """A categorical ``polygons`` fill records no numeric edges, matching the categorical choropleth.
+
+        Args:
+            drawn: The map under test.
+
+        Test scenario:
+            The categorical path bins class *codes*, which are not the caller's categories, so the filled
+            ``polygons`` layer records ``None`` exactly as ``choropleth(..., scheme="categorical")`` does.
+        """
+        drawn.polygons(_polygons(("a", "b", "a")), column=COLUMN, scheme="categorical")
+        assert drawn.last_breaks is None, (
+            f"a categorical polygons fill recorded {drawn.last_breaks!r}, which are codes not categories"
+        )
+
+
 class TestALayerWithNoClassificationRecordsNone:
     """The complement, so the record cannot pass by always holding numbers."""
 
