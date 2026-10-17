@@ -76,6 +76,21 @@ class TestAddLayerColorField:
         finally:
             m.close()
 
+    def test_an_empty_color_field_is_refused(self):
+        """An empty ``color_field`` is refused, as the docstring's Raises promises.
+
+        Test scenario:
+            ``add_layer(im, color_field="")`` raises ``ValueError`` from ``Encoding.by_field`` — a colour
+            encoding needs a non-empty field name, so an empty one is rejected rather than published.
+        """
+        m = Map()
+        try:
+            image = self._image(m)
+            with pytest.raises(ValueError, match="non-empty"):
+                m.add_layer(image, name="bad", color_field="")
+        finally:
+            m.close()
+
     def test_color_field_none_leaves_the_layer_keyless(self):
         """The default (``color_field=None``) keeps the pre-#349 keyless custom layer.
 
