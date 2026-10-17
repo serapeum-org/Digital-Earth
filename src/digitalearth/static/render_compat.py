@@ -11,10 +11,10 @@ what a builder accepts and a typo was a silently ignored keyword rather than an 
 where it drives one. That is what :func:`route_flat_style` routes against and what
 :func:`digitalearth.base.spec.style.StyleSchema.suggest` reads to name the key a typo was meant to be.
 
-Entry points. The first two are **Wave-1 scaffolding**: they are the declared-style half of the seam
-Wave 3's `LayerSpec` plugs into, and no builder calls them yet — the builders still pass flat kwargs
+Entry points. The first two are **declared-style scaffolding**: they are the declared-style half of the seam
+`LayerSpec` plugs into, and no builder calls them yet — the builders still pass flat kwargs
 through the last three. Said plainly because a docstring describing a pipeline that does not exist is
-the kind of claim that survives unchecked into the wave that was supposed to build it.
+the kind of claim that survives unchecked into the work that was supposed to build it.
 
 - :func:`route_flat_style` — flat public kwargs -> a declared
   :class:`~digitalearth.base.spec.style.Symbology`, plus whatever was not style at all.

@@ -677,7 +677,7 @@ class TestAnimationState:
 #: `polygons`. The spellings they replaced are gone rather than aliased, so each argument is documented in
 #: exactly one place.
 PATH_TAKING_BUILDERS = {
-    "field": "dataset",
+    "field": "data",
     # One `contours`, told apart by `filled=` (#262), rather than the two names this tier used to carry.
     "contours": "dataset",
     "pcolormesh": "dataset",

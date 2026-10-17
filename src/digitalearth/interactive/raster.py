@@ -30,6 +30,7 @@ from digitalearth.base.raster_classes import (
     classes_of,
     classify_band,
 )
+from digitalearth.base.sources import band_field_name
 from digitalearth.base.sources.view import SourceView
 from digitalearth.base.spec import (
     DEFAULT_BAND,
@@ -62,14 +63,6 @@ from digitalearth.interactive.style_fold import TIER_BUCKET, limits_scale
 #: What an unstyled colour-mapped raster is drawn at on this tier. The value left `field`'s signature with
 #: #334, for the reason `POINT_SIZE` gives on the vector side, and this is where it lives instead.
 FIELD_ALPHA = 1.0
-
-#: What a raster layer's colour is said to vary with when the raster names neither a band nor a variable.
-#:
-#: The same fallback :meth:`~digitalearth.interactive.base.InteractiveMapBase._vdim_name` lands on — a
-#: `Source` built from a bare array records ``variable: ""`` and its value axis is named ``z`` — so the name
-#: the description publishes is the name the drawn element's value dimension carries. Written once because
-#: the two would otherwise be two spellings of one thing.
-UNNAMED_VALUE = "z"
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -110,34 +103,27 @@ def coloured_by(data: Any, band: int = DEFAULT_BAND) -> str:
     :meth:`~digitalearth.interactive.base.InteractiveMapBase._auto_cmap_for_band` already reads a band name to
     resolve a colormap without touching the band.
 
-    The two agree by construction for every input this tier draws: the extractor records a `Dataset`'s
-    ``band_names[band - 1]`` as the source's ``variable`` and a `NetCDF`'s first variable name likewise, and
-    those are exactly what is read here. Measured on ``examples/data/acc4000.tif``: this answers ``'Band_1'``
-    and the drawn ``hv.Image``'s value dimension is ``'Band_1'``.
+    The shared :func:`~digitalearth.base.sources.band_field_name` reads it off the raster's own metadata
+    instead, and reprojecting here to ask the same question would do the drawer's work a second time and
+    throw the result away — the duplication review M8 took out of the vector builders.
+
+    The name agrees by construction with the drawn element's value dimension
+    (:meth:`~digitalearth.interactive.base.InteractiveMapBase._vdim_name`): the extractor records a
+    `Dataset`'s ``band_names[band - 1]`` as the source's ``variable`` and a `NetCDF`'s first variable name
+    likewise, and those are exactly what is read here. Measured on ``examples/data/acc4000.tif``: this answers
+    ``'Band_1'`` and the drawn ``hv.Image``'s value dimension is ``'Band_1'``.
 
     Args:
         data: The raster the layer draws — a pyramids ``Dataset`` / ``NetCDF`` / ``Source``, a path, or a bare
-            array. Read with `getattr`, so an input declaring neither list simply falls back.
+            array.
         band: The 1-based band the layer colours by.
 
     Returns:
-        The band's name, the first variable's name, or :data:`UNNAMED_VALUE` — never an empty string, which is
-        what an :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field name.
+        The band's name, the first variable's name, or :data:`~digitalearth.base.sources.UNNAMED_BAND` —
+        never an empty string, which an :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field
+        name.
     """
-    names = list(getattr(data, "band_names", None) or [])
-    if 1 <= band <= len(names) and names[band - 1]:
-        return str(names[band - 1])
-    # A `NetCDF` has variables rather than bands, and `to_display_source` extracts the **first** of them —
-    # it forwards only `band`, never a variable — so that is the one a colour key would explain.
-    # `next(iter(...), None)` rather than `variables[0]` guarded by `if variables`: the two are the same
-    # value, and the second reads as an unguarded subscript to a reviewer scanning for one (SonarCloud
-    # raises S6552 on it as a possible `IndexError`, which the short-circuit already makes impossible). It
-    # is still the **first** variable specifically — not the first non-empty one — because that is the one
-    # `to_display_source` extracts, which is what makes the name agree with the drawn value dimension.
-    first = next(iter(getattr(data, "variable_names", None) or []), None)
-    if first:
-        return str(first)
-    return UNNAMED_VALUE
+    return band_field_name(data, band)
 
 
 def _one_spacing_only(caller: str, levels: Any, interval: float | None) -> None:
@@ -824,7 +810,7 @@ class RasterMixin(_MixinBase):
     @_skips_off_limb
     def contours(
         self,
-        data: Any,
+        dataset: Any,
         *,
         band: int = DEFAULT_BAND,
         levels: Any = None,
@@ -843,7 +829,7 @@ class RasterMixin(_MixinBase):
         HoloViews, which refused it as an unknown *style* option.
 
         Args:
-            data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
+            dataset: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
             band: 1-based band to contour.
             levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
                 variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
@@ -900,7 +886,7 @@ class RasterMixin(_MixinBase):
         """
         _one_spacing_only("contours", levels, interval)
         return self._contour_layer(
-            data,
+            dataset,
             band=band,
             levels=levels,
             interval=interval,

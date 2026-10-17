@@ -51,6 +51,7 @@ from digitalearth.base.raster_classes import (
     classes_of,
     classify_band,
 )
+from digitalearth.base.sources import band_field_name
 from digitalearth.base.spec import (
     DEFAULT_BAND,
     DEFAULT_RAMP_STOPS,
@@ -66,11 +67,6 @@ from digitalearth.web.base import _require_layer_api, as_finite
 
 #: Pixel count above which the inline image-source path is refused (name a ``tiles=`` route for big rasters).
 _LARGE_RASTER_PIXELS = 4_000_000
-
-#: What a band with no name of its own is called, so a colour encoding has a field name rather than the
-#: empty string an :class:`~digitalearth.base.spec.encoding.Encoding` refuses. The interactive tier's
-#: ``UNNAMED_VALUE``, spelled the same, so one unnamed raster reads the same on both.
-_UNNAMED_BAND = "z"
 
 #: The tiled routes ``tiles=`` accepts, each mapped to the key its MapLibre ``raster`` source addresses the
 #: data under: ``xyz`` lists tile-URL templates, ``cog`` names one file a client-side protocol reads windows
@@ -498,40 +494,27 @@ def _band_name(data: Any, band: int) -> str:
     """Return the name of the value a raster layer's colour varies with.
 
     A raster has no classified column, so the honest name for the field its colour is bound to is the
-    **band's own** — read straight off the raster's ``band_names``/``variable_names``, never invented, and
-    never obtained by warping the band a second time to look.
+    **band's own**. The lookup is the one shared across tiers —
+    :func:`~digitalearth.base.sources.band_field_name` reads it off the raster's
+    ``band_names``/``variable_names``, never by warping the band a second time to look (#351).
 
-    The tier's other metadata reader is **not** the precedent for that, although the interactive tier's is:
+    This tier's other metadata reader is **not** the precedent for reading it here:
     :meth:`~digitalearth.web.base.WebMapBase._auto_cmap` is handed the display-CRS
     :class:`~digitalearth.base.sources.source.Source` the builder already warped — measured, `field()` calls
     it with a ``Source``, and it raises ``AttributeError: 'Dataset' object has no attribute 'metadata'`` if
     given the raster — so it reads the band name only as the extractor already recorded it under the
-    source's ``variable``. The method that reads ``band_names`` off the raster the way this does is
-    :meth:`~digitalearth.interactive.base.InteractiveMapBase._auto_cmap_for_band`, which this tier has no
-    counterpart of.
+    source's ``variable``.
 
     Args:
-        data: The raster the layer draws — a pyramids ``Dataset`` / ``NetCDF``. Read with `getattr`, so an
-            input declaring neither list simply falls back.
+        data: The raster the layer draws — a pyramids ``Dataset`` / ``NetCDF``.
         band: The 1-based band the layer colours by.
 
     Returns:
-        The band's name, the first variable's name, or :data:`_UNNAMED_BAND` — never an empty string, which
-        an :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field name.
-
-    Note:
-        The interactive tier answers the same question, by the same two lookups and with the same fallback,
-        in its own ``coloured_by`` — measured on ``examples/data/acc4000.tif``, both answer ``'Band_1'``.
-        They are not one import on purpose: the four backends are peers, and a backend importing another
-        would tie this tier's ``web`` extra to the ``interactive`` one.
+        The band's name, the first variable's name, or :data:`~digitalearth.base.sources.UNNAMED_BAND` —
+        never an empty string, which an :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a
+        field name.
     """
-    names = list(getattr(data, "band_names", None) or [])
-    if 1 <= band <= len(names) and names[band - 1]:
-        return str(names[band - 1])
-    # A `NetCDF` has variables rather than bands, and the display extractor takes the **first** of them, so
-    # that is the one a colour key would explain.
-    first = next(iter(getattr(data, "variable_names", None) or []), None)
-    return str(first) if first else _UNNAMED_BAND
+    return band_field_name(data, band)
 
 
 def _colour_domain(

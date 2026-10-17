@@ -17,7 +17,7 @@ The load-bearing change is that `band` is a **tuple**. A composite is not a spec
 parameter; it is a selection of three bands.
 
 This type does not resolve anything — it says *what* to read, and :class:`~digitalearth.base.spec.DataRef`
-says *where* from. Materialising both is the data tier's job (`DE-16`, Wave 2).
+says *where* from. Materialising both is the data tier's job (`DE-16`).
 """
 
 from collections.abc import Iterable, Mapping

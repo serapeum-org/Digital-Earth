@@ -112,10 +112,6 @@ KEYWORD_SHORTFALLS: Mapping[tuple[str, str], tuple[tuple[str, ...], str]] = (
             # the colour key is a `Guide` on the layer's colour encoding now, so `colorbar` takes the layer by
             # id and `legend` derives its rows from that layer's scale instead of being handed the colours and
             # labels themselves.
-            ("matplotlib", "basemap"): (
-                ("provider",),
-                "the provider is spelled source= here — #268",
-            ),
             ("matplotlib", "set_title"): (
                 ("subtitle",),
                 "one axes title, with no second line to carry a subtitle — #265",
