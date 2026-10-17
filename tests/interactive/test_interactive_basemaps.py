@@ -33,7 +33,7 @@ class TestInteractiveTierDispatch:
         """
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         url = m.layers[0].data
         assert "{Z}/{X}/{Y}" in url, f"placeholders were not upper-cased: {url}"
         assert FAKE_KEY in url, "the credential never reached the element"
@@ -51,13 +51,13 @@ class TestInteractiveTierDispatch:
 
         interactive_map = InteractiveMap()
         with pytest.raises(ValueError, match="no preset keywords"):
-            interactive_map.tiles("CartoLight", preset={"date": "2024-01"})
+            interactive_map.basemap("CartoLight", preset={"date": "2024-01"})
 
     def test_ordinary_providers_are_unaffected(self):
         """A catalog name still resolves through the GeoViews tile sources as before."""
         from digitalearth.interactive import InteractiveMap
 
-        assert InteractiveMap().tiles("CartoLight").layers, (
+        assert InteractiveMap().basemap("CartoLight").layers, (
             "the ordinary tile path stopped working"
         )
 
@@ -118,7 +118,7 @@ class TestAttributionIsCarried:
         """
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         _, attributions = self._rendered(m.layers[0])
         assert attributions, "the rendered tiles carry no attribution at all"
         assert "Planet Labs" in attributions[0], attributions[0]
@@ -135,7 +135,7 @@ class TestAttributionIsCarried:
 
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         _, attributions = self._rendered(m.layers[0] * hv.Points([(0.0, 0.0)]))
         assert any("Planet Labs" in text for text in attributions), attributions
 
@@ -143,7 +143,7 @@ class TestAttributionIsCarried:
         """The title belongs to the caller; writing the attribution there silently overrode it."""
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         title, _ = self._rendered(m.layers[0])
         assert title == "", f"the attribution hijacked the title: {title!r}"
         assert m.layers[0].label == "", (
@@ -154,7 +154,7 @@ class TestAttributionIsCarried:
         """The attribution is displayed to every viewer; the key must not travel with it."""
         from digitalearth.interactive import InteractiveMap
 
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m = InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         _, attributions = self._rendered(m.layers[0])
         assert FAKE_KEY not in "".join(attributions), (
             "the credential leaked into the attribution"

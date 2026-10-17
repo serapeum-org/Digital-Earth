@@ -178,14 +178,13 @@ ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
 # (`layer`/`element`/`artist`), `contours` (`dataset`/`data`/`dataset`), `set_title` (`heading`/`title`),
 # `tiles` (`url`/`provider`) and `basemap` (`provider`/`source`), while `colorbar`/`legend` had since converged
 # on `layer_id`. A positional call did not port between tiers and a keyword call ported for none of them — the
-# survivable, loud half of the `set_bounds` ordering defect. Seven are now declared in `first_argument` below;
-# five of them are renamed toward the spelling the majority of tiers already used (`field`→`data`,
-# `contours`→`dataset`, `set_title`→`heading`, `basemap`→`provider`, `add_layer`→`layer`), and `colorbar`/
-# `legend` needed no rename. All are held to it for every tier by `tests/test_contract_names.py`. Nothing is
-# aliased: the package treats
-# its API spelling as unreleased, so a rename deletes the old name rather than keeping it beside the new one.
-# `tiles` is the one still held back: unifying its first argument on `url` is the URL-only split that belongs
-# with the interactive `basemap` in #268, so it stays undeclared until that lands.
+# survivable, loud half of the `set_bounds` ordering defect. All eight are now declared in `first_argument`
+# below; six of them are renamed toward the spelling the majority of tiers already used (`field`→`data`,
+# `contours`→`dataset`, `set_title`→`heading`, `basemap`→`provider`, `add_layer`→`layer`, and `tiles`→`url` on
+# the interactive tier — split out of its overloaded `provider=` alongside a new `basemap()`, #268), and
+# `colorbar`/`legend` needed no rename. All are held to it for every tier by `tests/test_contract_names.py`.
+# Nothing is aliased: the package treats its API spelling as unreleased, so a rename deletes the old name
+# rather than keeping it beside the new one.
 
 #: The Core vocabulary: what every tier answers to, where it can draw the thing at all. A tier that cannot —
 #: a 3-D scene has no extent to frame — declares that in its `Capabilities` (#294) rather than growing a method
@@ -336,7 +335,12 @@ TIER2: tuple[Method, ...] = (
         frozenset({"lon_step", "lat_step", "spacing"}),
         first_argument="lon_step",
     ),
-    Method("tiles", "Draw raster tiles from a URL template.", frozenset({"url"})),
+    Method(
+        "tiles",
+        "Draw raster tiles from a URL template.",
+        frozenset({"url"}),
+        first_argument="url",
+    ),
     Method(
         "basemap",
         "Draw a named basemap beneath the data.",

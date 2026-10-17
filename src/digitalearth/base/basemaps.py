@@ -71,9 +71,9 @@ Extent = tuple[float, float, float, float]
 #: A light basemap is the default rather than a dark one because data is drawn *on top* of it: most colormaps
 #: are designed to read against white, and a dark ground inverts that contrast.
 #:
-#: Note (#247): ``tiles()`` takes either a provider name or a URL template in the same parameter, so a
-#: provider name and a URL are indistinguishable at the call site. Renaming that parameter is Core-contract
-#: work and is deliberately not done here.
+#: #268: the basemap entry points are split so a provider name and a URL are no longer indistinguishable —
+#: ``basemap(provider=...)`` takes a name or keyed preset and ``tiles(url=...)`` takes a raw URL template, on
+#: every tier that exposes them.
 DEFAULT_BASEMAP_PROVIDER: str = "CartoLight"
 
 #: NICFI publishes the tropics only, roughly 30°N–30°S. Outside this band the tiles 404, and cleopatra

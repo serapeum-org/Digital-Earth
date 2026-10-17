@@ -50,7 +50,7 @@ class TestTiles:
     """``tiles`` — web-tile basemaps."""
 
     def test_tiles_is_wmts_underlay(self, m, dataset):
-        m.field(dataset).tiles("CartoLight")
+        m.field(dataset).basemap("CartoLight")
         assert isinstance(m.layers[0], gv.element.WMTS), f"got {type(m.layers[0])}"
         assert isinstance(m.layers[1], hv.Image), (
             "tiles must insert beneath the data layers"
@@ -58,15 +58,15 @@ class TestTiles:
 
     def test_unknown_provider_raises_with_catalog(self, m):
         with pytest.raises(ValueError, match="unknown tile provider"):
-            m.tiles("NotARealProvider")
+            m.basemap("NotARealProvider")
 
     def test_non_mercator_map_raises(self):
         interactiveMap = InteractiveMap(crs=4326)
         with pytest.raises(ValueError, match="crs=3857"):
-            interactiveMap.tiles()
+            interactiveMap.basemap()
 
     def test_chains(self, m):
-        assert m.tiles() is m
+        assert m.basemap() is m
 
     def test_constructor_tiles_apply_once_at_render(self, dataset):
         """``InteractiveMap(tiles=...)`` prepends the basemap on first render only."""
@@ -81,7 +81,7 @@ class TestTiles:
 
     def test_explicit_tiles_supersede_constructor_tiles(self, dataset):
         """A constructor provider + an explicit .tiles() must not stack two basemaps (L2)."""
-        m = InteractiveMap(tiles="CartoLight").field(dataset).tiles("OSM")
+        m = InteractiveMap(tiles="CartoLight").field(dataset).basemap("OSM")
         overlay = m.render()
         wmts = [layer for layer in overlay if isinstance(layer, gv.element.WMTS)]
         assert len(wmts) == 1, f"expected exactly one basemap, got {len(wmts)}"
@@ -94,7 +94,7 @@ class TestTiles:
     def test_xyzservices_provider_builds_wmts(self, m):
         """DI.10: an xyzservices TileProvider object resolves through gv.WMTS."""
         xyz = pytest.importorskip("xyzservices")
-        m.tiles(xyz.providers.OpenStreetMap.Mapnik)
+        m.basemap(xyz.providers.OpenStreetMap.Mapnik)
         assert isinstance(m.layers[0], gv.element.WMTS), f"got {type(m.layers[0])}"
 
     def test_list_tile_providers_is_nonempty_sorted(self, m):
@@ -109,10 +109,10 @@ class TestTiles:
         if not providers:  # pragma: no cover - GeoViews build without Stadia sources
             pytest.skip("no Stadia tile sources in this GeoViews build")
         with pytest.raises(ImportError, match="api_key"):
-            m.tiles(providers[0])
+            m.basemap(providers[0])
 
     def test_overlay_level_puts_tiles_on_top(self, m, dataset):
-        m.field(dataset).tiles("CartoLight", level="overlay")
+        m.field(dataset).basemap("CartoLight", level="overlay")
         assert isinstance(m.layers[-1], gv.element.WMTS), (
             "overlay tiles must be the top layer"
         )
@@ -227,7 +227,7 @@ class TestTogglesAndCompose:
             toggles acted on; the web tier's `_last_layer_id` likewise counts data layers only. Tracking
             "the last layer added" without that exception would send this call to the tiles.
         """
-        m.field(dataset).tiles("CartoLight").colorbar(visible=False)
+        m.field(dataset).basemap("CartoLight").colorbar(visible=False)
         plot = hv.Store.lookup_options("bokeh", _element_of(m, hv.Image), "plot")
         assert plot.kwargs["colorbar"] is False, plot.kwargs
 
@@ -273,7 +273,7 @@ class TestTogglesAndCompose:
 
     def test_tiles_style_opts_forwarded(self, m):
         """Extra opts on tiles() reach the cloned element (the shared singleton stays pristine)."""
-        m.tiles("CartoLight", alpha=0.4)
+        m.basemap("CartoLight", alpha=0.4)
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert style["alpha"] == 0.4, f"tile opts not applied: {style.get('alpha')}"
 
@@ -286,7 +286,7 @@ class TestTogglesAndCompose:
 
     def test_image_tiles_coastlines_compose(self, m, dataset):
         """The DI.1 acceptance chain: raster + basemap + coastline in one ordered overlay."""
-        m.field(dataset).tiles().coastlines()
+        m.field(dataset).basemap().coastlines()
         overlay = m.render()
         assert isinstance(overlay, hv.Overlay)
         kinds = [type(layer) for layer in overlay]

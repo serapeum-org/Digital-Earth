@@ -333,7 +333,7 @@ class TestBasemapWidgetIsWired:
 
     def test_dashboard_basemap_replaces_an_existing_basemap(self, dataset):
         """On a map that already called tiles(), the widget swaps the basemap instead of stacking."""
-        built = InteractiveMap().field(dataset).tiles("CartoLight")
+        built = InteractiveMap().field(dataset).basemap("CartoLight")
         out = built._render_with_overrides({"basemap": "OSM"})
         tiles = [e for e in out if type(e).__name__ in ("WMTS", "Tiles")]
         assert len(tiles) == 1, f"exactly one basemap expected, got {len(tiles)}"
@@ -365,7 +365,7 @@ class TestBasemapWidgetIsWired:
             The check compared ``self.crs != 3857``; the constructor keeps the string, so the map was refused
             for not being in the CRS it is in.
         """
-        m = InteractiveMap(crs="EPSG:3857").tiles()
+        m = InteractiveMap(crs="EPSG:3857").basemap()
         assert len(m.layers) == 1, m.layers
 
     def test_the_basemap_select_is_built_for_web_mercator_spelled_as_a_string(self):

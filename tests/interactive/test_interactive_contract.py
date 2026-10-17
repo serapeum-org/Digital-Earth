@@ -548,8 +548,8 @@ class TestBasemapDefault:
         assert len(_BASEMAP_CHOICES) == len(set(_BASEMAP_CHOICES)), _BASEMAP_CHOICES
 
     def test_default_tiles_still_render(self, m):
-        """Calling ``tiles()`` bare still resolves a real provider."""
-        assert m.tiles().layers, "the default provider resolved to nothing"
+        """Calling ``basemap()`` bare still resolves a real provider."""
+        assert m.basemap().layers, "the default provider resolved to nothing"
 
 
 class TestKeyedBasemapCoverage:
@@ -572,7 +572,7 @@ class TestKeyedBasemapCoverage:
             on the ranges. ±30° latitude is ≈ ±3.5e6 m in Web Mercator, which is what pins that the
             lon/lat box was reprojected rather than passed through as degrees.
         """
-        m.tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m.basemap("Planet.NICFI", preset={"date": "2024-01"})
         figure = hv.render(m.layers[0])
         assert figure.x_range.bounds is not None, "no coverage was declared"
         assert figure.x_range.bounds[1] == pytest.approx(20_037_508.34, rel=1e-6)
@@ -589,14 +589,14 @@ class TestKeyedBasemapCoverage:
         messages = []
         handle = logger.add(messages.append, level="INFO")
         try:
-            m.tiles("Planet.NICFI", preset={"date": "2024-01"})
+            m.basemap("Planet.NICFI", preset={"date": "2024-01"})
         finally:
             logger.remove(handle)
         assert any("pannable range" in text for text in messages), messages
 
     def test_a_global_provider_declares_nothing(self, m):
         """A provider with no declared coverage leaves the ranges free — no invented limits."""
-        m.tiles("CartoLight")
+        m.basemap("CartoLight")
         figure = hv.render(m.layers[0])
         assert figure.x_range.bounds is None, figure.x_range.bounds
         assert figure.y_range.bounds is None, figure.y_range.bounds
@@ -625,7 +625,7 @@ class TestKeyedBasemapCoverage:
             )
 
         monkeypatch.setitem(KEYED_BASEMAPS, "example.global", _global_service)
-        m.tiles("Example.Global")
+        m.basemap("Example.Global")
         figure = hv.render(m.layers[0])
         assert figure.x_range.bounds is None, (
             f"a global service must not limit panning, got {figure.x_range.bounds}"
@@ -641,7 +641,7 @@ class TestKeyedBasemapCoverage:
             m: The map under test.
             dataset: A raster fixture well outside the tropics band.
         """
-        m.field(dataset).tiles("Planet.NICFI", preset={"date": "2024-01"})
+        m.field(dataset).basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert len(m.layers) == 2, m.layers
 
 

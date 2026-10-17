@@ -2214,9 +2214,14 @@ class InteractiveMapBase:
         under layers that do not exist yet. This is where it is applied, once, and it has to run before the
         layers are read — it adds one.
         """
-        if self._tiles_provider is not None and hasattr(self, "tiles"):
+        if self._tiles_provider is not None and hasattr(self, "basemap"):
             provider, self._tiles_provider = self._tiles_provider, None  # apply once
-            self.tiles(provider)
+            # The constructor's `tiles=` takes whatever the two methods take between them (#268), so it is
+            # routed the same way they split it: a raw URL template to `tiles`, anything else to `basemap`.
+            if isinstance(provider, str) and "://" in provider:
+                self.tiles(provider)
+            else:
+                self.basemap(provider)
 
     def _projected(self, obj: Any) -> Any:
         """Return `obj` drawn in the map's projection, when one was asked for.

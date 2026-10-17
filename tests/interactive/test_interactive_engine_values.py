@@ -161,7 +161,7 @@ def _builder_calls(dataset, collection, point_fc, polygon_fc, **extra):
         "trajectory": lambda m: m.trajectory(
             point_fc, dynamic=False, dynspread=False, width=20, height=20, **extra
         ),
-        "tiles": lambda m: m.tiles("CartoLight", **extra),
+        "tiles": lambda m: m.basemap("CartoLight", **extra),
         "coastlines": lambda m: m.coastlines(**extra),
         "features": lambda m: m.features(land=True, ocean=True, rivers=True, **extra),
         "graticule": lambda m: m.graticule(**extra),
@@ -324,7 +324,9 @@ class TestEveryBuilderWritesAFigureThatCanBeSaved:
         Args:
             new_map: The map factory.
         """
-        interactive_map = new_map().tiles("CartoLight").graticule().text(4.0, 52.0, "x")
+        interactive_map = (
+            new_map().basemap("CartoLight").graticule().text(4.0, 52.0, "x")
+        )
         assert json.dumps(interactive_map.figure_spec.to_dict()), "nothing was written"
 
 
@@ -436,7 +438,7 @@ class TestAKeyedProviderKeepsItsCredentialOffTheFigure:
         Args:
             new_map: The map factory.
         """
-        interactive_map = new_map().tiles(self._keyed_provider())
+        interactive_map = new_map().basemap(self._keyed_provider())
         written = json.dumps(interactive_map.figure_spec.to_dict())
         assert FAKE_KEY not in written, written
 
@@ -446,7 +448,7 @@ class TestAKeyedProviderKeepsItsCredentialOffTheFigure:
         Args:
             new_map: The map factory.
         """
-        interactive_map = new_map().tiles(self._keyed_provider())
+        interactive_map = new_map().basemap(self._keyed_provider())
         props = interactive_map.figure_spec.layers.get(
             interactive_map.layer_ids[0]
         ).symbology.props
@@ -475,7 +477,7 @@ class TestWhatIsHeldReachesTheEngine:
             new_map: The map factory.
         """
         xyz = pytest.importorskip("xyzservices")
-        interactive_map = new_map().tiles(xyz.providers.OpenStreetMap.Mapnik)
+        interactive_map = new_map().basemap(xyz.providers.OpenStreetMap.Mapnik)
         assert self._bokeh_plot(interactive_map) is not None, "nothing rendered"
 
     def test_a_hook_reaches_the_render_as_a_list(self, new_map, dataset):

@@ -126,10 +126,6 @@ KEYWORD_SHORTFALLS: Mapping[tuple[str, str], tuple[tuple[str, ...], str]] = (
             # colorbar". Order 24 built both: each takes `layer_id` and the Core's own `label`/`title`,
             # `labels` and `visible`, and records the answer as a `Guide` on the layer's colour encoding
             # rather than writing an option onto whichever element was added last (#261).
-            ("interactive", "tiles"): (
-                ("url",),
-                "a name and a URL both arrive through one overloaded provider= — #268",
-            ),
         }
     )
 )
