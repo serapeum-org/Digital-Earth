@@ -516,11 +516,11 @@ class TestBigDataThreshold:
 
 
 class TestBasemapDefault:
-    """C9 on the interactive tier — ``tiles()``'s default, which used to be this tier's own literal."""
+    """C9 on the interactive tier — ``basemap()``'s default, which used to be this tier's own literal."""
 
-    def test_tiles_defaults_to_the_shared_constant(self):
-        """``tiles()``'s default *is* the shared constant object, not a copy of its value."""
-        default = inspect.signature(InteractiveMap.tiles).parameters["provider"].default
+    def test_basemap_defaults_to_the_shared_constant(self):
+        """``basemap()``'s default *is* the shared constant object, not a copy of its value."""
+        default = inspect.signature(InteractiveMap.basemap).parameters["provider"].default
         assert default == interactive_decoration.DEFAULT_BASEMAP_PROVIDER, default
 
     def test_the_constant_comes_from_base(self):

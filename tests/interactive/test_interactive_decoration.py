@@ -79,8 +79,8 @@ class TestTiles:
         again = m.render()
         assert len(again) == 2, "re-rendering must not stack a second tile layer"
 
-    def test_explicit_tiles_supersede_constructor_tiles(self, dataset):
-        """A constructor provider + an explicit .tiles() must not stack two basemaps (L2)."""
+    def test_explicit_basemap_supersedes_constructor_tiles(self, dataset):
+        """A constructor provider + an explicit .basemap() must not stack two basemaps (L2)."""
         m = InteractiveMap(tiles="CartoLight").field(dataset).basemap("OSM")
         overlay = m.render()
         wmts = [layer for layer in overlay if isinstance(layer, gv.element.WMTS)]

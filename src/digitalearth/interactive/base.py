@@ -1365,7 +1365,7 @@ class InteractiveMapBase:
                 since a drawn kind brings its own ``symbology``. ``None`` (default) leaves the layer keyless.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.field(dem).tiles().coastlines()``. A drawer
+            The same map instance, so builder calls chain: ``m.field(dem).basemap().coastlines()``. A drawer
             that declined to draw the layer leaves the map as it was — the description, the registered
             source, the held key and the id are all let go again, so nothing names a layer that was never
             drawn.
@@ -1477,7 +1477,7 @@ class InteractiveMapBase:
         """Make a just-added layer the one the toggles act on, unless it is an underlay added over data.
 
         A basemap, land or ocean is drawn beneath the data and carries no colorbar, legend or hover of its
-        own, so `field(dem).tiles().colorbar(False)` means the raster. Before the layer tree, an underlay was
+        own, so `field(dem).basemap().colorbar(False)` means the raster. Before the layer tree, an underlay was
         inserted at the front of `layers` and so never became the layer these acted on; the web tier's
         `_last_layer_id` likewise counts data layers only. An underlay still takes the slot while nothing
         above the underlay band has been added, so a map of tiles alone can be configured at all.

@@ -17,7 +17,7 @@ collide with cleopatra's on the static tier and with HoloViews' style options on
 
     Map(domain=(-60, -5, -55, 0)).basemap("Planet.NICFI", preset={"date": "2024-01"})
     WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
-    InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+    InteractiveMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
 
 :func:`get_keyed_basemap` — the resolver the backends call — takes those keywords loose, since it has no
 engine keywords of its own to collide with.
