@@ -241,6 +241,29 @@ class TestNonNumericColumnIsNamed:
         ):
             canvas.points(text_points_fc, column="label")
 
+    def test_points_datetime_column_is_steered_to_numbers_not_categorical(self):
+        """A datetime column on a continuous ramp is refused toward numbers, not categorical (#332 L1).
+
+        Test scenario:
+            A date ramp is conceptually valid, but cleopatra cannot scale a ``datetime64`` column, and
+            ``scheme="categorical"`` — one colour per timestamp — is almost never what a date ramp wants.
+            The message steers the caller to an ordinal/epoch column instead.
+        """
+        import pandas as pd
+
+        fc = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"when": pd.to_datetime(["2020-01-01", "2020-06-01"])},
+                geometry=[Point(0, 0), Point(1, 1)],
+                crs="EPSG:4326",
+            )
+        )
+        canvas = Map(crs=4326)
+        with pytest.raises(
+            ValueError, match=r"date/time values a colour ramp cannot scale"
+        ):
+            canvas.points(fc, column="when")
+
     def test_choropleth_column_non_numeric_without_categorical_scheme(
         self, text_polygons_fc
     ):

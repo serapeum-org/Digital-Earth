@@ -550,6 +550,15 @@ def _require_numeric_ramp(values: np.ndarray | None, column: str, caller: str) -
     dtype = np.asarray(values).dtype
     if dtype.kind in "biufc":
         return
+    if dtype.kind in "Mm":
+        # Dates/timedeltas: a ramp over time is a real thing, but cleopatra's numeric path cannot scale a
+        # `datetime64`/`timedelta64` column, and `scheme="categorical"` — one colour per timestamp — is
+        # almost never what a date ramp wants, so the remedy points at numbers rather than categories.
+        raise ValueError(
+            f"{caller} needs column={column!r} to name a column of numbers for a continuous or graduated "
+            f"ramp, and it holds {dtype} date/time values a colour ramp cannot scale; map them to numbers "
+            "first (an ordinal or epoch column)"
+        )
     raise ValueError(
         f"{caller} needs column={column!r} to name a column of numbers for a continuous or graduated "
         f'ramp, and it holds {dtype} values that are not numbers; pass scheme="categorical" to colour '
@@ -2954,7 +2963,9 @@ class VectorMixin(_MixinBase):
                 ``column`` is ``None`` — an outline layer draws a uniform fill with no values to scale, so a
                 colour *scaling* is refused; pass ``column=`` to colour polygons by a column.
             KeyError: if ``column`` names no feature attribute — the refusal names ``choropleth()`` and
-                lists the columns the features do have (via :func:`_require_column`).
+                lists the columns the features do have (via :func:`_require_column`). A filled ``polygons``
+                layer draws through the ``choropleth`` recipe, so a non-numeric ``column`` on a continuous or
+                graduated ramp raises ``ValueError`` from the same recipe, also naming ``choropleth()``.
         """
         if scheme is not None and not column:
             # A scheme classifies a column, so one with no column to classify is a dropped styling request:
