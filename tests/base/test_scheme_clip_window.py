@@ -42,7 +42,8 @@ class TestEqualIntervalPinsTheWindow:
     def test_without_the_window_the_outlier_stretches_the_classes(self):
         """The same data with no clip lets 999 pull the top edge — the #378 complaint, reproduced."""
         edges = Scale.breaks_of([5, 10, 15, 20, 40, 999.0], "equal_interval", 2)
-        assert edges[-1] == 999.0 and edges[1] > 40.0, edges
+        assert edges[-1] == 999.0, edges
+        assert edges[1] > 40.0, edges
 
     def test_an_open_upper_bound_pins_only_the_floor(self):
         """`clip=(0, None)` pins the floor to 0 and leaves the top at the data's own max (40)."""

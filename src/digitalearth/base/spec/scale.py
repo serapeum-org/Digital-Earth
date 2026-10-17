@@ -331,16 +331,13 @@ class Scale:
         if scheme == "equal_interval":
             # equal_interval's classes are a pure split of the domain, so cutting the window itself gives
             # equal parts of `[lo, hi]` whatever the data holds. A data-driven scheme must not take this
-            # path: splitting the window would discard the distribution the scheme names.
+            # path: splitting the window would discard the distribution the scheme names. An open bound
+            # falls back to the clamped data's extent, or to a unit span when no cell survived.
             left = (
-                lo
-                if lo is not None
-                else (float(clamped.min()) if clamped.size else 0.0)
+                float(lo) if lo is not None else cls._open_bound(clamped, np.min, 0.0)
             )
             right = (
-                hi
-                if hi is not None
-                else (float(clamped.max()) if clamped.size else 1.0)
+                float(hi) if hi is not None else cls._open_bound(clamped, np.max, 1.0)
             )
             if right <= left:
                 left, right = cls._widen(left)
@@ -403,6 +400,20 @@ class Scale:
             np.ma.masked_invalid(np.ma.asarray(values, dtype="float64"))
         )
         return np.clip(array, lo, hi)
+
+    @staticmethod
+    def _open_bound(clamped: Any, reducer: Any, default: float) -> float:
+        """Return the clamped data's extent on one side, or ``default`` when no cell survived.
+
+        Args:
+            clamped: The clamped finite values.
+            reducer: ``numpy.min`` or ``numpy.max`` — which extent to take.
+            default: The bound to use when ``clamped`` is empty.
+
+        Returns:
+            ``float(reducer(clamped))``, or ``default`` for an empty array.
+        """
+        return float(reducer(clamped)) if clamped.size else default
 
     @staticmethod
     def _pin_outer_edges(
