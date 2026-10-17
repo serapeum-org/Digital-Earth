@@ -44,10 +44,11 @@ KNOWN_OPEN_ISSUES: Mapping[int, str] = MappingProxyType(
         265: (
             "fix(web): title(), fit_bounds() and labels() introduce third names for existing concepts"
         ),
-        332: (
-            "refactor(api): static and interactive builders spell opacity and column differently from "
-            "the Core contract"
-        ),
+        # `332` ("refactor(api): static and interactive builders spell opacity and column differently from
+        # the Core contract") stood here against the five `KEYWORD_SHORTFALLS` rows that named it. Adopting
+        # the Core channel names (`opacity`/`column`/`limits`, classify-by-column) on all five builders took
+        # those rows off, so nothing names the issue any more — `test_the_allowlist_holds_nothing_either_`
+        # `table_stopped_naming` refuses an allowlist entry no row and no `PENDING` reason cites.
     }
 )
 

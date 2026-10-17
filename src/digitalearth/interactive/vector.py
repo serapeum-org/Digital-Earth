@@ -110,6 +110,8 @@ POINT_SIZE = 6.0
 
 _POINTS_CALLER = "InteractiveMap.points()"
 
+_LINES_CALLER = "InteractiveMap.lines()"
+
 
 def apply_opacity(opacity: float | None, opts: dict) -> None:
     """Write the Core ``opacity`` into ``opts`` under the spelling the engine reads.
@@ -785,6 +787,11 @@ class VectorMixin(_MixinBase):
         # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
         # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
         # the count without the geometry, so naming a file still costs no open.
+        # Clear any breaks a prior categorical call recorded, as `choropleth` does — above the rasterize
+        # early-return as well, so a density layer (which records no class edges) does not keep reporting a
+        # prior categorical call's breaks on the legacy `last_breaks` accessor (#332 L3, round-2 M2). Only the
+        # categorical and graduated branches below record one; every other path leaves it cleared.
+        self.last_breaks = None
         if rasterize is True or (
             rasterize == "auto"
             and _route_through_rasterize("points", _feature_count(features), threshold)
@@ -859,22 +866,49 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
+        cmap: str = "viridis",
+        width: float | None = None,
+        opacity: float | None = None,
         name: str | None = None,
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Add a line layer (LineString / MultiLineString features).
+        """Add a line layer (LineString / MultiLineString features), optionally coloured by a column.
 
         Args:
             features: A pyramids ``FeatureCollection`` of line geometries; reprojected through
                 pyramids when needed.
+            column: The column colouring the lines (also shown on hover); ``None`` (default) draws one
+                flat colour. The Core spelling, the same one :meth:`points` and :meth:`polygons` use on
+                this tier (#332).
+            scheme: Optional classification of ``column`` — ``None`` (the default) is a continuous ramp, a
+                named ``cleopatra.styling.styles.classify`` scheme (``"quantiles"``, ``"equal_interval"``,
+                ``"fisher_jenks"``, …) cuts it into ``k`` classes, and ``"categorical"`` gives every
+                distinct value its own colour. It styles ``column``, so naming a scheme without one is
+                refused rather than ignored.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``.
+            cmap: Colormap used when ``column`` is given.
+            width: Line width in screen pixels; ``None`` (default) leaves HoloViews' own. HoloViews reads
+                it as ``line_width``, so a bare number is the line's thickness rather than the plot's.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use (#332);
+                HoloViews reads it as ``alpha`` through :func:`apply_opacity`. ``None`` (default) hands the
+                engine no opacity at all.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the map is suffixed
                 ``-2``, ``-3``, … (#321).
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
                 element while the figure went on calling it visible (#327).
-            **opts: Extra HoloViews style options applied to the element.
+            **opts: Extra HoloViews style options applied to the element. Anything written here **wins**
+                over the option a ``scheme`` derived, the same precedence :meth:`points` applies. A
+                continuous ramp (a ``column`` with no ``scheme``) reads ``clim=(lo, hi)`` from here to pin
+                its colour range — the spelling :meth:`choropleth` forwards it under on this tier; without
+                one HoloViews measures the range from the data.
 
         Examples:
             - Draw river reaches as an interactive line layer:
@@ -889,9 +923,55 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: if ``scheme`` is given without a ``column`` to classify, or when the column
+                cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit colour list
+                shorter than the class count).
         """
+        apply_opacity(opacity, opts)
+        if width is not None:
+            # HoloViews reads a line's thickness as `line_width`; a bare `width=` is the plot's width.
+            opts["line_width"] = width
+        if scheme is not None and not column:
+            raise ValueError(
+                f"{_LINES_CALLER}: scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        styling: dict = {}
+        labels: dict | None = None
+        # What the layer's colour varies with, published beside the engine's own spelling of it so a colour
+        # key can hang on the layer (order 24). `None` while no `column` was given: those lines are one flat
+        # colour, and a key over them would label nothing.
+        colour: Encoding | None = None
+        # Clear any breaks a prior categorical call recorded, as `choropleth` does: only the categorical and
+        # graduated branches below record class edges, so a flat or continuous layer must not keep reporting
+        # stale ones on the legacy `last_breaks` accessor (#332 L3).
+        self.last_breaks = None
+        if column and isinstance(scheme, str) and scheme.lower() == "categorical":
+            styling, categories, labels = self._categorical_style(
+                features, column, cmap=cmap
+            )
+            self.last_breaks = categories
+            colour = Encoding.by_field(
+                "color", column, scale=_categorical_scale(styling, categories, labels)
+            )
+        elif column and scheme is not None:
+            styling = self._graduated_style(
+                features, column, scheme=scheme, k=k, cmap=cmap
+            )
+            self.last_breaks = list(styling["color_levels"])
+            colour = Encoding.by_field(
+                "color", column, scale=_graduated_scale(styling, scheme)
+            )
+        elif column:
+            styling = {"color": column, "cmap": cmap, "colorbar": True}
+            colour = Encoding.by_field(
+                "color", column, scale=limits_scale(opts.get("clim"))
+            )
         held: dict[str, Any] = {}
         described_opts = describe_opts(held, opts)
+        common: dict = {**styling}
         return self.add_layer(
             None,
             name=name,
@@ -899,7 +979,15 @@ class VectorMixin(_MixinBase):
             kind="lines",
             source=features,
             held=held,
-            symbology=_vector_symbology("Path", None, {}, None, described_opts),
+            symbology=_vector_symbology(
+                "Path",
+                [column] if column else None,
+                describe_style(held, common),
+                labels,
+                described_opts,
+                (),
+                colour,
+            ),
         )
 
     @_skips_off_limb

@@ -110,6 +110,233 @@ class TestPath:
         )
 
 
+#: Four line values whose two-class quantile cut has a hand-known break at the median of 5 and 9.
+_FLOW_VALUES = (1.0, 5.0, 9.0, 13.0)
+
+#: The three edges the two-class quantile cut of :data:`_FLOW_VALUES` produces.
+_FLOW_EDGES = [1.0, 7.0, 13.0]
+
+
+def _flow_lines(values):
+    """Return one diagonal line per value, carrying it in a numeric ``flow`` column.
+
+    Args:
+        values: The column's values, one per line.
+
+    Returns:
+        A pyramids ``FeatureCollection`` of ``LineString`` geometries in EPSG:4326.
+    """
+    import geopandas as gpd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import LineString
+
+    return FeatureCollection(
+        gpd.GeoDataFrame(
+            {"flow": list(values)},
+            geometry=[LineString([(i, 0), (i + 1, 1)]) for i in range(len(values))],
+            crs=4326,
+        )
+    )
+
+
+def _flow_polygons(values):
+    """Return one unit square per value, carrying it in a numeric ``flow`` column.
+
+    Args:
+        values: The column's values, one per square.
+
+    Returns:
+        A pyramids ``FeatureCollection`` of ``Polygon`` geometries in EPSG:4326.
+    """
+    import geopandas as gpd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Polygon
+
+    return FeatureCollection(
+        gpd.GeoDataFrame(
+            {"flow": list(values)},
+            geometry=[
+                Polygon([(i, 0), (i + 1, 0), (i + 1, 1), (i, 1)])
+                for i in range(len(values))
+            ],
+            crs=4326,
+        )
+    )
+
+
+class TestPathClassify:
+    """``lines`` gained the Core colour vocabulary (#332): ``column`` / ``scheme`` / ``k`` / ``cmap``."""
+
+    def test_a_graduated_line_layer_records_the_choropleth_edges(self, m):
+        """``lines(column=, scheme=)`` cuts the column into the same edges a choropleth of them does.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            Four values cut into two quantile classes give the hand-known edges :data:`_FLOW_EDGES`; a
+            ``choropleth`` of the same values and scheme records the identical list.
+        """
+        m.lines(_flow_lines(_FLOW_VALUES), column="flow", scheme="quantiles", k=2)
+        through_lines = list(m.last_breaks)
+        reference = InteractiveMap()
+        reference.choropleth(
+            _flow_polygons(_FLOW_VALUES), "flow", scheme="quantiles", k=2
+        )
+        through_choropleth = list(reference.last_breaks)
+        reference.close()
+        assert through_lines == _FLOW_EDGES, (
+            f"a graduated line layer recorded {through_lines}, not {_FLOW_EDGES}"
+        )
+        assert through_lines == through_choropleth, (
+            f"lines recorded {through_lines}, choropleth recorded {through_choropleth}"
+        )
+
+    def test_a_categorical_line_layer_records_the_distinct_values(self, m):
+        """``scheme="categorical"`` records every distinct value as its own class, as choropleth does.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            Two distinct values give two categories; the categorical choropleth of the same values records
+            the same two, since the interactive tier's categorical key is the recorded category list.
+        """
+        m.lines(_flow_lines((1.0, 2.0, 1.0)), column="flow", scheme="categorical")
+        through_lines = list(m.last_breaks)
+        reference = InteractiveMap()
+        reference.choropleth(
+            _flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical"
+        )
+        through_choropleth = list(reference.last_breaks)
+        reference.close()
+        assert through_lines == [1.0, 2.0], (
+            f"a categorical line layer recorded {through_lines}, not the distinct values"
+        )
+        assert through_lines == through_choropleth, (
+            f"lines recorded {through_lines}, choropleth recorded {through_choropleth}"
+        )
+
+    def test_a_continuous_line_column_colours_by_that_field(self, m):
+        """``lines(column=)`` with no scheme colours along a ramp keyed to the column.
+
+        Args:
+            m: The map under test.
+        """
+        m.lines(_flow_lines((1.0, 9.0)), column="flow", cmap="plasma")
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style["color"] == "flow", (
+            f"the line colour is not the column: {style.get('color')}"
+        )
+        assert style["cmap"] == "plasma", (
+            f"the colormap did not reach the element: {style.get('cmap')}"
+        )
+
+    def test_a_scheme_without_a_column_is_refused(self, m):
+        """A ``scheme`` styles a ``column``; naming one without a column is an error, not a no-op.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            Silently drawing one flat colour would leave the caller believing the lines were classified.
+        """
+        features = _flow_lines(_FLOW_VALUES)
+        with pytest.raises(ValueError, match=r"scheme= classifies column="):
+            m.lines(features, scheme="quantiles")
+
+    def test_width_and_opacity_reach_the_element(self, m):
+        """``width`` is HoloViews' ``line_width`` and ``opacity`` its ``alpha`` — both the Core spelling.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            A bare ``width=`` must be the line's thickness, not the plot's, and ``opacity`` must arrive as
+            the engine's ``alpha``.
+        """
+        m.lines(_flow_lines((1.0, 9.0)), width=3.0, opacity=0.4)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style["line_width"] == 3.0, (
+            f"width did not reach line_width: {style.get('line_width')}"
+        )
+        assert style["alpha"] == 0.4, (
+            f"opacity did not reach alpha: {style.get('alpha')}"
+        )
+
+    def test_a_flat_lines_layer_clears_stale_last_breaks(self, m):
+        """A flat ``lines`` layer resets ``last_breaks``, the way ``choropleth`` does (#332 L3).
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            ``last_breaks`` is a legacy raw-numbers accessor. A categorical fill records its categories on
+            it; a following flat ``lines`` (no ``column``) left those stale categories reported, while
+            ``choropleth`` clears it on its own flat/continuous path. The new ``lines`` builder must match.
+        """
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        assert m.last_breaks is not None, (
+            "precondition: the categorical fill records breaks"
+        )
+        m.lines(_flow_lines((1.0, 9.0)))
+        assert m.last_breaks is None, (
+            f"a flat lines layer left stale breaks: {m.last_breaks}"
+        )
+
+    def test_a_continuous_lines_layer_clears_stale_last_breaks(self, m):
+        """A continuous (column, no scheme) ``lines`` layer also resets ``last_breaks`` (#332 L3).
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            The continuous ramp records no class edges, so a prior categorical fill's breaks must not keep
+            reporting on ``last_breaks`` after it.
+        """
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        m.lines(_flow_lines((1.0, 9.0)), column="flow")
+        assert m.last_breaks is None, (
+            f"a continuous lines layer left stale breaks: {m.last_breaks}"
+        )
+
+    def test_a_flat_points_layer_clears_stale_last_breaks(self, m, point_fc):
+        """The ``points`` sibling of the reset: a flat ``points`` layer also clears ``last_breaks`` (#332 L3).
+
+        Args:
+            m: The map under test.
+            point_fc: A point FeatureCollection whose ``fid`` column is not used here (flat layer).
+
+        Test scenario:
+            ``points`` shared the ``lines`` gap — only its categorical/graduated branches touched
+            ``last_breaks`` — so a flat points layer after a categorical fill reported stale categories.
+        """
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        m.points(point_fc)
+        assert m.last_breaks is None, (
+            f"a flat points layer left stale breaks: {m.last_breaks}"
+        )
+
+    def test_a_rasterized_points_layer_clears_stale_last_breaks(self, m, point_fc):
+        """A density (rasterized) ``points`` layer also clears ``last_breaks`` (#332 round-2 M2).
+
+        Args:
+            m: The map under test.
+            point_fc: A point FeatureCollection.
+
+        Test scenario:
+            ``points`` short-circuits to ``rasterize()`` before the classify chain, and ``rasterize`` records
+            no class edges, so the reset has to sit above that early-return — otherwise a prior categorical
+            call's breaks kept reporting on the density layer.
+        """
+        pytest.importorskip("datashader")
+        m.choropleth(_flow_polygons((1.0, 2.0, 1.0)), "flow", scheme="categorical")
+        m.points(point_fc, rasterize=True)
+        assert m.last_breaks is None, (
+            f"a rasterized points layer left stale breaks: {m.last_breaks}"
+        )
+
+
 class TestPolygonsAndChoropleth:
     """``polygons`` / ``choropleth`` — polygon layers and colour-by-attribute fills."""
 
