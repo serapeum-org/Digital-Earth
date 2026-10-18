@@ -18,7 +18,7 @@ video stays perfectly playable and the GIF gets full-chroma frames to quantise.
 import math
 import os
 import warnings
-from typing import Any, Union
+from typing import Any
 
 from cleopatra.glyphs.base.animation import SUPPORTED_VIDEO_FORMAT, gif_from_video
 from cleopatra.glyphs.base.animation import save_animation as _cleopatra_save_animation
@@ -86,10 +86,10 @@ def _encoder_fps(fps: Any, *, name: str = "fps") -> int:
 
 def save_animation(
     anim: Any,
-    path: Union[str, "os.PathLike[str]"],
+    path: str | os.PathLike[str],
     *,
     fps: float | None = None,
-    gif: Union[str, "os.PathLike[str]"] | None = None,
+    gif: str | os.PathLike[str] | None = None,
     gif_options: dict | None = None,
     **kwargs: Any,
 ) -> str | tuple[str, str]:

@@ -154,7 +154,7 @@ def _patch_maplibre_html_encoding() -> None:
     # Patch the canonical module first, then rebind every maplibre submodule that imported the reader by
     # name and still holds the original (e.g. `maplibre.map`) so no un-shimmed reference is left behind.
     _utils.read_internal_file = read_internal_file
-    for name, module in list(sys.modules.items()):
+    for name, module in sys.modules.items():
         if (
             name.startswith("maplibre")
             and getattr(module, "read_internal_file", None) is original
@@ -3384,11 +3384,11 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed.
         """
-        MapOptions, MapWidget = _require_maplibre()
-        kwargs: dict = {"map_options": MapOptions(**self._map_options())}
+        map_options_cls, map_widget_cls = _require_maplibre()
+        kwargs: dict = {"map_options": map_options_cls(**self._map_options())}
         if self.height is not None:
             kwargs["height"] = int(self.height)
-        widget = MapWidget(**kwargs)
+        widget = map_widget_cls(**kwargs)
         # One list for the page's deck.gl layers, filled in queue order and handed over below in a single
         # call: ``add_deck_layers`` sends ``addDeckOverlay``, which **replaces** the overlay rather than
         # adding to it, so a call per builder would leave only the last builder's layers on the page. One
