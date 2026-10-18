@@ -245,7 +245,7 @@ def _band_classes(
         k: Classes for a named graduated scheme.
         cmap: The caller's colormap — a categorical palette for codes, the colormap graduated classes are
             sampled from otherwise — or ``None``.
-        clip: The caller's ``clim`` as the ``(vmin, vmax)`` window a graduated scheme is pinned to (#378), so
+        clip: The caller's ``limits`` as the ``(vmin, vmax)`` window a graduated scheme is pinned to (#378), so
             the classes span the window and outliers land in an end class; ``None`` cuts them over the whole
             band. Ignored by :func:`~digitalearth.base.raster_classes.classify_band` for a categorical scheme
             or explicit edges, which have no range to pin.
@@ -535,10 +535,10 @@ class RasterMixin(_MixinBase):
         *,
         band: int = DEFAULT_BAND,
         cmap: str | None = None,
-        clim: tuple[float, float] | None = None,
+        limits: tuple[float, float] | None = None,
         scheme: Any | None = None,
         k: int | None = None,
-        alpha: Maybe[float] = UNSET,
+        opacity: Maybe[float] = UNSET,
         colorbar: bool = True,
         clabel: str | None = None,
         name: str | None = None,
@@ -553,12 +553,15 @@ class RasterMixin(_MixinBase):
             band: 1-based band to render.
             cmap: Colormap name; ``None`` (default) resolves it from the variable via
                 ``autostyle.auto_style`` (DI.12) — the same lookup the static ``Map`` uses.
-            clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales. A list is taken too,
-                and is the spelling the figure records — a tuple is what the travel rule refuses, so the
-                documented pair used to be dropped from every saved figure (review R2-M13). The drawer
-                hands HoloViews the tuple its own option is declared with either way. Under a graduated
-                ``scheme`` it pins the classes to this window (#378): they span it exactly and an outlier
-                lands in an end class; ``"categorical"`` and explicit edges ignore it, having no range to pin.
+            limits: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, so the same
+                channel is written the same way on every tier (#332); it reaches HoloViews as its own
+                ``clim``. A list is taken too, and is the spelling the figure records — a tuple is what the
+                travel rule refuses, so the documented pair used to be dropped from every saved figure
+                (review R2-M13). The drawer hands HoloViews the tuple its own option is declared with either
+                way. Under a graduated ``scheme`` it pins the classes to this window (#378): they span it
+                exactly and an outlier lands in an end class; ``"categorical"`` and explicit edges ignore it,
+                having no range to pin.
             scheme: Colour the band class by class rather than along a ramp. A named graduated scheme
                 (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) or an explicit list of edges cuts
                 classes coloured from ``cmap``; ``"categorical"`` gives each integer code a class of its own,
@@ -568,9 +571,11 @@ class RasterMixin(_MixinBase):
                 colour encoding, so the colorbar steps at them and a figure drawn on another tier keeps them.
                 ``None`` (default) draws the continuous ramp.
             k: How many classes a named graduated scheme cuts; ``None`` takes 5. Ignored without ``scheme``.
-            alpha: Layer opacity in ``[0, 1]``; not passed leaves :data:`FIELD_ALPHA`. The keyword is
-                recorded when it is passed, so a caller asking for exactly that value publishes it like any
-                other (#334).
+            opacity: Layer opacity in ``[0, 1]``; not passed leaves :data:`FIELD_ALPHA`. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, so the same
+                channel is written the same way on every tier (#332); HoloViews reads it as ``alpha``. The
+                keyword is recorded when it is passed, so a caller asking for exactly that value publishes it
+                like any other (#334).
             colorbar: Whether to draw a colorbar.
             clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
                 ``autostyle.auto_style`` (#230) and leaves the colorbar unlabelled when it knows none.
@@ -588,7 +593,7 @@ class RasterMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem, cmap="terrain", clim=(0, 60))  # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="terrain", limits=(0, 60))  # doctest: +SKIP
                 >>> len(m.layers)                                               # doctest: +SKIP
                 1
 
@@ -632,13 +637,13 @@ class RasterMixin(_MixinBase):
                 under ``"categorical"``, a band holding non-integer values, more than
                 :data:`~digitalearth.base.raster_classes.MAX_RASTER_CATEGORIES` codes, or no valid cell.
         """
-        scale = limits_scale(clim)
+        scale = limits_scale(limits)
         if scheme is not None:
-            # Pin the classes to `clim` only when it is a real `(lo, hi)` pair; a malformed `clim` is left to
-            # `limits_scale`'s tolerant handling above (it draws rather than raising), so the classify path
+            # Pin the classes to `limits` only when it is a real `(lo, hi)` pair; a malformed `limits` is left
+            # to `limits_scale`'s tolerant handling above (it draws rather than raising), so the classify path
             # must not turn the same bad value into a cryptic unpack error (review L3).
             window = (
-                clim if isinstance(clim, (tuple, list)) and len(clim) == 2 else None
+                limits if isinstance(limits, (tuple, list)) and len(limits) == 2 else None
             )
             scale = _band_classes(self, data, band, scheme, k, cmap, clip=window).scale
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
@@ -668,12 +673,12 @@ class RasterMixin(_MixinBase):
                     "via": "image",
                     "band": band,
                     "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
-                    "clim": describe(held, "clim", _travelling_pair(clim)),
+                    "clim": describe(held, "clim", _travelling_pair(limits)),
                     "scheme": scheme
                     if scheme is None or isinstance(scheme, str)
                     else list(scheme),
                     "k": k,
-                    "alpha": ask("alpha", alpha, FIELD_ALPHA),
+                    "alpha": ask("alpha", opacity, FIELD_ALPHA),
                     "colorbar": colorbar,
                     "clabel": clabel,
                     "opts": described_opts,

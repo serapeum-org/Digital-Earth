@@ -307,8 +307,8 @@ class TestEachLayerKeepsItsOwnStyle:
             element *type*, which is the only way `.opts()` can be applied to an overlay.
         """
         m = InteractiveMap()
-        m.field(_dem(), cmap="magma", clim=(0.0, 10.0))
-        m.field(_dem(), cmap="Blues", clim=(0.0, 80.0))
+        m.field(_dem(), cmap="magma", limits=(0.0, 10.0))
+        m.field(_dem(), cmap="Blues", limits=(0.0, 80.0))
         styles = self._styles(m._render_with_overrides({"alpha": 0.5}))
         assert [style.get("cmap") for style in styles] == ["magma", "Blues"], styles
 
@@ -337,8 +337,8 @@ class TestEachLayerKeepsItsOwnStyle:
             colour-mapped layer's style into one dict and applied it per element type.
         """
         m = InteractiveMap()
-        m.field(_dem(), cmap="magma", clim=(0.0, 10.0))
-        m.field(_dem(), cmap="Blues", clim=(0.0, 80.0))
+        m.field(_dem(), cmap="magma", limits=(0.0, 10.0))
+        m.field(_dem(), cmap="Blues", limits=(0.0, 80.0))
         styles = self._styles(m._compose_visible_layers(list(m.layer_ids), op=0.5))
         assert [style.get("cmap") for style in styles] == ["magma", "Blues"], styles
 

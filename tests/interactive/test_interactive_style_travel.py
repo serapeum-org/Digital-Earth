@@ -44,7 +44,7 @@ def _recorded(clim):
     """
     drawn = InteractiveMap()
     try:
-        drawn.field(_dem(), clim=clim)
+        drawn.field(_dem(), limits=clim)
         figure = drawn.figure_spec
         return figure.layers.get(figure.layers.ids[-1]).symbology.props.get("clim")
     finally:
@@ -93,7 +93,7 @@ class TestTheDocumentedSpellingIsTheOneThatTravels:
 
         drawn = InteractiveMap()
         try:
-            drawn.field(_dem(), clim=[0.0, 100.0])
+            drawn.field(_dem(), limits=[0.0, 100.0])
             applied = hv.Store.lookup_options("bokeh", drawn.layers[-1], "plot").kwargs
         finally:
             drawn.close()
@@ -192,4 +192,69 @@ class TestTheTimeSliderCubeCarriesItTheSameWay:
             drawn.close()
         assert applied.get("clim") == (0.0, 100.0), (
             f"the drawer handed HoloViews clim={applied.get('clim')!r}"
+        )
+
+
+def _recorded_opt(clim):
+    """Return what a figure records for a `clim` passed through `**opts`, not the named `limits` param.
+
+    Args:
+        clim: The colour limits, as the caller wrote them.
+
+    Returns:
+        The recorded `props["opts"]["clim"]`, or `None` when nothing was recorded.
+    """
+    drawn = InteractiveMap()
+    try:
+        drawn.field(_dem(), clim=clim)
+        figure = drawn.figure_spec
+        props = figure.layers.get(figure.layers.ids[-1]).symbology.props
+        return (props.get("opts") or {}).get("clim")
+    finally:
+        drawn.close()
+
+
+class TestAPairPassedThroughOptsAlsoTravels:
+    """A `**opts` pair travels like the named `limits`, rather than being held and lost on save (#332 M1)."""
+
+    @pytest.mark.parametrize("spelling", [(0.0, 50.0), [0.0, 50.0]])
+    def test_a_clim_pair_through_opts_reaches_the_figure(self, spelling):
+        """`field(clim=(lo, hi))` via `**opts` records the pair instead of dropping it on save.
+
+        Args:
+            spelling: The colour limits as a tuple or as a list.
+
+        Test scenario:
+            `clim` was renamed to `limits`, so the old spelling now falls through `**opts`. A tuple is what
+            `travels_in_a_figure` refuses, so it was held beside the layer and silently lost from every
+            saved figure, while the list form travelled — the same R2-M13 split the named parameter was
+            introduced to close, reappearing on the raw opts bag. `describe_opts` now normalises a
+            travelling pair to a list, so both spellings become one recorded value.
+        """
+        assert _recorded_opt(spelling) == (0.0, 50.0), (
+            f"field(clim={spelling!r}) via **opts recorded {_recorded_opt(spelling)!r}; a pair must travel"
+        )
+
+    def test_describe_opts_holds_a_nested_pair_rather_than_flattening_it(self):
+        """`describe_opts` lifts only a pair whose list form travels; a nested pair stays held (#322 survives).
+
+        Test scenario:
+            The normalisation must not re-type a nested pair. A flat numeric pair (`clim`) is recorded as a
+            list so it travels; a dash pattern `(0, (5, 5))` — which JSON would re-type to `[0, [5, 5]]`, a
+            value the engine refuses — stays held beside the layer and out of the described bag, the #322
+            guard the opts-level fix must not undo. Checked on `describe_opts` directly, since the builders'
+            opts validation would reject an element-inappropriate keyword before the travel split is reached.
+        """
+        from digitalearth.interactive.base import OPTS_KEY, describe_opts
+
+        held: dict = {}
+        described = describe_opts(held, {"clim": (0.0, 50.0), "line_dash": (0, (5, 5))})
+        assert described.get("clim") == [0.0, 50.0], (
+            f"a flat pair must be recorded as a travelling list: {described!r}"
+        )
+        assert "line_dash" not in described, (
+            f"a nested pair must not be written down: {described!r}"
+        )
+        assert held[OPTS_KEY]["line_dash"] == (0, (5, 5)), (
+            f"a nested pair must be held beside the layer: {held!r}"
         )

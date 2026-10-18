@@ -89,18 +89,21 @@ class TestARoadmapRefusalCountsTheOrdersTheWayTheRoadmapDoes:
     """An order is a number with an optional letter, and a number is not sorted as text."""
 
     def test_the_orders_this_contract_names_are_all_listed(self):
-        """The shipped table, whose order happens to be the same either way.
+        """The shipped table, now empty, so the refusal names none rather than a list.
 
         Test scenario:
-            24 and 27a sort identically as text and as numbers, which is why the defect could sit here
-            unseen. The listing is pinned all the same: the fix must not drop the letter suffix, and 27a
-            must still sort after 27 rather than being read as 27 with the letter thrown away. It is
-            pinned *exactly*, so it also fails the day an order is finished and its row taken out — which
-            is how the framing order and then the layer-management order left it.
+            24 and 27a sort identically as text and as numbers, which is why a drop-the-letter defect could
+            sit here unseen while the table still held them. The listing is pinned all the same, and pinned
+            *exactly*, so it fails the day an order is finished and its row taken out — which is how the
+            framing order, the layer-management order and finally order 27a each left it. With the table
+            empty, the refusal says "none" in that word; the sort behaviour is pinned by the monkeypatched
+            table below.
         """
         with pytest.raises(KeyError) as refusal:
             roadmap_order(_ABSENT_ORDER)
-        assert refusal.value.args[0].endswith("order 27a"), refusal.value.args[0]
+        assert refusal.value.args[0].endswith("every order it pointed at has landed"), (
+            refusal.value.args[0]
+        )
 
     def test_a_two_digit_order_is_not_listed_ahead_of_a_one_digit_one(
         self, monkeypatch

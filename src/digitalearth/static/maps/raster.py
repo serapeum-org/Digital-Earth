@@ -1336,6 +1336,10 @@ class RasterMixin(_MixinBase):
         self,
         data: Any,
         *,
+        band: int = DEFAULT_BAND,
+        cmap: str | None = None,
+        limits: tuple[float, float] | None = None,
+        opacity: float | None = None,
         name: str | None = None,
         visible: bool = True,
         **kwargs: Any,
@@ -1370,13 +1374,24 @@ class RasterMixin(_MixinBase):
             data: A pyramids ``Dataset``, a bare 2-D numpy array, or a path or URL to a raster
                 (reprojected to :attr:`crs` first, except for the array — see above). Only a path-backed
                 layer can be written down.
+            band: 1-based band index to draw — the Core keyword, named here rather than reached through
+                ``**kwargs`` so it is written down (#324, #332).
+            cmap: Colormap name, or ``None`` (default) to resolve one from the variable via ``auto_style``.
+                The Core keyword, named here rather than reached through ``**kwargs`` (#324, #332).
+            limits: The colour domain as ``(vmin, vmax)``; ``None`` (default) auto-scales. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, so the same
+                channel is written the same way on every tier (#332); it reaches ``ArrayGlyph`` as its own
+                ``vmin``/``vmax``.
+            opacity: How opaque the field is, in ``[0, 1]``. The Core spelling; ``None`` (default) sets no
+                opacity at all, which is not the same as ``1.0``. matplotlib's own ``alpha`` is what it
+                arrives as (#332).
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
                 hidden, so a switcher reading the figure agrees with the drawing (#327).
-            **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``band``, ``cmap``,
-                ``levels``, ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
+            **kwargs: Forwarded to :meth:`_field`, which documents the named ones (``levels``,
+                ``add_colorbar``, ``default_cmap``, ``draw_band``, ``zorder``). Anything
                 left over is the caller's own engine styling, split between the layer's description and
                 the scene (see the class docstring). ``scheme`` and ``k`` classify the band into discrete
                 classes, as on the vector layers: a named scheme (``"quantiles"``, ``"equal_interval"``,
@@ -1568,7 +1583,22 @@ class RasterMixin(_MixinBase):
 
                 ```
         """
-        self._field(data, kind="imshow", name=name, visible=visible, **kwargs)
+        if limits is not None:
+            # The Core channel is `limits`; ArrayGlyph reads its two ends as `vmin`/`vmax`, so it travels
+            # on under the engine's own spelling — exactly where a caller's `vmin=`/`vmax=` always went.
+            kwargs["vmin"], kwargs["vmax"] = limits
+        if opacity is not None:
+            # Named `opacity` here and `alpha` where it reaches matplotlib, as on the vector builders.
+            kwargs["alpha"] = opacity
+        self._field(
+            data,
+            kind="imshow",
+            band=band,
+            cmap=cmap,
+            name=name,
+            visible=visible,
+            **kwargs,
+        )
         return self
 
     def contours(

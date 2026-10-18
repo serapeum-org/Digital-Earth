@@ -249,14 +249,44 @@ STYLE_KEY = "common"
 OPTS_KEY = "opts"
 
 
+def _pair_spelling(value: Any) -> Any:
+    """Return the JSON-safe list spelling of a held two-item pair, or `None` for anything else.
+
+    A caller's `**opts` pair — colour limits as `clim=(0, 50)`, an `xlim`/`ylim` — is a **tuple**, which
+    :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses, so :func:`describe` holds it beside
+    the layer; without a spelling it then drops out of every saved figure while the list form of the same
+    pair travelled (review R2-M13). Handed to `describe` as the `spelling`, the list form is written into the
+    figure the way a colormap's registered name is, so the figure round-trips the pair while the held tuple
+    still reaches the engine unchanged (`held_props` merges the held half over the described one). This
+    generalises to the raw opts bag what the named builder parameters already do for their own pair (#332).
+
+    Only a pair whose **list** form itself travels earns a spelling, so the #322 guard survives: a nested
+    pair like a dash pattern `(0, (5, 5))` would JSON-re-type to `[0, [5, 5]]`, a value the engine refuses,
+    so it does not travel as a list and is left to `describe` to hold with no spelling (out of the figure
+    rather than written down broken). A `list` already travels as itself and needs no spelling, so only a
+    `tuple` is considered here.
+
+    Args:
+        value: One keyword's value from the opts bag.
+
+    Returns:
+        A two-item list for a held, travelling tuple pair; `None` otherwise.
+    """
+    if isinstance(value, tuple) and len(value) == 2:
+        as_list = list(value)
+        if travels_in_a_figure(as_list):
+            return as_list
+    return None
+
+
 def describe_opts(held: dict[str, Any], opts: Mapping[str, Any]) -> dict[str, Any]:
     """Describe a builder's `**opts` bag, keeping what a figure can carry and holding the rest.
 
     The bag that goes round the rule. :func:`describe` asks
     :func:`~digitalearth.base.spec._serial.travels_in_a_figure` per value — but every builder used to record
     its `**opts` wholesale into `held`, untested. So which of the caller's keywords a figure kept was decided
-    by which ones the builder happened to name in its signature: `field(alpha=0.25)` survived because
-    `alpha` is a parameter, and `quadmesh(alpha=0.25)` did not, although both are plain floats and both are
+    by which ones the builder happened to name in its signature: `field(opacity=0.25)` survived because
+    `opacity` is a parameter, and `quadmesh(alpha=0.25)` did not, although both are plain floats and both are
     channels the shared vocabulary declares. A figure read back elsewhere then drew the engine's defaults
     where the caller's styling had been, silently (review M3).
 
@@ -283,7 +313,11 @@ def describe_opts(held: dict[str, Any], opts: Mapping[str, Any]) -> dict[str, An
     bucket: dict[str, Any] = {}
     described: dict[str, Any] = {}
     for key, value in dict(opts or {}).items():
-        spelling = cmap_name(value) if key == "cmap" else None
+        # A pair-valued opt (`clim`, the removed spelling of `limits`, is the sharp case) is a tuple the
+        # shared rule refuses, so `describe` holds it and it drops out of a saved figure. Record its list
+        # form as the JSON spelling — the way a colormap records its name — so the held tuple still reaches
+        # the engine unchanged while the figure carries the pair and round-trips it (#332, R2-M13).
+        spelling = cmap_name(value) if key == "cmap" else _pair_spelling(value)
         recorded = describe(bucket, key, value, spelling)
         # `key not in bucket` is how a described value is told from a held one, rather than by testing the
         # result: a caller who wrote `cmap=None` passed a value that travels, and it is recorded as given.
@@ -1984,7 +2018,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)    # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", opacity=0.5)    # doctest: +SKIP
                 >>> m.style_of(0)["common"]["cmap"]                             # doctest: +SKIP
                 'magma'
 
@@ -2033,7 +2067,7 @@ class InteractiveMapBase:
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> m = InteractiveMap().field(dem, cmap="magma", alpha=0.5)   # doctest: +SKIP
+                >>> m = InteractiveMap().field(dem, cmap="magma", opacity=0.5)   # doctest: +SKIP
                 >>> [style["common"]["cmap"] for style in m.layer_styles]      # doctest: +SKIP
                 ['magma']
 

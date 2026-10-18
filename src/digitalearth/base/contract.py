@@ -121,10 +121,14 @@ class Method:
 # `ROADMAP_ORDERS` goes with them — a vendored order nothing cites is the next thing to go stale, which
 # `tests/base/test_contract.py::TestAPendingReasonPointsAtLiveWork` refuses.
 
-#: Where a tier adopts a Core spelling it has already agreed to. Order 27a is U-3's remainder — the
-#: "canonical names" half of the contract (DE-26, folded into U-3), which PR #304 froze without any tier
-#: adopting.
-_RENAME_ORDER = "order 27a"
+#: `_RENAME_ORDER = "order 27a"` stood here — where a tier adopts a Core spelling it had already agreed to:
+#: U-3's remainder, the "canonical names" half of the contract (DE-26, folded into U-3) that PR #304 froze
+#: without any tier adopting. That order has now built it: the first positional argument is settled (#348),
+#: and the channel keywords that adoption exposed are spelled the Core way on all five diverging builders
+#: (#332). The `KEYWORD_SHORTFALLS` rows that cited it are all off, so the constant and its `ROADMAP_ORDERS`
+#: entry go with them — `TestAPendingReasonPointsAtLiveWork` refuses a declared order no reason points at,
+#: which is what makes finishing an order include deleting its citation rather than leaving a pointer nobody
+#: follows.
 
 #: `_GUIDES_ORDER = "order 24"` stood here — where a colour key stops being the most recent classification
 #: and becomes a guide on its own layer's encoding. That order has built it on all four tiers: `colorbar` and
@@ -162,15 +166,11 @@ _ORDER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 #: `TestAPendingReasonPointsAtLiveWork` is what makes that a requirement rather than tidying — it refuses a
 #: declared order no reason points at, in the same breath as a reason pointing at an order nobody declared.
 #:
-#: The keys are the constants above rather than repeated strings, so a citation and its entry cannot disagree.
-ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType(
-    {
-        _RENAME_ORDER: (
-            "the Core contract's remainder — the renames each tier agreed to and had not adopted, plus the "
-            "divergences the frozen contract did not settle"
-        ),
-    }
-)
+#: Empty today: every order it pointed at has landed, the last being order 27a's rename remainder (#348 settled
+#: the first positional argument, #332 the channel keywords the adoption exposed), so nothing cites it and its
+#: row is gone. A key was the constant that declared the order rather than a repeated string, so a citation and
+#: its entry could not disagree; the next order to be scheduled re-opens the table the same way.
+ROADMAP_ORDERS: Mapping[str, str] = MappingProxyType({})
 
 
 # **The first positional argument, settled (#348).** Eight declared names once took a differently-spelled first
@@ -651,28 +651,30 @@ def roadmap_order(order: str) -> str:
             reading as a plan (review R-L3).
 
     Examples:
-        - What a caller waiting on a tier's adoption of a Core spelling is waiting for:
+        - The table is empty today — every order it pointed at has landed — so there is nothing to follow:
             ```python
-            >>> from digitalearth.base.contract import roadmap_order
-            >>> roadmap_order("order 27a").split("—")[0].strip()
-            "the Core contract's remainder"
+            >>> from digitalearth.base.contract import ROADMAP_ORDERS
+            >>> dict(ROADMAP_ORDERS)
+            {}
 
             ```
-        - An order nobody wrote down is refused with the ones there are:
+        - An order nobody wrote down is refused, naming the ones there are — none, now the table is empty,
+          said in that word rather than trailing off after "it names":
             ```python
             >>> from digitalearth.base.contract import roadmap_order
             >>> try:
             ...     roadmap_order("order 99")
             ... except KeyError as error:
             ...     print(error.args[0])
-            'order 99' is not a roadmap order this contract names; it names order 27a
+            'order 99' is not a roadmap order this contract names; it names none — every order it pointed at has landed
 
             ```
     """
     try:
         return ROADMAP_ORDERS[order]
     except KeyError:
+        named = _orders_named(ROADMAP_ORDERS)
+        tail = named if named else "none — every order it pointed at has landed"
         raise KeyError(
-            f"{order!r} is not a roadmap order this contract names; it names "
-            + _orders_named(ROADMAP_ORDERS)
+            f"{order!r} is not a roadmap order this contract names; it names {tail}"
         ) from None
