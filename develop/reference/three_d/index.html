@@ -5896,12 +5896,12 @@ its <code>figure_spec</code> taken — without a renderer, and <code>Scene3D.fro
 
     <div class="doc doc-contents first">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="digitalearth.three_d.terrain.TerrainMixin">TerrainMixin</span></code>, <code><span title="digitalearth.three_d.point_cloud.PointCloudMixin">PointCloudMixin</span></code>, <code><span title="digitalearth.three_d.flat.FlatMixin">FlatMixin</span></code>, <code><span title="digitalearth.three_d.volume.VolumeMixin">VolumeMixin</span></code>, <code><span title="digitalearth.three_d.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.three_d.globe.GlobeMixin">GlobeMixin</span></code>, <code><span title="digitalearth.three_d.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.three_d.guides.GuideMixin">GuideMixin</span></code>, <code><span title="digitalearth.three_d.interaction.InteractionMixin">InteractionMixin</span></code>, <code><span title="digitalearth.three_d.serve.ServeMixin">ServeMixin</span></code>, <code><span title="digitalearth.three_d.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.three_d.base.Scene3DBase">Scene3DBase</span></code></p>
+              Bases: <code><span title="digitalearth.three_d.builders.terrain.TerrainMixin">TerrainMixin</span></code>, <code><span title="digitalearth.three_d.builders.point_cloud.PointCloudMixin">PointCloudMixin</span></code>, <code><span title="digitalearth.three_d.builders.flat.FlatMixin">FlatMixin</span></code>, <code><span title="digitalearth.three_d.builders.volume.VolumeMixin">VolumeMixin</span></code>, <code><span title="digitalearth.three_d.builders.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.three_d.builders.globe.GlobeMixin">GlobeMixin</span></code>, <code><span title="digitalearth.three_d.decoration.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.three_d.legends.legend.GuideMixin">GuideMixin</span></code>, <code><span title="digitalearth.three_d.app.interaction.InteractionMixin">InteractionMixin</span></code>, <code><span title="digitalearth.three_d.app.serve.ServeMixin">ServeMixin</span></code>, <code><span title="digitalearth.three_d.temporal.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.three_d.core.base.Scene3DBase">Scene3DBase</span></code></p>
 
 
 
         <p>A single-:class:<code>pyvista.Plotter</code> 3-D scene with geospatial plot verbs.</p>
-<p>Inherits the plotter/layer/render lifecycle from :class:<code>~digitalearth.three_d.base.Scene3DBase</code> and the
+<p>Inherits the plotter/layer/render lifecycle from :class:<code>~digitalearth.three_d.core.base.Scene3DBase</code> and the
 plot methods from the capability mixins (:meth:<code>terrain</code>, :meth:<code>point_cloud</code>, :meth:<code>volume</code>,
 :meth:<code>isosurface</code>, :meth:<code>vectors</code>, :meth:<code>extruded_polygons</code>, :meth:<code>globe</code>, :meth:<code>set_title</code>,
 :meth:<code>text</code>, :meth:<code>axes</code>, :meth:<code>orientation_axes</code>, :meth:<code>colorbar</code>, :meth:<code>legend</code>, :meth:<code>orbit</code>,
@@ -5986,7 +5986,7 @@ plot methods from the capability mixins (:meth:<code>terrain</code>, :meth:<code
 <a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="p">):</span>
 <a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A single-:class:`pyvista.Plotter` 3-D scene with geospatial plot verbs.</span>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Inherits the plotter/layer/render lifecycle from :class:`~digitalearth.three_d.base.Scene3DBase` and the</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Inherits the plotter/layer/render lifecycle from :class:`~digitalearth.three_d.core.base.Scene3DBase` and the</span>
 <a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">    plot methods from the capability mixins (:meth:`terrain`, :meth:`point_cloud`, :meth:`volume`,</span>
 <a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    :meth:`isosurface`, :meth:`vectors`, :meth:`extruded_polygons`, :meth:`globe`, :meth:`set_title`,</span>
 <a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">    :meth:`text`, :meth:`axes`, :meth:`orientation_axes`, :meth:`colorbar`, :meth:`legend`, :meth:`orbit`,</span>
@@ -6476,7 +6476,7 @@ camera reset rather than a mesh rebuild. :meth:<code>digitalearth.three_d.Scene3
 <p><span class="doc-section-title">Examples:</span></p>
     <ul>
 <li>A fresh scene renders at true scale; the value set reads straight back:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">vertical_exaggeration</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="mf">1.0</span>
@@ -6487,7 +6487,7 @@ camera reset rather than a mesh rebuild. :meth:<code>digitalearth.three_d.Scene3
 </code></pre></div></li>
 <li>It is the view that stretches, not the mesh — and a layer added afterwards is stretched too:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">vertical_exaggeration</span> <span class="o">=</span> <span class="mf">4.0</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">sphere</span> <span class="o">=</span> <span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">()</span>
@@ -6553,14 +6553,14 @@ built, with :func:<code>house_theme</code> when no theme was given.</p>
 <p><span class="doc-section-title">Examples:</span></p>
     <ul>
 <li>The plotter carries the size the scene was built with:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">window_size</span><span class="o">=</span><span class="p">(</span><span class="mi">320</span><span class="p">,</span> <span class="mi">240</span><span class="p">))</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">list</span><span class="p">(</span><span class="n">scene</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">window_size</span><span class="p">)</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="p">[</span><span class="mi">320</span><span class="p">,</span> <span class="mi">240</span><span class="p">]</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </code></pre></div></li>
 <li>Asking twice returns the same plotter:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">plotter</span> <span class="ow">is</span> <span class="n">scene</span><span class="o">.</span><span class="n">plotter</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kc">True</span>
@@ -6602,17 +6602,17 @@ built, with :func:<code>house_theme</code> when no theme was given.</p>
       <tbody>
           <tr class="doc-section-item">
 <td><code>The</code></td>            <td>
-                  <code><span title="digitalearth.three_d.renderer.Renderer3D">Renderer3D</span></code>
+                  <code><span title="digitalearth.three_d.render.renderer.Renderer3D">Renderer3D</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>class:<code>~digitalearth.three_d.renderer.Renderer3D</code>. Its <code>drawn</code> mapping is how a layer id</p>
+                <p>class:<code>~digitalearth.three_d.render.renderer.Renderer3D</code>. Its <code>drawn</code> mapping is how a layer id</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
 <td></td>            <td>
-                  <code><span title="digitalearth.three_d.renderer.Renderer3D">Renderer3D</span></code>
+                  <code><span title="digitalearth.three_d.render.renderer.Renderer3D">Renderer3D</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6654,7 +6654,7 @@ that extent (#301); whether a draped surface should too is decided with draping 
 <p>Metre elevations over a geographic scene are converted to degrees by the scene's CRS, not the
 raster's.</p>
 <p><strong>Vertical exaggeration is a property of the scene, not of this layer.</strong> <code>z_exaggeration</code> sets
-:attr:<code>~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration</code>, a PyVista view scale that applies
+:attr:<code>~digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration</code>, a PyVista view scale that applies
 to every actor — so two terrains in one scene cannot disagree about it, the value can be read back off
 the scene, and changing it needs no mesh rebuild. Leaving it <code>None</code> keeps whatever the scene is
 already set to (<code>1.0</code>, true scale, on a fresh scene). The <code>exaggeration</code> property of the web tier's
@@ -6759,7 +6759,7 @@ when <code>texture</code> is given — a draped image colours the surface instea
               </div>
             </td>
             <td>
-                  <code><span title="digitalearth.three_d.terrain.ELEVATION">ELEVATION</span></code>
+                  <code><span title="digitalearth.three_d.builders.terrain.ELEVATION">ELEVATION</span></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -6793,10 +6793,10 @@ is published, since the surface is coloured by the image rather than by a field.
               <div class="doc-md-description">
                 <p>Cells above which the surface is simplified with <code>decimate_pro</code> before it is
 drawn (#207). <code>None</code> (the default) uses the scene's
-:attr:<code>~digitalearth.three_d.base.Scene3DBase.big_data_threshold</code>; a DEM at or under the budget
+:attr:<code>~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold</code>; a DEM at or under the budget
 is drawn exactly as it was built. Measured: a 708x708 DEM is drawn whole, a 709x709 one is
 reduced, and a 1000x1000 one goes from a 39.0 MB <code>export_html</code> page to a 12.3 MB one — see
-:mod:<code>digitalearth.three_d.bigdata</code> for the table the budget comes from.</p>
+:mod:<code>digitalearth.three_d.builders.bigdata</code> for the table the budget comes from.</p>
               </div>
             </td>
             <td>
@@ -6858,7 +6858,7 @@ reduced, and a 1000x1000 one goes from a 39.0 MB <code>export_html</code> page t
             </td>
             <td>
               <div class="doc-md-description">
-                <p>class:<code>~digitalearth.three_d.base.Scene3DBase</code>).</p>
+                <p>class:<code>~digitalearth.three_d.core.base.Scene3DBase</code>).</p>
               </div>
             </td>
           </tr>
@@ -6942,7 +6942,7 @@ reprojected; or if <code>big_data_threshold</code> is negative or not a whole nu
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/terrain.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/builders/terrain.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-209">209</a></span>
 <span class="normal"><a href="#__codelineno-0-210">210</a></span>
 <span class="normal"><a href="#__codelineno-0-211">211</a></span>
@@ -7107,7 +7107,7 @@ reprojected; or if <code>big_data_threshold</code> is negative or not a whole nu
 <a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">    raster&#39;s.</span>
 <a id="__codelineno-0-238" name="__codelineno-0-238"></a>
 <a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">    **Vertical exaggeration is a property of the scene, not of this layer.** ``z_exaggeration`` sets</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">    :attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`, a PyVista view scale that applies</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">    :attr:`~digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration`, a PyVista view scale that applies</span>
 <a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">    to every actor — so two terrains in one scene cannot disagree about it, the value can be read back off</span>
 <a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">    the scene, and changing it needs no mesh rebuild. Leaving it ``None`` keeps whatever the scene is</span>
 <a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">    already set to (``1.0``, true scale, on a fresh scene). The ``exaggeration`` property of the web tier&#39;s</span>
@@ -7132,16 +7132,16 @@ reprojected; or if <code>big_data_threshold</code> is negative or not a whole nu
 <a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">            is published, since the surface is coloured by the image rather than by a field.</span>
 <a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">        big_data_threshold: Cells above which the surface is simplified with ``decimate_pro`` before it is</span>
 <a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="sd">            drawn (#207). ``None`` (the default) uses the scene&#39;s</span>
-<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">            :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a DEM at or under the budget</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">            :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`; a DEM at or under the budget</span>
 <a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">            is drawn exactly as it was built. Measured: a 708x708 DEM is drawn whole, a 709x709 one is</span>
 <a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">            reduced, and a 1000x1000 one goes from a 39.0 MB ``export_html`` page to a 12.3 MB one — see</span>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">            :mod:`digitalearth.three_d.bigdata` for the table the budget comes from.</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">            :mod:`digitalearth.three_d.builders.bigdata` for the table the budget comes from.</span>
 <a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh` (``opacity``, ``show_edges``, ``pbr`` …).</span>
 <a id="__codelineno-0-270" name="__codelineno-0-270"></a>
 <a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">        The registered :class:`pyvista.Actor` for the terrain surface, or ``None`` when the raster held</span>
 <a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">        no elevation to build a surface from (see ``strict`` on</span>
-<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">        :class:`~digitalearth.three_d.base.Scene3DBase`).</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">        :class:`~digitalearth.three_d.core.base.Scene3DBase`).</span>
 <a id="__codelineno-0-275" name="__codelineno-0-275"></a>
 <a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">        OffLimbError: only when the scene was built with ``strict=True`` and the raster is empty or</span>
@@ -7404,7 +7404,7 @@ classes. The classes are computed exactly as the 2-D tiers compute them.</p>
               <div class="doc-md-description">
                 <p>Points above which the cloud is subsampled (an even stride over the points)
 before it is drawn (#207). <code>None</code> (the default) uses the scene's
-:attr:<code>~digitalearth.three_d.base.Scene3DBase.big_data_threshold</code>; a cloud at or under the
+:attr:<code>~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold</code>; a cloud at or under the
 budget keeps every point. The subsample is deterministic, so the render repeats, and the
 colour scalar is carried through.</p>
               </div>
@@ -7461,7 +7461,7 @@ missing data is drawn in is a choice the colouring only fills a default for.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>points (see <code>strict</code> on :class:<code>~digitalearth.three_d.base.Scene3DBase</code>).</p>
+                <p>points (see <code>strict</code> on :class:<code>~digitalearth.three_d.core.base.Scene3DBase</code>).</p>
               </div>
             </td>
           </tr>
@@ -7531,7 +7531,7 @@ with a warning.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/point_cloud.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/builders/point_cloud.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-102">102</a></span>
 <span class="normal"><a href="#__codelineno-0-103">103</a></span>
 <span class="normal"><a href="#__codelineno-0-104">104</a></span>
@@ -7683,7 +7683,7 @@ with a warning.</p>
 <a id="__codelineno-0-138" name="__codelineno-0-138"></a><span class="sd">        cmap: Colormap used when the cloud is coloured by a scalar.</span>
 <a id="__codelineno-0-139" name="__codelineno-0-139"></a><span class="sd">        big_data_threshold: Points above which the cloud is subsampled (an even stride over the points)</span>
 <a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">            before it is drawn (#207). ``None`` (the default) uses the scene&#39;s</span>
-<a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="sd">            :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a cloud at or under the</span>
+<a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="sd">            :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`; a cloud at or under the</span>
 <a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="sd">            budget keeps every point. The subsample is deterministic, so the render repeats, and the</span>
 <a id="__codelineno-0-143" name="__codelineno-0-143"></a><span class="sd">            colour scalar is carried through.</span>
 <a id="__codelineno-0-144" name="__codelineno-0-144"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`. A coloured cloud derives ``scalars``,</span>
@@ -7693,7 +7693,7 @@ with a warning.</p>
 <a id="__codelineno-0-148" name="__codelineno-0-148"></a>
 <a id="__codelineno-0-149" name="__codelineno-0-149"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-150" name="__codelineno-0-150"></a><span class="sd">        The registered :class:`pyvista.Actor` for the point cloud, or ``None`` when the cloud held no</span>
-<a id="__codelineno-0-151" name="__codelineno-0-151"></a><span class="sd">        points (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).</span>
+<a id="__codelineno-0-151" name="__codelineno-0-151"></a><span class="sd">        points (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).</span>
 <a id="__codelineno-0-152" name="__codelineno-0-152"></a>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">        ValueError: if ``values`` does not have one entry per point, if ``scheme`` cannot classify</span>
@@ -7868,7 +7868,7 @@ projection), <code>"average"</code> or <code>"additive"</code>.</p>
               <div class="doc-md-description">
                 <p>Fixed <code>(low, high)</code> colour range for the field. <code>None</code> lets the lookup table span the
 data's own range; pinning it is what keeps the colours steady across the frames of an
-:meth:<code>~digitalearth.three_d.animation.AnimationMixin.record</code> so a time stack does not flicker.</p>
+:meth:<code>~digitalearth.three_d.temporal.animation.AnimationMixin.record</code> so a time stack does not flicker.</p>
               </div>
             </td>
             <td>
@@ -7939,9 +7939,9 @@ instead of sitting at <code>(0, 0, 0)</code>.</p>
               <div class="doc-md-description">
                 <p>Voxels above which the cube is resampled to fewer per axis before it is
 ray-cast (#207). <code>None</code> (the default) uses the scene's
-:attr:<code>~digitalearth.three_d.base.Scene3DBase.big_data_threshold</code>; a cube at or under the budget
+:attr:<code>~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold</code>; a cube at or under the budget
 is drawn at full resolution. Resampling is output-driven, so it costs the same fraction of a
-second whatever it is given — see :mod:<code>digitalearth.three_d.bigdata</code>.</p>
+second whatever it is given — see :mod:<code>digitalearth.three_d.builders.bigdata</code>.</p>
               </div>
             </td>
             <td>
@@ -8033,7 +8033,7 @@ is negative or not a whole number of cells.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/volume.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/builders/volume.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-195">195</a></span>
 <span class="normal"><a href="#__codelineno-0-196">196</a></span>
 <span class="normal"><a href="#__codelineno-0-197">197</a></span>
@@ -8154,7 +8154,7 @@ is negative or not a whole number of cells.</p>
 <a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="sd">            projection), ``&quot;average&quot;`` or ``&quot;additive&quot;``.</span>
 <a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">        clim: Fixed ``(low, high)`` colour range for the field. ``None`` lets the lookup table span the</span>
 <a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">            data&#39;s own range; pinning it is what keeps the colours steady across the frames of an</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">            :meth:`~digitalearth.three_d.animation.AnimationMixin.record` so a time stack does not flicker.</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">            :meth:`~digitalearth.three_d.temporal.animation.AnimationMixin.record` so a time stack does not flicker.</span>
 <a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">        shade: Whether the volume is lit (gradient shading). Off by default — shading a smooth field can</span>
 <a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">            read as noise — but on it gives solid-looking structure a surface-like relief.</span>
 <a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">        origin: World ``(x, y, z)`` of the cube&#39;s lower-left-bottom corner (#198). ``None`` derives it</span>
@@ -8165,9 +8165,9 @@ is negative or not a whole number of cells.</p>
 <a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">            ``geotransform`` when it has one (the vertical stays one unit per level), else unit spacing.</span>
 <a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">        big_data_threshold: Voxels above which the cube is resampled to fewer per axis before it is</span>
 <a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">            ray-cast (#207). ``None`` (the default) uses the scene&#39;s</span>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">            :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a cube at or under the budget</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">            :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`; a cube at or under the budget</span>
 <a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">            is drawn at full resolution. Resampling is output-driven, so it costs the same fraction of a</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">            second whatever it is given — see :mod:`digitalearth.three_d.bigdata`.</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">            second whatever it is given — see :mod:`digitalearth.three_d.builders.bigdata`.</span>
 <a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.add_volume`.</span>
 <a id="__codelineno-0-239" name="__codelineno-0-239"></a>
 <a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">    Returns:</span>
@@ -8341,7 +8341,7 @@ from the data's pyramids <code>geotransform</code> when it has one, else the wor
               <div class="doc-md-description">
                 <p>Cells above which the extracted shells are simplified with <code>decimate_pro</code>
 before they are drawn (#207). <code>None</code> (the default) uses the scene's
-:attr:<code>~digitalearth.three_d.base.Scene3DBase.big_data_threshold</code>. The budget applies to the
+:attr:<code>~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold</code>. The budget applies to the
 <strong>shells</strong>, which is what reaches the plotter; the contour is still extracted from the full
 cube, so this bounds what is carried rather than what the extraction costs.</p>
               </div>
@@ -8434,7 +8434,7 @@ cube, so this bounds what is carried rather than what the extraction costs.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/volume.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/builders/volume.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-288">288</a></span>
 <span class="normal"><a href="#__codelineno-0-289">289</a></span>
 <span class="normal"><a href="#__codelineno-0-290">290</a></span>
@@ -8526,7 +8526,7 @@ cube, so this bounds what is carried rather than what the extraction costs.</p>
 <a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">            ``geotransform`` when it has one, else unit spacing.</span>
 <a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">        big_data_threshold: Cells above which the extracted shells are simplified with ``decimate_pro``</span>
 <a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">            before they are drawn (#207). ``None`` (the default) uses the scene&#39;s</span>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">            :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`. The budget applies to the</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">            :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`. The budget applies to the</span>
 <a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">            **shells**, which is what reaches the plotter; the contour is still extracted from the full</span>
 <a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">            cube, so this bounds what is carried rather than what the extraction costs.</span>
 <a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">        **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.</span>
@@ -8710,7 +8710,7 @@ cube, so this bounds what is carried rather than what the extraction costs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>to place a glyph at (see <code>strict</code> on :class:<code>~digitalearth.three_d.base.Scene3DBase</code>).</p>
+                <p>to place a glyph at (see <code>strict</code> on :class:<code>~digitalearth.three_d.core.base.Scene3DBase</code>).</p>
               </div>
             </td>
           </tr>
@@ -8762,7 +8762,7 @@ field, which is otherwise skipped with a warning.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-345">345</a></span>
 <span class="normal"><a href="#__codelineno-0-346">346</a></span>
 <span class="normal"><a href="#__codelineno-0-347">347</a></span>
@@ -8837,7 +8837,7 @@ field, which is otherwise skipped with a warning.</p>
 <a id="__codelineno-0-363" name="__codelineno-0-363"></a>
 <a id="__codelineno-0-364" name="__codelineno-0-364"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-365" name="__codelineno-0-365"></a><span class="sd">        The registered :class:`pyvista.Actor` for the glyph mesh, or ``None`` when there were no points</span>
-<a id="__codelineno-0-366" name="__codelineno-0-366"></a><span class="sd">        to place a glyph at (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a><span class="sd">        to place a glyph at (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).</span>
 <a id="__codelineno-0-367" name="__codelineno-0-367"></a>
 <a id="__codelineno-0-368" name="__codelineno-0-368"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-369" name="__codelineno-0-369"></a><span class="sd">        ValueError: if ``points`` and ``vectors`` do not have the same shape. Also — only when the scene</span>
@@ -9057,7 +9057,7 @@ is a choice the classifier only fills a default for, so a caller's own wins, as 
             </td>
             <td>
               <div class="doc-md-description">
-                <p>nothing to extrude (see <code>strict</code> on :class:<code>~digitalearth.three_d.base.Scene3DBase</code>).</p>
+                <p>nothing to extrude (see <code>strict</code> on :class:<code>~digitalearth.three_d.core.base.Scene3DBase</code>).</p>
               </div>
             </td>
           </tr>
@@ -9143,7 +9143,7 @@ otherwise skipped with a warning.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-562">562</a></span>
 <span class="normal"><a href="#__codelineno-0-563">563</a></span>
 <span class="normal"><a href="#__codelineno-0-564">564</a></span>
@@ -9292,7 +9292,7 @@ otherwise skipped with a warning.</p>
 <a id="__codelineno-0-600" name="__codelineno-0-600"></a>
 <a id="__codelineno-0-601" name="__codelineno-0-601"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-602" name="__codelineno-0-602"></a><span class="sd">        The registered :class:`pyvista.Actor` for the merged prism mesh, or ``None`` when there was</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">        nothing to extrude (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">        nothing to extrude (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).</span>
 <a id="__codelineno-0-604" name="__codelineno-0-604"></a>
 <a id="__codelineno-0-605" name="__codelineno-0-605"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="sd">        ValueError: if ``scheme`` cannot classify ``column``, or if an extrusion height is not finite.</span>
@@ -9600,7 +9600,7 @@ a CRS other than EPSG:4326.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/globe.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/builders/globe.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-194">194</a></span>
 <span class="normal"><a href="#__codelineno-0-195">195</a></span>
 <span class="normal"><a href="#__codelineno-0-196">196</a></span>
@@ -9784,7 +9784,7 @@ a screenshot, an exported page — so whatever context the notebook around it ha
 heading has to be part of the picture.</p>
 <p>The title is <strong>figure furniture, and described</strong>: it is the panel's own <code>title</code>, which <code>PanelSpec</code>
 already carries, so it survives <code>figure_spec.to_dict()</code> and is drawn again by
-:meth:<code>~digitalearth.three_d.base.Scene3DBase.from_figure</code>. It is not a layer — it has no place on the
+:meth:<code>~digitalearth.three_d.core.base.Scene3DBase.from_figure</code>. It is not a layer — it has no place on the
 ground, it is not in the layer tree, and removing a layer never takes it with it.</p>
 
 
@@ -9943,11 +9943,11 @@ certain to read, and <code>None</code> drawn as <code>"None"</code> is worse tha
 
 <details class="see-also" open>
   <summary>See Also</summary>
-  <p>digitalearth.web.decoration.DecorationMixin.set_title: the same name on the web tier.</p>
+  <p>digitalearth.web.decoration.decoration.DecorationMixin.set_title: the same name on the web tier.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-555">555</a></span>
 <span class="normal"><a href="#__codelineno-0-556">556</a></span>
 <span class="normal"><a href="#__codelineno-0-557">557</a></span>
@@ -10041,7 +10041,7 @@ certain to read, and <code>None</code> drawn as <code>"None"</code> is worse tha
 <a id="__codelineno-0-569" name="__codelineno-0-569"></a>
 <a id="__codelineno-0-570" name="__codelineno-0-570"></a><span class="sd">    The title is **figure furniture, and described**: it is the panel&#39;s own `title`, which `PanelSpec`</span>
 <a id="__codelineno-0-571" name="__codelineno-0-571"></a><span class="sd">    already carries, so it survives `figure_spec.to_dict()` and is drawn again by</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572"></a><span class="sd">    :meth:`~digitalearth.three_d.base.Scene3DBase.from_figure`. It is not a layer — it has no place on the</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a><span class="sd">    :meth:`~digitalearth.three_d.core.base.Scene3DBase.from_figure`. It is not a layer — it has no place on the</span>
 <a id="__codelineno-0-573" name="__codelineno-0-573"></a><span class="sd">    ground, it is not in the layer tree, and removing a layer never takes it with it.</span>
 <a id="__codelineno-0-574" name="__codelineno-0-574"></a>
 <a id="__codelineno-0-575" name="__codelineno-0-575"></a><span class="sd">    Args:</span>
@@ -10086,7 +10086,7 @@ certain to read, and <code>None</code> drawn as <code>"None"</code> is worse tha
 <a id="__codelineno-0-614" name="__codelineno-0-614"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-615" name="__codelineno-0-615"></a>
 <a id="__codelineno-0-616" name="__codelineno-0-616"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a><span class="sd">        digitalearth.web.decoration.DecorationMixin.set_title: the same name on the web tier.</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a><span class="sd">        digitalearth.web.decoration.decoration.DecorationMixin.set_title: the same name on the web tier.</span>
 <a id="__codelineno-0-618" name="__codelineno-0-618"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-619" name="__codelineno-0-619"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">heading</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
 <a id="__codelineno-0-620" name="__codelineno-0-620"></a>        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
@@ -10379,11 +10379,11 @@ or infinity could not be written down.</p>
 
 <details class="see-also" open>
   <summary>See Also</summary>
-  <p>digitalearth.static.maps.decoration.DecorationMixin.text: the same name on the static tier.</p>
+  <p>digitalearth.static.builders.decoration.DecorationMixin.text: the same name on the static tier.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-766">766</a></span>
 <span class="normal"><a href="#__codelineno-0-767">767</a></span>
 <span class="normal"><a href="#__codelineno-0-768">768</a></span>
@@ -10561,7 +10561,7 @@ or infinity could not be written down.</p>
 <a id="__codelineno-0-841" name="__codelineno-0-841"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-842" name="__codelineno-0-842"></a>
 <a id="__codelineno-0-843" name="__codelineno-0-843"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="sd">        digitalearth.static.maps.decoration.DecorationMixin.text: the same name on the static tier.</span>
+<a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="sd">        digitalearth.static.builders.decoration.DecorationMixin.text: the same name on the static tier.</span>
 <a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-846" name="__codelineno-0-846"></a>    <span class="n">call</span> <span class="o">=</span> <span class="s2">&quot;Scene3D.text()&quot;</span>
 <a id="__codelineno-0-847" name="__codelineno-0-847"></a>    <span class="k">if</span> <span class="n">s</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -10759,7 +10759,7 @@ is given.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-633">633</a></span>
 <span class="normal"><a href="#__codelineno-0-634">634</a></span>
 <span class="normal"><a href="#__codelineno-0-635">635</a></span>
@@ -11068,7 +11068,7 @@ coordinates, so it is not a layer.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-706">706</a></span>
 <span class="normal"><a href="#__codelineno-0-707">707</a></span>
 <span class="normal"><a href="#__codelineno-0-708">708</a></span>
@@ -11371,11 +11371,11 @@ indices reads <code>0, 1, 2 …</code>); or when <code>label</code> is a title a
 <details class="see-also" open>
   <summary>See Also</summary>
   <p>legend: the keyed list, for a layer coloured by classes.
-digitalearth.web.base.WebMapBase.colorbar: the same name on the web tier.</p>
+digitalearth.web.core.base.WebMapBase.colorbar: the same name on the web tier.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/guides.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/legends/legend.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1053">1053</a></span>
 <span class="normal"><a href="#__codelineno-0-1054">1054</a></span>
 <span class="normal"><a href="#__codelineno-0-1055">1055</a></span>
@@ -11521,7 +11521,7 @@ digitalearth.web.base.WebMapBase.colorbar: the same name on the web tier.</p>
 <a id="__codelineno-0-1118" name="__codelineno-0-1118"></a>
 <a id="__codelineno-0-1119" name="__codelineno-0-1119"></a><span class="sd">    See Also:</span>
 <a id="__codelineno-0-1120" name="__codelineno-0-1120"></a><span class="sd">        legend: the keyed list, for a layer coloured by classes.</span>
-<a id="__codelineno-0-1121" name="__codelineno-0-1121"></a><span class="sd">        digitalearth.web.base.WebMapBase.colorbar: the same name on the web tier.</span>
+<a id="__codelineno-0-1121" name="__codelineno-0-1121"></a><span class="sd">        digitalearth.web.core.base.WebMapBase.colorbar: the same name on the web tier.</span>
 <a id="__codelineno-0-1122" name="__codelineno-0-1122"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-1123" name="__codelineno-0-1123"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_record_guide</span><span class="p">(</span>
 <a id="__codelineno-0-1124" name="__codelineno-0-1124"></a>        <span class="n">layer_id</span><span class="p">,</span>
@@ -11617,7 +11617,7 @@ categories. One per row: a list that does not number the classes this layer cont
 refused, as it is on the other three tiers, because a short one leaves swatches unlabelled
 and a long one labels swatches that are not drawn. Recorded as <strong>drawn state</strong> on the scene
 rather than in the figure, exactly as
-:meth:<code>~digitalearth.three_d.decoration.DecorationMixin.set_title</code>'s font size and subtitle
+:meth:<code>~digitalearth.three_d.decoration.decoration.DecorationMixin.set_title</code>'s font size and subtitle
 are: the guide is what travels, and the labels are how this tier draws it. <code>None</code> clears
 labels an earlier call recorded, bringing the derived ranges or categories back, so one
 call's override does not outlive it.</p>
@@ -11735,11 +11735,11 @@ the layer is coloured by a <strong>continuous ramp</strong>, which has no classe
 <details class="see-also" open>
   <summary>See Also</summary>
   <p>colorbar: the scalar bar, for a layer coloured by a continuous ramp.
-digitalearth.web.decoration.DecorationMixin.legend: the same name on the web tier.</p>
+digitalearth.web.legends.legend.LegendMixin.legend: the same name on the web tier.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/guides.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/legends/legend.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1132">1132</a></span>
 <span class="normal"><a href="#__codelineno-0-1133">1133</a></span>
 <span class="normal"><a href="#__codelineno-0-1134">1134</a></span>
@@ -11853,7 +11853,7 @@ digitalearth.web.decoration.DecorationMixin.legend: the same name on the web tie
 <a id="__codelineno-0-1158" name="__codelineno-0-1158"></a><span class="sd">            refused, as it is on the other three tiers, because a short one leaves swatches unlabelled</span>
 <a id="__codelineno-0-1159" name="__codelineno-0-1159"></a><span class="sd">            and a long one labels swatches that are not drawn. Recorded as **drawn state** on the scene</span>
 <a id="__codelineno-0-1160" name="__codelineno-0-1160"></a><span class="sd">            rather than in the figure, exactly as</span>
-<a id="__codelineno-0-1161" name="__codelineno-0-1161"></a><span class="sd">            :meth:`~digitalearth.three_d.decoration.DecorationMixin.set_title`&#39;s font size and subtitle</span>
+<a id="__codelineno-0-1161" name="__codelineno-0-1161"></a><span class="sd">            :meth:`~digitalearth.three_d.decoration.decoration.DecorationMixin.set_title`&#39;s font size and subtitle</span>
 <a id="__codelineno-0-1162" name="__codelineno-0-1162"></a><span class="sd">            are: the guide is what travels, and the labels are how this tier draws it. `None` clears</span>
 <a id="__codelineno-0-1163" name="__codelineno-0-1163"></a><span class="sd">            labels an earlier call recorded, bringing the derived ranges or categories back, so one</span>
 <a id="__codelineno-0-1164" name="__codelineno-0-1164"></a><span class="sd">            call&#39;s override does not outlive it.</span>
@@ -11898,7 +11898,7 @@ digitalearth.web.decoration.DecorationMixin.legend: the same name on the web tie
 <a id="__codelineno-0-1203" name="__codelineno-0-1203"></a>
 <a id="__codelineno-0-1204" name="__codelineno-0-1204"></a><span class="sd">    See Also:</span>
 <a id="__codelineno-0-1205" name="__codelineno-0-1205"></a><span class="sd">        colorbar: the scalar bar, for a layer coloured by a continuous ramp.</span>
-<a id="__codelineno-0-1206" name="__codelineno-0-1206"></a><span class="sd">        digitalearth.web.decoration.DecorationMixin.legend: the same name on the web tier.</span>
+<a id="__codelineno-0-1206" name="__codelineno-0-1206"></a><span class="sd">        digitalearth.web.legends.legend.LegendMixin.legend: the same name on the web tier.</span>
 <a id="__codelineno-0-1207" name="__codelineno-0-1207"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-1208" name="__codelineno-0-1208"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_record_guide</span><span class="p">(</span>
 <a id="__codelineno-0-1209" name="__codelineno-0-1209"></a>        <span class="n">layer_id</span><span class="p">,</span>
@@ -12045,7 +12045,7 @@ view of a sheet.</p>
                 <code>viewup</code>
             </td>
             <td>
-                  <code><span title="digitalearth.three_d.animation.UpVector">UpVector</span> | None</code>
+                  <code><span title="digitalearth.three_d.temporal.animation.UpVector">UpVector</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -12179,7 +12179,7 @@ no file would be produced — drive that method yourself for a background render
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/animation.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/temporal/animation.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-274">274</a></span>
 <span class="normal"><a href="#__codelineno-0-275">275</a></span>
 <span class="normal"><a href="#__codelineno-0-276">276</a></span>
@@ -12471,7 +12471,7 @@ range moves frame to frame and the clip flickers. Passing <code>clim=(low, high)
 every drawn colour-mapped layer (the scalar bar follows its mapper) after each <code>update</code>, so one scale
 spans the whole animation — compute it once over the full stack (e.g.
 <code>(stack.values.min(), stack.values.max())</code>) and hand it in. <code>None</code> (the default) keeps the per-frame
-behaviour. A ray-cast volume's range is :meth:<code>~digitalearth.three_d.volume.VolumeMixin.volume</code>'s own
+behaviour. A ray-cast volume's range is :meth:<code>~digitalearth.three_d.builders.volume.VolumeMixin.volume</code>'s own
 <code>clim=</code> instead.</p>
 <p>Scope: <code>clim</code> pins <strong>every</strong> colour-mapped layer in the scene, not only the one <code>update</code> animates.
 That is what the time-stack use case wants (there is one data layer), but in a scene that holds a second
@@ -12527,7 +12527,7 @@ one layer while others keep their own range, build them in separate scenes.</p>
                 <code>update</code>
             </td>
             <td>
-                  <code><span title="collections.abc.Callable">Callable</span>[[<span title="digitalearth.three_d.animation.AnimationMixin">AnimationMixin</span>, <span title="typing.Any">Any</span>], None]</code>
+                  <code><span title="collections.abc.Callable">Callable</span>[[<span title="digitalearth.three_d.temporal.animation.AnimationMixin">AnimationMixin</span>, <span title="typing.Any">Any</span>], None]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -12667,7 +12667,7 @@ layer in the scene (a ray-cast volume is excepted — its range stays <code>volu
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/animation.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/temporal/animation.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-408">408</a></span>
 <span class="normal"><a href="#__codelineno-0-409">409</a></span>
 <span class="normal"><a href="#__codelineno-0-410">410</a></span>
@@ -12790,7 +12790,7 @@ layer in the scene (a ray-cast volume is excepted — its range stays <code>volu
 <a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">    every drawn colour-mapped layer (the scalar bar follows its mapper) after each ``update``, so one scale</span>
 <a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">    spans the whole animation — compute it once over the full stack (e.g.</span>
 <a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">    ``(stack.values.min(), stack.values.max())``) and hand it in. ``None`` (the default) keeps the per-frame</span>
-<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">    behaviour. A ray-cast volume&#39;s range is :meth:`~digitalearth.three_d.volume.VolumeMixin.volume`&#39;s own</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">    behaviour. A ray-cast volume&#39;s range is :meth:`~digitalearth.three_d.builders.volume.VolumeMixin.volume`&#39;s own</span>
 <a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">    ``clim=`` instead.</span>
 <a id="__codelineno-0-430" name="__codelineno-0-430"></a>
 <a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">    Scope: ``clim`` pins **every** colour-mapped layer in the scene, not only the one ``update`` animates.</span>
@@ -12953,7 +12953,7 @@ plotter until something changes it back.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/animation.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/temporal/animation.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-512">512</a></span>
 <span class="normal"><a href="#__codelineno-0-513">513</a></span>
 <span class="normal"><a href="#__codelineno-0-514">514</a></span>
@@ -13141,7 +13141,7 @@ plotter until something changes it back.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1288">1288</a></span>
 <span class="normal"><a href="#__codelineno-0-1289">1289</a></span>
 <span class="normal"><a href="#__codelineno-0-1290">1290</a></span>
@@ -13344,7 +13344,7 @@ recorded because the figure is drawn by the other tiers too, where order decides
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1495">1495</a></span>
 <span class="normal"><a href="#__codelineno-0-1496">1496</a></span>
 <span class="normal"><a href="#__codelineno-0-1497">1497</a></span>
@@ -13541,7 +13541,7 @@ recorded because the figure is drawn by the other tiers too, where order decides
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1408">1408</a></span>
 <span class="normal"><a href="#__codelineno-0-1409">1409</a></span>
 <span class="normal"><a href="#__codelineno-0-1410">1410</a></span>
@@ -13783,7 +13783,7 @@ one reached <code>get_source(None)</code> and answered with a <code>TypeError</c
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1317">1317</a></span>
 <span class="normal"><a href="#__codelineno-0-1318">1318</a></span>
 <span class="normal"><a href="#__codelineno-0-1319">1319</a></span>
@@ -14051,7 +14051,7 @@ and what tells a saved figure that the layer is there but hidden.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1456">1456</a></span>
 <span class="normal"><a href="#__codelineno-0-1457">1457</a></span>
 <span class="normal"><a href="#__codelineno-0-1458">1458</a></span>
@@ -14247,7 +14247,7 @@ CRS comes from the figure's camera unless <code>crs=</code> is given here.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1561">1561</a></span>
 <span class="normal"><a href="#__codelineno-0-1562">1562</a></span>
 <span class="normal"><a href="#__codelineno-0-1563">1563</a></span>
@@ -14432,7 +14432,7 @@ CRS comes from the figure's camera unless <code>crs=</code> is given here.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1537">1537</a></span>
 <span class="normal"><a href="#__codelineno-0-1538">1538</a></span>
 <span class="normal"><a href="#__codelineno-0-1539">1539</a></span>
@@ -14474,7 +14474,7 @@ CRS comes from the figure's camera unless <code>crs=</code> is given here.</p>
 <a id="__codelineno-0-1553" name="__codelineno-0-1553"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_change</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
 <a id="__codelineno-0-1554" name="__codelineno-0-1554"></a>    <span class="c1"># The panel&#39;s own `title` is part of the figure (#203), and nothing in the layer diff re-reads it, so</span>
 <a id="__codelineno-0-1555" name="__codelineno-0-1555"></a>    <span class="c1"># a heading drawn only at `set_title()` would be lost on exactly the round trip the seam exists for.</span>
-<a id="__codelineno-0-1556" name="__codelineno-0-1556"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.decoration</span><span class="w"> </span><span class="kn">import</span> <span class="n">redraw_decoration</span>
+<a id="__codelineno-0-1556" name="__codelineno-0-1556"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.decoration.decoration</span><span class="w"> </span><span class="kn">import</span> <span class="n">redraw_decoration</span>
 <a id="__codelineno-0-1557" name="__codelineno-0-1557"></a>
 <a id="__codelineno-0-1558" name="__codelineno-0-1558"></a>    <span class="n">redraw_decoration</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 <a id="__codelineno-0-1559" name="__codelineno-0-1559"></a>    <span class="k">return</span> <span class="bp">self</span>
@@ -14598,7 +14598,7 @@ a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (#349); <
     <ul>
 <li>Add one mesh and find it, paired with its actor, in the layer registry:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">actor</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">mesh</span><span class="p">,</span> <span class="n">registered</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -14608,7 +14608,7 @@ a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (#349); <
 </code></pre></div></li>
 <li>Style the mesh through <code>kwargs</code>, then tune the returned actor further:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">grid</span> <span class="o">=</span> <span class="n">pv</span><span class="o">.</span><span class="n">ImageData</span><span class="p">(</span><span class="n">dimensions</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">grid</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;z&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -14627,7 +14627,7 @@ a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (#349); <
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-973"> 973</a></span>
 <span class="normal"><a href="#__codelineno-0-974"> 974</a></span>
 <span class="normal"><a href="#__codelineno-0-975"> 975</a></span>
@@ -14727,7 +14727,7 @@ a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (#349); <
 <a id="__codelineno-0-1005" name="__codelineno-0-1005"></a><span class="sd">        - Add one mesh and find it, paired with its actor, in the layer registry:</span>
 <a id="__codelineno-0-1006" name="__codelineno-0-1006"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-1007" name="__codelineno-0-1007"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-1008" name="__codelineno-0-1008"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-1008" name="__codelineno-0-1008"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-1009" name="__codelineno-0-1009"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-1010" name="__codelineno-0-1010"></a><span class="sd">            &gt;&gt;&gt; actor = scene.add_mesh(pv.Sphere())</span>
 <a id="__codelineno-0-1011" name="__codelineno-0-1011"></a><span class="sd">            &gt;&gt;&gt; mesh, registered = scene.layers[0]</span>
@@ -14739,7 +14739,7 @@ a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (#349); <
 <a id="__codelineno-0-1017" name="__codelineno-0-1017"></a><span class="sd">        - Style the mesh through ``kwargs``, then tune the returned actor further:</span>
 <a id="__codelineno-0-1018" name="__codelineno-0-1018"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-1019" name="__codelineno-0-1019"></a><span class="sd">            &gt;&gt;&gt; import numpy as np, pyvista as pv</span>
-<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><span class="sd">            &gt;&gt;&gt; grid = pv.ImageData(dimensions=(8, 8, 1))</span>
 <a id="__codelineno-0-1022" name="__codelineno-0-1022"></a><span class="sd">            &gt;&gt;&gt; grid.point_data[&quot;z&quot;] = np.linspace(0.0, 1.0, 64)</span>
 <a id="__codelineno-0-1023" name="__codelineno-0-1023"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
@@ -14875,7 +14875,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
     <ul>
 <li>Ray-cast a 3-D scalar field and see it registered as one layer:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">grid</span> <span class="o">=</span> <span class="n">pv</span><span class="o">.</span><span class="n">ImageData</span><span class="p">(</span><span class="n">dimensions</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">grid</span><span class="o">.</span><span class="n">cell_data</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">125</span><span class="p">)</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -14886,7 +14886,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
 </code></pre></div></li>
 <li>A volume and a surface share the one plotter, stacking in add order:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">grid</span> <span class="o">=</span> <span class="n">pv</span><span class="o">.</span><span class="n">ImageData</span><span class="p">(</span><span class="n">dimensions</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">grid</span><span class="o">.</span><span class="n">cell_data</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">125</span><span class="p">)</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -14905,7 +14905,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1039">1039</a></span>
 <span class="normal"><a href="#__codelineno-0-1040">1040</a></span>
 <span class="normal"><a href="#__codelineno-0-1041">1041</a></span>
@@ -15000,7 +15000,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
 <a id="__codelineno-0-1068" name="__codelineno-0-1068"></a><span class="sd">        - Ray-cast a 3-D scalar field and see it registered as one layer:</span>
 <a id="__codelineno-0-1069" name="__codelineno-0-1069"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-1070" name="__codelineno-0-1070"></a><span class="sd">            &gt;&gt;&gt; import numpy as np, pyvista as pv</span>
-<a id="__codelineno-0-1071" name="__codelineno-0-1071"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-1071" name="__codelineno-0-1071"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-1072" name="__codelineno-0-1072"></a><span class="sd">            &gt;&gt;&gt; grid = pv.ImageData(dimensions=(6, 6, 6))</span>
 <a id="__codelineno-0-1073" name="__codelineno-0-1073"></a><span class="sd">            &gt;&gt;&gt; grid.cell_data[&quot;v&quot;] = np.linspace(0.0, 1.0, 125)</span>
 <a id="__codelineno-0-1074" name="__codelineno-0-1074"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
@@ -15013,7 +15013,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
 <a id="__codelineno-0-1081" name="__codelineno-0-1081"></a><span class="sd">        - A volume and a surface share the one plotter, stacking in add order:</span>
 <a id="__codelineno-0-1082" name="__codelineno-0-1082"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-1083" name="__codelineno-0-1083"></a><span class="sd">            &gt;&gt;&gt; import numpy as np, pyvista as pv</span>
-<a id="__codelineno-0-1084" name="__codelineno-0-1084"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-1084" name="__codelineno-0-1084"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-1085" name="__codelineno-0-1085"></a><span class="sd">            &gt;&gt;&gt; grid = pv.ImageData(dimensions=(6, 6, 6))</span>
 <a id="__codelineno-0-1086" name="__codelineno-0-1086"></a><span class="sd">            &gt;&gt;&gt; grid.cell_data[&quot;v&quot;] = np.linspace(0.0, 1.0, 125)</span>
 <a id="__codelineno-0-1087" name="__codelineno-0-1087"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
@@ -15129,7 +15129,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1231">1231</a></span>
 <span class="normal"><a href="#__codelineno-0-1232">1232</a></span>
 <span class="normal"><a href="#__codelineno-0-1233">1233</a></span>
@@ -15268,7 +15268,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1203">1203</a></span>
 <span class="normal"><a href="#__codelineno-0-1204">1204</a></span>
 <span class="normal"><a href="#__codelineno-0-1205">1205</a></span>
@@ -15343,7 +15343,7 @@ carries a colour key for :meth:<code>colorbar</code>/:meth:<code>legend</code> (
 <p>The one-word half of the camera API. :attr:<code>camera</code> says exactly where to stand; this says it the way a
 figure caption does, over PyVista's own <code>view_*</code> methods, which frame the scene's current bounds from
 a direction. The names are a table a caller can add to
-(:func:<code>~digitalearth.three_d.views.register_view</code>), not a fixed list of methods.</p>
+(:func:<code>~digitalearth.three_d.view.views.register_view</code>), not a fixed list of methods.</p>
 <p>The view is <strong>captured</strong>, not only applied: PyVista aims its camera, the scene reads the result back as
 a <code>Camera</code> and stores it. That is what makes the viewpoint survive the next render — which writes the
 stored camera onto the plotter — and what puts it on the figure's panel, in <code>to_dict()</code>, and anywhere
@@ -15370,7 +15370,7 @@ else the view is read.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The view's name, as :func:<code>~digitalearth.three_d.views.view_names</code> lists it.</p>
+                <p>The view's name, as :func:<code>~digitalearth.three_d.view.views.view_names</code> lists it.</p>
               </div>
             </td>
             <td>
@@ -15454,11 +15454,11 @@ else the view is read.</p>
 
 <details class="see-also" open>
   <summary>See Also</summary>
-  <p>digitalearth.three_d.views: the table, and how to put a view of your own in it.</p>
+  <p>digitalearth.three_d.view.views: the table, and how to put a view of your own in it.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1874">1874</a></span>
 <span class="normal"><a href="#__codelineno-0-1875">1875</a></span>
 <span class="normal"><a href="#__codelineno-0-1876">1876</a></span>
@@ -15518,7 +15518,7 @@ else the view is read.</p>
 <a id="__codelineno-0-1877" name="__codelineno-0-1877"></a><span class="sd">    The one-word half of the camera API. :attr:`camera` says exactly where to stand; this says it the way a</span>
 <a id="__codelineno-0-1878" name="__codelineno-0-1878"></a><span class="sd">    figure caption does, over PyVista&#39;s own ``view_*`` methods, which frame the scene&#39;s current bounds from</span>
 <a id="__codelineno-0-1879" name="__codelineno-0-1879"></a><span class="sd">    a direction. The names are a table a caller can add to</span>
-<a id="__codelineno-0-1880" name="__codelineno-0-1880"></a><span class="sd">    (:func:`~digitalearth.three_d.views.register_view`), not a fixed list of methods.</span>
+<a id="__codelineno-0-1880" name="__codelineno-0-1880"></a><span class="sd">    (:func:`~digitalearth.three_d.view.views.register_view`), not a fixed list of methods.</span>
 <a id="__codelineno-0-1881" name="__codelineno-0-1881"></a>
 <a id="__codelineno-0-1882" name="__codelineno-0-1882"></a><span class="sd">    The view is **captured**, not only applied: PyVista aims its camera, the scene reads the result back as</span>
 <a id="__codelineno-0-1883" name="__codelineno-0-1883"></a><span class="sd">    a `Camera` and stores it. That is what makes the viewpoint survive the next render — which writes the</span>
@@ -15526,7 +15526,7 @@ else the view is read.</p>
 <a id="__codelineno-0-1885" name="__codelineno-0-1885"></a><span class="sd">    else the view is read.</span>
 <a id="__codelineno-0-1886" name="__codelineno-0-1886"></a>
 <a id="__codelineno-0-1887" name="__codelineno-0-1887"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1888" name="__codelineno-0-1888"></a><span class="sd">        name: The view&#39;s name, as :func:`~digitalearth.three_d.views.view_names` lists it.</span>
+<a id="__codelineno-0-1888" name="__codelineno-0-1888"></a><span class="sd">        name: The view&#39;s name, as :func:`~digitalearth.three_d.view.views.view_names` lists it.</span>
 <a id="__codelineno-0-1889" name="__codelineno-0-1889"></a>
 <a id="__codelineno-0-1890" name="__codelineno-0-1890"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-1891" name="__codelineno-0-1891"></a><span class="sd">        The scene, so a view chains with the builders.</span>
@@ -15561,7 +15561,7 @@ else the view is read.</p>
 <a id="__codelineno-0-1920" name="__codelineno-0-1920"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-1921" name="__codelineno-0-1921"></a>
 <a id="__codelineno-0-1922" name="__codelineno-0-1922"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1923" name="__codelineno-0-1923"></a><span class="sd">        digitalearth.three_d.views: the table, and how to put a view of your own in it.</span>
+<a id="__codelineno-0-1923" name="__codelineno-0-1923"></a><span class="sd">        digitalearth.three_d.view.views: the table, and how to put a view of your own in it.</span>
 <a id="__codelineno-0-1924" name="__codelineno-0-1924"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-1925" name="__codelineno-0-1925"></a>    <span class="n">named_view</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="p">)</span>
 <a id="__codelineno-0-1926" name="__codelineno-0-1926"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">camera</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_live_camera</span><span class="p">()</span>
@@ -15624,7 +15624,7 @@ past the facade has one name to learn. Here that is the <code>pyvista.Plotter</c
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1385">1385</a></span>
 <span class="normal"><a href="#__codelineno-0-1386">1386</a></span>
 <span class="normal"><a href="#__codelineno-0-1387">1387</a></span>
@@ -15704,7 +15704,7 @@ past the facade has one name to learn. Here that is the <code>pyvista.Plotter</c
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="digitalearth.three_d.base.Destination">Destination</span> | None</code>
+                  <code><span title="digitalearth.three_d.core.base.Destination">Destination</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -15763,7 +15763,7 @@ image is only returned.</p>
     <ul>
 <li>Render to memory and work with the frame as an array:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">window_size</span><span class="o">=</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">))</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">frame</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">screenshot</span><span class="p">()</span>
@@ -15775,7 +15775,7 @@ image is only returned.</p>
 </code></pre></div></li>
 <li>Write a PNG to disk; the frame is still returned:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">folder</span><span class="p">:</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">...</span>     <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">...</span>     <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Cube</span><span class="p">())</span>
@@ -15794,7 +15794,7 @@ image is only returned.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2041">2041</a></span>
 <span class="normal"><a href="#__codelineno-0-2042">2042</a></span>
 <span class="normal"><a href="#__codelineno-0-2043">2043</a></span>
@@ -15855,7 +15855,7 @@ image is only returned.</p>
 <a id="__codelineno-0-2053" name="__codelineno-0-2053"></a><span class="sd">        - Render to memory and work with the frame as an array:</span>
 <a id="__codelineno-0-2054" name="__codelineno-0-2054"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2055" name="__codelineno-0-2055"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2056" name="__codelineno-0-2056"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2057" name="__codelineno-0-2057"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True, window_size=(200, 150))</span>
 <a id="__codelineno-0-2058" name="__codelineno-0-2058"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
 <a id="__codelineno-0-2059" name="__codelineno-0-2059"></a><span class="sd">            &gt;&gt;&gt; frame = scene.screenshot()</span>
@@ -15869,7 +15869,7 @@ image is only returned.</p>
 <a id="__codelineno-0-2067" name="__codelineno-0-2067"></a><span class="sd">        - Write a PNG to disk; the frame is still returned:</span>
 <a id="__codelineno-0-2068" name="__codelineno-0-2068"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2069" name="__codelineno-0-2069"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2070" name="__codelineno-0-2070"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2070" name="__codelineno-0-2070"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2071" name="__codelineno-0-2071"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
 <a id="__codelineno-0-2072" name="__codelineno-0-2072"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2073" name="__codelineno-0-2073"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Cube())</span>
@@ -15948,7 +15948,7 @@ this one is announced rather than eased.</p>
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="digitalearth.three_d.base.Destination">Destination</span></code>
+                  <code><span title="digitalearth.three_d.core.base.Destination">Destination</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -16043,7 +16043,7 @@ scene suffix needs.</p>
     <ul>
 <li>A raster suffix screenshots, and hands back the path it wrote — not the frame:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">folder</span><span class="p">:</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">...</span>     <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">window_size</span><span class="o">=</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">))</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">...</span>     <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
@@ -16056,7 +16056,7 @@ scene suffix needs.</p>
 <li>A scene-export suffix writes the geometry through PyVista's own exporter, and returns its path
   the same way:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">folder</span><span class="p">:</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">...</span>     <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">...</span>     <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
@@ -16069,7 +16069,7 @@ scene suffix needs.</p>
   :meth:<code>export_html</code> normalises the suffix it writes — so <code>SCENE.HTML</code> lands as <code>SCENE.html</code>
   and the returned path is the normalised one, not the name that was passed:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">folder</span><span class="p">:</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="o">...</span>     <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">...</span>     <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
@@ -16079,7 +16079,7 @@ scene suffix needs.</p>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">(</span><span class="s1">&#39;SCENE.html&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;SCENE.html&#39;</span><span class="p">])</span>
 </code></pre></div></li>
 <li>A suffix-less destination is an error, not a silent <code>.png</code>:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="o">...</span>     <span class="n">scene</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;scene&quot;</span><span class="p">)</span>
@@ -16100,7 +16100,7 @@ export_html: the interactive-page branch.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2159">2159</a></span>
 <span class="normal"><a href="#__codelineno-0-2160">2160</a></span>
 <span class="normal"><a href="#__codelineno-0-2161">2161</a></span>
@@ -16291,7 +16291,7 @@ export_html: the interactive-page branch.</p>
 <a id="__codelineno-0-2207" name="__codelineno-0-2207"></a><span class="sd">        - A raster suffix screenshots, and hands back the path it wrote — not the frame:</span>
 <a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2209" name="__codelineno-0-2209"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2210" name="__codelineno-0-2210"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2211" name="__codelineno-0-2211"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
 <a id="__codelineno-0-2212" name="__codelineno-0-2212"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True, window_size=(200, 150))</span>
 <a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
@@ -16306,7 +16306,7 @@ export_html: the interactive-page branch.</p>
 <a id="__codelineno-0-2222" name="__codelineno-0-2222"></a><span class="sd">          the same way:</span>
 <a id="__codelineno-0-2223" name="__codelineno-0-2223"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2224" name="__codelineno-0-2224"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2225" name="__codelineno-0-2225"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2226" name="__codelineno-0-2226"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
 <a id="__codelineno-0-2227" name="__codelineno-0-2227"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2228" name="__codelineno-0-2228"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
@@ -16321,7 +16321,7 @@ export_html: the interactive-page branch.</p>
 <a id="__codelineno-0-2237" name="__codelineno-0-2237"></a><span class="sd">          and the returned path is the normalised one, not the name that was passed:</span>
 <a id="__codelineno-0-2238" name="__codelineno-0-2238"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2239" name="__codelineno-0-2239"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2240" name="__codelineno-0-2240"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2241" name="__codelineno-0-2241"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
 <a id="__codelineno-0-2242" name="__codelineno-0-2242"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2243" name="__codelineno-0-2243"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
@@ -16333,7 +16333,7 @@ export_html: the interactive-page branch.</p>
 <a id="__codelineno-0-2249" name="__codelineno-0-2249"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-2250" name="__codelineno-0-2250"></a><span class="sd">        - A suffix-less destination is an error, not a silent ``.png``:</span>
 <a id="__codelineno-0-2251" name="__codelineno-0-2251"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2252" name="__codelineno-0-2252"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2253" name="__codelineno-0-2253"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2254" name="__codelineno-0-2254"></a><span class="sd">            &gt;&gt;&gt; try:</span>
 <a id="__codelineno-0-2255" name="__codelineno-0-2255"></a><span class="sd">            ...     scene.save(&quot;scene&quot;)</span>
@@ -16425,7 +16425,7 @@ normalising up front is what makes the two agree and keeps the returned path the
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="digitalearth.three_d.base.Destination">Destination</span></code>
+                  <code><span title="digitalearth.three_d.core.base.Destination">Destination</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -16511,7 +16511,7 @@ package is present, read the warning for the real cause.</p>
 <li>Export a small scene. Asking for <code>scene.HTML</code> writes <code>scene.html</code>, and the returned path is
   the normalised one — the page that exists, on either pyvista — so it can be passed straight on:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span><span class="o">,</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">folder</span><span class="p">:</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">...</span>     <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">...</span>     <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
@@ -16531,7 +16531,7 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2088">2088</a></span>
 <span class="normal"><a href="#__codelineno-0-2089">2089</a></span>
 <span class="normal"><a href="#__codelineno-0-2090">2090</a></span>
@@ -16640,7 +16640,7 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 <a id="__codelineno-0-2124" name="__codelineno-0-2124"></a><span class="sd">          the normalised one — the page that exists, on either pyvista — so it can be passed straight on:</span>
 <a id="__codelineno-0-2125" name="__codelineno-0-2125"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">            &gt;&gt;&gt; import os, tempfile, pyvista as pv</span>
-<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
 <a id="__codelineno-0-2129" name="__codelineno-0-2129"></a><span class="sd">            ...     scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2130" name="__codelineno-0-2130"></a><span class="sd">            ...     _ = scene.add_mesh(pv.Sphere())</span>
@@ -16751,7 +16751,7 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
   opening a window. What comes back is pyvista's own return value, which its <code>return_cpos</code>
   theme setting decides — do not rely on it:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
@@ -16759,7 +16759,7 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 </code></pre></div></li>
 <li>Keyword arguments reach :meth:<code>pyvista.Plotter.show</code>, so the camera can be framed on the way in:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Cube</span><span class="p">())</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">cpos</span><span class="o">=</span><span class="s2">&quot;xy&quot;</span><span class="p">)</span>
@@ -16774,7 +16774,7 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2300">2300</a></span>
 <span class="normal"><a href="#__codelineno-0-2301">2301</a></span>
 <span class="normal"><a href="#__codelineno-0-2302">2302</a></span>
@@ -16827,7 +16827,7 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 <a id="__codelineno-0-2312" name="__codelineno-0-2312"></a><span class="sd">          theme setting decides — do not rely on it:</span>
 <a id="__codelineno-0-2313" name="__codelineno-0-2313"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2314" name="__codelineno-0-2314"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-2315" name="__codelineno-0-2315"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2315" name="__codelineno-0-2315"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2316" name="__codelineno-0-2316"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2317" name="__codelineno-0-2317"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
 <a id="__codelineno-0-2318" name="__codelineno-0-2318"></a><span class="sd">            &gt;&gt;&gt; _ = scene.show()</span>
@@ -16837,7 +16837,7 @@ save: routes here automatically for a <code>*.html</code> destination.</p>
 <a id="__codelineno-0-2322" name="__codelineno-0-2322"></a><span class="sd">        - Keyword arguments reach :meth:`pyvista.Plotter.show`, so the camera can be framed on the way in:</span>
 <a id="__codelineno-0-2323" name="__codelineno-0-2323"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2324" name="__codelineno-0-2324"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-2325" name="__codelineno-0-2325"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2325" name="__codelineno-0-2325"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2326" name="__codelineno-0-2326"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2327" name="__codelineno-0-2327"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Cube())</span>
 <a id="__codelineno-0-2328" name="__codelineno-0-2328"></a><span class="sd">            &gt;&gt;&gt; _ = scene.show(cpos=&quot;xy&quot;)</span>
@@ -16876,7 +16876,7 @@ it again on exit. A scene that never drew has no render window, and closing it o
     <ul>
 <li>Free the render window when the scene is finished with:
     <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">pyvista</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pv</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Sphere</span><span class="p">())</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -16884,7 +16884,7 @@ it again on exit. A scene that never drew has no render window, and closing it o
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="mi">1</span>
 </code></pre></div></li>
 <li>A second close is a no-op, not an error:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3DBase</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3DBase</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -16898,7 +16898,7 @@ it again on exit. A scene that never drew has no render window, and closing it o
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2339">2339</a></span>
 <span class="normal"><a href="#__codelineno-0-2340">2340</a></span>
 <span class="normal"><a href="#__codelineno-0-2341">2341</a></span>
@@ -16946,7 +16946,7 @@ it again on exit. A scene that never drew has no render window, and closing it o
 <a id="__codelineno-0-2346" name="__codelineno-0-2346"></a><span class="sd">        - Free the render window when the scene is finished with:</span>
 <a id="__codelineno-0-2347" name="__codelineno-0-2347"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-2348" name="__codelineno-0-2348"></a><span class="sd">            &gt;&gt;&gt; import pyvista as pv</span>
-<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2350" name="__codelineno-0-2350"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2351" name="__codelineno-0-2351"></a><span class="sd">            &gt;&gt;&gt; _ = scene.add_mesh(pv.Sphere())</span>
 <a id="__codelineno-0-2352" name="__codelineno-0-2352"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
@@ -16956,7 +16956,7 @@ it again on exit. A scene that never drew has no render window, and closing it o
 <a id="__codelineno-0-2356" name="__codelineno-0-2356"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-2357" name="__codelineno-0-2357"></a><span class="sd">        - A second close is a no-op, not an error:</span>
 <a id="__codelineno-0-2358" name="__codelineno-0-2358"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-2359" name="__codelineno-0-2359"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.base import Scene3DBase</span>
+<a id="__codelineno-0-2359" name="__codelineno-0-2359"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d.core.base import Scene3DBase</span>
 <a id="__codelineno-0-2360" name="__codelineno-0-2360"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3DBase(off_screen=True)</span>
 <a id="__codelineno-0-2361" name="__codelineno-0-2361"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
 <a id="__codelineno-0-2362" name="__codelineno-0-2362"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>

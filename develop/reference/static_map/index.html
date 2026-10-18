@@ -4375,7 +4375,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#digitalearth.static.figure.facet" class="md-nav__link">
+  <a href="#digitalearth.static.panels.figure.facet" class="md-nav__link">
     <span class="md-ellipsis">
       
         facet
@@ -5362,7 +5362,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#digitalearth.static.figure.facet" class="md-nav__link">
+  <a href="#digitalearth.static.panels.figure.facet" class="md-nav__link">
     <span class="md-ellipsis">
       
         facet
@@ -5948,10 +5948,10 @@ one colorbar spans them. Each panel is an ordinary <code>Map</code>, returned fo
 <div class="doc doc-object doc-function">
 
 
-<h3 id="digitalearth.static.figure.facet" class="doc doc-heading"><a href="#digitalearth.static.figure.facet" class="toclink">
-            <code class="highlight language-python"><span class="n">digitalearth</span><span class="o">.</span><span class="n">static</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">facet</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">col</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">col_wrap</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;field&#39;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">DEFAULT_BAND</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">globe</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">style</span><span class="p">)</span></code>
+<h3 id="digitalearth.static.panels.figure.facet" class="doc doc-heading"><a href="#digitalearth.static.panels.figure.facet" class="toclink">
+            <code class="highlight language-python"><span class="n">digitalearth</span><span class="o">.</span><span class="n">static</span><span class="o">.</span><span class="n">panels</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">facet</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">col</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">col_wrap</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;field&#39;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">DEFAULT_BAND</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="mi">3857</span><span class="p">,</span> <span class="n">globe</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar_label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">style</span><span class="p">)</span></code>
 
-</a><a href="#digitalearth.static.figure.facet" class="headerlink" title="Permanent link">#</a></h3>
+</a><a href="#digitalearth.static.panels.figure.facet" class="headerlink" title="Permanent link">#</a></h3>
 
 
     <div class="doc doc-contents first">
@@ -6349,7 +6349,7 @@ shared_colorbar: the spanning bar on its own.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/figure.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/panels/figure.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-881"> 881</a></span>
 <span class="normal"><a href="#__codelineno-0-882"> 882</a></span>
 <span class="normal"><a href="#__codelineno-0-883"> 883</a></span>
@@ -6826,20 +6826,20 @@ the night side is filled only where it faces the viewer, and a circle on the far
 
     <div class="doc doc-contents first">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="digitalearth.static.maps.raster.RasterMixin">RasterMixin</span></code>, <code><span title="digitalearth.static.maps.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.static.maps.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.static.maps.inset.InsetMixin">InsetMixin</span></code>, <code><span title="digitalearth.static.maps.projection.ProjectionMixin">ProjectionMixin</span></code>, <code><span title="digitalearth.static.maps.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.static.maps.base.GeoLayerBase">GeoLayerBase</span></code></p>
+              Bases: <code><span title="digitalearth.static.builders.raster.RasterMixin">RasterMixin</span></code>, <code><span title="digitalearth.static.builders.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.static.builders.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.static.builders.inset.InsetMixin">InsetMixin</span></code>, <code><span title="digitalearth.static.builders.projection.ProjectionMixin">ProjectionMixin</span></code>, <code><span title="digitalearth.static.builders.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.static.builders.base.GeoLayerBase">GeoLayerBase</span></code></p>
 
 
 
-        <p>A geospatial :class:<code>~digitalearth.static.scene.Scene</code> that reprojects to a display CRS.</p>
+        <p>A geospatial :class:<code>~digitalearth.static.core.scene.Scene</code> that reprojects to a display CRS.</p>
 <p>The tier's workhorse, and a <strong>composition rather than a class with methods of its own</strong>: every
-capability lives in one of the six mixins under <code>digitalearth.static.maps</code> — <code>RasterMixin</code> (fields,
+capability lives in one of the six mixins under <code>digitalearth.static.builders</code> — <code>RasterMixin</code> (fields,
 composites, spaghetti), <code>VectorMixin</code> (points, polygons, unstructured, flow, u/v fields),
 <code>DecorationMixin</code> (text, annotate, basemap, Natural-Earth layers), <code>InsetMixin</code> (<code>inset</code>,
 <code>mark_extent</code>), <code>ProjectionMixin</code> (extent, domain, globe frame, save/show) and <code>AnimationMixin</code>
 (<code>animate</code>, <code>rotate</code>) — and <code>map.py</code> only lists them. <code>tests/static/test_map_composition.py</code> pins that
 MRO, so a seventh mixin fails it until the list is updated.</p>
 <p><strong>Every data builder returns <code>Self</code>, so calls chain</strong> (<code>m.field(ds).coastlines().colorbar()</code>), and the
-matplotlib artist a layer drew is reached by name through :meth:<code>~digitalearth.static.scene.Scene.artist</code>
+matplotlib artist a layer drew is reached by name through :meth:<code>~digitalearth.static.core.scene.Scene.artist</code>
 — never through the renderer's private record.</p>
 
 
@@ -6882,7 +6882,7 @@ matplotlib artist a layer drew is reached by name through :meth:<code>~digitalea
                 <p>A registered region name (<code>"europe"</code>, <code>"africa"</code>, …) or an explicit
 <code>(west, south, east, north)</code> bbox in EPSG:4326. <strong>Stored, not applied</strong>: constructing with one
 does not frame the axes, and it is not validated either — it becomes the fallback a bare
-:meth:<code>~digitalearth.static.maps.projection.ProjectionMixin.set_domain</code> call resolves, and the
+:meth:<code>~digitalearth.static.builders.projection.ProjectionMixin.set_domain</code> call resolves, and the
 <code>domain</code> the panel's <code>Viewport</code> carries. <code>None</code> (the default) leaves the view to fit the data.</p>
               </div>
             </td>
@@ -6900,7 +6900,7 @@ does not frame the axes, and it is not validated either — it becomes the fallb
             <td>
               <div class="doc-md-description">
                 <p>Existing axes to draw on (a new figure/axes is created when <code>None</code>). One axes holds one map;
-two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene.Scene</code>).</p>
+two maps sharing one is unsupported (see :class:<code>~digitalearth.static.core.scene.Scene</code>).</p>
               </div>
             </td>
             <td>
@@ -7422,10 +7422,10 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="n">AnimationMixin</span><span class="p">,</span>
 <a id="__codelineno-0-42" name="__codelineno-0-42"></a>    <span class="n">GeoLayerBase</span><span class="p">,</span>
 <a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="p">):</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A geospatial :class:`~digitalearth.static.scene.Scene` that reprojects to a display CRS.</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A geospatial :class:`~digitalearth.static.core.scene.Scene` that reprojects to a display CRS.</span>
 <a id="__codelineno-0-45" name="__codelineno-0-45"></a>
 <a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">    The tier&#39;s workhorse, and a **composition rather than a class with methods of its own**: every</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    capability lives in one of the six mixins under `digitalearth.static.maps` — `RasterMixin` (fields,</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    capability lives in one of the six mixins under `digitalearth.static.builders` — `RasterMixin` (fields,</span>
 <a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    composites, spaghetti), `VectorMixin` (points, polygons, unstructured, flow, u/v fields),</span>
 <a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">    `DecorationMixin` (text, annotate, basemap, Natural-Earth layers), `InsetMixin` (`inset`,</span>
 <a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    `mark_extent`), `ProjectionMixin` (extent, domain, globe frame, save/show) and `AnimationMixin`</span>
@@ -7433,7 +7433,7 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">    MRO, so a seventh mixin fails it until the list is updated.</span>
 <a id="__codelineno-0-53" name="__codelineno-0-53"></a>
 <a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">    **Every data builder returns `Self`, so calls chain** (`m.field(ds).coastlines().colorbar()`), and the</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    matplotlib artist a layer drew is reached by name through :meth:`~digitalearth.static.scene.Scene.artist`</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    matplotlib artist a layer drew is reached by name through :meth:`~digitalearth.static.core.scene.Scene.artist`</span>
 <a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">    — never through the renderer&#39;s private record.</span>
 <a id="__codelineno-0-57" name="__codelineno-0-57"></a>
 <a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">    Args:</span>
@@ -7441,10 +7441,10 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">        domain: A registered region name (`&quot;europe&quot;`, `&quot;africa&quot;`, …) or an explicit</span>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">            `(west, south, east, north)` bbox in EPSG:4326. **Stored, not applied**: constructing with one</span>
 <a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            does not frame the axes, and it is not validated either — it becomes the fallback a bare</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_domain` call resolves, and the</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            :meth:`~digitalearth.static.builders.projection.ProjectionMixin.set_domain` call resolves, and the</span>
 <a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            `domain` the panel&#39;s `Viewport` carries. `None` (the default) leaves the view to fit the data.</span>
 <a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">        ax: Existing axes to draw on (a new figure/axes is created when ``None``). One axes holds one map;</span>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">            two maps sharing one is unsupported (see :class:`~digitalearth.static.scene.Scene`).</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">            two maps sharing one is unsupported (see :class:`~digitalearth.static.core.scene.Scene`).</span>
 <a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        fig: Figure owning ``ax``. Taken from `ax` (its root figure) when only `ax` is given.</span>
 <a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        figsize: New-figure size in inches when one is created; `(8, 8)` by default.</span>
 <a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">        globe: Draw the projection boundary/graticule and clip layers to it (an orthographic globe).</span>
@@ -7507,9 +7507,9 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Draw a figure into this map, bringing it from whatever it showed before.</span>
 <a id="__codelineno-0-127" name="__codelineno-0-127"></a>
 <a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">        The 2-D counterpart of the 3-D tier&#39;s ``draw_figure``, with one difference in the plumbing: this</span>
-<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">        tier&#39;s :meth:`~digitalearth.static.scene.Scene._change` derives a candidate&#39;s sources from</span>
+<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">        tier&#39;s :meth:`~digitalearth.static.core.scene.Scene._change` derives a candidate&#39;s sources from</span>
 <a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">        ``self._sources`` (filtered to the tree), not from the incoming figure, so the figure&#39;s own sources</span>
-<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">        are installed here first — otherwise :meth:`~digitalearth.static.renderer.Renderer.apply` would have</span>
+<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">        are installed here first — otherwise :meth:`~digitalearth.static.render.renderer.Renderer.apply` would have</span>
 <a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">        nothing to open. The 3-D tier replays its incoming figure&#39;s sources directly and needs no such step.</span>
 <a id="__codelineno-0-133" name="__codelineno-0-133"></a>
 <a id="__codelineno-0-134" name="__codelineno-0-134"></a><span class="sd">        **The two titles land in their own slots, and the round trip is idempotent.** This tier describes a</span>
@@ -7521,7 +7521,7 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">        and after is equal, and equal again on a third pass.</span>
 <a id="__codelineno-0-141" name="__codelineno-0-141"></a>
 <a id="__codelineno-0-142" name="__codelineno-0-142"></a><span class="sd">        **The heading is figure-wide, so it is restored only onto a figure this map owns.** A `grid` panel</span>
-<a id="__codelineno-0-143" name="__codelineno-0-143"></a><span class="sd">        is built on an axes :func:`~digitalearth.static.figure.grid` laid out, and every panel of that grid</span>
+<a id="__codelineno-0-143" name="__codelineno-0-143"></a><span class="sd">        is built on an axes :func:`~digitalearth.static.panels.figure.grid` laid out, and every panel of that grid</span>
 <a id="__codelineno-0-144" name="__codelineno-0-144"></a><span class="sd">        shares one figure — so writing the described heading through ``Figure.suptitle`` from one panel</span>
 <a id="__codelineno-0-145" name="__codelineno-0-145"></a><span class="sd">        reaches the whole figure and its siblings, which then describe the incoming heading as their own.</span>
 <a id="__codelineno-0-146" name="__codelineno-0-146"></a><span class="sd">        Measured on a two-panel grid headed `&#39;grid heading&#39;`, drawing a description headed `&#39;INCOMING&#39;`</span>
@@ -7533,7 +7533,7 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-152" name="__codelineno-0-152"></a>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a><span class="sd">        **A title is written only when the incoming figure carries one**, so drawing an untitled figure does</span>
 <a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="sd">        not blank a heading the map already had. &quot;Carries one&quot; is decided by</span>
-<a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene._recorded_title`, the same normaliser `set_title` and</span>
+<a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene._recorded_title`, the same normaliser `set_title` and</span>
 <a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="sd">        `grid(suptitle=)` use: a `FigureSpec` refuses `&quot;&quot;` but accepts `&quot;   &quot;`, and a whitespace heading is</span>
 <a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">        the request &quot;no heading&quot; rather than a heading made of spaces. It used to be painted and then</span>
 <a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">        described as none, so a figure written down and read back drew a different picture (R2-L5). The layers are reconciled, not merely added — that part</span>
@@ -7658,7 +7658,7 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-277" name="__codelineno-0-277"></a>        <span class="c1"># Normalise recipe names before drawing, so a figure the web or interactive tier described draws here:</span>
 <a id="__codelineno-0-278" name="__codelineno-0-278"></a>        <span class="c1"># a foreign recipe is retargeted to this tier&#39;s own, and the field drawer fills the style a portable</span>
 <a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="c1"># figure omits from its own defaults. A same-tier figure already knows every recipe, so this is a no-op.</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">retarget_via</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.render.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">retarget_via</span>
 <a id="__codelineno-0-281" name="__codelineno-0-281"></a>
 <a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="n">figure</span> <span class="o">=</span> <span class="n">retarget_via</span><span class="p">(</span><span class="n">figure</span><span class="p">)</span>
 <a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_sources</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">figure</span><span class="o">.</span><span class="n">sources</span><span class="p">)</span>
@@ -7708,7 +7708,7 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
 <a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_figure</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">figure</span><span class="p">:</span> <span class="n">FigureSpec</span><span class="p">,</span> <span class="o">**</span><span class="n">scene_kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
 <a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a map and draw a figure into it — the round trip the description seam exists for.</span>
 <a id="__codelineno-0-329" name="__codelineno-0-329"></a>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">        A map describes itself with :attr:`~digitalearth.static.scene.Scene.figure_spec`, the description</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">        A map describes itself with :attr:`~digitalearth.static.core.scene.Scene.figure_spec`, the description</span>
 <a id="__codelineno-0-331" name="__codelineno-0-331"></a><span class="sd">        survives ``to_dict()``/``from_dict()``, and this draws it again. :func:`digitalearth.api.to_backend`</span>
 <a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">        dispatches here for ``backend=&quot;matplotlib&quot;``.</span>
 <a id="__codelineno-0-333" name="__codelineno-0-333"></a>
@@ -8092,7 +8092,7 @@ two maps sharing one is unsupported (see :class:<code>~digitalearth.static.scene
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The view :class:<code>~digitalearth.static.maps.base.GeoLayerBase</code> builds from the display CRS, the</p>
+                <p>The view :class:<code>~digitalearth.static.builders.base.GeoLayerBase</code> builds from the display CRS, the</p>
               </div>
             </td>
           </tr>
@@ -8321,14 +8321,14 @@ layer is <strong>not georeferenced</strong>, and that is not a detail:</p>
   on the integers and the image covering <code>[-0.5, cols - 0.5] x [-0.5, rows - 0.5]</code>, with the first
   row drawn at the <strong>top</strong> as matplotlib draws every array;</li>
 <li><strong>nothing is reprojected.</strong> An array declares no CRS, so :attr:<code>crs</code> says nothing about where it
-  is and no warp is attempted — :meth:<code>~digitalearth.static.maps.base.GeoLayerBase._reproject</code> hands
+  is and no warp is attempted — :meth:<code>~digitalearth.static.builders.base.GeoLayerBase._reproject</code> hands
   it straight back and the layer's <code>Source</code> carries <code>crs=None</code>;</li>
 <li><strong>no georeferenced layer may share the figure.</strong> A basemap, a coastline, a graticule and a
   reprojected raster are all placed in the display CRS, so mixing one in is refused by
-  :meth:<code>~digitalearth.static.scene.Scene._require_one_placement</code> rather than drawn with the array
+  :meth:<code>~digitalearth.static.core.scene.Scene._require_one_placement</code> rather than drawn with the array
   as an invisible speck beside it;</li>
 <li><strong>a globe frame is refused</strong> for the same reason, at this call;</li>
-<li>:meth:<code>~digitalearth.static.maps.projection.ProjectionMixin.set_bounds</code> still frames the figure,
+<li>:meth:<code>~digitalearth.static.builders.projection.ProjectionMixin.set_bounds</code> still frames the figure,
   and its <code>bounds</code> are read in the display CRS — which for such a figure means <em>array indices</em>.
   <code>set_bounds(None)</code> fits the array, and <code>set_bounds((0, 0, 4, 3))</code> frames columns 0-4 and rows
   0-3. Geographic bounds would frame empty axes, and there is nothing to tell them apart by.</li>
@@ -8639,7 +8639,7 @@ signature. Measured, <code>STATIC_STYLE_SCHEMA</code> carries all five while
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.vector.VectorMixin.quiverkey</code> hands back matplotlib's</p>
+                <p>meth:<code>~digitalearth.static.builders.vector.VectorMixin.quiverkey</code> hands back matplotlib's</p>
               </div>
             </td>
           </tr>
@@ -8879,7 +8879,7 @@ signature. Measured, <code>STATIC_STYLE_SCHEMA</code> carries all five while
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code>: <code>m.artist()</code> hands back what this call used</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code>: <code>m.artist()</code> hands back what this call used</p>
               </div>
             </td>
           </tr>
@@ -8929,7 +8929,7 @@ signature. Measured, <code>STATIC_STYLE_SCHEMA</code> carries all five while
             </td>
             <td>
               <div class="doc-md-description">
-                <p>attr:<code>~digitalearth.static.scene.Scene.layer_ids</code>, so</p>
+                <p>attr:<code>~digitalearth.static.core.scene.Scene.layer_ids</code>, so</p>
               </div>
             </td>
           </tr>
@@ -8939,7 +8939,7 @@ signature. Measured, <code>STATIC_STYLE_SCHEMA</code> carries all five while
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> refuses it by name — the same answer every other</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> refuses it by name — the same answer every other</p>
               </div>
             </td>
           </tr>
@@ -9085,7 +9085,7 @@ no valid cell.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1335">1335</a></span>
 <span class="normal"><a href="#__codelineno-0-1336">1336</a></span>
 <span class="normal"><a href="#__codelineno-0-1337">1337</a></span>
@@ -9375,14 +9375,14 @@ no valid cell.</p>
 <a id="__codelineno-0-1354" name="__codelineno-0-1354"></a><span class="sd">      on the integers and the image covering ``[-0.5, cols - 0.5] x [-0.5, rows - 0.5]``, with the first</span>
 <a id="__codelineno-0-1355" name="__codelineno-0-1355"></a><span class="sd">      row drawn at the **top** as matplotlib draws every array;</span>
 <a id="__codelineno-0-1356" name="__codelineno-0-1356"></a><span class="sd">    * **nothing is reprojected.** An array declares no CRS, so :attr:`crs` says nothing about where it</span>
-<a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">      is and no warp is attempted — :meth:`~digitalearth.static.maps.base.GeoLayerBase._reproject` hands</span>
+<a id="__codelineno-0-1357" name="__codelineno-0-1357"></a><span class="sd">      is and no warp is attempted — :meth:`~digitalearth.static.builders.base.GeoLayerBase._reproject` hands</span>
 <a id="__codelineno-0-1358" name="__codelineno-0-1358"></a><span class="sd">      it straight back and the layer&#39;s `Source` carries ``crs=None``;</span>
 <a id="__codelineno-0-1359" name="__codelineno-0-1359"></a><span class="sd">    * **no georeferenced layer may share the figure.** A basemap, a coastline, a graticule and a</span>
 <a id="__codelineno-0-1360" name="__codelineno-0-1360"></a><span class="sd">      reprojected raster are all placed in the display CRS, so mixing one in is refused by</span>
-<a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">      :meth:`~digitalearth.static.scene.Scene._require_one_placement` rather than drawn with the array</span>
+<a id="__codelineno-0-1361" name="__codelineno-0-1361"></a><span class="sd">      :meth:`~digitalearth.static.core.scene.Scene._require_one_placement` rather than drawn with the array</span>
 <a id="__codelineno-0-1362" name="__codelineno-0-1362"></a><span class="sd">      as an invisible speck beside it;</span>
 <a id="__codelineno-0-1363" name="__codelineno-0-1363"></a><span class="sd">    * **a globe frame is refused** for the same reason, at this call;</span>
-<a id="__codelineno-0-1364" name="__codelineno-0-1364"></a><span class="sd">    * :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` still frames the figure,</span>
+<a id="__codelineno-0-1364" name="__codelineno-0-1364"></a><span class="sd">    * :meth:`~digitalearth.static.builders.projection.ProjectionMixin.set_bounds` still frames the figure,</span>
 <a id="__codelineno-0-1365" name="__codelineno-0-1365"></a><span class="sd">      and its ``bounds`` are read in the display CRS — which for such a figure means *array indices*.</span>
 <a id="__codelineno-0-1366" name="__codelineno-0-1366"></a><span class="sd">      ``set_bounds(None)`` fits the array, and ``set_bounds((0, 0, 4, 3))`` frames columns 0-4 and rows</span>
 <a id="__codelineno-0-1367" name="__codelineno-0-1367"></a><span class="sd">      0-3. Geographic bounds would frame empty axes, and there is nothing to tell them apart by.</span>
@@ -9470,7 +9470,7 @@ no valid cell.</p>
 <a id="__codelineno-0-1449" name="__codelineno-0-1449"></a><span class="sd">        annotated `-&gt; Self`, so `m.field(ds).coastlines().set_title(&quot;Flow&quot;)` is a `Map` the whole way</span>
 <a id="__codelineno-0-1450" name="__codelineno-0-1450"></a><span class="sd">        (measured). **The deliberate `-&gt; Any` carve-outs are enumerated here**, and a new one belongs</span>
 <a id="__codelineno-0-1451" name="__codelineno-0-1451"></a><span class="sd">        in this list rather than beside its own method: `stock_img` hands back its backdrop artist, and</span>
-<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a><span class="sd">        :meth:`~digitalearth.static.maps.vector.VectorMixin.quiverkey` hands back matplotlib&#39;s</span>
+<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a><span class="sd">        :meth:`~digitalearth.static.builders.vector.VectorMixin.quiverkey` hands back matplotlib&#39;s</span>
 <a id="__codelineno-0-1453" name="__codelineno-0-1453"></a><span class="sd">        ``QuiverKey``. For both, the return *is* the point of the call. `quiverkey` is the further case:</span>
 <a id="__codelineno-0-1454" name="__codelineno-0-1454"></a><span class="sd">        it draws onto the axes while registering **no layer**, so — measured on a map carrying one</span>
 <a id="__codelineno-0-1455" name="__codelineno-0-1455"></a><span class="sd">        ``quiver`` layer — `layer_ids` is `[&#39;vectors-1&#39;]` either side of it and</span>
@@ -9496,14 +9496,14 @@ no valid cell.</p>
 <a id="__codelineno-0-1475" name="__codelineno-0-1475"></a><span class="sd">        annotation, and a body that really hands back ``self``.</span>
 <a id="__codelineno-0-1476" name="__codelineno-0-1476"></a>
 <a id="__codelineno-0-1477" name="__codelineno-0-1477"></a><span class="sd">        **The artist is still reachable**, through</span>
-<a id="__codelineno-0-1478" name="__codelineno-0-1478"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist`: ``m.artist()`` hands back what this call used</span>
+<a id="__codelineno-0-1478" name="__codelineno-0-1478"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist`: ``m.artist()`` hands back what this call used</span>
 <a id="__codelineno-0-1479" name="__codelineno-0-1479"></a><span class="sd">        to return — the layer drawn last — and ``m.artist(layer_id)`` names one, so ``name=`` is the way</span>
 <a id="__codelineno-0-1480" name="__codelineno-0-1480"></a><span class="sd">        to keep a stable handle on a layer&#39;s artist in a figure of several.</span>
 <a id="__codelineno-0-1481" name="__codelineno-0-1481"></a>
 <a id="__codelineno-0-1482" name="__codelineno-0-1482"></a><span class="sd">        **An off-limb layer is now read from the figure rather than from a ``None``.** A layer whose</span>
 <a id="__codelineno-0-1483" name="__codelineno-0-1483"></a><span class="sd">        data lies entirely outside what the display CRS shows draws nothing and is **absent from**</span>
-<a id="__codelineno-0-1484" name="__codelineno-0-1484"></a><span class="sd">        :attr:`~digitalearth.static.scene.Scene.layer_ids`, so</span>
-<a id="__codelineno-0-1485" name="__codelineno-0-1485"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` refuses it by name — the same answer every other</span>
+<a id="__codelineno-0-1484" name="__codelineno-0-1484"></a><span class="sd">        :attr:`~digitalearth.static.core.scene.Scene.layer_ids`, so</span>
+<a id="__codelineno-0-1485" name="__codelineno-0-1485"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` refuses it by name — the same answer every other</span>
 <a id="__codelineno-0-1486" name="__codelineno-0-1486"></a><span class="sd">        tier gives, and testable without a return value. An off-limb draw still renders an empty frame</span>
 <a id="__codelineno-0-1487" name="__codelineno-0-1487"></a><span class="sd">        rather than raising.</span>
 <a id="__codelineno-0-1488" name="__codelineno-0-1488"></a>
@@ -9845,7 +9845,7 @@ the caller's own engine styling, split between the layer's description and the s
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -9971,7 +9971,7 @@ interpolates between class codes (draw categories with :meth:<code>field</code>,
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1604">1604</a></span>
 <span class="normal"><a href="#__codelineno-0-1605">1605</a></span>
 <span class="normal"><a href="#__codelineno-0-1606">1606</a></span>
@@ -10183,7 +10183,7 @@ interpolates between class codes (draw categories with :meth:<code>field</code>,
 <a id="__codelineno-0-1650" name="__codelineno-0-1650"></a>
 <a id="__codelineno-0-1651" name="__codelineno-0-1651"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-1652" name="__codelineno-0-1652"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-1653" name="__codelineno-0-1653"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-1653" name="__codelineno-0-1653"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-1654" name="__codelineno-0-1654"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-1655" name="__codelineno-0-1655"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why</span>
 <a id="__codelineno-0-1656" name="__codelineno-0-1656"></a><span class="sd">        the return value is the map rather than the artist.</span>
@@ -10427,7 +10427,7 @@ the caller's own engine styling, split between the layer's description and the s
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -10489,7 +10489,7 @@ the caller's own engine styling, split between the layer's description and the s
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1768">1768</a></span>
 <span class="normal"><a href="#__codelineno-0-1769">1769</a></span>
 <span class="normal"><a href="#__codelineno-0-1770">1770</a></span>
@@ -10547,7 +10547,7 @@ the caller's own engine styling, split between the layer's description and the s
 <a id="__codelineno-0-1789" name="__codelineno-0-1789"></a>
 <a id="__codelineno-0-1790" name="__codelineno-0-1790"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-1791" name="__codelineno-0-1791"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-1792" name="__codelineno-0-1792"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-1792" name="__codelineno-0-1792"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-1793" name="__codelineno-0-1793"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-1794" name="__codelineno-0-1794"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why</span>
 <a id="__codelineno-0-1795" name="__codelineno-0-1795"></a><span class="sd">        the return value is the map rather than the artist.</span>
@@ -10692,7 +10692,7 @@ the caller's own engine styling, split between the layer's description and the s
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -10754,7 +10754,7 @@ the caller's own engine styling, split between the layer's description and the s
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1803">1803</a></span>
 <span class="normal"><a href="#__codelineno-0-1804">1804</a></span>
 <span class="normal"><a href="#__codelineno-0-1805">1805</a></span>
@@ -10824,7 +10824,7 @@ the caller's own engine styling, split between the layer's description and the s
 <a id="__codelineno-0-1830" name="__codelineno-0-1830"></a>
 <a id="__codelineno-0-1831" name="__codelineno-0-1831"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-1832" name="__codelineno-0-1832"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-1833" name="__codelineno-0-1833"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-1833" name="__codelineno-0-1833"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-1834" name="__codelineno-0-1834"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-1835" name="__codelineno-0-1835"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why</span>
 <a id="__codelineno-0-1836" name="__codelineno-0-1836"></a><span class="sd">        the return value is the map rather than the artist.</span>
@@ -10926,7 +10926,7 @@ pre-mask behaviour, where the nodata sentinel participates in the stretch).</p>
             <td>
               <div class="doc-md-description">
                 <p>Optional frozen <code>(lo, hi)</code> stretch bounds, one pair per channel — skips the per-call
-percentile scan. :meth:<code>~digitalearth.static.maps.animation.AnimationMixin.animate</code> fills
+percentile scan. :meth:<code>~digitalearth.static.builders.animation.AnimationMixin.animate</code> fills
 these from the whole stack so a composite animation holds one stretch across its frames.</p>
               </div>
             </td>
@@ -10979,7 +10979,7 @@ these from the whole stack so a composite animation holds one stretch across its
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -11086,7 +11086,7 @@ digitalearth.base.stretch.channel_limits: Derives the <code>limits</code> this a
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1878">1878</a></span>
 <span class="normal"><a href="#__codelineno-0-1879">1879</a></span>
 <span class="normal"><a href="#__codelineno-0-1880">1880</a></span>
@@ -11198,13 +11198,13 @@ digitalearth.base.stretch.channel_limits: Derives the <code>limits</code> this a
 <a id="__codelineno-0-1896" name="__codelineno-0-1896"></a><span class="sd">            percentile stretch (and render transparent). Pass ``False`` for the raw values (the</span>
 <a id="__codelineno-0-1897" name="__codelineno-0-1897"></a><span class="sd">            pre-mask behaviour, where the nodata sentinel participates in the stretch).</span>
 <a id="__codelineno-0-1898" name="__codelineno-0-1898"></a><span class="sd">        limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call</span>
-<a id="__codelineno-0-1899" name="__codelineno-0-1899"></a><span class="sd">            percentile scan. :meth:`~digitalearth.static.maps.animation.AnimationMixin.animate` fills</span>
+<a id="__codelineno-0-1899" name="__codelineno-0-1899"></a><span class="sd">            percentile scan. :meth:`~digitalearth.static.builders.animation.AnimationMixin.animate` fills</span>
 <a id="__codelineno-0-1900" name="__codelineno-0-1900"></a><span class="sd">            these from the whole stack so a composite animation holds one stretch across its frames.</span>
 <a id="__codelineno-0-1901" name="__codelineno-0-1901"></a><span class="sd">        **opts: Styling kwargs, filtered to ``ArrayGlyph``&#39;s accepted options.</span>
 <a id="__codelineno-0-1902" name="__codelineno-0-1902"></a>
 <a id="__codelineno-0-1903" name="__codelineno-0-1903"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-1904" name="__codelineno-0-1904"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-1905" name="__codelineno-0-1905"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-1905" name="__codelineno-0-1905"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-1906" name="__codelineno-0-1906"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-1907" name="__codelineno-0-1907"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See :meth:`field` for why</span>
 <a id="__codelineno-0-1908" name="__codelineno-0-1908"></a><span class="sd">        the return value is the map rather than the artist.</span>
@@ -11487,7 +11487,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
               <div class="doc-md-description">
                 <p>Further <code>ScatterGlyph</code> styling kwargs (<code>size_limits</code>, <code>size_scale</code>,
 <code>size_legend</code>, <code>size_legend_values</code>, …).
-:func:<code>~digitalearth.static.render_compat._fold_marker_size</code> is the one place that knows
+:func:<code>~digitalearth.static.render.compat._fold_marker_size</code> is the one place that knows
 cleopatra's constructor calls the marker size <code>point_size</code>.</p>
               </div>
             </td>
@@ -11524,7 +11524,7 @@ cleopatra's constructor calls the marker size <code>point_size</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -11554,7 +11554,7 @@ cleopatra's constructor calls the marker size <code>point_size</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -11611,7 +11611,7 @@ refused rather than dropped.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1820">1820</a></span>
 <span class="normal"><a href="#__codelineno-0-1821">1821</a></span>
 <span class="normal"><a href="#__codelineno-0-1822">1822</a></span>
@@ -11764,15 +11764,15 @@ refused rather than dropped.</p>
 <a id="__codelineno-0-1865" name="__codelineno-0-1865"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the axes (#327).</span>
 <a id="__codelineno-0-1866" name="__codelineno-0-1866"></a><span class="sd">        **opts: Further ``ScatterGlyph`` styling kwargs (``size_limits``, ``size_scale``,</span>
 <a id="__codelineno-0-1867" name="__codelineno-0-1867"></a><span class="sd">            ``size_legend``, ``size_legend_values``, …).</span>
-<a id="__codelineno-0-1868" name="__codelineno-0-1868"></a><span class="sd">            :func:`~digitalearth.static.render_compat._fold_marker_size` is the one place that knows</span>
+<a id="__codelineno-0-1868" name="__codelineno-0-1868"></a><span class="sd">            :func:`~digitalearth.static.render.compat._fold_marker_size` is the one place that knows</span>
 <a id="__codelineno-0-1869" name="__codelineno-0-1869"></a><span class="sd">            cleopatra&#39;s constructor calls the marker size ``point_size``.</span>
 <a id="__codelineno-0-1870" name="__codelineno-0-1870"></a>
 <a id="__codelineno-0-1871" name="__codelineno-0-1871"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-1872" name="__codelineno-0-1872"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-1873" name="__codelineno-0-1873"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-1873" name="__codelineno-0-1873"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-1874" name="__codelineno-0-1874"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-1875" name="__codelineno-0-1875"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-1876" name="__codelineno-0-1876"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-1876" name="__codelineno-0-1876"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-1877" name="__codelineno-0-1877"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-1878" name="__codelineno-0-1878"></a>
 <a id="__codelineno-0-1879" name="__codelineno-0-1879"></a><span class="sd">    Raises:</span>
@@ -11951,7 +11951,7 @@ sets the marker size — the cross-backend spelling, folded onto cleopatra's own
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -11981,7 +11981,7 @@ sets the marker size — the cross-backend spelling, folded onto cleopatra's own
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -12032,7 +12032,7 @@ sets the marker size — the cross-backend spelling, folded onto cleopatra's own
             <td>
               <div class="doc-md-description">
                 <p>when <code>dataset</code> is not a raster or a reference to one. A bare numpy array is refused
-here where :meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> takes one: the cell
+here where :meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> takes one: the cell
 centres come from pyramids' <code>to_xyz</code>, which reads a geo-transform an array does not carry.</p>
               </div>
             </td>
@@ -12042,7 +12042,7 @@ centres come from pyramids' <code>to_xyz</code>, which reads a geo-transform an 
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2085">2085</a></span>
 <span class="normal"><a href="#__codelineno-0-2086">2086</a></span>
 <span class="normal"><a href="#__codelineno-0-2087">2087</a></span>
@@ -12131,10 +12131,10 @@ centres come from pyramids' <code>to_xyz</code>, which reads a geo-transform an 
 <a id="__codelineno-0-2106" name="__codelineno-0-2106"></a>
 <a id="__codelineno-0-2107" name="__codelineno-0-2107"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2108" name="__codelineno-0-2108"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2109" name="__codelineno-0-2109"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-2110" name="__codelineno-0-2110"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-2111" name="__codelineno-0-2111"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2112" name="__codelineno-0-2112"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-2113" name="__codelineno-0-2113"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-2114" name="__codelineno-0-2114"></a>
 <a id="__codelineno-0-2115" name="__codelineno-0-2115"></a><span class="sd">    Examples:</span>
@@ -12155,7 +12155,7 @@ centres come from pyramids' <code>to_xyz</code>, which reads a geo-transform an 
 <a id="__codelineno-0-2130" name="__codelineno-0-2130"></a>
 <a id="__codelineno-0-2131" name="__codelineno-0-2131"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-2132" name="__codelineno-0-2132"></a><span class="sd">        TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused</span>
-<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a><span class="sd">            here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell</span>
+<a id="__codelineno-0-2133" name="__codelineno-0-2133"></a><span class="sd">            here where :meth:`~digitalearth.static.builders.raster.RasterMixin.field` takes one: the cell</span>
 <a id="__codelineno-0-2134" name="__codelineno-0-2134"></a><span class="sd">            centres come from pyramids&#39; ``to_xyz``, which reads a geo-transform an array does not carry.</span>
 <a id="__codelineno-0-2135" name="__codelineno-0-2135"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-2136" name="__codelineno-0-2136"></a>    <span class="n">require_drawable</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;Map.grid_points()&quot;</span><span class="p">,</span> <span class="n">accepts</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;raster&quot;</span><span class="p">,))</span>
@@ -12324,7 +12324,7 @@ describes — see <code>_polygon_layer</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -12354,7 +12354,7 @@ describes — see <code>_polygon_layer</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -12388,7 +12388,7 @@ describes — see <code>_polygon_layer</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>when <code>dataset</code> is not a raster or a reference to one. A bare numpy array is refused
-here where :meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> takes one: the cell
+here where :meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> takes one: the cell
 polygons come from pyramids' <code>get_cell_polygons</code>, which reads a geo-transform an array does
 not carry.</p>
               </div>
@@ -12428,7 +12428,7 @@ ones it does. The layer is dropped from the description again before it propagat
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2177">2177</a></span>
 <span class="normal"><a href="#__codelineno-0-2178">2178</a></span>
 <span class="normal"><a href="#__codelineno-0-2179">2179</a></span>
@@ -12532,15 +12532,15 @@ ones it does. The layer is dropped from the description again before it propagat
 <a id="__codelineno-0-2202" name="__codelineno-0-2202"></a>
 <a id="__codelineno-0-2203" name="__codelineno-0-2203"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2204" name="__codelineno-0-2204"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2205" name="__codelineno-0-2205"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-2206" name="__codelineno-0-2206"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-2207" name="__codelineno-0-2207"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2208" name="__codelineno-0-2208"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-2209" name="__codelineno-0-2209"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-2210" name="__codelineno-0-2210"></a>
 <a id="__codelineno-0-2211" name="__codelineno-0-2211"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-2212" name="__codelineno-0-2212"></a><span class="sd">        TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused</span>
-<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">            here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell</span>
+<a id="__codelineno-0-2213" name="__codelineno-0-2213"></a><span class="sd">            here where :meth:`~digitalearth.static.builders.raster.RasterMixin.field` takes one: the cell</span>
 <a id="__codelineno-0-2214" name="__codelineno-0-2214"></a><span class="sd">            polygons come from pyramids&#39; ``get_cell_polygons``, which reads a geo-transform an array does</span>
 <a id="__codelineno-0-2215" name="__codelineno-0-2215"></a><span class="sd">            not carry.</span>
 <a id="__codelineno-0-2216" name="__codelineno-0-2216"></a><span class="sd">        ValueError: from ``PolygonGlyph`` for a keyword in ``**opts`` it does not accept, naming the</span>
@@ -12832,7 +12832,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -12862,7 +12862,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -13018,7 +13018,7 @@ without a column, so it is refused rather than dropped; or if <code>column</code
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3707">3707</a></span>
 <span class="normal"><a href="#__codelineno-0-3708">3708</a></span>
 <span class="normal"><a href="#__codelineno-0-3709">3709</a></span>
@@ -13268,10 +13268,10 @@ without a column, so it is refused rather than dropped; or if <code>column</code
 <a id="__codelineno-0-3754" name="__codelineno-0-3754"></a>
 <a id="__codelineno-0-3755" name="__codelineno-0-3755"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-3756" name="__codelineno-0-3756"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-3757" name="__codelineno-0-3757"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-3757" name="__codelineno-0-3757"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-3758" name="__codelineno-0-3758"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-3759" name="__codelineno-0-3759"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-3760" name="__codelineno-0-3760"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-3760" name="__codelineno-0-3760"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-3761" name="__codelineno-0-3761"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-3762" name="__codelineno-0-3762"></a>
 <a id="__codelineno-0-3763" name="__codelineno-0-3763"></a><span class="sd">    Raises:</span>
@@ -13637,7 +13637,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -13667,7 +13667,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -13726,7 +13726,7 @@ graduated ramp raises <code>ValueError</code> from the same recipe, also naming 
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2908">2908</a></span>
 <span class="normal"><a href="#__codelineno-0-2909">2909</a></span>
 <span class="normal"><a href="#__codelineno-0-2910">2910</a></span>
@@ -13884,10 +13884,10 @@ graduated ramp raises <code>ValueError</code> from the same recipe, also naming 
 <a id="__codelineno-0-2950" name="__codelineno-0-2950"></a>
 <a id="__codelineno-0-2951" name="__codelineno-0-2951"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2952" name="__codelineno-0-2952"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2953" name="__codelineno-0-2953"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2953" name="__codelineno-0-2953"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-2954" name="__codelineno-0-2954"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-2955" name="__codelineno-0-2955"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2956" name="__codelineno-0-2956"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2956" name="__codelineno-0-2956"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-2957" name="__codelineno-0-2957"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-2958" name="__codelineno-0-2958"></a>
 <a id="__codelineno-0-2959" name="__codelineno-0-2959"></a><span class="sd">    Raises:</span>
@@ -14190,7 +14190,7 @@ web/interactive tiers either way.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -14220,7 +14220,7 @@ web/interactive tiers either way.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -14293,7 +14293,7 @@ lists the columns the features do have (via :func:<code>_require_column</code>).
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2774">2774</a></span>
 <span class="normal"><a href="#__codelineno-0-2775">2775</a></span>
 <span class="normal"><a href="#__codelineno-0-2776">2776</a></span>
@@ -14489,10 +14489,10 @@ lists the columns the features do have (via :func:<code>_require_column</code>).
 <a id="__codelineno-0-2834" name="__codelineno-0-2834"></a>
 <a id="__codelineno-0-2835" name="__codelineno-0-2835"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2836" name="__codelineno-0-2836"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2837" name="__codelineno-0-2837"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2837" name="__codelineno-0-2837"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-2838" name="__codelineno-0-2838"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-2839" name="__codelineno-0-2839"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2840" name="__codelineno-0-2840"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2840" name="__codelineno-0-2840"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-2841" name="__codelineno-0-2841"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-2842" name="__codelineno-0-2842"></a>
 <a id="__codelineno-0-2843" name="__codelineno-0-2843"></a><span class="sd">    Raises:</span>
@@ -14644,7 +14644,7 @@ figure; a function is held beside the layer, and a figure read back elsewhere fa
               </div>
             </td>
             <td>
-                  <code><span title="digitalearth.static.maps.vector.DEFAULT_HEXBIN_REDUCE">DEFAULT_HEXBIN_REDUCE</span></code>
+                  <code><span title="digitalearth.static.builders.vector.DEFAULT_HEXBIN_REDUCE">DEFAULT_HEXBIN_REDUCE</span></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -14764,7 +14764,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -14794,7 +14794,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -14949,7 +14949,7 @@ quadtree: points aggregated into adaptive square cells.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3455">3455</a></span>
 <span class="normal"><a href="#__codelineno-0-3456">3456</a></span>
 <span class="normal"><a href="#__codelineno-0-3457">3457</a></span>
@@ -15177,10 +15177,10 @@ quadtree: points aggregated into adaptive square cells.</p>
 <a id="__codelineno-0-3497" name="__codelineno-0-3497"></a>
 <a id="__codelineno-0-3498" name="__codelineno-0-3498"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-3499" name="__codelineno-0-3499"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-3500" name="__codelineno-0-3500"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-3500" name="__codelineno-0-3500"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-3501" name="__codelineno-0-3501"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-3502" name="__codelineno-0-3502"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-3503" name="__codelineno-0-3503"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-3503" name="__codelineno-0-3503"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-3504" name="__codelineno-0-3504"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-3505" name="__codelineno-0-3505"></a>
 <a id="__codelineno-0-3506" name="__codelineno-0-3506"></a><span class="sd">    Raises:</span>
@@ -15462,7 +15462,7 @@ caller's own <code>VectorGlyph</code> styling, split between the layer's descrip
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -15492,7 +15492,7 @@ caller's own <code>VectorGlyph</code> styling, split between the layer's descrip
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -15555,7 +15555,7 @@ is named by an empty string.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2319">2319</a></span>
 <span class="normal"><a href="#__codelineno-0-2320">2320</a></span>
 <span class="normal"><a href="#__codelineno-0-2321">2321</a></span>
@@ -15625,10 +15625,10 @@ is named by an empty string.</p>
 <a id="__codelineno-0-2343" name="__codelineno-0-2343"></a>
 <a id="__codelineno-0-2344" name="__codelineno-0-2344"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2345" name="__codelineno-0-2345"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2346" name="__codelineno-0-2346"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2346" name="__codelineno-0-2346"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-2347" name="__codelineno-0-2347"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-2348" name="__codelineno-0-2348"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2349" name="__codelineno-0-2349"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-2350" name="__codelineno-0-2350"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-2351" name="__codelineno-0-2351"></a>
 <a id="__codelineno-0-2352" name="__codelineno-0-2352"></a><span class="sd">    Raises:</span>
@@ -15788,7 +15788,7 @@ caller's own <code>VectorGlyph</code> styling, split between the layer's descrip
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -15818,7 +15818,7 @@ caller's own <code>VectorGlyph</code> styling, split between the layer's descrip
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -15881,7 +15881,7 @@ is named by an empty string.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2407">2407</a></span>
 <span class="normal"><a href="#__codelineno-0-2408">2408</a></span>
 <span class="normal"><a href="#__codelineno-0-2409">2409</a></span>
@@ -15956,10 +15956,10 @@ is named by an empty string.</p>
 <a id="__codelineno-0-2431" name="__codelineno-0-2431"></a>
 <a id="__codelineno-0-2432" name="__codelineno-0-2432"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2433" name="__codelineno-0-2433"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2434" name="__codelineno-0-2434"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2434" name="__codelineno-0-2434"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-2435" name="__codelineno-0-2435"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-2436" name="__codelineno-0-2436"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2437" name="__codelineno-0-2437"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2437" name="__codelineno-0-2437"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-2438" name="__codelineno-0-2438"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-2439" name="__codelineno-0-2439"></a>
 <a id="__codelineno-0-2440" name="__codelineno-0-2440"></a><span class="sd">    Raises:</span>
@@ -15997,7 +15997,7 @@ is named by an empty string.</p>
         <p>Label every feature with the text in <code>column</code> — one string per feature, from an attribute.</p>
 <p>The static third of order 27's text layers (ST-16, #345). <code>WebMap.labels</code> shipped first and the
 <code>labels</code> kind was registered with it, so a caller could label a collection on a web map and not on a
-static one; :meth:<code>~digitalearth.static.maps.decoration.DecorationMixin.text</code> is no substitute, since
+static one; :meth:<code>~digitalearth.static.builders.decoration.DecorationMixin.text</code> is no substitute, since
 it places <strong>one</strong> string at <strong>one</strong> coordinate.</p>
 <p>The keywords are <code>WebMap.labels</code>'s wherever the two tiers can mean the same thing, which is the point
 of the Core contract — one spelling per concept:</p>
@@ -16184,7 +16184,7 @@ measures it; e.g. <code>(0, -1.2)</code> to lift the label off its point. <code>
               <div class="doc-md-description">
                 <p>The caller's own name for the layer, used as its id and its label; <code>None</code> (default)
 generates one from the kind, and a name already on the figure is suffixed <code>-2</code>, <code>-3</code>, …
-(#321). Unlike :meth:<code>~digitalearth.static.maps.decoration.DecorationMixin.text</code>, it is
+(#321). Unlike :meth:<code>~digitalearth.static.builders.decoration.DecorationMixin.text</code>, it is
 <strong>not</strong> also read as a font family — see :func:<code>draw_labels</code>.</p>
               </div>
             </td>
@@ -16255,7 +16255,7 @@ switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code> — <code>map.artist()</code> for the layer just</p>
               </div>
             </td>
           </tr>
@@ -16285,7 +16285,7 @@ switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.maps.raster.RasterMixin.field</code> for why the return value is the</p>
+                <p>meth:<code>~digitalearth.static.builders.raster.RasterMixin.field</code> for why the return value is the</p>
               </div>
             </td>
           </tr>
@@ -16367,12 +16367,12 @@ above cannot be answered.</p>
 
 <details class="see-also" open>
   <summary>See Also</summary>
-  <p>digitalearth.static.maps.decoration.DecorationMixin.text: one string at one coordinate.
-digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with an arrow to a point.</p>
+  <p>digitalearth.static.builders.decoration.DecorationMixin.text: one string at one coordinate.
+digitalearth.static.builders.decoration.DecorationMixin.annotate: one string, with an arrow to a point.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1926">1926</a></span>
 <span class="normal"><a href="#__codelineno-0-1927">1927</a></span>
 <span class="normal"><a href="#__codelineno-0-1928">1928</a></span>
@@ -16550,7 +16550,7 @@ digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with a
 <a id="__codelineno-0-1943" name="__codelineno-0-1943"></a>
 <a id="__codelineno-0-1944" name="__codelineno-0-1944"></a><span class="sd">    The static third of order 27&#39;s text layers (ST-16, #345). ``WebMap.labels`` shipped first and the</span>
 <a id="__codelineno-0-1945" name="__codelineno-0-1945"></a><span class="sd">    ``labels`` kind was registered with it, so a caller could label a collection on a web map and not on a</span>
-<a id="__codelineno-0-1946" name="__codelineno-0-1946"></a><span class="sd">    static one; :meth:`~digitalearth.static.maps.decoration.DecorationMixin.text` is no substitute, since</span>
+<a id="__codelineno-0-1946" name="__codelineno-0-1946"></a><span class="sd">    static one; :meth:`~digitalearth.static.builders.decoration.DecorationMixin.text` is no substitute, since</span>
 <a id="__codelineno-0-1947" name="__codelineno-0-1947"></a><span class="sd">    it places **one** string at **one** coordinate.</span>
 <a id="__codelineno-0-1948" name="__codelineno-0-1948"></a>
 <a id="__codelineno-0-1949" name="__codelineno-0-1949"></a><span class="sd">    The keywords are ``WebMap.labels``&#39;s wherever the two tiers can mean the same thing, which is the point</span>
@@ -16598,7 +16598,7 @@ digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with a
 <a id="__codelineno-0-1991" name="__codelineno-0-1991"></a><span class="sd">            ``None`` (default) reads the collection&#39;s own.</span>
 <a id="__codelineno-0-1992" name="__codelineno-0-1992"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None`` (default)</span>
 <a id="__codelineno-0-1993" name="__codelineno-0-1993"></a><span class="sd">            generates one from the kind, and a name already on the figure is suffixed ``-2``, ``-3``, …</span>
-<a id="__codelineno-0-1994" name="__codelineno-0-1994"></a><span class="sd">            (#321). Unlike :meth:`~digitalearth.static.maps.decoration.DecorationMixin.text`, it is</span>
+<a id="__codelineno-0-1994" name="__codelineno-0-1994"></a><span class="sd">            (#321). Unlike :meth:`~digitalearth.static.builders.decoration.DecorationMixin.text`, it is</span>
 <a id="__codelineno-0-1995" name="__codelineno-0-1995"></a><span class="sd">            **not** also read as a font family — see :func:`draw_labels`.</span>
 <a id="__codelineno-0-1996" name="__codelineno-0-1996"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it hidden, so a</span>
 <a id="__codelineno-0-1997" name="__codelineno-0-1997"></a><span class="sd">            switcher reading the figure agrees with the axes (#327).</span>
@@ -16607,10 +16607,10 @@ digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with a
 <a id="__codelineno-0-2000" name="__codelineno-0-2000"></a>
 <a id="__codelineno-0-2001" name="__codelineno-0-2001"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2002" name="__codelineno-0-2002"></a><span class="sd">        This map (chainable). The drawn artist is reached with</span>
-<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
+<a id="__codelineno-0-2003" name="__codelineno-0-2003"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just</span>
 <a id="__codelineno-0-2004" name="__codelineno-0-2004"></a><span class="sd">        drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place</span>
 <a id="__codelineno-0-2005" name="__codelineno-0-2005"></a><span class="sd">        drew nothing, so it is absent from the figure and refused there. See</span>
-<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a><span class="sd">        :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the</span>
+<a id="__codelineno-0-2006" name="__codelineno-0-2006"></a><span class="sd">        :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the</span>
 <a id="__codelineno-0-2007" name="__codelineno-0-2007"></a><span class="sd">        map rather than the artist (ST-20).</span>
 <a id="__codelineno-0-2008" name="__codelineno-0-2008"></a>
 <a id="__codelineno-0-2009" name="__codelineno-0-2009"></a><span class="sd">    Raises:</span>
@@ -16637,8 +16637,8 @@ digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with a
 <a id="__codelineno-0-2030" name="__codelineno-0-2030"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-2031" name="__codelineno-0-2031"></a>
 <a id="__codelineno-0-2032" name="__codelineno-0-2032"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-2033" name="__codelineno-0-2033"></a><span class="sd">        digitalearth.static.maps.decoration.DecorationMixin.text: one string at one coordinate.</span>
-<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><span class="sd">        digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with an arrow to a point.</span>
+<a id="__codelineno-0-2033" name="__codelineno-0-2033"></a><span class="sd">        digitalearth.static.builders.decoration.DecorationMixin.text: one string at one coordinate.</span>
+<a id="__codelineno-0-2034" name="__codelineno-0-2034"></a><span class="sd">        digitalearth.static.builders.decoration.DecorationMixin.annotate: one string, with an arrow to a point.</span>
 <a id="__codelineno-0-2035" name="__codelineno-0-2035"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-2036" name="__codelineno-0-2036"></a>    <span class="c1"># At the call as well as in the drawer, because the drawer settles the CRS question before it reaches</span>
 <a id="__codelineno-0-2037" name="__codelineno-0-2037"></a>    <span class="c1"># `_vector_input`&#39;s guard — and an array would be refused for declaring no CRS rather than for being</span>
@@ -17025,7 +17025,7 @@ builder that autoscales the axes moves the picture without moving what this repo
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1268">1268</a></span>
 <span class="normal"><a href="#__codelineno-0-1269">1269</a></span>
 <span class="normal"><a href="#__codelineno-0-1270">1270</a></span>
@@ -17475,7 +17475,7 @@ crossing the antimeridian, which a single rectangle cannot express.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1590">1590</a></span>
 <span class="normal"><a href="#__codelineno-0-1591">1591</a></span>
 <span class="normal"><a href="#__codelineno-0-1592">1592</a></span>
@@ -18248,7 +18248,7 @@ not restyle the graticule the map is still drawing (round 2, M1).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1642">1642</a></span>
 <span class="normal"><a href="#__codelineno-0-1643">1643</a></span>
 <span class="normal"><a href="#__codelineno-0-1644">1644</a></span>
@@ -18901,7 +18901,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>This map (chainable). What :meth:<code>~digitalearth.static.scene.Scene.artist</code> answers for this</p>
+                <p>This map (chainable). What :meth:<code>~digitalearth.static.core.scene.Scene.artist</code> answers for this</p>
               </div>
             </td>
           </tr>
@@ -18951,7 +18951,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.set_visible</code> and</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.set_visible</code> and</p>
               </div>
             </td>
           </tr>
@@ -18961,7 +18961,7 @@ hidden, so a switcher reading the figure agrees with the axes (#327).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.remove_layer</code> reach; no public accessor names it</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.remove_layer</code> reach; no public accessor names it</p>
               </div>
             </td>
           </tr>
@@ -19095,7 +19095,7 @@ axes yet (a declared <code>domain</code> alone does not — it is applied at ren
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3597">3597</a></span>
 <span class="normal"><a href="#__codelineno-0-3598">3598</a></span>
 <span class="normal"><a href="#__codelineno-0-3599">3599</a></span>
@@ -19272,13 +19272,13 @@ axes yet (a declared <code>domain</code> alone does not — it is applied at ren
 <a id="__codelineno-0-3637" name="__codelineno-0-3637"></a><span class="sd">        **kwargs: Forwarded to ``add_tiles``.</span>
 <a id="__codelineno-0-3638" name="__codelineno-0-3638"></a>
 <a id="__codelineno-0-3639" name="__codelineno-0-3639"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-3640" name="__codelineno-0-3640"></a><span class="sd">        This map (chainable). What :meth:`~digitalearth.static.scene.Scene.artist` answers for this</span>
+<a id="__codelineno-0-3640" name="__codelineno-0-3640"></a><span class="sd">        This map (chainable). What :meth:`~digitalearth.static.core.scene.Scene.artist` answers for this</span>
 <a id="__codelineno-0-3641" name="__codelineno-0-3641"></a><span class="sd">        layer&#39;s id is **the axes**, because cleopatra&#39;s ``add_tiles`` draws onto them and hands them</span>
 <a id="__codelineno-0-3642" name="__codelineno-0-3642"></a><span class="sd">        back rather than naming what it added (its own ``Returns:`` reads *&quot;matplotlib.axes.Axes: The</span>
 <a id="__codelineno-0-3643" name="__codelineno-0-3643"></a><span class="sd">        same axes, for chaining&quot;*) — the same situation as the Natural-Earth layers on a flat map, and</span>
 <a id="__codelineno-0-3644" name="__codelineno-0-3644"></a><span class="sd">        the same wording. The tile ``AxesImage`` is the layer&#39;s all the same, which is what</span>
-<a id="__codelineno-0-3645" name="__codelineno-0-3645"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.set_visible` and</span>
-<a id="__codelineno-0-3646" name="__codelineno-0-3646"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.remove_layer` reach; no public accessor names it</span>
+<a id="__codelineno-0-3645" name="__codelineno-0-3645"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.set_visible` and</span>
+<a id="__codelineno-0-3646" name="__codelineno-0-3646"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.remove_layer` reach; no public accessor names it</span>
 <a id="__codelineno-0-3647" name="__codelineno-0-3647"></a><span class="sd">        (round 2, M5 — the claim this replaces said ``artist`` did, and</span>
 <a id="__codelineno-0-3648" name="__codelineno-0-3648"></a><span class="sd">        ``tests/static/test_basemap_tile_artist.py`` is where that is measured against the real</span>
 <a id="__codelineno-0-3649" name="__codelineno-0-3649"></a><span class="sd">        engine). Tiles that cannot be fetched raise rather than answering ``None``, and the layer is</span>
@@ -19494,7 +19494,7 @@ to the Natural-Earth default for it.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code>, by this layer's id (round-1 L6): on a globe a</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code>, by this layer's id (round-1 L6): on a globe a</p>
               </div>
             </td>
           </tr>
@@ -19578,7 +19578,7 @@ land: the filled counterpart.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2809">2809</a></span>
 <span class="normal"><a href="#__codelineno-0-2810">2810</a></span>
 <span class="normal"><a href="#__codelineno-0-2811">2811</a></span>
@@ -19671,7 +19671,7 @@ land: the filled counterpart.</p>
 <a id="__codelineno-0-2831" name="__codelineno-0-2831"></a>
 <a id="__codelineno-0-2832" name="__codelineno-0-2832"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2833" name="__codelineno-0-2833"></a><span class="sd">        This map (chainable). The coastline is reached through</span>
-<a id="__codelineno-0-2834" name="__codelineno-0-2834"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist`, by this layer&#39;s id (round-1 L6): on a globe a</span>
+<a id="__codelineno-0-2834" name="__codelineno-0-2834"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer&#39;s id (round-1 L6): on a globe a</span>
 <a id="__codelineno-0-2835" name="__codelineno-0-2835"></a><span class="sd">        **list** of `Line2D`, one per run the limb split the layer into (measured: 57 at 110m through</span>
 <a id="__codelineno-0-2836" name="__codelineno-0-2836"></a><span class="sd">        an orthographic projection); on a flat map **the axes**, because cleopatra&#39;s `add_features`</span>
 <a id="__codelineno-0-2837" name="__codelineno-0-2837"></a><span class="sd">        draws onto them and hands them back rather than naming what it drew (see</span>
@@ -19896,7 +19896,7 @@ refused on either frame — and then dropped there, where a flat map draws it.</
             </td>
             <td>
               <div class="doc-md-description">
-                <p>is drawn as there — is reached through :meth:<code>~digitalearth.static.scene.Scene.artist</code>, by this</p>
+                <p>is drawn as there — is reached through :meth:<code>~digitalearth.static.core.scene.Scene.artist</code>, by this</p>
               </div>
             </td>
           </tr>
@@ -20031,7 +20031,7 @@ globe used to take either value silently (round 3, L7 for <code>n</code>; round 
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3233">3233</a></span>
 <span class="normal"><a href="#__codelineno-0-3234">3234</a></span>
 <span class="normal"><a href="#__codelineno-0-3235">3235</a></span>
@@ -20238,7 +20238,7 @@ globe used to take either value silently (round 3, L7 for <code>n</code>; round 
 <a id="__codelineno-0-3279" name="__codelineno-0-3279"></a>
 <a id="__codelineno-0-3280" name="__codelineno-0-3280"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-3281" name="__codelineno-0-3281"></a><span class="sd">        This map (chainable). The shade&#39;s ``PolyCollection`` — on a globe, the filled ``ContourSet`` it</span>
-<a id="__codelineno-0-3282" name="__codelineno-0-3282"></a><span class="sd">        is drawn as there — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by this</span>
+<a id="__codelineno-0-3282" name="__codelineno-0-3282"></a><span class="sd">        is drawn as there — is reached through :meth:`~digitalearth.static.core.scene.Scene.artist`, by this</span>
 <a id="__codelineno-0-3283" name="__codelineno-0-3283"></a><span class="sd">        layer&#39;s id (round-1 L6). A globe whose visible side holds no night draws nothing and registers</span>
 <a id="__codelineno-0-3284" name="__codelineno-0-3284"></a><span class="sd">        no layer, which is what the ``None`` this used to answer with said.</span>
 <a id="__codelineno-0-3285" name="__codelineno-0-3285"></a>
@@ -20433,7 +20433,7 @@ a world grid every 30 degrees of longitude and latitude, from 60 S to 60 N.</p>
               </div>
             </td>
             <td>
-                  <code><span title="digitalearth.static.maps.decoration.DEFAULT_TISSOT_RADIUS_M">DEFAULT_TISSOT_RADIUS_M</span></code>
+                  <code><span title="digitalearth.static.builders.decoration.DEFAULT_TISSOT_RADIUS_M">DEFAULT_TISSOT_RADIUS_M</span></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -20533,7 +20533,7 @@ The default is an unfilled black outline.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>meth:<code>~digitalearth.static.scene.Scene.artist</code>, by this layer's id (round-1 L6). No circle the</p>
+                <p>meth:<code>~digitalearth.static.core.scene.Scene.artist</code>, by this layer's id (round-1 L6). No circle the</p>
               </div>
             </td>
           </tr>
@@ -20688,7 +20688,7 @@ own description with it.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-3392">3392</a></span>
 <span class="normal"><a href="#__codelineno-0-3393">3393</a></span>
 <span class="normal"><a href="#__codelineno-0-3394">3394</a></span>
@@ -20931,7 +20931,7 @@ own description with it.</p>
 <a id="__codelineno-0-3428" name="__codelineno-0-3428"></a>
 <a id="__codelineno-0-3429" name="__codelineno-0-3429"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-3430" name="__codelineno-0-3430"></a><span class="sd">        This map (chainable). The circles&#39; ``PolyCollection`` is reached through</span>
-<a id="__codelineno-0-3431" name="__codelineno-0-3431"></a><span class="sd">        :meth:`~digitalearth.static.scene.Scene.artist`, by this layer&#39;s id (round-1 L6). No circle the</span>
+<a id="__codelineno-0-3431" name="__codelineno-0-3431"></a><span class="sd">        :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer&#39;s id (round-1 L6). No circle the</span>
 <a id="__codelineno-0-3432" name="__codelineno-0-3432"></a><span class="sd">        projection could place draws nothing and registers no layer, which is what the ``None`` this</span>
 <a id="__codelineno-0-3433" name="__codelineno-0-3433"></a><span class="sd">        used to answer with said.</span>
 <a id="__codelineno-0-3434" name="__codelineno-0-3434"></a>
@@ -21403,7 +21403,7 @@ layer. Asking twice for the <em>same</em> layer replaces its bar rather than sta
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/core/scene.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2089">2089</a></span>
 <span class="normal"><a href="#__codelineno-0-2090">2090</a></span>
 <span class="normal"><a href="#__codelineno-0-2091">2091</a></span>
@@ -21939,7 +21939,7 @@ titled, relabelled, hidden and removed with the layer.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/core/scene.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2271">2271</a></span>
 <span class="normal"><a href="#__codelineno-0-2272">2272</a></span>
 <span class="normal"><a href="#__codelineno-0-2273">2273</a></span>
@@ -22308,9 +22308,9 @@ does, and dragging the basemap over them is not.</p>
   <summary>Note</summary>
   <p>This reaches the picture and not only the description. matplotlib paints the artists of one
 z-order in the order they were added, so the renderer re-arranges the layers it holds
-(:meth:<code>~digitalearth.static.renderer.Renderer._repaint</code>) — and because that stops at a z-order
+(:meth:<code>~digitalearth.static.render.renderer.Renderer._repaint</code>) — and because that stops at a z-order
 boundary, it also deals the layers' own z-orders back out along the new order
-(:func:<code>~digitalearth.static.renderer._rank_zorders</code>), which is what moves a point layer under a
+(:func:<code>~digitalearth.static.render.renderer._rank_zorders</code>), which is what moves a point layer under a
 raster rather than only saying so. The layers keep the z-orders they held between them, so the
 move stays inside their slice of the stack and nothing outside it shifts; a <code>zorder=</code> a caller
 gave one of the moved layers is superseded, the move being the later word on where it is painted.</p>
@@ -22333,7 +22333,7 @@ gave one of the moved layers is superseded, the move being the later word on whe
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/core/scene.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1408">1408</a></span>
 <span class="normal"><a href="#__codelineno-0-1409">1409</a></span>
 <span class="normal"><a href="#__codelineno-0-1410">1410</a></span>
@@ -22398,9 +22398,9 @@ gave one of the moved layers is superseded, the move being the later word on whe
 <a id="__codelineno-0-1424" name="__codelineno-0-1424"></a><span class="sd">    Note:</span>
 <a id="__codelineno-0-1425" name="__codelineno-0-1425"></a><span class="sd">        This reaches the picture and not only the description. matplotlib paints the artists of one</span>
 <a id="__codelineno-0-1426" name="__codelineno-0-1426"></a><span class="sd">        z-order in the order they were added, so the renderer re-arranges the layers it holds</span>
-<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a><span class="sd">        (:meth:`~digitalearth.static.renderer.Renderer._repaint`) — and because that stops at a z-order</span>
+<a id="__codelineno-0-1427" name="__codelineno-0-1427"></a><span class="sd">        (:meth:`~digitalearth.static.render.renderer.Renderer._repaint`) — and because that stops at a z-order</span>
 <a id="__codelineno-0-1428" name="__codelineno-0-1428"></a><span class="sd">        boundary, it also deals the layers&#39; own z-orders back out along the new order</span>
-<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a><span class="sd">        (:func:`~digitalearth.static.renderer._rank_zorders`), which is what moves a point layer under a</span>
+<a id="__codelineno-0-1429" name="__codelineno-0-1429"></a><span class="sd">        (:func:`~digitalearth.static.render.renderer._rank_zorders`), which is what moves a point layer under a</span>
 <a id="__codelineno-0-1430" name="__codelineno-0-1430"></a><span class="sd">        raster rather than only saying so. The layers keep the z-orders they held between them, so the</span>
 <a id="__codelineno-0-1431" name="__codelineno-0-1431"></a><span class="sd">        move stays inside their slice of the stack and nothing outside it shifts; a ``zorder=`` a caller</span>
 <a id="__codelineno-0-1432" name="__codelineno-0-1432"></a><span class="sd">        gave one of the moved layers is superseded, the move being the later word on where it is painted.</span>
@@ -22548,7 +22548,7 @@ it, and drawing that figure again needs it; :meth:<code>close</code> is where th
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/core/scene.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1319">1319</a></span>
 <span class="normal"><a href="#__codelineno-0-1320">1320</a></span>
 <span class="normal"><a href="#__codelineno-0-1321">1321</a></span>
@@ -22792,7 +22792,7 @@ the drawers read the source out of the figure, and a missing one reaches the dra
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/core/scene.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1455">1455</a></span>
 <span class="normal"><a href="#__codelineno-0-1456">1456</a></span>
 <span class="normal"><a href="#__codelineno-0-1457">1457</a></span>
@@ -23049,7 +23049,7 @@ and what tells a saved figure that the layer is there but not drawn.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/core/scene.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1368">1368</a></span>
 <span class="normal"><a href="#__codelineno-0-1369">1369</a></span>
 <span class="normal"><a href="#__codelineno-0-1370">1370</a></span>
@@ -23249,7 +23249,7 @@ rate every animation entry point — here, :meth:<code>rotate</code>, and the ot
               <div class="doc-md-description">
                 <p>Optional per-frame captions; must match the stack length when given. They are drawn
 on the axes and left out of the figure's description, so a heading
-:meth:<code>~digitalearth.static.scene.Scene.set_title</code> recorded survives in the record — but
+:meth:<code>~digitalearth.static.core.scene.Scene.set_title</code> recorded survives in the record — but
 it is <strong>painted over</strong> on the axes by every frame, which is a disagreement between the
 drawn and the described title and is said once, at <code>WARNING</code>, when both are asked for
 (round 2, L11).</p>
@@ -23556,7 +23556,7 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/animation.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/animation.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1525">1525</a></span>
 <span class="normal"><a href="#__codelineno-0-1526">1526</a></span>
 <span class="normal"><a href="#__codelineno-0-1527">1527</a></span>
@@ -23860,7 +23860,7 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 <a id="__codelineno-0-1582" name="__codelineno-0-1582"></a><span class="sd">            rate every animation entry point — here, :meth:`rotate`, and the other backends — starts from.</span>
 <a id="__codelineno-0-1583" name="__codelineno-0-1583"></a><span class="sd">        titles: Optional per-frame captions; must match the stack length when given. They are drawn</span>
 <a id="__codelineno-0-1584" name="__codelineno-0-1584"></a><span class="sd">            on the axes and left out of the figure&#39;s description, so a heading</span>
-<a id="__codelineno-0-1585" name="__codelineno-0-1585"></a><span class="sd">            :meth:`~digitalearth.static.scene.Scene.set_title` recorded survives in the record — but</span>
+<a id="__codelineno-0-1585" name="__codelineno-0-1585"></a><span class="sd">            :meth:`~digitalearth.static.core.scene.Scene.set_title` recorded survives in the record — but</span>
 <a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><span class="sd">            it is **painted over** on the axes by every frame, which is a disagreement between the</span>
 <a id="__codelineno-0-1587" name="__codelineno-0-1587"></a><span class="sd">            drawn and the described title and is said once, at ``WARNING``, when both are asked for</span>
 <a id="__codelineno-0-1588" name="__codelineno-0-1588"></a><span class="sd">            (round 2, L11).</span>
@@ -24100,7 +24100,7 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Forwarded to :meth:<code>~digitalearth.static.scene.Scene.save</code> / <code>Figure.savefig</code>.</p>
+                <p>Forwarded to :meth:<code>~digitalearth.static.core.scene.Scene.save</code> / <code>Figure.savefig</code>.</p>
               </div>
             </td>
             <td>
@@ -24135,7 +24135,7 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2123">2123</a></span>
 <span class="normal"><a href="#__codelineno-0-2124">2124</a></span>
 <span class="normal"><a href="#__codelineno-0-2125">2125</a></span>
@@ -24152,7 +24152,7 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 <a id="__codelineno-0-2125" name="__codelineno-0-2125"></a>
 <a id="__codelineno-0-2126" name="__codelineno-0-2126"></a><span class="sd">    Args:</span>
 <a id="__codelineno-0-2127" name="__codelineno-0-2127"></a><span class="sd">        path: Destination file path; the extension picks the format matplotlib writes.</span>
-<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">        **kwargs: Forwarded to :meth:`~digitalearth.static.scene.Scene.save` / ``Figure.savefig``.</span>
+<a id="__codelineno-0-2128" name="__codelineno-0-2128"></a><span class="sd">        **kwargs: Forwarded to :meth:`~digitalearth.static.core.scene.Scene.save` / ``Figure.savefig``.</span>
 <a id="__codelineno-0-2129" name="__codelineno-0-2129"></a>
 <a id="__codelineno-0-2130" name="__codelineno-0-2130"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2131" name="__codelineno-0-2131"></a><span class="sd">        The path that was written, as a :class:`pathlib.Path`.</span>
@@ -24180,7 +24180,7 @@ save_animation: Write the returned animation to an mp4/GIF.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/maps/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/builders/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2136">2136</a></span>
 <span class="normal"><a href="#__codelineno-0-2137">2137</a></span>
 <span class="normal"><a href="#__codelineno-0-2138">2138</a></span>
@@ -24219,13 +24219,13 @@ reference it by path to keep such a figure readable.</p>
 bare <code>Map()</code>/<code>Scene()</code>, and so every :meth:<code>from_figure</code> round trip) is closed here; a figure
 handed in through <code>ax=</code>/<code>fig=</code> is <strong>spared</strong>, because it belongs to whoever laid it out. This is</p>
 <h4 id="digitalearth.static.map.Map.close--371-resolved-a-borrowed-figure-is-spared-r2-l12-which-brings-this-into-line-with"><a class="toclink" href="#digitalearth.static.map.Map.close--371-resolved-a-borrowed-figure-is-spared-r2-l12-which-brings-this-into-line-with">371, resolved: a borrowed figure is spared (R2-L12), which brings this into line with</a><a class="headerlink" href="#digitalearth.static.map.Map.close--371-resolved-a-borrowed-figure-is-spared-r2-l12-which-brings-this-into-line-with" title="Permanent link">#</a></h4>
-<p>:meth:<code>~digitalearth.static.textured_globe.TexturedGlobe.close</code>, always gated the same way. The
+<p>:meth:<code>~digitalearth.static.globe.textured_globe.TexturedGlobe.close</code>, always gated the same way. The
 object table and the pick handler are released on <strong>every</strong> close regardless — see below.</p>
 <p>.. warning::
     When the scene owns the figure, this closes the <strong>entire</strong> <code>self.fig</code>. The panels returned by
-    :func:<code>~digitalearth.static.figure.grid</code> share <strong>one</strong> figure none of them owns (each is built
+    :func:<code>~digitalearth.static.panels.figure.grid</code> share <strong>one</strong> figure none of them owns (each is built
     with <code>ax=</code>/<code>fig=</code>), so closing a single panel no longer closes its siblings — and an
-    :meth:<code>~digitalearth.static.maps.inset.InsetMixin.inset</code> locator, drawn on the host's own
+    :meth:<code>~digitalearth.static.builders.inset.InsetMixin.inset</code> locator, drawn on the host's own
     figure, likewise spares the host when closed. Close the scene that <strong>made</strong> the figure (or call
     :meth:<code>save</code> and close it yourself) to take the whole figure down. The pick handler this scene
     connected comes off on close whether the figure is owned or borrowed, so a closed borrowed-axes
@@ -24249,7 +24249,7 @@ object table and the pick handler are released on <strong>every</strong> close r
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static/scene.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/core/scene.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2965">2965</a></span>
 <span class="normal"><a href="#__codelineno-0-2966">2966</a></span>
 <span class="normal"><a href="#__codelineno-0-2967">2967</a></span>
@@ -24329,14 +24329,14 @@ object table and the pick handler are released on <strong>every</strong> close r
 <a id="__codelineno-0-2981" name="__codelineno-0-2981"></a><span class="sd">    bare ``Map()``/``Scene()``, and so every :meth:`from_figure` round trip) is closed here; a figure</span>
 <a id="__codelineno-0-2982" name="__codelineno-0-2982"></a><span class="sd">    handed in through ``ax=``/``fig=`` is **spared**, because it belongs to whoever laid it out. This is</span>
 <a id="__codelineno-0-2983" name="__codelineno-0-2983"></a><span class="sd">    #371, resolved: a borrowed figure is spared (R2-L12), which brings this into line with</span>
-<a id="__codelineno-0-2984" name="__codelineno-0-2984"></a><span class="sd">    :meth:`~digitalearth.static.textured_globe.TexturedGlobe.close`, always gated the same way. The</span>
+<a id="__codelineno-0-2984" name="__codelineno-0-2984"></a><span class="sd">    :meth:`~digitalearth.static.globe.textured_globe.TexturedGlobe.close`, always gated the same way. The</span>
 <a id="__codelineno-0-2985" name="__codelineno-0-2985"></a><span class="sd">    object table and the pick handler are released on **every** close regardless — see below.</span>
 <a id="__codelineno-0-2986" name="__codelineno-0-2986"></a>
 <a id="__codelineno-0-2987" name="__codelineno-0-2987"></a><span class="sd">    .. warning::</span>
 <a id="__codelineno-0-2988" name="__codelineno-0-2988"></a><span class="sd">        When the scene owns the figure, this closes the **entire** ``self.fig``. The panels returned by</span>
-<a id="__codelineno-0-2989" name="__codelineno-0-2989"></a><span class="sd">        :func:`~digitalearth.static.figure.grid` share **one** figure none of them owns (each is built</span>
+<a id="__codelineno-0-2989" name="__codelineno-0-2989"></a><span class="sd">        :func:`~digitalearth.static.panels.figure.grid` share **one** figure none of them owns (each is built</span>
 <a id="__codelineno-0-2990" name="__codelineno-0-2990"></a><span class="sd">        with ``ax=``/``fig=``), so closing a single panel no longer closes its siblings — and an</span>
-<a id="__codelineno-0-2991" name="__codelineno-0-2991"></a><span class="sd">        :meth:`~digitalearth.static.maps.inset.InsetMixin.inset` locator, drawn on the host&#39;s own</span>
+<a id="__codelineno-0-2991" name="__codelineno-0-2991"></a><span class="sd">        :meth:`~digitalearth.static.builders.inset.InsetMixin.inset` locator, drawn on the host&#39;s own</span>
 <a id="__codelineno-0-2992" name="__codelineno-0-2992"></a><span class="sd">        figure, likewise spares the host when closed. Close the scene that **made** the figure (or call</span>
 <a id="__codelineno-0-2993" name="__codelineno-0-2993"></a><span class="sd">        :meth:`save` and close it yourself) to take the whole figure down. The pick handler this scene</span>
 <a id="__codelineno-0-2994" name="__codelineno-0-2994"></a><span class="sd">        connected comes off on close whether the figure is owned or borrowed, so a closed borrowed-axes</span>

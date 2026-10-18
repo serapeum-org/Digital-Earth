@@ -5382,7 +5382,7 @@ non-commercial use under NICFI terms. Two things about it are worth knowing befo
 </li>
 <li><strong>A failed fetch can log it.</strong> <code>cleopatra.basemap.tiles</code> logs the built URL at <code>DEBUG</code>, so the
     static backend suppresses that logger for the duration of a keyed fetch (see
-    <code>digitalearth.static.maps.decoration</code>). Do not otherwise run tile fetches at <code>DEBUG</code> into shared
+    <code>digitalearth.static.builders.decoration</code>). Do not otherwise run tile fetches at <code>DEBUG</code> into shared
     logs.</li>
 <li><strong>A non-<code>http(s)</code> URL is refused here</strong>, before it reaches a tile engine, because cleopatra reports
     that case by raising with the offending URL in the message — which the log suppression does not

@@ -5674,7 +5674,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.netcdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">NetCDF</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span> <span class="k">as</span> <span class="n">proj</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.view</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span> <span class="k">as</span> <span class="n">proj</span>
 
 <span class="c1"># Real climate data, fetched from the internet: NOAA ERSST v5 monthly sea-surface temperature</span>
 <span class="c1"># (2-degree global grid), via the pydata/xarray-data mirror on GitHub. It is committed under</span>
@@ -5735,7 +5735,7 @@ import matplotlib.pyplot as plt
 from pyramids.netcdf import NetCDF
 from pyramids.dataset import Dataset, GeoReference
 from digitalearth.static import Map
-from digitalearth.static import projections as proj
+from digitalearth.static.view import projections as proj
 
 # Real climate data, fetched from the internet: NOAA ERSST v5 monthly sea-surface temperature
 # (2-degree global grid), via the pydata/xarray-data mirror on GitHub. It is committed under
@@ -5989,7 +5989,7 @@ fig.tight_layout(); fig;</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>/home/runner/work/Digital-Earth/Digital-Earth/src/digitalearth/static/maps/projection.py:732: UserWarning: graticule() could not place 1 degree label(s): 180°. The display CRS 3857 gives their anchor no position inside the view the figure is framed on; frame the map on a region that holds them, or pass labels=False.
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/src/digitalearth/static/builders/projection.py:732: UserWarning: graticule() could not place 1 degree label(s): 180°. The display CRS 3857 gives their anchor no position inside the view the figure is framed on; frame the map on a region that holds them, or pass labels=False.
   warnings.warn(
 </pre>
 </div>
