@@ -54,6 +54,10 @@ _BASELINE = {"savefig_kwargs": {"dpi": 80}, "style": "default"}
 #: Figure size in inches for the single-panel maps (the multi-panel grid overrides it).
 _FIGSIZE = (4.0, 4.0)
 
+#: Degrees the decimation fixture's raster spans on each side — a fine grid over a small region, so the
+#: 1200 cells a side are detail to be decimated rather than a grid running off the end of the world.
+_LARGE_SPAN = 20.0
+
 
 @pytest.fixture
 def polygons():
@@ -154,6 +158,69 @@ def global_raster():
     arr = (np.cos(np.radians(lat)) * np.sin(np.radians(2.0 * lon))).astype("float32")
     geo = (-180.0, 3.0, 0.0, 90.0, 0.0, -3.0)
     return Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=geo, epsg=4326))
+
+
+@pytest.fixture
+def large_raster(tmp_path):
+    """A raster far larger than the baseline canvas, on disk so it is read through pyramids' overviews.
+
+    At ``_FIGSIZE`` the canvas is a few hundred device pixels a side, so a 1200-cell-a-side raster trips the
+    static tier's decimation threshold (``digitalearth.static.builders.raster._DECIMATE_ABOVE``) and is read
+    at a lower resolution through pyramids' ``read_part`` rather than being fully decoded. The field is a
+    smooth, low-frequency analytic surface, so at figure resolution the decimated read and a full decode are
+    the same picture — which is what lets one committed baseline stand for both (#480).
+
+    Args:
+        tmp_path: pytest's temporary directory; the raster is written here so it exposes the ``read_part`` /
+            overview surface. An in-memory array would be drawn whole, since only a file-backed dataset
+            offers the windowed read the decimation path needs.
+
+    Returns:
+        Dataset: a single-band EPSG:4326 raster, 1200 cells a side over :data:`_LARGE_SPAN` degrees.
+    """
+    side = 1200
+    axis = np.linspace(-1.0, 1.0, side, dtype="float32")
+    arr = (
+        np.sin(1.5 * np.pi * axis)[None, :] * np.cos(1.5 * np.pi * axis)[:, None]
+    ).astype("float32")
+    path = tmp_path / "large.tif"
+    Dataset.from_array(
+        arr=arr,
+        geo_ref=GeoReference(
+            top_left_corner=(0.0, _LARGE_SPAN), cell_size=_LARGE_SPAN / side, epsg=4326
+        ),
+    ).to_file(str(path))
+    return Dataset.read_file(str(path))
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
+def test_decimated_large_raster(large_raster):
+    """A raster far larger than the canvas renders from a decimated overview — the picture a full decode draws (#480).
+
+    Test scenario:
+        ST-5 gave the static tier a view-dependent overview read: a band well past the canvas is read at a
+        lower resolution through pyramids' ``read_part`` instead of being fully decoded (closed as #220). The
+        property tests in ``test_static_raster_overviews.py`` pin the *shape* of that read; this is the pixel
+        half #480 asked for — proof that the decimated read is placed, oriented and coloured exactly as a full
+        decode would be at figure resolution. The field is smooth, so the decimated read and a full decode are
+        the same picture and one baseline stands for both.
+
+        The in-test guard asserts the read was actually decimated, so a regression that silently reverted to a
+        full decode fails here loudly rather than quietly re-committing a baseline that only looks the same.
+
+    Args:
+        large_raster: a 1200-cell-a-side raster that trips the decimation threshold at ``_FIGSIZE``.
+
+    Returns:
+        Figure: the rendered map.
+    """
+    m = Map(crs=large_raster.epsg, figsize=_FIGSIZE)
+    m.field(large_raster, name="big", cmap="viridis")
+    drawn = np.asarray(m.artist("big").get_array()).shape
+    assert max(drawn) < 1200, (
+        f"the raster was not decimated — read {drawn}, file 1200x1200"
+    )
+    return m.fig
 
 
 @pytest.mark.mpl_image_compare(**_BASELINE)
