@@ -130,7 +130,7 @@ def start_xvfb(
             ```
 
     See Also:
-        digitalearth.three_d.base.Scene3DBase: ``off_screen=`` is the other half of rendering headless.
+        digitalearth.three_d.core.base.Scene3DBase: ``off_screen=`` is the other half of rendering headless.
     """
     _check_request(display, window_size, wait)
     if os.environ.get("DISPLAY") or not sys.platform.startswith("linux"):
@@ -196,7 +196,7 @@ def _reap(server: subprocess.Popen, display: str) -> None:
           (a display nothing here set, so ``DISPLAY`` is left alone):
             ```python
             >>> import subprocess, sys
-            >>> from digitalearth.three_d.headless import _reap
+            >>> from digitalearth.three_d.app.headless import _reap
             >>> child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
             >>> _reap(child, ":4242")
             >>> stopped = child.returncode

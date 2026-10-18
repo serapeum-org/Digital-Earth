@@ -178,7 +178,7 @@ class TestTheReorderRationaleIsStillTrue:
         "static/core/scene.py",
         "interactive/base.py",
         "web/base.py",
-        "three_d/base.py",
+        "three_d/core/base.py",
     )
 
     @staticmethod

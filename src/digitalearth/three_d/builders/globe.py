@@ -119,13 +119,13 @@ def _require_geovista():
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
 
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Selection
-from digitalearth.three_d.layer import drawing_props
+from digitalearth.three_d.core.layer import drawing_props
 
 
 class GlobeMixin(_MixinBase):
@@ -137,13 +137,13 @@ class GlobeMixin(_MixinBase):
     composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.core.base.Scene3DBase`, the state ``Scene3D``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
     what it was before the annotation.
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
-        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
     """
 
     def _to_geographic_source(self, data: Any, *, band: int = DEFAULT_BAND) -> Source:

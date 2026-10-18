@@ -4,7 +4,7 @@ Turns a pyramids raster into a PyVista ``StructuredGrid`` whose z is the elevati
 surface. Built from the uniform :class:`~digitalearth.base.sources.Source` (numpy z + 1-D x/y coordinate vectors
 + CRS) — **no xarray/rasterio**; CRS/reproject stays in pyramids. Vertical *exaggeration* is deliberately not
 baked into those points: it is a scene-wide view scale
-(:attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`), so layers cannot disagree about it and
+(:attr:`~digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration`), so layers cannot disagree about it and
 it can be changed without rebuilding a mesh. The only vertical factor the geometry carries is the CRS unit
 conversion (:func:`_vertical_unit_scale`).
 
@@ -22,8 +22,8 @@ import numpy as np
 from digitalearth.base.crs import is_geographic
 from digitalearth.base.sources import Source, get_source
 from digitalearth.base.spec import DEFAULT_BAND, Encoding, LayerSpec, Selection
-from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET, reduce_surface
-from digitalearth.three_d.layer import drawing_props
+from digitalearth.three_d.builders.bigdata import DEFAULT_CELL_BUDGET, reduce_surface
+from digitalearth.three_d.core.layer import drawing_props
 
 #: Attribute name the elevation scalar is stored under on the generated mesh.
 ELEVATION = "elevation"
@@ -46,7 +46,7 @@ def _vertical_unit_scale(crs: Any) -> float:
 
     This is a **unit conversion**, not vertical exaggeration: it is baked into the mesh because it is a property
     of that layer's CRS, whereas exaggeration is a property of the view
-    (:attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`).
+    (:attr:`~digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration`).
 
     Args:
         crs: The :class:`~digitalearth.base.sources.Source` CRS — an EPSG int, an ``"EPSG:<code>"``
@@ -69,7 +69,7 @@ def _terrain_mesh(
         y: 1-D y/latitude cell-centre coordinates, length ``ny`` (descending for north→south rasters is fine).
         vertical_scale: Unit conversion applied to the elevation before it becomes geometry — see
             :func:`_vertical_unit_scale`. Vertical *exaggeration* is not applied here: it is a view scale
-            (:attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`), so the points keep the
+            (:attr:`~digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration`), so the points keep the
             elevation the data actually carries.
 
     Returns:
@@ -183,7 +183,7 @@ def _color_encoding(scalars: Any, kwargs: dict[str, Any]) -> dict[str, Encoding]
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
 
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -197,13 +197,13 @@ class TerrainMixin(_MixinBase):
     composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.core.base.Scene3DBase`, the state ``Scene3D``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
     what it was before the annotation.
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
-        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
     """
 
     def terrain(
@@ -237,7 +237,7 @@ class TerrainMixin(_MixinBase):
         raster's.
 
         **Vertical exaggeration is a property of the scene, not of this layer.** ``z_exaggeration`` sets
-        :attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`, a PyVista view scale that applies
+        :attr:`~digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration`, a PyVista view scale that applies
         to every actor — so two terrains in one scene cannot disagree about it, the value can be read back off
         the scene, and changing it needs no mesh rebuild. Leaving it ``None`` keeps whatever the scene is
         already set to (``1.0``, true scale, on a fresh scene). The ``exaggeration`` property of the web tier's
@@ -262,16 +262,16 @@ class TerrainMixin(_MixinBase):
                 is published, since the surface is coloured by the image rather than by a field.
             big_data_threshold: Cells above which the surface is simplified with ``decimate_pro`` before it is
                 drawn (#207). ``None`` (the default) uses the scene's
-                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a DEM at or under the budget
+                :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`; a DEM at or under the budget
                 is drawn exactly as it was built. Measured: a 708x708 DEM is drawn whole, a 709x709 one is
                 reduced, and a 1000x1000 one goes from a 39.0 MB ``export_html`` page to a 12.3 MB one — see
-                :mod:`digitalearth.three_d.bigdata` for the table the budget comes from.
+                :mod:`digitalearth.three_d.builders.bigdata` for the table the budget comes from.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh` (``opacity``, ``show_edges``, ``pbr`` …).
 
         Returns:
             The registered :class:`pyvista.Actor` for the terrain surface, or ``None`` when the raster held
             no elevation to build a surface from (see ``strict`` on
-            :class:`~digitalearth.three_d.base.Scene3DBase`).
+            :class:`~digitalearth.three_d.core.base.Scene3DBase`).
 
         Raises:
             OffLimbError: only when the scene was built with ``strict=True`` and the raster is empty or

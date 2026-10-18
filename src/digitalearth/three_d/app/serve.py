@@ -1,6 +1,6 @@
 """ServeMixin — a live trame view of the scene in a browser/notebook (TD-12).
 
-:meth:`~digitalearth.three_d.base.Scene3DBase.export_html` writes a **frozen** vtk.js page whose own docstring
+:meth:`~digitalearth.three_d.core.base.Scene3DBase.export_html` writes a **frozen** vtk.js page whose own docstring
 measures the cost — "~19 bytes per point … a 4700x4700 DEM gives ~430 MB". A served scene is the correct answer
 to that: geometry (or rendered images) stream on demand, so there is no per-point page-size floor, and the
 scene is usable from a notebook against a remote or headless machine. The whole trame stack ships with the
@@ -15,7 +15,7 @@ and streams images, ``"trame"`` switches at runtime.
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -28,13 +28,13 @@ class ServeMixin(_MixinBase):
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the plotter this serves.
-        digitalearth.three_d.base.Scene3DBase.export_html: the frozen-page alternative this streams instead of.
+        digitalearth.three_d.core.base.Scene3DBase.export_html: the frozen-page alternative this streams instead of.
     """
 
     def serve(self, *, mode: str = "client", **kwargs: Any) -> Any:
         """Open the scene as a live, interactive trame view and return its handle.
 
-        Unlike :meth:`~digitalearth.three_d.base.Scene3DBase.export_html`, which bakes the whole scene into one
+        Unlike :meth:`~digitalearth.three_d.core.base.Scene3DBase.export_html`, which bakes the whole scene into one
         self-contained page, a served view streams on demand — so a huge cloud or DEM that makes a frozen page
         hundreds of megabytes serves without that floor.
 
@@ -70,7 +70,7 @@ class ServeMixin(_MixinBase):
         """
         # A process must use one VTK build for trame and PyVista; the base's guard raises a clear RuntimeError
         # naming the fix rather than failing deep inside trame on a wrapped-type mismatch (see base.py).
-        from digitalearth.three_d.base import _require_one_vtk_build
+        from digitalearth.three_d.core.base import _require_one_vtk_build
 
         _require_one_vtk_build()
         # Imported at call time, not module load: the trame launcher is only needed when a scene is actually

@@ -18,7 +18,7 @@ from digitalearth.base.sources import get_source  # noqa: E402
 from digitalearth.base.spec import Camera, FigureSpec, LayerSpec  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
-from digitalearth.three_d.renderer import drawer_for  # noqa: E402
+from digitalearth.three_d.render.renderer import drawer_for  # noqa: E402
 
 DEM_PATH = "examples/data/acc4000.tif"
 
@@ -114,7 +114,7 @@ class TestTheDescription:
             message belongs (review L3). Neither can be reached without editing one and not the other,
             which is what this does.
         """
-        from digitalearth.three_d import renderer
+        from digitalearth.three_d.render import renderer
 
         monkeypatch.setattr(renderer, "DRAWN_KINDS", ("terrain",))
         with pytest.raises(KeyError, match="drawer table and DRAWN_KINDS disagree"):
@@ -129,7 +129,7 @@ class TestTheDescription:
             of a kind the declaration did not list and its `absent` said could not exist (review M6).
             Reading the drawer table covers every kind without needing geovista installed to do it.
         """
-        from digitalearth.three_d.renderer import DRAWN_KINDS, drawer_for
+        from digitalearth.three_d.render.renderer import DRAWN_KINDS, drawer_for
 
         undeclared = sorted(set(DRAWN_KINDS) - CAPABILITIES.kinds)
         assert undeclared == [], f"the tier draws {undeclared} without declaring them"
@@ -569,7 +569,7 @@ class TestTheRemainingArms:
         """
         from dataclasses import replace as with_fields
 
-        from digitalearth.three_d.renderer import Renderer3D
+        from digitalearth.three_d.render.renderer import Renderer3D
 
         scene.terrain(get_source(_dem()))
         before = scene.figure_spec

@@ -60,7 +60,7 @@ class NamedView:
     Examples:
         - A row says which PyVista call it stands for:
             ```python
-            >>> from digitalearth.three_d.views import named_view
+            >>> from digitalearth.three_d.view.views import named_view
             >>> top = named_view("top")
             >>> top.method, dict(top.options)
             ('view_xy', {})
@@ -68,7 +68,7 @@ class NamedView:
             ```
         - The opposite side of the same axis is the same method with one option:
             ```python
-            >>> from digitalearth.three_d.views import named_view
+            >>> from digitalearth.three_d.view.views import named_view
             >>> named_view("bottom").method, dict(named_view("bottom").options)
             ('view_xy', {'negative': True})
 
@@ -152,7 +152,7 @@ def view_names() -> tuple[str, ...]:
     Examples:
         - The shipped set:
             ```python
-            >>> from digitalearth.three_d.views import view_names
+            >>> from digitalearth.three_d.view.views import view_names
             >>> view_names()
             ('back', 'bottom', 'front', 'isometric', 'left', 'right', 'top')
 
@@ -173,12 +173,12 @@ def named_view(name: str) -> NamedView:
     Raises:
         KeyError: for a name nothing registered. The message lists the names that do exist, because the way out
             of this error is one of them — the same shape :func:`~digitalearth.base.contract_clauses.clause`
-            and :func:`~digitalearth.three_d.renderer.drawer_for` use.
+            and :func:`~digitalearth.three_d.render.renderer.drawer_for` use.
 
     Examples:
         - A name nobody registered says which ones are there:
             ```python
-            >>> from digitalearth.three_d.views import named_view
+            >>> from digitalearth.three_d.view.views import named_view
             >>> named_view("birdseye")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -191,7 +191,7 @@ def named_view(name: str) -> NamedView:
     except KeyError:
         raise KeyError(
             f"{name!r} is not a named view; the scene knows {list(view_names())}. "
-            "Register your own with digitalearth.three_d.views.register_view()"
+            "Register your own with digitalearth.three_d.view.views.register_view()"
         ) from None
 
 
@@ -232,7 +232,7 @@ def register_view(
         - Register a view and look at a scene from it:
             ```python
             >>> from digitalearth.three_d import Scene3D
-            >>> from digitalearth.three_d.views import forget_view, register_view
+            >>> from digitalearth.three_d.view.views import forget_view, register_view
             >>> _ = register_view(
             ...     "north_east",
             ...     method="view_vector",
@@ -248,7 +248,7 @@ def register_view(
             ```
         - A method PyVista does not have is refused where it was written:
             ```python
-            >>> from digitalearth.three_d.views import register_view
+            >>> from digitalearth.three_d.view.views import register_view
             >>> register_view("nowhere", method="view_from_behind", describes="nowhere")
             Traceback (most recent call last):
                 ...
@@ -287,7 +287,7 @@ def forget_view(name: str) -> NamedView:
     Examples:
         - Register, use, forget:
             ```python
-            >>> from digitalearth.three_d.views import forget_view, register_view, view_names
+            >>> from digitalearth.three_d.view.views import forget_view, register_view, view_names
             >>> _ = register_view("underside", method="view_xy", describes="from below", negative=True)
             >>> "underside" in view_names()
             True
@@ -332,7 +332,7 @@ def temporary_view(view: NamedView) -> Iterator[None]:
     Examples:
         - The view resolves inside the block and is gone afterwards:
             ```python
-            >>> from digitalearth.three_d.views import NamedView, temporary_view, view_names
+            >>> from digitalearth.three_d.view.views import NamedView, temporary_view, view_names
             >>> row = NamedView("demo:scratch", "view_xy", "from directly above, for one block")
             >>> with temporary_view(row):
             ...     "demo:scratch" in view_names()
@@ -343,7 +343,7 @@ def temporary_view(view: NamedView) -> Iterator[None]:
             ```
         - Swapping a shipped view for a block puts the shipped row back afterwards:
             ```python
-            >>> from digitalearth.three_d.views import NamedView, named_view, temporary_view
+            >>> from digitalearth.three_d.view.views import NamedView, named_view, temporary_view
             >>> with temporary_view(NamedView("top", "view_xy", "a stand-in description")):
             ...     named_view("top").describes
             'a stand-in description'

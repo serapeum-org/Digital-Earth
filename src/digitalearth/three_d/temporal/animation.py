@@ -227,7 +227,7 @@ def _up_vector(viewup: "UpVector | None") -> "np.ndarray | None":
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -241,14 +241,14 @@ class AnimationMixin(_MixinBase):
     composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.core.base.Scene3DBase`, the state ``Scene3D``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
     what it was before the annotation.
 
     Examples:
         - The three methods this mixin contributes, and the runtime base that keeps the composition inert:
             ```python
-            >>> from digitalearth.three_d.animation import AnimationMixin
+            >>> from digitalearth.three_d.temporal.animation import AnimationMixin
             >>> sorted(name for name in vars(AnimationMixin) if not name.startswith("_"))
             ['jupyter', 'orbit', 'record']
             >>> AnimationMixin.__bases__
@@ -258,7 +258,7 @@ class AnimationMixin(_MixinBase):
         - They are reached through the composed scene, never on the mixin itself, which owns no state:
             ```python
             >>> from digitalearth.three_d import Scene3D
-            >>> from digitalearth.three_d.animation import AnimationMixin
+            >>> from digitalearth.three_d.temporal.animation import AnimationMixin
             >>> AnimationMixin in Scene3D.__mro__
             True
             >>> vars(AnimationMixin).get("__init__") is None
@@ -268,7 +268,7 @@ class AnimationMixin(_MixinBase):
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
-        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
     """
 
     def orbit(
@@ -425,7 +425,7 @@ class AnimationMixin(_MixinBase):
         every drawn colour-mapped layer (the scalar bar follows its mapper) after each ``update``, so one scale
         spans the whole animation — compute it once over the full stack (e.g.
         ``(stack.values.min(), stack.values.max())``) and hand it in. ``None`` (the default) keeps the per-frame
-        behaviour. A ray-cast volume's range is :meth:`~digitalearth.three_d.volume.VolumeMixin.volume`'s own
+        behaviour. A ray-cast volume's range is :meth:`~digitalearth.three_d.builders.volume.VolumeMixin.volume`'s own
         ``clim=`` instead.
 
         Scope: ``clim`` pins **every** colour-mapped layer in the scene, not only the one ``update`` animates.

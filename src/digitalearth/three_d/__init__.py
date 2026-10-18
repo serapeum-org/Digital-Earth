@@ -14,12 +14,12 @@ work stays in pyramids.
 
 Requires the optional ``3d`` extra (``pip install digitalearth[3d]`` → pyvista + trame; geovista for the globe).
 
-On a Linux machine with no display, call :func:`~digitalearth.three_d.headless.start_xvfb` once before drawing
+On a Linux machine with no display, call :func:`~digitalearth.three_d.app.headless.start_xvfb` once before drawing
 to give VTK a virtual X server to render into (a no-op where a display already exists).
 """
 
-from digitalearth.three_d.headless import start_xvfb
-from digitalearth.three_d.panels import grid
+from digitalearth.three_d.app.headless import start_xvfb
+from digitalearth.three_d.app.panels import grid
 from digitalearth.three_d.scene3d import Scene3D
 
 __all__ = ["Scene3D", "grid", "start_xvfb"]

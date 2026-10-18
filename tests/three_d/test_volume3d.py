@@ -10,7 +10,7 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.volume import FIELD, _cube, _grid_geo
+from digitalearth.three_d.builders.volume import FIELD, _cube, _grid_geo
 
 
 class _GeoCube:
@@ -170,7 +170,7 @@ def test_cube_axes_map_lon_to_world_x():
     Guards L1: a feature placed only at the max-lon / max-lat cell must land at the high-x / high-y corner of
     the point grid, not on the vertical (z) axis.
     """
-    from digitalearth.three_d.volume import _point_grid
+    from digitalearth.three_d.builders.volume import _point_grid
 
     cube = np.zeros((2, 3, 5))  # (nz=level, ny=lat, nx=lon)
     cube[:, 2, 4] = 1.0  # max lat (idx 2) and max lon (idx 4)

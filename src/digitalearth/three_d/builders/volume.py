@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from digitalearth.base.spec import Encoding
-from digitalearth.three_d.bigdata import (
+from digitalearth.three_d.builders.bigdata import (
     DEFAULT_CELL_BUDGET,
     reduce_surface,
     reduce_volume,
@@ -165,13 +165,13 @@ def _point_grid(
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
 
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
 
 from digitalearth.base.spec import LayerSpec
-from digitalearth.three_d.layer import drawing_props
+from digitalearth.three_d.core.layer import drawing_props
 
 
 class VolumeMixin(_MixinBase):
@@ -183,13 +183,13 @@ class VolumeMixin(_MixinBase):
     composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.core.base.Scene3DBase`, the state ``Scene3D``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
     what it was before the annotation.
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
-        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
     """
 
     def volume(
@@ -221,7 +221,7 @@ class VolumeMixin(_MixinBase):
                 projection), ``"average"`` or ``"additive"``.
             clim: Fixed ``(low, high)`` colour range for the field. ``None`` lets the lookup table span the
                 data's own range; pinning it is what keeps the colours steady across the frames of an
-                :meth:`~digitalearth.three_d.animation.AnimationMixin.record` so a time stack does not flicker.
+                :meth:`~digitalearth.three_d.temporal.animation.AnimationMixin.record` so a time stack does not flicker.
             shade: Whether the volume is lit (gradient shading). Off by default — shading a smooth field can
                 read as noise — but on it gives solid-looking structure a surface-like relief.
             origin: World ``(x, y, z)`` of the cube's lower-left-bottom corner (#198). ``None`` derives it
@@ -232,9 +232,9 @@ class VolumeMixin(_MixinBase):
                 ``geotransform`` when it has one (the vertical stays one unit per level), else unit spacing.
             big_data_threshold: Voxels above which the cube is resampled to fewer per axis before it is
                 ray-cast (#207). ``None`` (the default) uses the scene's
-                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a cube at or under the budget
+                :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`; a cube at or under the budget
                 is drawn at full resolution. Resampling is output-driven, so it costs the same fraction of a
-                second whatever it is given — see :mod:`digitalearth.three_d.bigdata`.
+                second whatever it is given — see :mod:`digitalearth.three_d.builders.bigdata`.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_volume`.
 
         Returns:
@@ -309,7 +309,7 @@ class VolumeMixin(_MixinBase):
                 ``geotransform`` when it has one, else unit spacing.
             big_data_threshold: Cells above which the extracted shells are simplified with ``decimate_pro``
                 before they are drawn (#207). ``None`` (the default) uses the scene's
-                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`. The budget applies to the
+                :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`. The budget applies to the
                 **shells**, which is what reaches the plotter; the contour is still extracted from the full
                 cube, so this bounds what is carried rather than what the extraction costs.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.

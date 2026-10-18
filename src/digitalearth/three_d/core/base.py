@@ -43,11 +43,11 @@ from digitalearth.base.spec import (
     Selection,
     Symbology,
 )
-from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+from digitalearth.three_d.builders.bigdata import DEFAULT_CELL_BUDGET
 from digitalearth.three_d.capabilities import CAPABILITIES
-from digitalearth.three_d.layer import next_layer_id, stored_props
-from digitalearth.three_d.renderer import Renderer3D
-from digitalearth.three_d.views import named_view
+from digitalearth.three_d.core.layer import next_layer_id, stored_props
+from digitalearth.three_d.render.renderer import Renderer3D
+from digitalearth.three_d.view.views import named_view
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
@@ -233,7 +233,7 @@ def classified_scalars(
     Examples:
         - No scheme is a continuous ramp: the values reach the engine unchanged:
             ```python
-            >>> from digitalearth.three_d.base import classified_scalars
+            >>> from digitalearth.three_d.core.base import classified_scalars
             >>> style = classified_scalars([1.0, 5.0, 9.0], scheme=None, k=5, cmap="viridis")
             >>> sorted(style), [float(v) for v in style["scalars"]]
             (['cmap', 'nan_color', 'scalars'], [1.0, 5.0, 9.0])
@@ -241,7 +241,7 @@ def classified_scalars(
             ```
         - A graduated scheme replaces the values with class indices and supplies one colour per class:
             ```python
-            >>> from digitalearth.three_d.base import classified_scalars
+            >>> from digitalearth.three_d.core.base import classified_scalars
             >>> style = classified_scalars(
             ...     [1.0, 2.0, 3.0, 40.0], scheme="quantiles", k=2, cmap="viridis"
             ... )
@@ -253,7 +253,7 @@ def classified_scalars(
             ```
         - A categorical scheme gives every distinct value its own colour:
             ```python
-            >>> from digitalearth.three_d.base import classified_scalars
+            >>> from digitalearth.three_d.core.base import classified_scalars
             >>> style = classified_scalars(
             ...     ["a", "b", "a", "c"], scheme="categorical", k=5, cmap="tab10"
             ... )
@@ -264,7 +264,7 @@ def classified_scalars(
         - A feature with no value is drawn as missing, never as the top class:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.three_d.base import classified_scalars
+            >>> from digitalearth.three_d.core.base import classified_scalars
             >>> style = classified_scalars(
             ...     [1.0, 2.0, 3.0, 40.0, np.nan], scheme="quantiles", k=4, cmap="viridis"
             ... )
@@ -377,7 +377,7 @@ def supported_destinations() -> str:
 
     Examples:
         ```python
-        >>> from digitalearth.three_d.base import supported_destinations
+        >>> from digitalearth.three_d.core.base import supported_destinations
         >>> supported_destinations().startswith("use a raster-frame suffix")
         True
 
@@ -398,7 +398,7 @@ def house_theme() -> "pv.themes.Theme":
     Examples:
         - Read back the settings a scene renders with by default:
             ```python
-            >>> from digitalearth.three_d.base import house_theme
+            >>> from digitalearth.three_d.core.base import house_theme
             >>> theme = house_theme()
             >>> theme.cmap
             'viridis'
@@ -410,7 +410,7 @@ def house_theme() -> "pv.themes.Theme":
             ```
         - Every call hands back a fresh theme, so tweaking one scene's colours leaves the next untouched:
             ```python
-            >>> from digitalearth.three_d.base import house_theme
+            >>> from digitalearth.three_d.core.base import house_theme
             >>> mine = house_theme()
             >>> mine.cmap = "magma"
             >>> house_theme().cmap
@@ -559,7 +559,7 @@ class Scene3DBase:
     Examples:
         - A scene given a display CRS reports it before any layer is added, and builds no plotter to do so:
             ```python
-            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> from digitalearth.three_d.core.base import Scene3DBase
             >>> scene = Scene3DBase(off_screen=True, crs=4326)
             >>> scene.display_crs, scene.layers
             (4326, [])
@@ -569,7 +569,7 @@ class Scene3DBase:
         - Build a scene, stack two meshes on its single plotter, and read the layer registry back:
             ```python
             >>> import pyvista as pv
-            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> from digitalearth.three_d.core.base import Scene3DBase
             >>> scene = Scene3DBase(off_screen=True)
             >>> _ = scene.add_mesh(pv.Sphere())
             >>> _ = scene.add_mesh(pv.Cube(center=(3, 0, 0)))
@@ -580,7 +580,7 @@ class Scene3DBase:
             ```
         - Size the render window, then render a frame from it:
             ```python
-            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> from digitalearth.three_d.core.base import Scene3DBase
             >>> scene = Scene3DBase(off_screen=True, window_size=(320, 240))
             >>> list(scene.plotter.window_size)
             [320, 240]
@@ -592,7 +592,7 @@ class Scene3DBase:
         - Used as a context manager the plotter is closed on the way out, even if the body raises:
             ```python
             >>> import pyvista as pv
-            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> from digitalearth.three_d.core.base import Scene3DBase
             >>> with Scene3DBase(off_screen=True) as scene:
             ...     _ = scene.add_mesh(pv.Sphere())
             ...     len(scene.layers)
@@ -663,7 +663,7 @@ class Scene3DBase:
         #: currently on the plotter under, whether the layer is in the keyed list, and the row labels a caller
         #: overrode. The same split as `_decoration`: what the key **is** travels on the layer's encoding as a
         #: `Guide`, and this is the drawing state that cannot, because a bar's title is a slot on one plotter
-        #: rather than a property of the figure. :func:`~digitalearth.three_d.guides.redraw_guides` owns it
+        #: rather than a property of the figure. :func:`~digitalearth.three_d.legends.legend.redraw_guides` owns it
         #: and prunes an entry when its layer goes.
         self._guides: dict[str, dict[str, Any]] = {}
         #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
@@ -673,7 +673,7 @@ class Scene3DBase:
         #: Cells above which a layer takes this tier's big-data route (#207, contract C8). The scene-wide reach
         #: of the cutoff: every builder that can reduce reads it, and each takes its own
         #: `big_data_threshold=` for one call without changing this. **Cells, not rows** — see
-        #: :data:`~digitalearth.three_d.bigdata.DEFAULT_CELL_BUDGET`.
+        #: :data:`~digitalearth.three_d.builders.bigdata.DEFAULT_CELL_BUDGET`.
         self.big_data_threshold: int = DEFAULT_CELL_BUDGET
 
     @property
@@ -690,7 +690,7 @@ class Scene3DBase:
         Examples:
             - The plotter carries the size the scene was built with:
                 ```python
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True, window_size=(320, 240))
                 >>> list(scene.plotter.window_size)
                 [320, 240]
@@ -699,7 +699,7 @@ class Scene3DBase:
                 ```
             - Asking twice returns the same plotter:
                 ```python
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> scene.plotter is scene.plotter
                 True
@@ -742,7 +742,7 @@ class Scene3DBase:
         The scene's decoration is the same kind of state and is applied here for the same reason (#203):
         `set_title()` on a described scene must not force a render window open, and a heading drawn only at
         the call would be missing from the window that is finally built — and from the next one the scene is
-        handed. :func:`~digitalearth.three_d.decoration.redraw_decoration` reads the heading off the figure
+        handed. :func:`~digitalearth.three_d.decoration.decoration.redraw_decoration` reads the heading off the figure
         and its styling off :attr:`_decoration`.
 
         The scale is applied unconditionally: `set_scale(zscale=1.0)` leaves a fresh plotter at
@@ -757,7 +757,7 @@ class Scene3DBase:
         self._apply_camera()
         # Imported here rather than at module level: `decoration` is one of the builder modules, and every one
         # of them declares this class as its typing base, so a module-level import would close a cycle.
-        from digitalearth.three_d.decoration import redraw_decoration
+        from digitalearth.three_d.decoration.decoration import redraw_decoration
 
         redraw_decoration(self)
 
@@ -783,7 +783,7 @@ class Scene3DBase:
                 ```python
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> placed = scene._place(np.zeros((2, 3)), layer="demo")
                 >>> scene.display_crs is None
@@ -849,7 +849,7 @@ class Scene3DBase:
         Examples:
             - A fresh scene renders at true scale; the value set reads straight back:
                 ```python
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> scene.vertical_exaggeration
                 1.0
@@ -862,7 +862,7 @@ class Scene3DBase:
             - It is the view that stretches, not the mesh — and a layer added afterwards is stretched too:
                 ```python
                 >>> import pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> scene.vertical_exaggeration = 4.0
                 >>> sphere = pv.Sphere()
@@ -1005,7 +1005,7 @@ class Scene3DBase:
             - Add one mesh and find it, paired with its actor, in the layer registry:
                 ```python
                 >>> import pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> actor = scene.add_mesh(pv.Sphere())
                 >>> mesh, registered = scene.layers[0]
@@ -1017,7 +1017,7 @@ class Scene3DBase:
             - Style the mesh through ``kwargs``, then tune the returned actor further:
                 ```python
                 >>> import numpy as np, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> grid = pv.ImageData(dimensions=(8, 8, 1))
                 >>> grid.point_data["z"] = np.linspace(0.0, 1.0, 64)
                 >>> scene = Scene3DBase(off_screen=True)
@@ -1068,7 +1068,7 @@ class Scene3DBase:
             - Ray-cast a 3-D scalar field and see it registered as one layer:
                 ```python
                 >>> import numpy as np, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> grid = pv.ImageData(dimensions=(6, 6, 6))
                 >>> grid.cell_data["v"] = np.linspace(0.0, 1.0, 125)
                 >>> scene = Scene3DBase(off_screen=True)
@@ -1081,7 +1081,7 @@ class Scene3DBase:
             - A volume and a surface share the one plotter, stacking in add order:
                 ```python
                 >>> import numpy as np, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> grid = pv.ImageData(dimensions=(6, 6, 6))
                 >>> grid.cell_data["v"] = np.linspace(0.0, 1.0, 125)
                 >>> scene = Scene3DBase(off_screen=True)
@@ -1141,7 +1141,7 @@ class Scene3DBase:
         """The renderer that draws this scene's figure, and holds what it drew.
 
         Returns:
-            The :class:`~digitalearth.three_d.renderer.Renderer3D`. Its `drawn` mapping is how a layer id
+            The :class:`~digitalearth.three_d.render.renderer.Renderer3D`. Its `drawn` mapping is how a layer id
             reaches the mesh and actor behind it.
         """
         return self._renderer
@@ -1553,7 +1553,7 @@ class Scene3DBase:
         self._change(figure)
         # The panel's own `title` is part of the figure (#203), and nothing in the layer diff re-reads it, so
         # a heading drawn only at `set_title()` would be lost on exactly the round trip the seam exists for.
-        from digitalearth.three_d.decoration import redraw_decoration
+        from digitalearth.three_d.decoration.decoration import redraw_decoration
 
         redraw_decoration(self)
         return self
@@ -1721,7 +1721,7 @@ class Scene3DBase:
                 (order 24). `None` for a layer whose look is engine keywords alone, which is what publishing
                 nothing means: a key over it is refused rather than drawn over nothing.
             **props: The engine keywords, stored on the layer's symbology. An array among them is stored as a
-                reference rather than copied (:mod:`digitalearth.three_d.layer`).
+                reference rather than copied (:mod:`digitalearth.three_d.core.layer`).
 
         Returns:
             The actor PyVista produced, or `None` when the layer had nothing to draw. A skipped layer is not
@@ -1877,7 +1877,7 @@ class Scene3DBase:
         The one-word half of the camera API. :attr:`camera` says exactly where to stand; this says it the way a
         figure caption does, over PyVista's own ``view_*`` methods, which frame the scene's current bounds from
         a direction. The names are a table a caller can add to
-        (:func:`~digitalearth.three_d.views.register_view`), not a fixed list of methods.
+        (:func:`~digitalearth.three_d.view.views.register_view`), not a fixed list of methods.
 
         The view is **captured**, not only applied: PyVista aims its camera, the scene reads the result back as
         a `Camera` and stores it. That is what makes the viewpoint survive the next render — which writes the
@@ -1885,7 +1885,7 @@ class Scene3DBase:
         else the view is read.
 
         Args:
-            name: The view's name, as :func:`~digitalearth.three_d.views.view_names` lists it.
+            name: The view's name, as :func:`~digitalearth.three_d.view.views.view_names` lists it.
 
         Returns:
             The scene, so a view chains with the builders.
@@ -1920,7 +1920,7 @@ class Scene3DBase:
                 ```
 
         See Also:
-            digitalearth.three_d.views: the table, and how to put a view of your own in it.
+            digitalearth.three_d.view.views: the table, and how to put a view of your own in it.
         """
         named_view(name).apply(self.plotter)
         self.camera = self._live_camera()
@@ -2053,7 +2053,7 @@ class Scene3DBase:
             - Render to memory and work with the frame as an array:
                 ```python
                 >>> import pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True, window_size=(200, 150))
                 >>> _ = scene.add_mesh(pv.Sphere())
                 >>> frame = scene.screenshot()
@@ -2067,7 +2067,7 @@ class Scene3DBase:
             - Write a PNG to disk; the frame is still returned:
                 ```python
                 >>> import os, tempfile, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     scene = Scene3DBase(off_screen=True)
                 ...     _ = scene.add_mesh(pv.Cube())
@@ -2124,7 +2124,7 @@ class Scene3DBase:
               the normalised one — the page that exists, on either pyvista — so it can be passed straight on:
                 ```python
                 >>> import os, tempfile, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     scene = Scene3DBase(off_screen=True)
                 ...     _ = scene.add_mesh(pv.Sphere())
@@ -2207,7 +2207,7 @@ class Scene3DBase:
             - A raster suffix screenshots, and hands back the path it wrote — not the frame:
                 ```python
                 >>> import os, tempfile, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     scene = Scene3DBase(off_screen=True, window_size=(200, 150))
                 ...     _ = scene.add_mesh(pv.Sphere())
@@ -2222,7 +2222,7 @@ class Scene3DBase:
               the same way:
                 ```python
                 >>> import os, tempfile, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     scene = Scene3DBase(off_screen=True)
                 ...     _ = scene.add_mesh(pv.Sphere())
@@ -2237,7 +2237,7 @@ class Scene3DBase:
               and the returned path is the normalised one, not the name that was passed:
                 ```python
                 >>> import os, tempfile, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     scene = Scene3DBase(off_screen=True)
                 ...     _ = scene.add_mesh(pv.Sphere())
@@ -2249,7 +2249,7 @@ class Scene3DBase:
                 ```
             - A suffix-less destination is an error, not a silent ``.png``:
                 ```python
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> try:
                 ...     scene.save("scene")
@@ -2312,7 +2312,7 @@ class Scene3DBase:
               theme setting decides — do not rely on it:
                 ```python
                 >>> import pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> _ = scene.add_mesh(pv.Sphere())
                 >>> _ = scene.show()
@@ -2322,7 +2322,7 @@ class Scene3DBase:
             - Keyword arguments reach :meth:`pyvista.Plotter.show`, so the camera can be framed on the way in:
                 ```python
                 >>> import pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> _ = scene.add_mesh(pv.Cube())
                 >>> _ = scene.show(cpos="xy")
@@ -2346,7 +2346,7 @@ class Scene3DBase:
             - Free the render window when the scene is finished with:
                 ```python
                 >>> import pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> _ = scene.add_mesh(pv.Sphere())
                 >>> scene.close()
@@ -2356,7 +2356,7 @@ class Scene3DBase:
                 ```
             - A second close is a no-op, not an error:
                 ```python
-                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> from digitalearth.three_d.core.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> scene.close()
                 >>> scene.close()

@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from digitalearth.base.spec import FigureSpec, PanelSpec
-from digitalearth.three_d.base import DEFAULT_CAMERA, PANEL_ID
+from digitalearth.three_d.core.base import DEFAULT_CAMERA, PANEL_ID
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
@@ -83,7 +83,7 @@ def grid(
             >>> import numpy as np
             >>> from digitalearth.base.sources import get_source
             >>> from digitalearth.three_d import Scene3D
-            >>> from digitalearth.three_d.panels import grid
+            >>> from digitalearth.three_d.app.panels import grid
             >>> left = Scene3D(off_screen=True)
             >>> _ = left.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
             >>> right = Scene3D(off_screen=True)

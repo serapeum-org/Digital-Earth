@@ -31,7 +31,7 @@ from shapely.geometry import LineString, Point, Polygon
 
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.base import classified_scalars
+from digitalearth.three_d.core.base import classified_scalars
 
 #: The keyword every derived colour style pins, and so the one a pinned caller value would be overwritten by.
 #: Read out of `classified_scalars` rather than written here, which is what ties this to the code that derives
@@ -59,7 +59,7 @@ DRAWS_WITH_KWARGS = {
 }
 
 #: The other methods whose signature ends in ``**kwargs`` and which draw nothing from a derived style, each with
-#: the reason — the same "declared, with a reason" shape :data:`~digitalearth.three_d.bigdata.UNREDUCED` uses. A
+#: the reason — the same "declared, with a reason" shape :data:`~digitalearth.three_d.builders.bigdata.UNREDUCED` uses. A
 #: method here is exempt because of what it does, not because nobody got round to it.
 NOT_A_DRAWING_CALL = {
     "axes": "decoration: its keywords reach show_bounds, which takes no scalars and derives nothing from data",

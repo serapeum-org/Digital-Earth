@@ -225,7 +225,7 @@ class TestOffenderRules:
             "digitalearth.static.charts.figures",
             "digitalearth.interactive.charts",
             "digitalearth.web.base",
-            "digitalearth.three_d.globe",
+            "digitalearth.three_d.builders.globe",
         ],
     )
     def test_sibling_backends_are_rejected(self, target):

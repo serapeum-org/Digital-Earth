@@ -52,7 +52,7 @@ PACKAGE_ROOT = Path(digitalearth.__file__).resolve().parent
 
 #: A cross-reference or a prose mention carrying its receiver. The receiver has to start with a capital, which
 #: keeps ``np.asarray`` and ``self.foo`` out; a dotted path naming modules first
-#: (``digitalearth.three_d.base.Scene3DBase.vertical_exaggeration``) is excluded by the lookbehind, since it
+#: (``digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration``) is excluded by the lookbehind, since it
 #: resolves through the full path rather than through a bare class name.
 DOTTED_REFERENCE = re.compile(r"`~?([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)`")
 

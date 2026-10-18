@@ -201,7 +201,7 @@ def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
         - A surface over the budget comes back at or under it:
             ```python
             >>> import numpy as np, pyvista as pv
-            >>> from digitalearth.three_d.bigdata import reduce_surface
+            >>> from digitalearth.three_d.builders.bigdata import reduce_surface
             >>> ax = np.arange(40.0)
             >>> xx, yy = np.meshgrid(ax, ax)
             >>> grid = pv.StructuredGrid(xx, yy, xx * 0.1)
@@ -214,7 +214,7 @@ def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
         - A sheet whose quads fit the budget but whose triangles do not is still reduced:
             ```python
             >>> import numpy as np, pyvista as pv
-            >>> from digitalearth.three_d.bigdata import reduce_surface
+            >>> from digitalearth.three_d.builders.bigdata import reduce_surface
             >>> ax = np.arange(41.0)
             >>> grid = pv.StructuredGrid(*np.meshgrid(ax, ax), np.zeros((41, 41)))
             >>> grid.n_cells
@@ -226,7 +226,7 @@ def reduce_surface(mesh: Any, budget: int, *, kind: str) -> Any:
         - One whose triangles are under the budget is the very same object:
             ```python
             >>> import numpy as np, pyvista as pv
-            >>> from digitalearth.three_d.bigdata import reduce_surface
+            >>> from digitalearth.three_d.builders.bigdata import reduce_surface
             >>> grid = pv.StructuredGrid(*np.meshgrid(np.arange(4.0), np.arange(4.0)), np.zeros((4, 4)))
             >>> reduce_surface(grid, 500_000, kind="terrain") is grid
             True
@@ -285,7 +285,7 @@ def reduce_volume(
         - A cube over the budget comes back at or under it, still carrying its field:
             ```python
             >>> import numpy as np, pyvista as pv
-            >>> from digitalearth.three_d.bigdata import reduce_volume
+            >>> from digitalearth.three_d.builders.bigdata import reduce_volume
             >>> cube = np.random.default_rng(0).random((20, 20, 20))
             >>> grid = pv.ImageData(dimensions=np.array(cube.shape[::-1]) + 1)
             >>> grid.cell_data["field"] = cube.transpose(2, 1, 0).ravel(order="F")
@@ -297,7 +297,7 @@ def reduce_volume(
         - A volume with one thin axis is reduced by the axes that can shrink, so the budget still holds:
             ```python
             >>> import numpy as np, pyvista as pv
-            >>> from digitalearth.three_d.bigdata import reduce_volume
+            >>> from digitalearth.three_d.builders.bigdata import reduce_volume
             >>> grid = pv.ImageData(dimensions=(1001, 1001, 2))
             >>> grid.cell_data["field"] = np.zeros(1_000_000)
             >>> smaller = reduce_volume(grid, 500_000, kind="volume", scalars="field", preference="cell")
@@ -340,7 +340,7 @@ def reduce_points(cloud: Any, budget: int, *, kind: str = "point_cloud") -> Any:
         - A cloud over the budget comes back at or under it:
             ```python
             >>> import numpy as np, pyvista as pv
-            >>> from digitalearth.three_d.bigdata import reduce_points
+            >>> from digitalearth.three_d.builders.bigdata import reduce_points
             >>> cloud = pv.PolyData(np.random.default_rng(0).random((1000, 3)))
             >>> reduce_points(cloud, 100).n_points <= 100
             True
@@ -349,7 +349,7 @@ def reduce_points(cloud: Any, budget: int, *, kind: str = "point_cloud") -> Any:
         - One under the budget is the very same object:
             ```python
             >>> import numpy as np, pyvista as pv
-            >>> from digitalearth.three_d.bigdata import reduce_points
+            >>> from digitalearth.three_d.builders.bigdata import reduce_points
             >>> cloud = pv.PolyData(np.random.default_rng(0).random((50, 3)))
             >>> reduce_points(cloud, 500_000) is cloud
             True

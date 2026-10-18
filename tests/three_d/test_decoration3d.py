@@ -25,7 +25,7 @@ pv = pytest.importorskip("pyvista")
 from digitalearth.base.spec import FigureSpec  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
-from digitalearth.three_d.decoration import (  # noqa: E402
+from digitalearth.three_d.decoration.decoration import (  # noqa: E402
     SUBTITLE_ACTOR,
     TITLE_SLOT,
     axis_labels,

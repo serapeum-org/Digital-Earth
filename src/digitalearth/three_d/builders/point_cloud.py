@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from digitalearth.base.points import PointArrays
-from digitalearth.three_d.base import classified_scalars
-from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET, reduce_points
+from digitalearth.three_d.builders.bigdata import DEFAULT_CELL_BUDGET, reduce_points
+from digitalearth.three_d.core.base import classified_scalars
 
 #: Attribute name the per-point colour scalar is stored under on the generated cloud.
 SCALAR = "scalar"
@@ -72,13 +72,13 @@ def _coords_from_array(data: Any) -> np.ndarray:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
 
 from digitalearth.base.spec import Encoding, LayerSpec
-from digitalearth.three_d.layer import drawing_props
+from digitalearth.three_d.core.layer import drawing_props
 
 
 class PointCloudMixin(_MixinBase):
@@ -90,13 +90,13 @@ class PointCloudMixin(_MixinBase):
     composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.core.base.Scene3DBase`, the state ``Scene3D``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
     what it was before the annotation.
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
-        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
     """
 
     def point_cloud(
@@ -138,7 +138,7 @@ class PointCloudMixin(_MixinBase):
             cmap: Colormap used when the cloud is coloured by a scalar.
             big_data_threshold: Points above which the cloud is subsampled (an even stride over the points)
                 before it is drawn (#207). ``None`` (the default) uses the scene's
-                :attr:`~digitalearth.three_d.base.Scene3DBase.big_data_threshold`; a cloud at or under the
+                :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`; a cloud at or under the
                 budget keeps every point. The subsample is deterministic, so the render repeats, and the
                 colour scalar is carried through.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`. A coloured cloud derives ``scalars``,
@@ -148,7 +148,7 @@ class PointCloudMixin(_MixinBase):
 
         Returns:
             The registered :class:`pyvista.Actor` for the point cloud, or ``None`` when the cloud held no
-            points (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+            points (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).
 
         Raises:
             ValueError: if ``values`` does not have one entry per point, if ``scheme`` cannot classify
@@ -243,9 +243,9 @@ def _color_encoding(
 
         The scale is `None` when the values cannot be reached or cannot be classified: the drawer classifies
         the same column moments later and raises the tier's own message for it (see
-        :func:`~digitalearth.three_d.guides.color_scale`).
+        :func:`~digitalearth.three_d.legends.legend.color_scale`).
     """
-    from digitalearth.three_d.guides import color_scale
+    from digitalearth.three_d.legends.legend import color_scale
 
     column = np.asarray(values) if values is not None else None
     if column is None and value_column:
@@ -295,9 +295,9 @@ def _refuse_derived_colours(
 ) -> None:
     """Refuse a colour keyword the cloud's own colouring derives, naming it.
 
-    The style :func:`~digitalearth.three_d.base.classified_scalars` builds is splatted over ``props``, so a
+    The style :func:`~digitalearth.three_d.core.base.classified_scalars` builds is splatted over ``props``, so a
     caller pinning ``clim=`` on a coloured cloud silently lost it to the class-index range — the same clash
-    :func:`~digitalearth.three_d.vector._classify_or_refuse` already refuses for an extruded polygon, which
+    :func:`~digitalearth.three_d.builders.vector._classify_or_refuse` already refuses for an extruded polygon, which
     this drawer did not (review H4). ``scalars`` is in the same position: the cloud binds its own array name.
 
     What is refused is a *consequence* of the classification, not a choice inside it. ``clim`` and ``n_colors``

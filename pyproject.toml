@@ -384,7 +384,7 @@ module = "digitalearth.static.charts.series"  # 2 errors at baseline
 disable_error_code = ["arg-type", "assignment"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.three_d.base"  # 2 errors at baseline
+module = "digitalearth.three_d.core.base"  # 2 errors at baseline
 disable_error_code = ["exit-return", "no-any-return"]
 
 [[tool.mypy.overrides]]
@@ -409,12 +409,12 @@ module = "digitalearth.static.globe.textured_globe"  # 1 error at baseline
 disable_error_code = ["exit-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.three_d.globe"  # 1 error at baseline
+module = "digitalearth.three_d.builders.globe"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.three_d.terrain"  # 1 error at baseline
+module = "digitalearth.three_d.builders.terrain"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
 

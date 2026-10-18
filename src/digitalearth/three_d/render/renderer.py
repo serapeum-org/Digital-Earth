@@ -25,7 +25,7 @@ from typing import Any
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.spec import FigureSpec, LayerSpec
-from digitalearth.three_d.bigdata import report_unreduced
+from digitalearth.three_d.builders.bigdata import report_unreduced
 from digitalearth.three_d.capabilities import CAPABILITIES
 
 __all__ = ["Renderer3D", "drawer_for"]
@@ -78,14 +78,14 @@ def drawer_for(kind: str) -> Any:
         - Every kind the tier declares has a drawer:
             ```python
             >>> from digitalearth.three_d.capabilities import CAPABILITIES
-            >>> from digitalearth.three_d.renderer import drawer_for
+            >>> from digitalearth.three_d.render.renderer import drawer_for
             >>> sorted(kind for kind in CAPABILITIES.kinds if drawer_for(kind) is None)
             []
 
             ```
         - A kind from another tier is refused by name:
             ```python
-            >>> from digitalearth.three_d.renderer import drawer_for
+            >>> from digitalearth.three_d.render.renderer import drawer_for
             >>> drawer_for("hexbin")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -108,8 +108,7 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the scene, so a module-level
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.
-    from digitalearth.three_d import (
-        decoration,
+    from digitalearth.three_d.builders import (
         flat,
         globe,
         point_cloud,
@@ -117,6 +116,7 @@ def drawer_for(kind: str) -> Any:
         vector,
         volume,
     )
+    from digitalearth.three_d.decoration import decoration
 
     drawers = {
         "terrain": terrain.draw_terrain,
@@ -163,7 +163,7 @@ def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | N
     Raises:
         OffLimbError: when the object is missing and the scene is `strict`.
     """
-    from digitalearth.three_d.layer import drawing_props
+    from digitalearth.three_d.core.layer import drawing_props
 
     props = drawing_props(layer.symbology.props)
     try:
@@ -312,7 +312,7 @@ class Renderer3D:
         # and this is the one place all six funnel through, and the only one where the actors a scalar bar
         # reads its mapper from are current (order 24). `after` is passed rather than read off the scene:
         # during a `_change` the scene still holds the figure it is leaving.
-        from digitalearth.three_d.guides import redraw_guides
+        from digitalearth.three_d.legends.legend import redraw_guides
 
         redraw_guides(self.scene, after)
 
@@ -327,7 +327,7 @@ class Renderer3D:
 
         **A guide is in the same position as a label** (order 24): asking for a colour key, titling it or
         switching it off changes the layer's `Symbology`, and none of it changes the mesh or the mapper — the
-        key is drawn beside them by :func:`~digitalearth.three_d.guides.redraw_guides`. Compared whole, a
+        key is drawn beside them by :func:`~digitalearth.three_d.legends.legend.redraw_guides`. Compared whole, a
         `colorbar(label=...)` on a 1000x1000 DEM re-opened the raster, re-ran the reprojection and rebuilt the
         surface to add a text label to the window.
 

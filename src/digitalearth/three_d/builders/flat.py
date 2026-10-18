@@ -13,29 +13,29 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from digitalearth.base.spec import Encoding, LayerSpec
-from digitalearth.three_d.base import classified_scalars
-from digitalearth.three_d.bigdata import reduce_points
-from digitalearth.three_d.layer import drawing_props
-from digitalearth.three_d.point_cloud import (
+from digitalearth.three_d.builders.bigdata import reduce_points
+from digitalearth.three_d.builders.point_cloud import (
     SCALAR,
     _coords_from_array,
     _coords_from_geodataframe,
 )
-from digitalearth.three_d.point_cloud import (
+from digitalearth.three_d.builders.point_cloud import (
     _color_encoding as _point_encoding,
 )
-from digitalearth.three_d.vector import (
+from digitalearth.three_d.builders.vector import (
     VALUE,
     _cap_with_holes,
     _classify_or_refuse,
     _polygon_parts,
 )
-from digitalearth.three_d.vector import (
+from digitalearth.three_d.builders.vector import (
     _color_encoding as _polygon_encoding,
 )
+from digitalearth.three_d.core.base import classified_scalars
+from digitalearth.three_d.core.layer import drawing_props
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -81,7 +81,7 @@ class FlatMixin(_MixinBase):
     ) -> Any:
         """Draw flat point features (markers on the ground plane, ``z=0``) and register them as one layer.
 
-        The Core ``points`` verb, distinct from :meth:`~digitalearth.three_d.point_cloud.PointCloudMixin.point_cloud`,
+        The Core ``points`` verb, distinct from :meth:`~digitalearth.three_d.builders.point_cloud.PointCloudMixin.point_cloud`,
         which takes a z per point: ``points`` lays markers flat, as a 2-D map would, under the 3-D scene.
 
         Args:
@@ -130,7 +130,7 @@ class FlatMixin(_MixinBase):
         """Draw flat filled polygons (footprints on the ground plane, ``z=0``) and register them as one layer.
 
         The Core ``polygons`` verb, distinct from
-        :meth:`~digitalearth.three_d.vector.VectorMixin.extruded_polygons`, which raises each footprint into a
+        :meth:`~digitalearth.three_d.builders.vector.VectorMixin.extruded_polygons`, which raises each footprint into a
         prism: ``polygons`` fills them flat. Holes are carved (the same hole-aware triangulation the extrusion
         uses).
 

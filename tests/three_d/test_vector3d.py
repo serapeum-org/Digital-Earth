@@ -15,7 +15,7 @@ from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.vector import (
+from digitalearth.three_d.builders.vector import (
     MAGNITUDE,
     VALUE,
     _exterior_rings,
@@ -520,7 +520,7 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
             ``n_colors`` from *its* length instead of from the class count — so classes 2, 3 and 4 of five
             all clamped onto the second colour and rendered identically.
         """
-        from digitalearth.three_d.base import classified_scalars
+        from digitalearth.three_d.core.base import classified_scalars
 
         with pytest.raises(ValueError) as excinfo:
             classified_scalars([1, 2, 3, 4, 50], scheme="quantiles", k=5, cmap=colours)
@@ -530,7 +530,7 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
 
     def test_a_colour_list_of_exactly_k_is_honoured(self):
         """The guard must not disturb the deliberate case it protects."""
-        from digitalearth.three_d.base import classified_scalars
+        from digitalearth.three_d.core.base import classified_scalars
 
         colours = ["#ff0000", "#00ff00", "#0000ff"]
         style = classified_scalars(
@@ -683,7 +683,7 @@ class TestTheExtrudedColumnIsClassifiedOnce:
         """
         from dataclasses import replace as with_fields
 
-        from digitalearth.three_d.base import classified_scalars
+        from digitalearth.three_d.core.base import classified_scalars
 
         gdf = self._grid(9)
         asked = {"scheme": scheme, "k": k, "cmap": cmap, **changed}

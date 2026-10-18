@@ -99,7 +99,7 @@ def is_geographic(crs: Any) -> bool | None:
     ``"EPSG:<code>"`` string in either case, a proj4 string, or a WKT definition. Nothing is inferred from
     coordinate magnitudes and nothing is parsed out of the string here — a reader that only understood the
     ``int`` spelling answered "unknown" for a projected CRS written ``"EPSG:3857"``, which let
-    :meth:`digitalearth.three_d.globe.GlobeMixin.globe` drape Web-Mercator metres on a sphere.
+    :meth:`digitalearth.three_d.builders.globe.GlobeMixin.globe` drape Web-Mercator metres on a sphere.
 
     An unreadable CRS is reported as "unknown" (``None``) rather than guessed at, so a caller can tell
     "definitely projected" apart from "no CRS to go on" and answer the two differently.

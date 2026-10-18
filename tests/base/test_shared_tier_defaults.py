@@ -365,7 +365,7 @@ class TestM9TheAnimationRateIsOneConstant:
             ``three_d/animation.py`` held its own ``DEFAULT_FPS: float = 3.0``, the third declaration of one
             agreed number. Its module cannot be imported in this environment, so the source is parsed instead.
         """
-        tree = _tree("three_d/animation.py")
+        tree = _tree("three_d/temporal/animation.py")
         assert "DEFAULT_FPS" not in _assigned_names(tree)
         assert "DEFAULT_FPS" in _imports_from(tree, "digitalearth.base.animation")
 
@@ -374,7 +374,7 @@ class TestM9TheAnimationRateIsOneConstant:
         [
             "static/builders/animation.py",
             "interactive/animation.py",
-            "three_d/animation.py",
+            "three_d/temporal/animation.py",
             "web/export.py",
         ],
     )
@@ -428,7 +428,7 @@ class TestL11TheColormapSamplerIsShared:
             Its copy was spelled ``_sample_cmap`` and accepted an already-built colour sequence as well as a
             name — the superset the shared helper now offers every tier.
         """
-        tree = _tree("three_d/base.py")
+        tree = _tree("three_d/core/base.py")
         assert "sample_cmap" in _imports_from(tree, "digitalearth.base.symbology")
         assert "_sample_cmap" not in _function_names(tree)
 

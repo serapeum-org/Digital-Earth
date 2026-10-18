@@ -941,7 +941,7 @@ class ThreeDContract(RendererContract):
         Returns:
             The drawable kinds.
         """
-        from digitalearth.three_d.renderer import DRAWN_KINDS
+        from digitalearth.three_d.render.renderer import DRAWN_KINDS
 
         return DRAWN_KINDS
 
@@ -954,7 +954,7 @@ class ThreeDContract(RendererContract):
         Returns:
             The drawer.
         """
-        from digitalearth.three_d.renderer import drawer_for
+        from digitalearth.three_d.render.renderer import drawer_for
 
         return drawer_for(kind)
 

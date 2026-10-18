@@ -21,9 +21,9 @@ place :func:`digitalearth.api._has_a_key_to_draw` asks the static tier which of 
 bar can describe.
 
 **Where the key is drawn, so it survives a re-render.** Not in
-:meth:`~digitalearth.three_d.base.Scene3DBase._dress_plotter`: that re-applies *scene* state — the view scale,
+:meth:`~digitalearth.three_d.core.base.Scene3DBase._dress_plotter`: that re-applies *scene* state — the view scale,
 the camera, the title — onto a plotter that carries none of the layers' actors, and a scalar bar needs the
-mapper of a drawn actor. It is drawn at the end of :meth:`~digitalearth.three_d.renderer.Renderer3D.apply`,
+mapper of a drawn actor. It is drawn at the end of :meth:`~digitalearth.three_d.render.renderer.Renderer3D.apply`,
 which is the one place every figure change funnels through — a layer added, removed, hidden, shown, moved,
 restyled, or a whole figure brought in by `draw_figure`/`from_figure` — and the only place where the actors a
 bar reads are current. :func:`redraw_guides` therefore takes the figure it is reconciling against as an
@@ -60,7 +60,7 @@ from digitalearth.base.spec import Encoding, FigureSpec, Guide, LegendSpec, Scal
 __all__ = ["ColourGuide", "GuideMixin", "color_scale", "guide_field", "redraw_guides"]
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -112,7 +112,7 @@ def guide_field(layer: Any) -> str | None:
             >>> import numpy as np
             >>> from digitalearth.base.sources import get_source
             >>> from digitalearth.three_d import Scene3D
-            >>> from digitalearth.three_d.guides import guide_field
+            >>> from digitalearth.three_d.legends.legend import guide_field
             >>> scene = Scene3D(off_screen=True)
             >>> _ = scene.terrain(get_source(np.add.outer(np.arange(4.0), np.arange(5.0))))
             >>> guide_field(scene.get_layer("terrain-1"))
@@ -125,7 +125,7 @@ def guide_field(layer: Any) -> str | None:
             >>> import numpy as np
             >>> from digitalearth.base.sources import get_source
             >>> from digitalearth.three_d import Scene3D
-            >>> from digitalearth.three_d.guides import guide_field
+            >>> from digitalearth.three_d.legends.legend import guide_field
             >>> dem = get_source(np.add.outer(np.arange(4.0), np.arange(5.0)))
             >>> scene = Scene3D(off_screen=True)
             >>> _ = scene.terrain(dem, scalars=None, color="red")
@@ -140,7 +140,7 @@ def guide_field(layer: Any) -> str | None:
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
             >>> from digitalearth.three_d import Scene3D
-            >>> from digitalearth.three_d.guides import guide_field
+            >>> from digitalearth.three_d.legends.legend import guide_field
             >>> features = gpd.GeoDataFrame(
             ...     {"depth": [1.0, 5.0, 9.0]},
             ...     geometry=[Point(0, 0), Point(1, 1), Point(2, 2)],
@@ -167,7 +167,7 @@ def color_scale(
 
     The builder's half of the classification the drawer performs. It is the **same** computation, not a second
     one: a graduated scheme's edges come from :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` — which is
-    what :func:`~digitalearth.three_d.base.classified_scalars` calls — and a categorical scheme's categories
+    what :func:`~digitalearth.three_d.core.base.classified_scalars` calls — and a categorical scheme's categories
     and colours from :func:`~digitalearth.base.symbology.categorical_colors` with the same
     :func:`~digitalearth.base.symbology.resolve_categorical_cmap` sentinel. That is what lets
     :meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale` derive a legend whose rows cannot disagree
@@ -190,7 +190,7 @@ def color_scale(
     Examples:
         - A graduated scheme records the class edges, so a legend can label each class:
             ```python
-            >>> from digitalearth.three_d.guides import color_scale
+            >>> from digitalearth.three_d.legends.legend import color_scale
             >>> scale = color_scale([1.0, 2.0, 3.0, 40.0], scheme="quantiles", k=2, cmap="viridis")
             >>> scale.is_classified, len(scale.class_ranges())
             (True, 2)
@@ -198,7 +198,7 @@ def color_scale(
             ```
         - A categorical scheme records the categories and the colours they were given:
             ```python
-            >>> from digitalearth.three_d.guides import color_scale
+            >>> from digitalearth.three_d.legends.legend import color_scale
             >>> scale = color_scale(["a", "b", "a"], scheme="categorical", k=5, cmap="tab10")
             >>> scale.categories, scale.color_for("a"), scale.color_for("b")
             (('a', 'b'), '#1f77b4', '#ff7f0e')
@@ -206,7 +206,7 @@ def color_scale(
             ```
         - A column the scheme cannot cut answers `None`, leaving the refusal to the drawer:
             ```python
-            >>> from digitalearth.three_d.guides import color_scale
+            >>> from digitalearth.three_d.legends.legend import color_scale
             >>> color_scale([1.0, 1.0, 1.0], scheme="quantiles", k=4, cmap="viridis") is None
             True
 
@@ -346,7 +346,7 @@ def _plotter_of(scene: Any) -> Any:
     Returns:
         The scene's plotter when it has one that answers to the scalar-bar API — a described scene builds no
         render window, and a stand-in plotter need not implement the whole annotation surface, which is the
-        rule :func:`~digitalearth.three_d.decoration.redraw_decoration` already applies. `None` otherwise.
+        rule :func:`~digitalearth.three_d.decoration.decoration.redraw_decoration` already applies. `None` otherwise.
     """
     plotter = getattr(scene, "_plotter", None)
     if plotter is None or not hasattr(plotter, "add_scalar_bar"):
@@ -490,7 +490,7 @@ def _drawn_colors(actor: Any, scale: Scale) -> list[str] | None:
 
     This is the reason a swatch cannot disagree with the picture. The colours are not recomputed from the
     colormap for the legend — they are read back from the `vtkLookupTable` the layer is being rendered
-    through, which is the table :func:`~digitalearth.three_d.base.classified_scalars` built.
+    through, which is the table :func:`~digitalearth.three_d.core.base.classified_scalars` built.
 
     Args:
         actor: The layer's drawn actor.
@@ -631,7 +631,7 @@ def _guide_plan(figure: FigureSpec) -> list[ColourGuide]:
 def redraw_guides(scene: Any, figure: FigureSpec) -> None:
     """Bring the scene's drawn colour keys into line with what its layers ask for.
 
-    Called at the end of :meth:`~digitalearth.three_d.renderer.Renderer3D.apply` — see the module docstring
+    Called at the end of :meth:`~digitalearth.three_d.render.renderer.Renderer3D.apply` — see the module docstring
     for why there and not in `_dress_plotter`. Everything it draws is derived from `figure`, so a key follows
     its layer for free: a removed layer has no row, a hidden one asks for nothing, and a moved one asks for
     exactly what it asked for before.
@@ -938,11 +938,11 @@ class GuideMixin(_MixinBase):
     the PyVista actor rather than the scene, so a key is a call of its own after the layer.
 
     Note:
-        The class is declared against :class:`~digitalearth.three_d.base.Scene3DBase` under `TYPE_CHECKING`
+        The class is declared against :class:`~digitalearth.three_d.core.base.Scene3DBase` under `TYPE_CHECKING`
         only — at runtime the base is `object`, so the composed MRO is what it was before the annotation.
 
     See Also:
-        digitalearth.three_d.decoration.DecorationMixin: the scene's other decoration, which explains no
+        digitalearth.three_d.decoration.decoration.DecorationMixin: the scene's other decoration, which explains no
             encoding and so is not a guide.
     """
 
@@ -1158,7 +1158,7 @@ class GuideMixin(_MixinBase):
                 refused, as it is on the other three tiers, because a short one leaves swatches unlabelled
                 and a long one labels swatches that are not drawn. Recorded as **drawn state** on the scene
                 rather than in the figure, exactly as
-                :meth:`~digitalearth.three_d.decoration.DecorationMixin.set_title`'s font size and subtitle
+                :meth:`~digitalearth.three_d.decoration.decoration.DecorationMixin.set_title`'s font size and subtitle
                 are: the guide is what travels, and the labels are how this tier draws it. `None` clears
                 labels an earlier call recorded, bringing the derived ranges or categories back, so one
                 call's override does not outlive it.

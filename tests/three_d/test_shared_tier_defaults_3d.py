@@ -14,8 +14,8 @@ pytest.importorskip("pyvista")
 
 from digitalearth.base.animation import DEFAULT_FPS  # noqa: E402
 from digitalearth.base.symbology import sample_cmap  # noqa: E402
-from digitalearth.three_d import animation as animation3d  # noqa: E402
-from digitalearth.three_d import base as base3d  # noqa: E402
+from digitalearth.three_d.core import base as base3d  # noqa: E402
+from digitalearth.three_d.temporal import animation as animation3d  # noqa: E402
 
 
 class TestTheAnimationRateIsTheSharedOne:
@@ -110,7 +110,7 @@ class TestTheBigDataCutoffDefaultsToTheCellBudget:
             from a re-declared copy.
         """
         from digitalearth.three_d import Scene3D
-        from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+        from digitalearth.three_d.builders.bigdata import DEFAULT_CELL_BUDGET
 
         scene = Scene3D(off_screen=True)
         try:
@@ -130,7 +130,7 @@ class TestTheBigDataCutoffDefaultsToTheCellBudget:
             protect.
         """
         from digitalearth.base.bigdata import DEFAULT_BIG_DATA_THRESHOLD
-        from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+        from digitalearth.three_d.builders.bigdata import DEFAULT_CELL_BUDGET
 
         assert DEFAULT_CELL_BUDGET != DEFAULT_BIG_DATA_THRESHOLD, (
             "the cell budget and the row cutoff have converged, which contract C8 no longer claims"

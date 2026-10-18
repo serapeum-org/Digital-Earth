@@ -19,7 +19,7 @@ uses two of them:
   :meth:`DecorationMixin.orientation_axes` (the corner triad) are furniture too, but **drawn view state**
   rather than described: they are held on the scene and re-applied to whichever plotter it is drawing on,
   exactly as its vertical exaggeration and its camera are. All three go through :func:`redraw_decoration`,
-  which :meth:`~digitalearth.three_d.base.Scene3DBase._dress_plotter` calls for the same reason it applies the
+  which :meth:`~digitalearth.three_d.core.base.Scene3DBase._dress_plotter` calls for the same reason it applies the
   view scale.
 
 **Why the box and the triad are not described, and what would change that.** The only description that fits a
@@ -34,7 +34,7 @@ the scene keeps them, the figure does not carry them, and removing a layer never
 **What this module deliberately does not build.** A scalar bar and a legend — and not because they are
 missing. Both are Core names keyed to a layer's `Encoding`, so they are **guides** rather than decoration: they
 explain something the layer publishes, where a title, a label and a coordinate frame explain nothing. They live
-in :mod:`digitalearth.three_d.guides` as `colorbar()` and `legend()` (order 24), under those spellings and no
+in :mod:`digitalearth.three_d.legends.legend` as `colorbar()` and `legend()` (order 24), under those spellings and no
 others — a differently shaped `scalar_bar()` here would put two spellings on one concept, which is the single
 thing the Core contract exists to prevent. A north arrow is not built at all: the tier declares it absent, with
 its reason (a scene can be looked at from any direction, so there is no fixed north on screen).
@@ -51,7 +51,7 @@ from digitalearth.base.crs import is_geographic
 from digitalearth.base.spec import LayerSpec
 from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.three_d.layer import drawing_props
+from digitalearth.three_d.core.layer import drawing_props
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -131,21 +131,21 @@ def axis_titles(crs: Any) -> tuple[str, str, str]:
     Examples:
         - A projected CRS names its own axes, and the vertical one is filled in:
             ```python
-            >>> from digitalearth.three_d.decoration import axis_titles
+            >>> from digitalearth.three_d.decoration.decoration import axis_titles
             >>> axis_titles(32618)
             ('Easting', 'Northing', 'Elevation')
 
             ```
         - A geographic CRS is labelled in its own terms, east first however the CRS orders its axes:
             ```python
-            >>> from digitalearth.three_d.decoration import axis_titles
+            >>> from digitalearth.three_d.decoration.decoration import axis_titles
             >>> axis_titles(4326)
             ('Geodetic longitude', 'Geodetic latitude', 'Elevation')
 
             ```
         - A scene with no CRS is labelled with the survey words rather than with array indices:
             ```python
-            >>> from digitalearth.three_d.decoration import axis_titles
+            >>> from digitalearth.three_d.decoration.decoration import axis_titles
             >>> axis_titles(None)
             ('Easting', 'Northing', 'Elevation')
 
@@ -177,7 +177,7 @@ def axis_labels(crs: Any) -> tuple[str, str, str]:
     Examples:
         - A lon/lat scene and a projected one are labelled in their own terms:
             ```python
-            >>> from digitalearth.three_d.decoration import axis_labels
+            >>> from digitalearth.three_d.decoration.decoration import axis_labels
             >>> axis_labels(4326), axis_labels(32618)
             (('Lon', 'Lat', 'Up'), ('E', 'N', 'Up'))
 
@@ -229,7 +229,7 @@ def _finite(value: Any, name: str, caller: str) -> float:
     Examples:
         - A finite number passes through as a float:
             ```python
-            >>> from digitalearth.three_d.decoration import _finite
+            >>> from digitalearth.three_d.decoration.decoration import _finite
             >>> _finite(3, "lon", "Scene3D.text()")
             3.0
 
@@ -340,7 +340,7 @@ def redraw_decoration(scene: Any) -> None:
     orientation triad was asked for — belongs to the scene rather than to whichever plotter happens to exist.
     So it is applied to a window the scene has just been given, whether it built it or a caller handed one
     over, exactly as its vertical exaggeration and its camera are
-    (:meth:`~digitalearth.three_d.base.Scene3DBase._dress_plotter`), and again when a figure is drawn into the
+    (:meth:`~digitalearth.three_d.core.base.Scene3DBase._dress_plotter`), and again when a figure is drawn into the
     scene, so a stored heading survives the round trip.
 
     Args:
@@ -387,7 +387,7 @@ def draw_reference_lines(
     """
     from cleopatra.basemap.reference import natural_earth
 
-    from digitalearth.three_d.vector import _polyline
+    from digitalearth.three_d.builders.vector import _polyline
 
     props = drawing_props(layer.symbology.props)
     dataset = props.pop("dataset")
@@ -428,7 +428,7 @@ def draw_reference_fill(
 
     The fill counterpart of :func:`draw_reference_lines`. The polygons are read **hole-aware** from
     cleopatra's `natural_earth_polygons` (each part `[exterior, *holes]`) and triangulated into flat caps at
-    `z=0` with their holes carved (:func:`~digitalearth.three_d.vector._cap_with_holes`), so an ocean fill
+    `z=0` with their holes carved (:func:`~digitalearth.three_d.builders.vector._cap_with_holes`), so an ocean fill
     shows the continents through it rather than painting over them (cleopatra#384).
 
     Args:
@@ -446,7 +446,7 @@ def draw_reference_fill(
     """
     from cleopatra.basemap.reference import natural_earth_polygons
 
-    from digitalearth.three_d.vector import _cap_with_holes
+    from digitalearth.three_d.builders.vector import _cap_with_holes
 
     props = drawing_props(layer.symbology.props)
     dataset = props.pop("dataset")
@@ -544,12 +544,12 @@ class DecorationMixin(_MixinBase):
     `scene.terrain(dem).set_title("Elevation").axes().orientation_axes()`.
 
     Note:
-        The class is declared against :class:`~digitalearth.three_d.base.Scene3DBase` under `TYPE_CHECKING`
+        The class is declared against :class:`~digitalearth.three_d.core.base.Scene3DBase` under `TYPE_CHECKING`
         only — at runtime the base is `object`, so the composed MRO is what it was before the annotation.
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
-        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
     """
 
     def set_title(
@@ -569,7 +569,7 @@ class DecorationMixin(_MixinBase):
 
         The title is **figure furniture, and described**: it is the panel's own `title`, which `PanelSpec`
         already carries, so it survives `figure_spec.to_dict()` and is drawn again by
-        :meth:`~digitalearth.three_d.base.Scene3DBase.from_figure`. It is not a layer — it has no place on the
+        :meth:`~digitalearth.three_d.core.base.Scene3DBase.from_figure`. It is not a layer — it has no place on the
         ground, it is not in the layer tree, and removing a layer never takes it with it.
 
         Args:
@@ -876,7 +876,7 @@ class DecorationMixin(_MixinBase):
     ) -> Any:
         """Draw Natural-Earth coastlines as reference lines in the scene (TD-5b, #205).
 
-        Reference geography was reachable only inside :meth:`~digitalearth.three_d.globe.GlobeMixin.globe`,
+        Reference geography was reachable only inside :meth:`~digitalearth.three_d.builders.globe.GlobeMixin.globe`,
         where geovista traces the shoreline onto the sphere. This draws it in an ordinary (non-globe) scene —
         a terrain, say — from the same ``cleopatra.basemap.reference`` Natural-Earth coordinates the static and
         web tiers read, as 3-D polylines on the ground plane. The lines are in geographic coordinates

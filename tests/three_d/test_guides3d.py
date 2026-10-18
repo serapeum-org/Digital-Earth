@@ -31,7 +31,7 @@ from digitalearth.base.sources import get_source  # noqa: E402
 from digitalearth.base.spec import Guide, Symbology  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
-from digitalearth.three_d.guides import (  # noqa: E402
+from digitalearth.three_d.legends.legend import (  # noqa: E402
     color_scale,
     guide_field,
 )
@@ -1235,7 +1235,7 @@ class TestTheBuildersPublishWhatTheyColourBy:
         import geopandas as gpd
         from shapely.geometry import Polygon
 
-        from digitalearth.three_d.vector import _color_encoding
+        from digitalearth.three_d.builders.vector import _color_encoding
 
         squares = gpd.GeoDataFrame(
             {"pop": [1.0, 9.0]},

@@ -21,7 +21,7 @@ what made them the four kinds layer management could not address at all. They ar
 the widget takes them through :attr:`DrawnLayer.route` — see `DRAWN_KINDS`' own note below.
 
 **This tier rebuilds rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
-place, so :mod:`digitalearth.three_d.renderer` reconciles a diff against it. MapLibre's widget is built
+place, so :mod:`digitalearth.three_d.render.renderer` reconciles a diff against it. MapLibre's widget is built
 fresh on every ``render()``, from the map's queue, so there is no long-lived engine object to reconcile
 against: :meth:`Renderer.apply` reconciles the renderer's own *record* of what is drawn —
 :attr:`Renderer.drawn` — and the contract it signs is the one the shared renderer conformance suite states

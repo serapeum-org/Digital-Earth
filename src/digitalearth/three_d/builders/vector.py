@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from digitalearth.base.spec import Encoding, LayerSpec, Scale
-from digitalearth.three_d.base import classified_scalars
-from digitalearth.three_d.layer import drawing_props
+from digitalearth.three_d.core.base import classified_scalars
+from digitalearth.three_d.core.layer import drawing_props
 
 #: Attribute name the vector array is stored under for glyph orientation/scaling.
 VECTORS = "vectors"
@@ -228,7 +228,7 @@ def _polyline(coords: np.ndarray) -> "pv.PolyData":
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
 
-    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -258,7 +258,7 @@ def _classify_or_refuse(
         scale: The classification the layer's colour encoding already carries, when it has one.
             `_color_encoding` cut this very column with this very `scheme`/`k` to describe the layer, so
             cutting it again here is a second full pass for a result that is by construction identical.
-            :func:`~digitalearth.three_d.base.classified_scalars` reads it only as far as it answers this
+            :func:`~digitalearth.three_d.core.base.classified_scalars` reads it only as far as it answers this
             request — a `scheme`/`k`/`cmap` the description was not cut with is cut here — so the saving
             cannot become a veto over a restyle (review R2-L11, R2-H3).
         caller: The public method this is classifying for, named in the clash message so `lines()` and
@@ -272,7 +272,7 @@ def _classify_or_refuse(
         TypeError: when a keyword the scheme *derives* (`clim` / `n_colors`) was also passed by the caller.
             `nan_color` is not one of them: it is the colour missing data is drawn in, which the classifier
             fills from a shared default rather than computing from the classes, so a caller's own is honoured
-            — the same rule :func:`~digitalearth.three_d.point_cloud._refuse_derived_colours` follows, and one
+            — the same rule :func:`~digitalearth.three_d.builders.point_cloud._refuse_derived_colours` follows, and one
             builder refusing what its neighbour honours is the asymmetry (review R2-L2).
     """
     if colours is None:
@@ -333,13 +333,13 @@ class VectorMixin(_MixinBase):
     composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.core.base.Scene3DBase`, the state ``Scene3D``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
     what it was before the annotation.
 
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
-        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
     """
 
     def vectors(
@@ -363,7 +363,7 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The registered :class:`pyvista.Actor` for the glyph mesh, or ``None`` when there were no points
-            to place a glyph at (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+            to place a glyph at (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).
 
         Raises:
             ValueError: if ``points`` and ``vectors`` do not have the same shape. Also — only when the scene
@@ -440,7 +440,7 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The registered :class:`pyvista.Actor` for the merged polyline mesh, or ``None`` when there were no
-            line geometries to draw (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+            line geometries to draw (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).
 
         Raises:
             ValueError: if ``scheme`` cannot classify ``column``. Also — only under ``strict=True`` —
@@ -523,7 +523,7 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The registered :class:`pyvista.Actor` for the streamline mesh, or ``None`` when the field seeded
-            no streamlines (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+            no streamlines (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).
 
         Raises:
             ValueError: if ``field`` is not a ``(nz, ny, nx, 3)`` array. Also — only under ``strict=True`` —
@@ -600,7 +600,7 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The registered :class:`pyvista.Actor` for the merged prism mesh, or ``None`` when there was
-            nothing to extrude (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+            nothing to extrude (see ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).
 
         Raises:
             ValueError: if ``scheme`` cannot classify ``column``, or if an extrusion height is not finite.
@@ -685,9 +685,9 @@ def _color_encoding(
         `{"color": Encoding}` naming `column`, with the scale its values are cut into, or `None` when the
         layer colours by nothing. The scale is `None` where the column cannot be reached or classified: the
         drawer reads the same column moments later and raises the tier's own message for it (see
-        :func:`~digitalearth.three_d.guides.color_scale`).
+        :func:`~digitalearth.three_d.legends.legend.color_scale`).
     """
-    from digitalearth.three_d.guides import color_scale
+    from digitalearth.three_d.legends.legend import color_scale
 
     if not column:
         return None

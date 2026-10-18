@@ -14,7 +14,7 @@ gpd = pytest.importorskip("geopandas")
 from shapely.geometry import Point, Polygon
 
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.vector import VALUE
+from digitalearth.three_d.builders.vector import VALUE
 
 
 @pytest.fixture(autouse=True)

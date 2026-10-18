@@ -233,7 +233,7 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #: * ``interactive`` pans and zooms, so it has no fixed extent; it does have a display CRS, coastlines and a
 #:   colorbar toggle.
 #: * ``3d`` draws every layer in one display CRS, given as ``crs`` or taken from the first layer
-#:   (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs`); it has no coastline or extent concept. Its
+#:   (:attr:`digitalearth.three_d.core.base.Scene3DBase.display_crs`); it has no coastline or extent concept. Its
 #:   ``colorbar`` toggle reaches the tier's own `colorbar`/`legend` through :func:`_add_3d_key` (order 24):
 #:   PyVista's scalar bar for a layer coloured by a ramp, its keyed legend for one coloured by classes, and
 #:   nothing at all — without an error — for a layer whose colour is flat.
@@ -1480,8 +1480,8 @@ def _quickmap_3d(
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
         colorbar: Whether the scene carries a colour key, routed through the tier's own
-            :meth:`~digitalearth.three_d.guides.GuideMixin.colorbar` /
-            :meth:`~digitalearth.three_d.guides.GuideMixin.legend` rather than through a PyVista keyword
+            :meth:`~digitalearth.three_d.legends.legend.GuideMixin.colorbar` /
+            :meth:`~digitalearth.three_d.legends.legend.GuideMixin.legend` rather than through a PyVista keyword
             (order 24), so the key is recorded on the layer it explains. ``True`` (the default) keys the
             layer that was drawn, where its colour comes from data: a ramp gets PyVista's scalar bar, which
             is the bar the engine already drew, and a **classified** fill gets the keyed list instead of a

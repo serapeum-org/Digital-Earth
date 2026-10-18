@@ -16,7 +16,8 @@ import pytest
 
 pytest.importorskip("pyvista")
 
-from digitalearth.three_d import headless, start_xvfb  # noqa: E402
+from digitalearth.three_d import start_xvfb
+from digitalearth.three_d.app import headless  # noqa: E402
 
 XVFB = "/usr/bin/Xvfb"
 

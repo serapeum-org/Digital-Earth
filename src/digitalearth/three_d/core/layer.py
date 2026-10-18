@@ -59,7 +59,7 @@ def next_layer_id(tree: LayerTree, kind: str, name: Any = None) -> str:
         - An unnamed layer is numbered by its kind:
             ```python
             >>> from digitalearth.base.spec import LayerSpec, LayerTree
-            >>> from digitalearth.three_d.layer import next_layer_id
+            >>> from digitalearth.three_d.core.layer import next_layer_id
             >>> next_layer_id(LayerTree(), "terrain")
             'terrain-1'
 
@@ -67,7 +67,7 @@ def next_layer_id(tree: LayerTree, kind: str, name: Any = None) -> str:
         - A name already on the scene is suffixed rather than replacing what is there:
             ```python
             >>> from digitalearth.base.spec import LayerSpec, LayerTree
-            >>> from digitalearth.three_d.layer import next_layer_id
+            >>> from digitalearth.three_d.core.layer import next_layer_id
             >>> tree = LayerTree().add(LayerSpec("dem", "terrain"))
             >>> next_layer_id(tree, "terrain", "dem")
             'dem-2'
@@ -100,7 +100,7 @@ def ref(obj: Any) -> dict[str, str]:
         - An array is stored as a reference, and read back as itself:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.three_d.layer import ref, resolved
+            >>> from digitalearth.three_d.core.layer import ref, resolved
             >>> stored = ref(np.array([1.0, 2.0, 3.0]))
             >>> sorted(stored)
             ['$ref']
@@ -129,14 +129,14 @@ def resolved(value: Any) -> Any:
     Examples:
         - A plain value passes through:
             ```python
-            >>> from digitalearth.three_d.layer import resolved
+            >>> from digitalearth.three_d.core.layer import resolved
             >>> resolved("terrain")
             'terrain'
 
             ```
         - A stored tuple comes back as a list, which is what PyVista's keywords take:
             ```python
-            >>> from digitalearth.three_d.layer import resolved
+            >>> from digitalearth.three_d.core.layer import resolved
             >>> resolved((0.25, 0.5))
             [0.25, 0.5]
 
@@ -162,7 +162,7 @@ def drawing_props(props: Mapping[str, Any]) -> dict[str, Any]:
         - What a builder stored is what the renderer passes on:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.three_d.layer import drawing_props, ref
+            >>> from digitalearth.three_d.core.layer import drawing_props, ref
             >>> stored = {"cmap": "terrain", "values": ref(np.array([1.0, 2.0]))}
             >>> drawn = drawing_props(stored)
             >>> drawn["cmap"], drawn["values"].tolist()
@@ -186,7 +186,7 @@ def stored_props(**kwargs: Any) -> dict[str, Any]:
         - A colormap is stored as it is; an array of values is stored as a reference:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.three_d.layer import stored_props
+            >>> from digitalearth.three_d.core.layer import stored_props
             >>> stored = stored_props(cmap="terrain", values=np.array([1.0, 2.0]))
             >>> stored["cmap"], sorted(stored["values"])
             ('terrain', ['$ref'])

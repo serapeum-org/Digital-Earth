@@ -29,9 +29,9 @@ from shapely.geometry import LineString, Polygon  # noqa: E402
 
 from digitalearth.base.spec import Scale  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
+from digitalearth.three_d.builders.point_cloud import SCALAR  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
-from digitalearth.three_d.point_cloud import SCALAR  # noqa: E402
-from digitalearth.three_d.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
+from digitalearth.three_d.render.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
 
 #: The committed raster the surface builders are given. Read from the repo root, as the rest of the suite does.
 DEM_PATH = "examples/data/acc4000.tif"
