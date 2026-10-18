@@ -194,7 +194,8 @@ class TestALargeRasterIsReadThroughAWindow:
         def _render():
             with Map(crs=4326, figsize=(4, 4)) as scene:
                 scene.field(dataset, name="f")
-                shape = _drawn_shape(scene, "f")
+                # The public accessor (CLAUDE.md), not this file's legacy `_drawn_shape`/`_renderer.drawn`.
+                shape = np.asarray(scene.artist("f").get_array()).shape
                 scene.fig.canvas.draw()
                 buffer = np.asarray(scene.fig.canvas.buffer_rgba(), dtype=float)
             return shape, buffer
