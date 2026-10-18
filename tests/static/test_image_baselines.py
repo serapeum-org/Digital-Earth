@@ -18,7 +18,7 @@ Running and regenerating:
 Sensitivity:
     A baseline is only worth its bytes if a real change moves it further than the tolerance. Measured on the
     pinned stack (each figure re-rendered unchanged, then with one semantic change, RMS against the committed
-    PNG): the unchanged re-render scores exactly **0.0** for all 18, and the weakest real change measured is
+    PNG): the unchanged re-render scores exactly **0.0** for every figure measured, and the weakest real change is
     **3.96** (one of the two shared-colorbar panels going from 6 contour levels to 7). Between them sit a
     moved point (4.4), a dropped graticule (4.4), a dropped border layer (5.3-5.6) and a dropped colorbar
     label (7.8-9.3); the colormap swaps run 9.7-68.2 and a reversed RGB band order 94.4. ``test_scatter_points``
@@ -36,8 +36,9 @@ Determinism:
 
     Two notes for ``test_decimated_large_raster``, the one baseline whose pixels pass through a decimated
     read. The ``dpi=80`` above is the *savefig* resolution; whether that raster decimates is decided by a
-    separate budget, ``figsize × figure.dpi`` (matplotlib's default ``figure.dpi`` of 100 is ~400 px a side,
-    while the PNG is saved at 320), so it rests on that default staying 100 rather than on the 80. And its
+    separate budget, ``figsize × figure.dpi`` (at 4 in and matplotlib's default ``figure.dpi`` of 100 that is
+    400 px a side, while the PNG is saved at 320), so it rests on that default staying 100 rather than on the 80.
+    And its
     pixels flow through pyramids'/GDAL's on-the-fly decimation resampling — the only baseline here that does —
     so, unlike the other 21, a change to GDAL's default decimation algorithm would move it; regenerate it if a
     GDAL upgrade on the CI image does.
@@ -90,9 +91,8 @@ def _large_field(side):
     """
     yv = np.linspace(-0.4, 1.6, side, dtype="float32")[:, None]
     xv = np.linspace(-1.0, 1.0, side, dtype="float32")[None, :]
-    return (
-        np.sin(2.0 * np.pi * xv + 0.4) * np.cos(1.5 * np.pi * yv) + 0.35 * yv
-    ).astype("float32")
+    # float32 inputs keep the result float32 under NEP 50 (numpy >= 2), so no trailing astype is needed.
+    return np.sin(2.0 * np.pi * xv + 0.4) * np.cos(1.5 * np.pi * yv) + 0.35 * yv
 
 
 @pytest.fixture
@@ -241,7 +241,8 @@ def test_decimated_large_raster(large_raster):
         baseline. It is a **stability** baseline, like the other 21: the committed PNG is generated from this
         same decimated render, so the comparison proves the render stays like itself, not that it equals a full
         decode. That equivalence — the decimated read drawing the same picture a full decode would — is proven
-        separately, into one canvas, by ``test_static_raster_overviews.TestALargeRasterIsReadThroughAWindow.
+        separately, into one canvas and on a representative smooth field (not this baseline's field itself), by
+        ``test_static_raster_overviews.TestALargeRasterIsReadThroughAWindow.
         test_the_decimated_render_matches_a_full_decode``.
 
         The in-test guard asserts the read was actually decimated, so a regression that silently reverted to a
