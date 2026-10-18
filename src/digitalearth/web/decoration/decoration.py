@@ -29,7 +29,7 @@ from digitalearth.base.basemaps import (
 )
 from digitalearth.base.controls import check_control_position, resolved_controls
 from digitalearth.base.spec import Guide, LayerSpec, Symbology
-from digitalearth.web.base import _require_layer_api, _require_maplibre, as_finite
+from digitalearth.web.core.base import _require_layer_api, _require_maplibre, as_finite
 
 # #268: `tiles()` takes a URL while `basemap()` takes a provider name — the split that settles the overloaded
 # `provider=` collision, now applied on every tier (the interactive tier was the last to carry it).
@@ -303,7 +303,7 @@ def _legend_panel(spec: dict, guide: Guide, labels: Any | None) -> tuple:
         labels: Explicit row labels replacing the derived ones, or ``None``.
 
     Returns:
-        The ``(content, position)`` pair :attr:`~digitalearth.web.base.WebMapBase._panels` holds.
+        The ``(content, position)`` pair :attr:`~digitalearth.web.core.base.WebMapBase._panels` holds.
 
     Raises:
         ValueError: when `labels` has a different number of entries from the classification, as
@@ -485,7 +485,7 @@ def _check_position(position: str) -> None:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.web.base import WebMapBase as _MixinBase
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -503,13 +503,13 @@ def draw_text(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` holding that point source and the symbol layer.
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` holding that point source and the symbol layer.
 
     Raises:
         ValueError: when the description carries none of the values the annotation is built from —
             its anchor, its string, its text size or its colours — naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
     props = required_props(
@@ -561,14 +561,14 @@ def draw_tiles(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the raster source and the raster layer
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` holding the raster source and the raster layer
         reading it. It is an ordinary style layer, so it takes the ordinary route.
 
     Raises:
         ValueError: when the description carries neither the MapLibre source the tiles are served from nor
             the opacity they are drawn at, naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
     props = required_props(layer, "source", "opacity")
@@ -598,7 +598,7 @@ def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` holding that GeoJSON source, the line layer, and —
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` holding that GeoJSON source, the line layer, and —
         when the description asked for labels — the degree labels beside it as an extra layer. A hidden
         graticule hides its labels too, so the numbers never float with nothing to annotate.
 
@@ -607,7 +607,7 @@ def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
             two steps, its colour, width and opacity, or whether it is labelled — naming the layer, its
             kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer, derived_ids, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, derived_ids, required_props
 
     layer_cls, layer_types = _require_layer_api()
     props = required_props(
@@ -668,13 +668,13 @@ class DecorationMixin(_MixinBase):
     lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.core.base.WebMapBase`, the state ``WebMap`` inherits.
     At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
     before the annotation.
 
     See Also:
         digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
-        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+        digitalearth.web.core.base.WebMapBase: the typing-only base declared above the class.
     """
 
     def tiles(
@@ -717,7 +717,7 @@ class DecorationMixin(_MixinBase):
         Examples:
             - Put an XYZ service on the ground. It is described and addressable like any other layer —
               what keeps it out of a layer switcher is that
-              :meth:`~digitalearth.web.decoration.DecorationMixin.layer_control` offers the data layers
+              :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.layer_control` offers the data layers
               rather than every id (needs the ``web`` extra, so the block is skipped without it):
                 ```python
                 >>> from digitalearth.web import WebMap              # doctest: +SKIP
@@ -757,8 +757,8 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.basemap: the named-provider wrapper.
-            digitalearth.web.base.WebMapBase.add_underlay: the registration that keeps it at the
+            digitalearth.web.decoration.decoration.DecorationMixin.basemap: the named-provider wrapper.
+            digitalearth.web.core.base.WebMapBase.add_underlay: the registration that keeps it at the
                 bottom of the stack.
         """
         _require_layer_api()
@@ -831,7 +831,7 @@ class DecorationMixin(_MixinBase):
                 same way, and so a mistyped style argument is an unexpected keyword rather than something
                 ``**preset`` silently swallows.
             name: What the basemap is addressed by, forwarded to
-                :meth:`~digitalearth.web.decoration.DecorationMixin.tiles`.
+                :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.tiles`.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -897,7 +897,7 @@ class DecorationMixin(_MixinBase):
 
         A thematic map is unreadable without one, and until this the tier drew the classes and left the
         caller to build a key out of band from ``last_breaks``. The classification records what it actually
-        coloured with (:attr:`~digitalearth.web.base.WebMapBase.last_legend`), so the key shows the rendered
+        coloured with (:attr:`~digitalearth.web.core.base.WebMapBase.last_legend`), so the key shows the rendered
         colours rather than a second guess at them.
 
         The three shapes a classification can take are all handled: a **categorical** one gets a swatch per
@@ -974,8 +974,8 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.
-            digitalearth.web.decoration.refresh_legend_panel: derives the panel from the recorded guides.
+            digitalearth.web.builders.vector.VectorMixin.choropleth: the builder whose classes this describes.
+            digitalearth.web.decoration.decoration.refresh_legend_panel: derives the panel from the recorded guides.
         """
         return self._record_key(
             layer_id,
@@ -998,7 +998,7 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Record a colour key on a layer, told which public spelling the caller reached it through.
 
-        :meth:`legend` and :meth:`~digitalearth.web.base.WebMapBase.colorbar` are one mechanism under two
+        :meth:`legend` and :meth:`~digitalearth.web.core.base.WebMapBase.colorbar` are one mechanism under two
         names, so the body lives here and each name passes its own. Without that, the one refusal a
         `colorbar()` caller can actually hit — "nothing to describe" — named `legend()` and told them to add
         a `column=`, about a method they never called; this tier names the caller in every other refusal it
@@ -1065,7 +1065,7 @@ class DecorationMixin(_MixinBase):
         """Refuse a malformed key description, before the `visible` flag has been read at all.
 
         **The one place a caller argument to :meth:`legend` /
-        :meth:`~digitalearth.web.base.WebMapBase.colorbar` may be checked from**, which is what makes the
+        :meth:`~digitalearth.web.core.base.WebMapBase.colorbar` may be checked from**, which is what makes the
         rule "no argument is valid only half the time" a property of the method rather than a property of
         the three keywords somebody remembered. The flag is deliberately not a parameter here: it cannot be
         consulted, so it cannot skip anything.
@@ -1196,11 +1196,11 @@ class DecorationMixin(_MixinBase):
                 override rather than keeping it, so two `legend()` calls do not silently compound.
 
         Note:
-            The tree is written directly rather than through :meth:`~digitalearth.web.base.WebMapBase._change`.
+            The tree is written directly rather than through :meth:`~digitalearth.web.core.base.WebMapBase._change`.
             A guide changes no paint, so there is nothing for the renderer to draw again; routing it through
             the reconcile would rebuild the MapLibre layer of every classified layer a caller keys.
-            :meth:`~digitalearth.web.base.WebMapBase._index_layer` writes the tree the same way, and
-            :meth:`~digitalearth.web.base.WebMapBase._figure_with` derives the figure from it, so the guide
+            :meth:`~digitalearth.web.core.base.WebMapBase._index_layer` writes the tree the same way, and
+            :meth:`~digitalearth.web.core.base.WebMapBase._figure_with` derives the figure from it, so the guide
             reaches `figure_spec` with no further step.
         """
         layer = self._layer_tree.get(layer_id)
@@ -1243,8 +1243,8 @@ class DecorationMixin(_MixinBase):
 
         **The manager widens past visibility (WB-8/WB-14), and most of the widening is declarative.**
         ``opacity=`` dims a layer and ``order=`` reorders the stack, each applied **now** — ``opacity``
-        through :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rewrites the layer's own
-        paint, and ``order`` through :meth:`~digitalearth.web.base.WebMapBase.move_layer` — so the saved page
+        through :meth:`~digitalearth.web.core.base.WebMapBase.replace_layer`, which rewrites the layer's own
+        paint, and ``order`` through :meth:`~digitalearth.web.core.base.WebMapBase.move_layer` — so the saved page
         draws the layers dimmed and in that order. The switcher itself stays a **live page-side control**
         (py-maplibregl's ``LayerSwitcherControl``), and ``controls=["visibility", "basemap"]`` adds the
         basemap layers to it (WB-14) so the ground is switchable too. A live opacity *slider* or a
@@ -1256,7 +1256,7 @@ class DecorationMixin(_MixinBase):
 
         Args:
             layers: The layers to offer, by id, defaulting to every data layer added so far — that is,
-                :attr:`~digitalearth.web.base.WebMapBase.layer_ids` without the basemaps, which are
+                :attr:`~digitalearth.web.core.base.WebMapBase.layer_ids` without the basemaps, which are
                 addressable but are the ground rather than something a viewer toggles. Pass a subset to
                 hide the rest from the switch without hiding them from the map, or name a basemap to offer
                 it after all.
@@ -1274,11 +1274,11 @@ class DecorationMixin(_MixinBase):
             theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles. This tier's own
                 keyword: it styles the switcher rather than choosing what the switcher contains.
             opacity: A mapping of layer id to opacity in ``[0, 1]``, applied **now** by rewriting each named
-                layer's paint through :meth:`~digitalearth.web.base.WebMapBase.replace_layer`. A layer that
+                layer's paint through :meth:`~digitalearth.web.core.base.WebMapBase.replace_layer`. A layer that
                 records no opacity to change — a text annotation has none — is refused rather than silently
                 left opaque. ``None`` dims nothing.
             order: The bottom-to-top draw order for the named layers, applied **now** through
-                :meth:`~digitalearth.web.base.WebMapBase.move_layer`. The ids must share a draw-order band —
+                :meth:`~digitalearth.web.core.base.WebMapBase.move_layer`. The ids must share a draw-order band —
                 a layer cannot be dragged under the basemap, which is the one move the bands forbid — and an
                 order that crosses a band is refused with the ``IndexError`` ``move_layer`` raises. ``None``
                 leaves the order untouched.
@@ -1300,7 +1300,7 @@ class DecorationMixin(_MixinBase):
                 that is not on this map, when an ``opacity`` value is not a finite fraction in ``[0, 1]``,
                 or when an ``opacity`` names a layer that records no opacity to change.
             IndexError: when ``order`` would move a layer out of its draw-order band, as
-                :meth:`~digitalearth.web.base.WebMapBase.move_layer` refuses it.
+                :meth:`~digitalearth.web.core.base.WebMapBase.move_layer` refuses it.
 
         Examples:
             - Two layers and a switch between them:
@@ -1316,7 +1316,7 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.base.WebMapBase.layer_ids: the ids this offers by default.
+            digitalearth.web.core.base.WebMapBase.layer_ids: the ids this offers by default.
             digitalearth.base.controls.resolved_controls: the shared control vocabulary.
         """
         _require_maplibre()
@@ -1445,7 +1445,7 @@ class DecorationMixin(_MixinBase):
         """Install the rewritten specs from :meth:`_resolve_layer_opacity` through ``replace_layer``.
 
         The request was fully validated by :meth:`_resolve_layer_opacity`, so nothing here raises — each spec
-        is handed to :meth:`~digitalearth.web.base.WebMapBase.replace_layer`, which rebuilds the MapLibre layer
+        is handed to :meth:`~digitalearth.web.core.base.WebMapBase.replace_layer`, which rebuilds the MapLibre layer
         from it so the saved page draws the layer dimmed.
 
         Args:
@@ -1524,7 +1524,7 @@ class DecorationMixin(_MixinBase):
 
         The web tier builds no drag-to-reorder control, so ordering is applied declaratively: each listed
         layer is moved to its place in draw order with
-        :meth:`~digitalearth.web.base.WebMapBase.move_layer`. Anchored at the lowest position the listed
+        :meth:`~digitalearth.web.core.base.WebMapBase.move_layer`. Anchored at the lowest position the listed
         layers currently occupy and filled upward, so the listed set ends up contiguous in the given order.
         The order was already proven a legal in-band permutation by :meth:`_check_layer_order`, so no move
         here crosses a band — the atomicity pre-check is what makes that true.
@@ -1560,7 +1560,7 @@ class DecorationMixin(_MixinBase):
         """Place a single line of text at a coordinate.
 
         The "label this spot" case, which needed a whole GeoDataFrame before —
-        :meth:`~digitalearth.web.vector.VectorMixin.labels` is the data-driven counterpart.
+        :meth:`~digitalearth.web.builders.vector.VectorMixin.labels` is the data-driven counterpart.
 
         Args:
             lon: X of the anchor point, in `crs` — a longitude by default.
@@ -1594,7 +1594,7 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.vector.VectorMixin.labels: label many features from a column.
+            digitalearth.web.builders.vector.VectorMixin.labels: label many features from a column.
         """
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.text()"
@@ -1825,8 +1825,8 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.borders: the same line path for country boundaries.
-            digitalearth.web.base.WebMapBase.add_reference: the band that keeps it under the data.
+            digitalearth.web.decoration.decoration.DecorationMixin.borders: the same line path for country boundaries.
+            digitalearth.web.core.base.WebMapBase.add_reference: the band that keeps it under the data.
         """
         return self._reference_lines(
             "coastline",
@@ -1866,7 +1866,7 @@ class DecorationMixin(_MixinBase):
                 ``width`` or ``opacity`` is not a finite number.
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.coastlines: the shoreline counterpart.
+            digitalearth.web.decoration.decoration.DecorationMixin.coastlines: the shoreline counterpart.
         """
         return self._reference_lines(
             "borders",
@@ -1894,7 +1894,7 @@ class DecorationMixin(_MixinBase):
         :meth:`coastlines` and :meth:`borders` are one mechanism over two Natural-Earth datasets, so the
         body lives here. The geometry is read from ``cleopatra.basemap.reference`` as lon/lat coordinate
         arrays and packaged into GeoJSON; the MapLibre source and line layer are added through a queued
-        closure (the shape :meth:`~digitalearth.web.base.WebMapBase.add_reference` takes), so a figure
+        closure (the shape :meth:`~digitalearth.web.core.base.WebMapBase.add_reference` takes), so a figure
         written down keeps the embedded lines even offline.
 
         Args:
@@ -2013,8 +2013,8 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.ocean: the complementary fill, drawn beneath.
-            digitalearth.web.decoration.DecorationMixin.coastlines: the shoreline as a line overlay.
+            digitalearth.web.decoration.decoration.DecorationMixin.ocean: the complementary fill, drawn beneath.
+            digitalearth.web.decoration.decoration.DecorationMixin.coastlines: the shoreline as a line overlay.
         """
         return self._reference_fill(
             "land",
@@ -2057,7 +2057,7 @@ class DecorationMixin(_MixinBase):
                 ``opacity`` is not a finite number.
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.land: the fill the ocean sits beneath.
+            digitalearth.web.decoration.decoration.DecorationMixin.land: the fill the ocean sits beneath.
         """
         return self._reference_fill(
             "ocean",
@@ -2098,7 +2098,7 @@ class DecorationMixin(_MixinBase):
                 ``opacity`` is not a finite number.
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.land: the fill the lakes sit over.
+            digitalearth.web.decoration.decoration.DecorationMixin.land: the fill the lakes sit over.
         """
         return self._reference_fill(
             "lakes",
@@ -2128,7 +2128,7 @@ class DecorationMixin(_MixinBase):
         ``cleopatra.basemap.reference.natural_earth_polygons`` as ``[exterior_ring, *hole_rings]`` per part
         and packaged into GeoJSON ``Polygon`` features (the first ring the exterior, the rest holes, each
         closed if the source left it open); the MapLibre source and ``fill`` layer are added through a
-        queued closure (the shape :meth:`~digitalearth.web.base.WebMapBase.add_reference` takes), so a
+        queued closure (the shape :meth:`~digitalearth.web.core.base.WebMapBase.add_reference` takes), so a
         figure written down keeps the embedded fill even offline.
 
         Args:
@@ -2428,7 +2428,7 @@ class DecorationMixin(_MixinBase):
         """Add a MapLibre terrain control — a toggle for 3-D terrain from a DEM source (WB-14).
 
         The control drives a raster-DEM source that is already on the map (for example the one
-        :meth:`~digitalearth.web.threed.ThreeDMixin.terrain_tiles` adds); it is named here by its MapLibre
+        :meth:`~digitalearth.web.builders.threed.ThreeDMixin.terrain_tiles` adds); it is named here by its MapLibre
         source id, the way the control itself references it, so whether the source exists is the caller's
         own responsibility — exactly as it is in MapLibre.
 
@@ -2592,7 +2592,7 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.navigation: the control-wiring pattern this follows.
+            digitalearth.web.decoration.decoration.DecorationMixin.navigation: the control-wiring pattern this follows.
         """
         _require_maplibre()
         _check_position(position)
@@ -2717,7 +2717,7 @@ class DecorationMixin(_MixinBase):
 
         See Also:
             measure: adds the draw control this reads from.
-            digitalearth.web.base.WebMapBase.render: builds the widget that is read by default.
+            digitalearth.web.core.base.WebMapBase.render: builds the widget that is read by default.
         """
         if widget is None:
             widget = self._widget
@@ -2773,7 +2773,7 @@ class DecorationMixin(_MixinBase):
             - The draw id wins over a property of the same name, and the other properties come through
               untouched:
                 ```python
-                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> from digitalearth.web.decoration.decoration import DecorationMixin
                 >>> DecorationMixin._drawn_properties({
                 ...     "id": "draw-1",
                 ...     "properties": {"id": "mine", "label": "plot A"},
@@ -2785,7 +2785,7 @@ class DecorationMixin(_MixinBase):
             - With no draw id — ``id`` absent, or present as ``None`` — the feature's own property stands
               rather than being replaced by nothing:
                 ```python
-                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> from digitalearth.web.decoration.decoration import DecorationMixin
                 >>> own = {"properties": {"id": "mine", "label": "plot A"}}
                 >>> DecorationMixin._drawn_properties(own)
                 {'id': 'mine', 'label': 'plot A'}
@@ -2796,7 +2796,7 @@ class DecorationMixin(_MixinBase):
             - A feature with no id of either kind still gets the column, so ``drawn["id"]`` reads the same
               whatever was drawn:
                 ```python
-                >>> from digitalearth.web.decoration import DecorationMixin
+                >>> from digitalearth.web.decoration.decoration import DecorationMixin
                 >>> DecorationMixin._drawn_properties({"properties": {"label": "plot B"}})
                 {'label': 'plot B', 'id': None}
                 >>> DecorationMixin._drawn_properties({})
@@ -2892,7 +2892,7 @@ class DecorationMixin(_MixinBase):
         :meth:`popup` and :meth:`tooltip` are one mechanism under two names — click versus hover — so the
         body lives here and each name passes its trigger and the ``add_*`` method the widget wires it with.
         A target list is bound layer by layer: each gets its own recorded interaction and its own queued
-        closure, tagged with its id so :meth:`~digitalearth.web.base.WebMapBase.remove_layer` takes the
+        closure, tagged with its id so :meth:`~digitalearth.web.core.base.WebMapBase.remove_layer` takes the
         right popup off.
 
         Args:

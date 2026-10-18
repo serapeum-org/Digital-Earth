@@ -13,7 +13,7 @@ Both forms build one layer per step, so a page saved without the live slider car
 ``LayerSwitcherControl`` step picker over those layers (WB-4) rather than piling every step up at once.
 
 The slider is wired at :meth:`render` time via :meth:`_wrap_temporal` (returning a slider + map composite);
-:meth:`~digitalearth.web.base.WebMapBase.save` still serialises just the map. ipywidgets/maplibre are
+:meth:`~digitalearth.web.core.base.WebMapBase.save` still serialises just the map. ipywidgets/maplibre are
 imported lazily.
 """
 
@@ -29,7 +29,7 @@ from digitalearth.base.clim import (
 )
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.spec import DEFAULT_BAND
-from digitalearth.web.base import _require_layer_api, as_finite
+from digitalearth.web.core.base import _require_layer_api, as_finite
 
 #: Members scanned when computing a stack's shared colour range — `digitalearth.base.clim`'s cap, the one
 #: number the static and interactive tiers read too, picked at the same evenly-spread positions. The scan
@@ -48,7 +48,7 @@ _LARGE_SERIES_FEATURES = 100_000
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.web.base import WebMapBase as _MixinBase
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -104,7 +104,7 @@ class TemporalMixin(_MixinBase):
             ``(vmin, vmax)`` finite colour limits taken from the sampled members, or ``(0.0, 1.0)`` when none
             holds a finite value. The pair comes from the frozen
             :class:`~digitalearth.base.spec.scale.Scale` the measurement builds, which is the same widening
-            the per-member :meth:`~digitalearth.web.raster.RasterMixin.field` call applies to it downstream —
+            the per-member :meth:`~digitalearth.web.builders.raster.RasterMixin.field` call applies to it downstream —
             so a stack of identical members now reports the range it is actually drawn with.
         """
         return stack_scale(
@@ -195,7 +195,7 @@ class TemporalMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.raster.RasterMixin.field: draw a single raster with no time dimension.
+            digitalearth.web.builders.raster.RasterMixin.field: draw a single raster with no time dimension.
             digitalearth.static.builders.animation.AnimationMixin.animate: the matplotlib tier's raster
                 time-stack animation.
             digitalearth.interactive.temporal.temporal.TemporalMixin.timecube: the interactive tier's raster
@@ -395,7 +395,7 @@ class TemporalMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
-        from digitalearth.web.vector import POINT_SIZE, VECTOR_COLOR
+        from digitalearth.web.builders.vector import POINT_SIZE, VECTOR_COLOR
 
         _, layer_types = _require_layer_api()
         # Guard opacity the way the point/polygon/choropleth builders this path once delegated to did:

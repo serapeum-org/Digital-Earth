@@ -66,7 +66,7 @@ class TestDrawDeckGeojsonDescriptionContract:
         """
         from digitalearth.base.spec import LayerSpec, Symbology
         from digitalearth.web import WebMap
-        from digitalearth.web.bigdata import draw_deck_geojson
+        from digitalearth.web.builders.bigdata import draw_deck_geojson
 
         web_map = WebMap()
         bare = LayerSpec("ghost", "deck_scatter", symbology=Symbology(props={}))
@@ -145,7 +145,7 @@ class TestDeckLayerSurvivesAFigureRoundTrip:
         """
         from digitalearth.base.spec import FigureSpec
         from digitalearth.web import WebMap
-        from digitalearth.web.renderer import DECK_ROUTE
+        from digitalearth.web.render.renderer import DECK_ROUTE
 
         path = self._geojson_path(points_gdf, tmp_path, "pts")
         built = WebMap().deck_scatter(path, size=6.0, name="obs")
@@ -172,7 +172,7 @@ class TestDeckLayerSurvivesAFigureRoundTrip:
         """
         from digitalearth.base.spec import FigureSpec
         from digitalearth.web import WebMap
-        from digitalearth.web.renderer import DECK_ROUTE
+        from digitalearth.web.render.renderer import DECK_ROUTE
 
         path = self._geojson_path(polygons_gdf, tmp_path, "areas")
         built = WebMap().deck_polygons(path, name="zones")

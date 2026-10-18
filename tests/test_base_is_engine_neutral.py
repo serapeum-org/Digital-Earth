@@ -224,7 +224,7 @@ class TestOffenderRules:
             "digitalearth.static",
             "digitalearth.static.charts.figures",
             "digitalearth.interactive.charts.charts",
-            "digitalearth.web.base",
+            "digitalearth.web.core.base",
             "digitalearth.three_d.builders.globe",
         ],
     )

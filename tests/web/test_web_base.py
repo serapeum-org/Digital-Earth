@@ -19,7 +19,7 @@ import pytest
 
 from digitalearth.base.sources.source import Source
 from digitalearth.web import WebMap
-from digitalearth.web.base import _require_maplibre, _resolve_style
+from digitalearth.web.core.base import _require_maplibre, _resolve_style
 from tests.test_no_competitor_imports import (
     FORBIDDEN,
     _top_level_imports,
@@ -231,7 +231,7 @@ class TestUtf8Shim:
 
         import maplibre._utils as _utils
 
-        from digitalearth.web import base
+        from digitalearth.web.core import base
 
         real_open = builtins.open
 
@@ -336,14 +336,14 @@ class TestConstructionDefaults:
 
     def test_composition_includes_all_mixins(self):
         """``WebMap`` composes the base plus all seven capability mixins."""
-        from digitalearth.web.base import WebMapBase
-        from digitalearth.web.bigdata import BigDataMixin
-        from digitalearth.web.decoration import DecorationMixin
-        from digitalearth.web.export import ExportMixin
-        from digitalearth.web.raster import RasterMixin
-        from digitalearth.web.temporal import TemporalMixin
-        from digitalearth.web.threed import ThreeDMixin
-        from digitalearth.web.vector import VectorMixin
+        from digitalearth.web.builders.bigdata import BigDataMixin
+        from digitalearth.web.builders.raster import RasterMixin
+        from digitalearth.web.builders.threed import ThreeDMixin
+        from digitalearth.web.builders.vector import VectorMixin
+        from digitalearth.web.core.base import WebMapBase
+        from digitalearth.web.decoration.decoration import DecorationMixin
+        from digitalearth.web.output.export import ExportMixin
+        from digitalearth.web.temporal.temporal import TemporalMixin
 
         mro = WebMap.__mro__
         for cls in (
@@ -1041,7 +1041,7 @@ class TestJsonSafeDatetimes:
 
     def test_lon_lat_extent_in_another_spelling_is_not_reprojected(self, mocker):
         """``_as_lonlat`` returns an extent already in lon/lat as it is, however EPSG:4326 is written (#287)."""
-        transform = mocker.patch("digitalearth.web.base.reproject_coordinates")
+        transform = mocker.patch("digitalearth.web.core.base.reproject_coordinates")
         m = WebMap()
         m.crs = "epsg:4326"
         extent = m._as_lonlat(5.0, 52.0, 6.0, 53.0)
@@ -1352,7 +1352,7 @@ class TestPlacingAVectorDrawersSource:
         from shapely.geometry import Point
 
         from digitalearth.base.spec import LayerSpec
-        from digitalearth.web.base import placed_features
+        from digitalearth.web.core.base import placed_features
 
         features = gpd.GeoDataFrame(
             {"value": [1.0]}, geometry=[Point(4.9, 52.4)], crs=4326

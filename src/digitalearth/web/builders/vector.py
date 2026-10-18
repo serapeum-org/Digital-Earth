@@ -36,7 +36,7 @@ from digitalearth.base.symbology import (
     DEFAULT_LABEL_HALO_WIDTH,
     DEFAULT_LABEL_TEXT_SIZE,
 )
-from digitalearth.web.base import _require_layer_api, as_finite, placed_features
+from digitalearth.web.core.base import _require_layer_api, as_finite, placed_features
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class ContourInterval:
     Examples:
         - Trace a level every 100 units, starting from zero:
             ```python
-            >>> from digitalearth.web.vector import ContourInterval
+            >>> from digitalearth.web.builders.vector import ContourInterval
             >>> every_hundred = ContourInterval(100)
             >>> every_hundred.spacing, every_hundred.base
             (100, 0.0)
@@ -63,7 +63,7 @@ class ContourInterval:
             ```
         - Anchor the same spacing at 50, so the levels land on 50, 150, 250:
             ```python
-            >>> from digitalearth.web.vector import ContourInterval
+            >>> from digitalearth.web.builders.vector import ContourInterval
             >>> offset = ContourInterval(100, base=50)
             >>> offset.base
             50
@@ -71,7 +71,7 @@ class ContourInterval:
             ```
         - A spacing of zero has no levels to give and is refused:
             ```python
-            >>> from digitalearth.web.vector import ContourInterval
+            >>> from digitalearth.web.builders.vector import ContourInterval
             >>> ContourInterval(0)
             Traceback (most recent call last):
                 ...
@@ -122,21 +122,21 @@ class VectorTileSource:
     Examples:
         - A ``{z}/{x}/{y}`` template becomes a ``vector`` source listing that one template:
             ```python
-            >>> from digitalearth.web.vector import VectorTileSource
+            >>> from digitalearth.web.builders.vector import VectorTileSource
             >>> VectorTileSource(tiles="https://tiles.example.org/{z}/{x}/{y}.pbf").to_source()
             {'type': 'vector', 'tiles': ['https://tiles.example.org/{z}/{x}/{y}.pbf']}
 
             ```
         - A TileJSON ``url`` and a zoom range fold into the same dict:
             ```python
-            >>> from digitalearth.web.vector import VectorTileSource
+            >>> from digitalearth.web.builders.vector import VectorTileSource
             >>> VectorTileSource(url="https://tiles.example.org/roads.json", max_zoom=14).to_source()
             {'type': 'vector', 'url': 'https://tiles.example.org/roads.json', 'maxzoom': 14}
 
             ```
         - Naming neither tile set is refused, at construction rather than at the builder:
             ```python
-            >>> from digitalearth.web.vector import VectorTileSource
+            >>> from digitalearth.web.builders.vector import VectorTileSource
             >>> VectorTileSource()
             Traceback (most recent call last):
                 ...
@@ -257,7 +257,7 @@ class _ContourLevels:
     """The iso-values one `contours()` call traces, held with the spelling its caller asked in.
 
     `interval=` and `levels=` are two spellings of a single ask, and the pair used to travel the whole
-    length of :meth:`~digitalearth.web.vector.VectorMixin.contours` as loose locals: normalised, handed
+    length of :meth:`~digitalearth.web.builders.vector.VectorMixin.contours` as loose locals: normalised, handed
     to pyramids as three separate keywords, and — when the trace comes back empty — quoted back to the
     caller in whichever spelling they wrote. Every one of those readings was another conditional on the
     same two variables, in a method that is about drawing contours rather than about pyramids' argument
@@ -267,7 +267,7 @@ class _ContourLevels:
     Attributes:
         spacing: The regular interval the levels are cut at, or `None` when they are named explicitly.
         fixed: The settled explicit levels, or `None` when `spacing` decides them instead. Exactly one of
-            the two is set: :meth:`~digitalearth.web.vector.VectorMixin._contour_levels` refuses the pair,
+            the two is set: :meth:`~digitalearth.web.builders.vector.VectorMixin._contour_levels` refuses the pair,
             and falls back on evenly spaced levels rather than settling on neither.
         asked: The caller's own `interval=` argument, kept as they passed it — a message quotes
             `interval=100` as it was written, not as the :class:`ContourInterval` it normalises to.
@@ -343,7 +343,7 @@ CHOROPLETH_OPACITY = 0.85
 CONTOUR_OUTLINE_COLOR = "#ffffff"
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.web.base import WebMapBase as _MixinBase
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -363,7 +363,7 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`. It never declines: any of these kinds either
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`. It never declines: any of these kinds either
         draws or refuses by raising, which is why their builders do not ask whether the layer survived.
 
     Raises:
@@ -373,7 +373,7 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
             places none of its geometry and the map is `strict` — both from :func:`placed_features`,
             which places the data when the drawer is handed nothing already placed.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
 
     layer_cls, _ = _require_layer_api()
     props = required_props(layer, "maplibre_type", "paint")
@@ -411,7 +411,7 @@ def draw_vector_tiles(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the ``vector`` source and the circle / line
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` holding the ``vector`` source and the circle / line
         / fill layer reading one of its source-layers. It is an ordinary style layer, so it takes the
         ordinary route.
 
@@ -419,7 +419,7 @@ def draw_vector_tiles(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         ValueError: when the description carries none of the MapLibre source, the source-layer, the layer
             type or the paint the drawer reads — naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
 
     layer_cls, _ = _require_layer_api()
     props = required_props(layer, "source", "source_layer", "maplibre_type", "paint")
@@ -453,13 +453,13 @@ class VectorMixin(_MixinBase):
     lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.core.base.WebMapBase`, the state ``WebMap`` inherits.
     At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
     before the annotation.
 
     See Also:
         digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
-        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+        digitalearth.web.core.base.WebMapBase: the typing-only base declared above the class.
     """
 
     def _color_expr(
@@ -497,7 +497,7 @@ class VectorMixin(_MixinBase):
 
             Also sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp
             stops, and ``self.last_legend`` to those values *plus the colours they were drawn with*, which
-            is what :meth:`~digitalearth.web.decoration.DecorationMixin.legend` renders.
+            is what :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` renders.
 
         Raises:
             ValueError: from :class:`~digitalearth.base.spec.scale.Scale` when the scheme cannot classify
@@ -666,7 +666,7 @@ class VectorMixin(_MixinBase):
             raise ValueError(f"column {column!r} has no finite values to colour")
         lo, hi = Scale.from_finite(finite).as_limits()
         # The shared count, not a literal: the raster band's ramp
-        # (:meth:`~digitalearth.web.raster.RasterMixin._band_colour`) samples at the same one, so a
+        # (:meth:`~digitalearth.web.builders.raster.RasterMixin._band_colour`) samples at the same one, so a
         # continuous key reads the same whichever the values came from. Both used to spell `5` separately,
         # which made the invariant a coincidence either could break in silence (review N6).
         stops = np.linspace(lo, hi, DEFAULT_RAMP_STOPS)
@@ -720,7 +720,7 @@ class VectorMixin(_MixinBase):
                 and polygons at a placement MapLibre picks. A path or URL to one is taken too, and is the
                 only input this layer can be written down with — a pyramids object does not know where it
                 came from. The reference is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what the
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what the
                 figure records.
             column: The property to read the text from.
             text_size: Text size in pixels. Named for the text rather than ``size``, which means the
@@ -761,7 +761,7 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
+            digitalearth.web.decoration.decoration.DecorationMixin.text: a single annotation at a coordinate.
         """
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.labels()"
@@ -972,7 +972,7 @@ class VectorMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             interval: Spacing between levels — a number for "one every N", or a
                 :class:`ContourInterval` when the spacing has to be anchored somewhere other than zero.
@@ -982,7 +982,7 @@ class VectorMixin(_MixinBase):
                 variable is one it recognises (mean sea-level pressure, 2-m temperature, …) — the levels
                 that field is conventionally drawn with.
             band: 1-based band to contour, matching
-                :meth:`~digitalearth.web.raster.RasterMixin.field` — pyramids counts bands from 0, and
+                :meth:`~digitalearth.web.builders.raster.RasterMixin.field` — pyramids counts bands from 0, and
                 this converts, so the same number means the same band everywhere in this tier.
             filled: Draw filled bands between successive levels instead of lines.
             cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the
@@ -1014,7 +1014,7 @@ class VectorMixin(_MixinBase):
                 could not be written down.
             TypeError: when ``interval`` is neither a number nor a :class:`ContourInterval`.
             FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
-                is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
+                is registered for its URL scheme — from :meth:`~digitalearth.web.core.base.WebMapBase._opened`.
 
         Examples:
             - Contour a DEM every 100 m:
@@ -1025,7 +1025,7 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.
+            digitalearth.web.builders.vector.VectorMixin.lines: what the traced contours are drawn as.
             digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
         """
         spacing = _as_interval(interval)
@@ -1146,7 +1146,7 @@ class VectorMixin(_MixinBase):
             color_encoding: What drives the layer's colour when a `column` does, as
                 :meth:`~digitalearth.base.spec.encoding.Encoding.by_field` built it in `_color_expr`. Filed
                 on the symbology's ``color`` channel, which is where
-                :meth:`~digitalearth.web.decoration.DecorationMixin.legend` hangs its
+                :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` hangs its
                 :class:`~digitalearth.base.spec.encoding.Guide` — so the colour key belongs to the layer and
                 moves, hides and disappears with it. `None` — a flat colour, or no colour at all — files
                 nothing, which is what makes a key on an unclassified layer refusable.
@@ -1232,7 +1232,7 @@ class VectorMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             column: Optional value column; when given, circles are coloured by it (graduated if ``scheme``
                 is set, else a continuous ramp).
@@ -1248,7 +1248,7 @@ class VectorMixin(_MixinBase):
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
             big_data_threshold: Feature count above which this one call auto-routes to deck.gl. ``None``
-                uses the map's :attr:`~digitalearth.web.base.WebMapBase.big_data_threshold`, which is the
+                uses the map's :attr:`~digitalearth.web.core.base.WebMapBase.big_data_threshold`, which is the
                 way to change it for every layer at once.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
@@ -1304,8 +1304,8 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.bigdata.BigDataMixin.deck_scatter: the GPU path for large tables.
-            digitalearth.web.vector.VectorMixin.choropleth: the thematic polygon counterpart.
+            digitalearth.web.builders.bigdata.BigDataMixin.deck_scatter: the GPU path for large tables.
+            digitalearth.web.builders.vector.VectorMixin.choropleth: the thematic polygon counterpart.
         """
         #: This builder's own name, for the refusals below to quote back at the caller.
         call = "WebMap.points()"
@@ -1379,7 +1379,7 @@ class VectorMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             column: Optional value column to colour the lines by.
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
@@ -1437,7 +1437,7 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.vector.VectorMixin.contours: traces a raster into these lines.
+            digitalearth.web.builders.vector.VectorMixin.contours: traces a raster into these lines.
         """
         _, layer_types = _require_layer_api()
         ask = Ask()
@@ -1494,7 +1494,7 @@ class VectorMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             column: Optional value column to colour the polygons by (graduated if ``scheme`` is set, else a
                 continuous ramp). For full thematic symbology prefer :meth:`choropleth`.
@@ -1508,7 +1508,7 @@ class VectorMixin(_MixinBase):
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
             big_data_threshold: Feature count above which this one call auto-routes to deck.gl. ``None``
-                uses the map's :attr:`~digitalearth.web.base.WebMapBase.big_data_threshold`, which is the
+                uses the map's :attr:`~digitalearth.web.core.base.WebMapBase.big_data_threshold`, which is the
                 way to change it for every layer at once.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
@@ -1560,8 +1560,8 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.vector.VectorMixin.choropleth: the thematic build of this fill.
-            digitalearth.web.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
+            digitalearth.web.builders.vector.VectorMixin.choropleth: the thematic build of this fill.
+            digitalearth.web.builders.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
         """
         _, layer_types = _require_layer_api()
         ask = Ask()
@@ -1638,7 +1638,7 @@ class VectorMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             column: The attribute that colours the polygons (numeric for graduated/continuous; any hashable
                 value for ``scheme="categorical"``). Required.
@@ -1708,8 +1708,8 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.legend: draws the key from ``last_legend``.
-            digitalearth.web.vector.VectorMixin.polygons: the same fill layer without the thematic
+            digitalearth.web.decoration.decoration.DecorationMixin.legend: draws the key from ``last_legend``.
+            digitalearth.web.builders.vector.VectorMixin.polygons: the same fill layer without the thematic
                 classification.
         """
         _, layer_types = _require_layer_api()
@@ -1758,7 +1758,7 @@ class VectorMixin(_MixinBase):
 
         MapLibre serves a vector tile pyramid — an ``.mvt``/``.pbf`` tile set, or a TileJSON describing one —
         as a ``vector`` source, and draws one of its named layers with an ordinary style layer. This is the
-        vector counterpart of :meth:`~digitalearth.web.decoration.DecorationMixin.tiles`, which drapes a
+        vector counterpart of :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.tiles`, which drapes a
         *raster* pyramid under the data: the features here are drawn **among** the data from the tile URL,
         never read into memory, so a continent of roads costs the page a URL rather than a GeoJSON blob.
 
@@ -1812,9 +1812,9 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.tiles: the raster-pyramid counterpart, drawn under
+            digitalearth.web.decoration.decoration.DecorationMixin.tiles: the raster-pyramid counterpart, drawn under
                 the data.
-            digitalearth.web.vector.VectorMixin.lines: the same line layer drawn from an in-memory
+            digitalearth.web.builders.vector.VectorMixin.lines: the same line layer drawn from an in-memory
                 collection instead of a tile set.
         """
         #: This builder's own name, for the refusals below to quote back at the caller.

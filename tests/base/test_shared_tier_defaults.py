@@ -197,7 +197,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
         from cleopatra.basemap.tiles import get_provider
 
         from digitalearth.static.builders.decoration import _resolve_tile_source
-        from digitalearth.web.decoration import _BASEMAP_PROVIDERS
+        from digitalearth.web.decoration.decoration import _BASEMAP_PROVIDERS
 
         static_url = get_provider(_resolve_tile_source(None)).build_url()
         web_url = _BASEMAP_PROVIDERS[DEFAULT_BASEMAP_PROVIDER.lower()][0]
@@ -244,7 +244,7 @@ class TestM8TheBigDataCutoffIsOneNumberAndOneRule:
         from digitalearth.interactive.core.base import (
             DEFAULT_BIG_DATA_THRESHOLD as interactive_default,
         )
-        from digitalearth.web.base import DEFAULT_BIG_DATA_THRESHOLD as web_default
+        from digitalearth.web.core.base import DEFAULT_BIG_DATA_THRESHOLD as web_default
 
         assert interactive_default is DEFAULT_BIG_DATA_THRESHOLD
         assert web_default == DEFAULT_BIG_DATA_THRESHOLD
@@ -309,7 +309,7 @@ class TestM9TheAnimationRateIsOneConstant:
         [
             ("digitalearth.static.builders.animation", "DEFAULT_FPS"),
             ("digitalearth.interactive.temporal.animation", "DEFAULT_FPS"),
-            ("digitalearth.web.export", "DEFAULT_FPS"),
+            ("digitalearth.web.output.export", "DEFAULT_FPS"),
         ],
         ids=["static", "interactive", "web"],
     )
@@ -375,7 +375,7 @@ class TestM9TheAnimationRateIsOneConstant:
             "static/builders/animation.py",
             "interactive/temporal/animation.py",
             "three_d/temporal/animation.py",
-            "web/export.py",
+            "web/output/export.py",
         ],
     )
     def test_no_tier_declares_a_rate_of_its_own(self, module):
@@ -441,7 +441,7 @@ class TestL11TheColormapSamplerIsShared:
             three copies were supposed to have: a mismatch means a ``column``/``scheme``/``k`` triple colours
             differently on the web tier than on the other two.
         """
-        from digitalearth.web.base import WebMapBase
+        from digitalearth.web.core.base import WebMapBase
 
         for n in (1, 2, 5):
             assert WebMapBase._cmap_hex("viridis", n) == sample_cmap("viridis", n)
@@ -534,7 +534,7 @@ class TestALabelsDefaultsAreDeclaredOnce:
         """
         node = next(
             found
-            for found in ast.walk(_tree("web/vector.py"))
+            for found in ast.walk(_tree("web/builders/vector.py"))
             if isinstance(found, ast.FunctionDef) and found.name == "labels"
         )
         written = dict(

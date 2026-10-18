@@ -14,7 +14,7 @@ import pytest
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import LayerSpec
 from digitalearth.web.capabilities import CAPABILITIES
-from digitalearth.web.renderer import DRAWN_KINDS, derived_ids, drawer_for
+from digitalearth.web.render.renderer import DRAWN_KINDS, derived_ids, drawer_for
 
 from ..base.test_renderer_conformance import RendererConformance, RendererContract
 from .test_web_capabilities import DESCRIBED_AND_DRAWN
@@ -566,7 +566,8 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
             because the drawer drew it. Filing it whether or not the drawer drew would leave the tooltip
             bound to a layer no widget holds, which is exactly the drift this seam removes.
         """
-        from digitalearth.web import WebMap, bigdata
+        from digitalearth.web import WebMap
+        from digitalearth.web.builders import bigdata
 
         def _declines(web_map, data, layer):
             """Behave like a drawer that found nothing to draw.
@@ -798,7 +799,8 @@ class TestALayerThatIsNotDrawnLeavesNothingBehind:
             id released, a later layer reusing it would inherit a key it was never drawn with; and `legend()`
             with no id would describe a layer that is not on the map.
         """
-        from digitalearth.web import WebMap, vector
+        from digitalearth.web import WebMap
+        from digitalearth.web.builders import vector
 
         m = WebMap().points(points_gdf, name="kept")
         monkeypatch.setattr(vector, "draw_vector", _refusing_drawer)
@@ -820,7 +822,8 @@ class TestALayerThatIsNotDrawnLeavesNothingBehind:
             follows, the next *unclassified* layer is filed under that key and a colour key is drawn for a
             layer that was never classified.
         """
-        from digitalearth.web import WebMap, vector
+        from digitalearth.web import WebMap
+        from digitalearth.web.builders import vector
 
         m = WebMap().points(points_gdf, column="value", name="first")
         drawer = vector.draw_vector
@@ -1020,7 +1023,8 @@ class TestADerivedIdIsReserved:
             monkeypatch: Used to make the cluster drawer decline.
             points_gdf: A small point collection.
         """
-        from digitalearth.web import WebMap, bigdata
+        from digitalearth.web import WebMap
+        from digitalearth.web.builders import bigdata
 
         monkeypatch.setattr(bigdata, "draw_clusters", lambda web_map, data, layer: None)
         m = WebMap().cluster(points_gdf)

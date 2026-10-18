@@ -172,7 +172,7 @@ def _as_finite(value: Any, argument: str, caller: str) -> float:
             bare ``float()`` error several frames down.
 
     Note:
-        ``digitalearth.web.base.as_finite`` is the same helper for the same reason. The two are not shared
+        ``digitalearth.web.core.base.as_finite`` is the same helper for the same reason. The two are not shared
         because ``base/`` has no such home yet and a tier may not import another tier; giving them one is the
         obvious follow-up, and until then this docstring is the pointer between them.
     """

@@ -285,7 +285,7 @@ class TestTimeSliderNeedsEngine:
             The per-step layers inline as GeoJSON into the saved page; a large series bloats it, so the
             vector path warns to serve tiles instead — the counterpart of the raster stack's pixel guard.
         """
-        from digitalearth.web import temporal as web_temporal
+        from digitalearth.web.temporal import temporal as web_temporal
 
         monkeypatch.setattr(web_temporal, "_LARGE_SERIES_FEATURES", 2)
         WebMap().timeslider(timed_points, kdim="time", column="pop")

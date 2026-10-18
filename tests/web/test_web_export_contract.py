@@ -36,7 +36,7 @@ def two_step_map(monkeypatch, tmp_path):
         recorded["duration"] = duration
         pathlib.Path(path).write_bytes(b"GIF89a")
 
-    from digitalearth.web import export as web_export
+    from digitalearth.web.output import export as web_export
 
     monkeypatch.setattr(web_export, "_write_gif", fake_write)
     monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])

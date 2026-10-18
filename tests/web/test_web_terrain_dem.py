@@ -77,7 +77,7 @@ class TestATileTemplateStillWorks:
 
     def test_no_argument_takes_the_public_default(self):
         """A bare call still draws terrain, from the open-data tiles the tier documents."""
-        from digitalearth.web.threed import _DEFAULT_TERRAIN_TILES
+        from digitalearth.web.builders.threed import _DEFAULT_TERRAIN_TILES
 
         source, terrain = _recorded_terrain(WebMap().terrain_tiles())
         assert source.tiles == [_DEFAULT_TERRAIN_TILES], source.tiles

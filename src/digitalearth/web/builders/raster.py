@@ -63,7 +63,7 @@ from digitalearth.base.spec import (
     Symbology,
 )
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS, require_three_bands
-from digitalearth.web.base import _require_layer_api, as_finite
+from digitalearth.web.core.base import _require_layer_api, as_finite
 
 #: Pixel count above which the inline image-source path is refused (name a ``tiles=`` route for big rasters).
 _LARGE_RASTER_PIXELS = 4_000_000
@@ -115,7 +115,7 @@ _COMPOSITE_RECIPES: Mapping[str, str] = MappingProxyType(
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.web.base import WebMapBase as _MixinBase
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -274,14 +274,14 @@ def _route_parts(tiles: Any, caller: str) -> tuple[Any, Any, Any]:
     Examples:
         - The inline path has no parts; a route has all three:
             ```python
-            >>> from digitalearth.web.raster import TileRoute, _route_parts
+            >>> from digitalearth.web.builders.raster import TileRoute, _route_parts
             >>> _route_parts(None, "WebMap.field()"), _route_parts(TileRoute("cog", "a.tif"), "WebMap.field()")
             ((None, None, None), ('cog', 'a.tif', None))
 
             ```
         - A bare route name is refused, pointing at the argument that replaces it:
             ```python
-            >>> from digitalearth.web.raster import _route_parts
+            >>> from digitalearth.web.builders.raster import _route_parts
             >>> _route_parts("xyz", "WebMap.field()")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -499,7 +499,7 @@ def _band_name(data: Any, band: int) -> str:
     ``band_names``/``variable_names``, never by warping the band a second time to look (#351).
 
     This tier's other metadata reader is **not** the precedent for reading it here:
-    :meth:`~digitalearth.web.base.WebMapBase._auto_cmap` is handed the display-CRS
+    :meth:`~digitalearth.web.core.base.WebMapBase._auto_cmap` is handed the display-CRS
     :class:`~digitalearth.base.sources.source.Source` the builder already warped — measured, `field()` calls
     it with a ``Source``, and it raises ``AttributeError: 'Dataset' object has no attribute 'metadata'`` if
     given the raster — so it reads the band name only as the extractor already recorded it under the
@@ -625,7 +625,7 @@ def _classed_png(values: Any, classes: BandClasses) -> bytes | None:
             ```python
             >>> import numpy as np
             >>> from digitalearth.base.raster_classes import classify_band
-            >>> from digitalearth.web.raster import _classed_png
+            >>> from digitalearth.web.builders.raster import _classed_png
             >>> classes = classify_band(np.array([1, 2]), "categorical", None, None)
             >>> _classed_png(np.array([[1.0, 2.0], [np.nan, 1.0]]), classes)[:8]
             b'\\x89PNG\\r\\n\\x1a\\n'
@@ -732,7 +732,7 @@ def _windowed_raster(web_map: Any, data: Any, *, route: str, caller: str) -> Any
     """Open what a tiled route was handed, refusing an input it cannot read one window at a time.
 
     Args:
-        web_map: The map, whose :meth:`~digitalearth.web.base.WebMapBase._opened` reads a path, a URL or a
+        web_map: The map, whose :meth:`~digitalearth.web.core.base.WebMapBase._opened` reads a path, a URL or a
             `DataRef` into the raster it names.
         data: The caller's ``data=``/``dataset=``, as they gave it.
         route: The resolved route, named in the refusal.
@@ -776,7 +776,7 @@ def _destination(
         route: The resolved route, named in the message.
         caller: The builder, for the message.
         named: How the caller names the destination, for the message — a raster builder's ``TileRoute``
-            path, or ``tiles_path=`` on :meth:`~digitalearth.web.threed.ThreeDMixin.terrain_tiles`, which
+            path, or ``tiles_path=`` on :meth:`~digitalearth.web.builders.threed.ThreeDMixin.terrain_tiles`, which
             writes one terrain pyramid and takes no route.
 
     Returns:
@@ -1211,7 +1211,7 @@ def _image_layer(_web_map: Any, layer: LayerSpec, url: str, coordinates: Any) ->
         coordinates: The four lon/lat corners, clockwise from the north-west.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the description records no `opacity` for the raster, naming the layer, its kind
@@ -1235,13 +1235,13 @@ def _raster_layer(layer: LayerSpec, source_spec: dict) -> Any:
         source_spec: The source, in the shape the widget's ``add_source`` takes it.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the description records no ``opacity`` for the raster, naming the layer, its kind
             and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
     source_id = f"{layer.id}-src"
@@ -1272,7 +1272,7 @@ def _tiled_layer(web_map: Any, layer: LayerSpec, props: dict) -> Any:
         props: Its recorded props, already thawed.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the description names a route this tier does not draw — the same refusal the builder
@@ -1310,7 +1310,7 @@ def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the band cannot be placed — it
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`, or `None` when the band cannot be placed — it
         lies outside what the display CRS can show, or its corners will not express as lon/lat. Either way
         it has been reported through the map's skip log before this answers.
 
@@ -1321,7 +1321,7 @@ def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     import numpy as np
 
-    from digitalearth.web.renderer import required_props
+    from digitalearth.web.render.renderer import required_props
 
     props = required_props(layer, "band", "cmap", "vmin", "vmax", "opacity")
     if props.get("tiles") is not None:
@@ -1383,7 +1383,7 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     Both composites are drawn here — the recipe is the layer's own, recorded under ``via`` — because they
     differ in one step out of six: the warp, the band stack, the stretch, the north-up flip, the PNG and the
     placement are the same work either way. It keeps the name it is registered under in
-    :func:`~digitalearth.web.renderer.drawer_for`.
+    :func:`~digitalearth.web.render.renderer.drawer_for`.
 
     Args:
         web_map: The map being drawn.
@@ -1393,7 +1393,7 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the composite cannot be placed —
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`, or `None` when the composite cannot be placed —
         it lies outside what the display CRS can show, or its corners will not express as lon/lat. Either
         way it has been reported through the map's skip log before this answers.
 
@@ -1410,7 +1410,7 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     import numpy as np
 
     from digitalearth.base.sources import get_stack
-    from digitalearth.web.renderer import required_props
+    from digitalearth.web.render.renderer import required_props
 
     props = required_props(layer, "bands", "mask_nodata", "limits", "opacity")
     if props.get("tiles") is not None:
@@ -1485,10 +1485,10 @@ class RasterMixin(_MixinBase):
             would rather publish nothing than that.
 
         Note:
-            Also sets :attr:`~digitalearth.web.base.WebMapBase.last_breaks` and
-            :attr:`~digitalearth.web.base.WebMapBase.last_legend`, which is how the key's **content** —
+            Also sets :attr:`~digitalearth.web.core.base.WebMapBase.last_breaks` and
+            :attr:`~digitalearth.web.core.base.WebMapBase.last_legend`, which is how the key's **content** —
             the swatches and the colours they were drawn with — reaches the layer:
-            :meth:`~digitalearth.web.base.WebMapBase._index_layer` files a fresh `last_legend` under the
+            :meth:`~digitalearth.web.core.base.WebMapBase._index_layer` files a fresh `last_legend` under the
             layer being built, exactly as it does for a classifying vector builder. The two are set
             together, as every other builder sets them (review L7).
 
@@ -1527,7 +1527,7 @@ class RasterMixin(_MixinBase):
             classes: The band's classes, or ``None`` for a ramp.
 
         Returns:
-            The legend dict this tier stores per layer (:meth:`~digitalearth.web.base.WebMapBase._legend_dict`):
+            The legend dict this tier stores per layer (:meth:`~digitalearth.web.core.base.WebMapBase._legend_dict`):
             its ``values`` are the ramp's stops, a graduated band's class edges, or a categorical band's codes.
 
         Examples:
@@ -1575,7 +1575,7 @@ class RasterMixin(_MixinBase):
                 values=edges,
             )
         # `DEFAULT_RAMP_STOPS`, not a number of this module's own: the vector ramp
-        # (:meth:`~digitalearth.web.vector.VectorMixin._ramp_color_expr`) samples at the same count, so a
+        # (:meth:`~digitalearth.web.builders.vector.VectorMixin._ramp_color_expr`) samples at the same count, so a
         # continuous key reads the same whether the values came from a column or from a band — and that was
         # a coincidence between two spellings of `5` until both read the constant `LegendSpec` itself
         # defaults to (review N6).
@@ -1620,7 +1620,7 @@ class RasterMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             band: 1-based band to draw.
             cmap: A registered matplotlib colormap name, or a ``Colormap`` itself — the classified
@@ -1633,7 +1633,7 @@ class RasterMixin(_MixinBase):
                 (#378): the classes span it exactly, an outlier lands in an end class, and the colorbar reads
                 the requested limits; ``"categorical"`` and explicit edges ignore them, having no range to pin.
             units: What the band's values are measured in, recorded as
-                :attr:`~digitalearth.web.base.WebMapBase.last_units` so a key built from them can say so.
+                :attr:`~digitalearth.web.core.base.WebMapBase.last_units` so a key built from them can say so.
                 ``None`` (the default) takes the variable's units from
                 :func:`~digitalearth.base.autostyle.auto_style`, and leaves them unknown when it carries
                 none — a unit is never guessed. Pass one to correct a band the library mis-identifies, or
@@ -1647,13 +1647,13 @@ class RasterMixin(_MixinBase):
                 coloured from the shared categorical palette (``cmap`` picks another). The classes are cut by
                 :mod:`digitalearth.base.raster_classes`, the classifier the static and interactive tiers use,
                 so one band is classed — and coloured — alike on all three; they are recorded in the layer's
-                colour encoding, and :meth:`~digitalearth.web.decoration.DecorationMixin.legend` keys them
+                colour encoding, and :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` keys them
                 one swatch per class. ``limits``/``vmin``/``vmax`` do not apply to a classified band. ``None``
                 (default) draws the continuous ramp. Not taken by a ``tiles`` route.
             k: How many classes a named graduated scheme cuts; ``None`` takes 5. Ignored without ``scheme``.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible. ``False`` builds it hidden, which is how
-                :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks time steps without
+                :meth:`~digitalearth.web.temporal.temporal.TemporalMixin.timeslider` stacks time steps without
                 every frame showing at once — including in a saved page, which carries no slider.
             tiles: How the pixels reach the page. ``None`` (the default) inlines them as a ``data:`` PNG, so
                 the page is one self-contained file — and is refused above :data:`_LARGE_RASTER_PIXELS`
@@ -1665,9 +1665,9 @@ class RasterMixin(_MixinBase):
                 writes one Cloud-Optimized GeoTIFF there instead and addresses it as ``cog://<file>``: fewer,
                 larger files, read by range request, but MapLibre has no built-in reader for one, so the page
                 showing it must register a ``cog://`` protocol itself. This tier cannot put that script in a
-                page it writes — :meth:`~digitalearth.web.base.WebMapBase.save` has no hook for one — so take
+                page it writes — :meth:`~digitalearth.web.core.base.WebMapBase.save` has no hook for one — so take
                 the COG route when you control the page the map is embedded in, and ``"xyz"`` when
-                :meth:`~digitalearth.web.base.WebMapBase.save` is the whole pipeline. **Either route makes
+                :meth:`~digitalearth.web.core.base.WebMapBase.save` is the whole pipeline. **Either route makes
                 the output a folder** — the HTML plus the pyramid or the COG — rather than a single file, and
                 the page addresses what sits beside it, so save it into the same directory. The route's
                 ``zooms`` default to ``(0, native)``, where *native* is the zoom at which a tile pixel is about
@@ -1716,7 +1716,7 @@ class RasterMixin(_MixinBase):
 
                 ```
             - The band also hands the map its extent, so the view frames itself and
-              :meth:`~digitalearth.web.base.WebMapBase.set_bounds` has something to frame on;
+              :meth:`~digitalearth.web.core.base.WebMapBase.set_bounds` has something to frame on;
               on an empty map the same call raises instead:
                 ```python
                 >>> m.set_bounds() is m                              # doctest: +SKIP
@@ -1724,7 +1724,7 @@ class RasterMixin(_MixinBase):
 
                 ```
             - ``visible=False`` builds the layer hidden, which is how
-              :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks one layer per time
+              :meth:`~digitalearth.web.temporal.temporal.TemporalMixin.timeslider` stacks one layer per time
               step without every frame showing at once — in a saved page too, which has no slider:
                 ```python
                 >>> m = WebMap().field(src, visible=False, name="t0")       # doctest: +SKIP
@@ -1762,8 +1762,8 @@ class RasterMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.raster.RasterMixin.rgb_composite: the three-band composite path.
-            digitalearth.web.vector.VectorMixin.contours: draws the same field as vectors.
+            digitalearth.web.builders.raster.RasterMixin.rgb_composite: the three-band composite path.
+            digitalearth.web.builders.vector.VectorMixin.contours: draws the same field as vectors.
         """
         vmin, vmax = _colour_limits(limits, vmin, vmax, caller=_FIELD_CALLER)
         ask = Ask()
@@ -2013,7 +2013,7 @@ class RasterMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             bands: The three 1-based band numbers, in red-green-blue order.
             mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.
@@ -2041,7 +2041,7 @@ class RasterMixin(_MixinBase):
                 composite has no finite pixels to draw, or when ``opacity`` is not a finite number —
                 refused at this call, because a figure holding NaN or infinity could not be written down.
             FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
-                is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
+                is registered for its URL scheme — from :meth:`~digitalearth.web.core.base.WebMapBase._opened`.
             TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;
                 see :meth:`field`, whose tiled route shares this one's writer.
 
@@ -2054,9 +2054,9 @@ class RasterMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.
+            digitalearth.web.builders.raster.RasterMixin.hsv_composite: the same three bands read as hue/sat/value.
             digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.
-            digitalearth.web.raster.RasterMixin.field: the single-band, colormapped path.
+            digitalearth.web.builders.raster.RasterMixin.field: the single-band, colormapped path.
         """
         return self._composite(
             _RGB_RECIPE,
@@ -2099,7 +2099,7 @@ class RasterMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             bands: The three 1-based band numbers, in hue-saturation-value order.
             mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value. A cell
@@ -2129,7 +2129,7 @@ class RasterMixin(_MixinBase):
                 composite has no finite pixels to draw, or when ``opacity`` is not a finite number —
                 refused at this call, because a figure holding NaN or infinity could not be written down.
             FileNotFoundError: when `dataset` is a path that names nothing, or KeyError when no resolver
-                is registered for its URL scheme — from :meth:`~digitalearth.web.base.WebMapBase._opened`.
+                is registered for its URL scheme — from :meth:`~digitalearth.web.core.base.WebMapBase._opened`.
             TypeError: for a tiled route, when `dataset` is not a raster pyramids can read windows out of;
                 see :meth:`field`, whose tiled route shares this one's writer.
 
@@ -2143,7 +2143,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.raster.RasterMixin.rgb_composite: the same three bands as red/green/blue.
+            digitalearth.web.builders.raster.RasterMixin.rgb_composite: the same three bands as red/green/blue.
             digitalearth.static.builders.raster.RasterMixin.hsv_composite: the matplotlib tier's counterpart,
                 which this answers to on every parameter the two share.
         """

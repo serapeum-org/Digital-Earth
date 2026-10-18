@@ -177,7 +177,7 @@ class TestTheReorderRationaleIsStillTrue:
     MOVERS = (
         "static/core/scene.py",
         "interactive/core/base.py",
-        "web/base.py",
+        "web/core/base.py",
         "three_d/core/base.py",
     )
 

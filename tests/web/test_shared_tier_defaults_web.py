@@ -18,7 +18,7 @@ from digitalearth.base.animation import DEFAULT_FPS  # noqa: E402
 from digitalearth.base.basemaps import DEFAULT_BASEMAP_PROVIDER  # noqa: E402
 from digitalearth.base.bigdata import DEFAULT_BIG_DATA_THRESHOLD  # noqa: E402
 from digitalearth.web import WebMap  # noqa: E402
-from digitalearth.web.decoration import _BASEMAP_PROVIDERS  # noqa: E402
+from digitalearth.web.decoration.decoration import _BASEMAP_PROVIDERS  # noqa: E402
 
 #: The Carto tile set every tier requests for the shared default provider — see the base-tier test module.
 CARTO_LIGHT = "light_all"
@@ -62,7 +62,7 @@ class TestTheAnimationRateIsTheSharedOne:
             The tier declared its own ``DEFAULT_FPS = 3.0``. ``is`` rather than ``==`` is what tells a shared
             constant from a re-declared literal that happens to match today.
         """
-        from digitalearth.web import export
+        from digitalearth.web.output import export
 
         assert export.DEFAULT_FPS is DEFAULT_FPS
 
@@ -75,7 +75,7 @@ class TestTheAnimationRateIsTheSharedOne:
         """
         import inspect
 
-        from digitalearth.web import export
+        from digitalearth.web.output import export
 
         default = (
             inspect.signature(export.ExportMixin.save_animation)

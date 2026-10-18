@@ -58,7 +58,7 @@ def warp_counter(monkeypatch) -> dict:
     """Count the display warps a build performs, through both of the tier's warp paths.
 
     A raster reaches the display CRS either as a whole dataset (`WebMapBase._to_display_raster`, which calls
-    the name `reproject` imported into :mod:`digitalearth.web.base`) or as one band
+    the name `reproject` imported into :mod:`digitalearth.web.core.base`) or as one band
     (:func:`digitalearth.base.display.to_display_source`, which calls its own module's `reproject`). Both
     names are wrapped, so a warp repeated on either path is counted.
 
@@ -69,7 +69,7 @@ def warp_counter(monkeypatch) -> dict:
         A dict whose `"warps"` entry counts the calls made so far.
     """
     from digitalearth.base import display
-    from digitalearth.web import base as web_base
+    from digitalearth.web.core import base as web_base
 
     counted = {"warps": 0}
     real = display.reproject

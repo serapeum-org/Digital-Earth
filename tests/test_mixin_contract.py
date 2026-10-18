@@ -64,7 +64,7 @@ BACKENDS = {
         "InteractiveMapBase",
     ),
     "digitalearth.three_d": ("digitalearth.three_d.core.base", "Scene3DBase"),
-    "digitalearth.web": ("digitalearth.web.base", "WebMapBase"),
+    "digitalearth.web": ("digitalearth.web.core.base", "WebMapBase"),
 }
 
 #: How many mixins the four backends held when this guard was written. A floor, not an equality: adding a
@@ -285,7 +285,7 @@ class TestComposedClassMro:
     """Tests for the exact method-resolution order of the composed backend classes.
 
     All four backends list their capability mixins first and their backend base last. That order is load
-    bearing rather than stylistic: with the mixins typed against that base (see :mod:`digitalearth.web.base`
+    bearing rather than stylistic: with the mixins typed against that base (see :mod:`digitalearth.web.core.base`
     and friends), listing the base *first* puts it both before and after its own subclasses, and the MRO
     algorithm cannot linearize it — mypy then falls back to ``[cls, object]`` and every attribute silently
     becomes ``Any``. ``static.Map`` always had the working order; the other three were corrected to match.
@@ -564,7 +564,7 @@ COMPOSED_CLASSES = {
     "digitalearth.interactive.map": ("InteractiveMap",),
     "digitalearth.three_d.core.base": ("Scene3DBase",),
     "digitalearth.three_d.scene3d": ("Scene3D",),
-    "digitalearth.web.base": ("WebMapBase",),
+    "digitalearth.web.core.base": ("WebMapBase",),
     "digitalearth.web.map": ("WebMap",),
 }
 

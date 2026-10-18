@@ -42,7 +42,7 @@ class TestTheGridItself:
             meridians: Expected meridian count — 360/spacing, with the antimeridian drawn once.
             parallels: Expected parallel count over the -80..80 band.
         """
-        from digitalearth.web.decoration import _graticule_features
+        from digitalearth.web.decoration.decoration import _graticule_features
 
         features = _graticule_features(spacing, spacing)["features"]
         lines = [f["geometry"]["coordinates"] for f in features]
@@ -55,7 +55,7 @@ class TestTheGridItself:
 
     def test_the_antimeridian_is_drawn_once(self):
         """-180 and +180 are the same line; drawing both doubles it."""
-        from digitalearth.web.decoration import _graticule_features
+        from digitalearth.web.decoration.decoration import _graticule_features
 
         features = _graticule_features(10.0, 10.0)["features"]
         longitudes = [
@@ -68,7 +68,7 @@ class TestTheGridItself:
 
     def test_lines_carry_a_hemisphere_label(self):
         """ "10" alone does not say which side of the meridian it is."""
-        from digitalearth.web.decoration import _graticule_features
+        from digitalearth.web.decoration.decoration import _graticule_features
 
         labels = {
             f["properties"]["label"]
@@ -82,7 +82,7 @@ class TestTheGridItself:
 
     def test_meridians_are_sampled_not_straight(self):
         """A projection curves a meridian, which it cannot do with only two vertices."""
-        from digitalearth.web.decoration import _graticule_features
+        from digitalearth.web.decoration.decoration import _graticule_features
 
         features = _graticule_features(30.0, 30.0)["features"]
         meridian = next(

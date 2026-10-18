@@ -25,7 +25,7 @@ pytest.importorskip("maplibre", reason="the web tier needs the web environment")
 
 from digitalearth.base.spec import Symbology  # noqa: E402
 from digitalearth.web import WebMap  # noqa: E402
-from digitalearth.web.renderer import portable_encodings  # noqa: E402
+from digitalearth.web.render.renderer import portable_encodings  # noqa: E402
 
 #: The contour levels every contour probe traces, so no probe depends on an auto-resolved level set.
 LEVELS = [10.0, 100.0, 1000.0]

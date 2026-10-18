@@ -741,7 +741,7 @@ def quickmap(
             adds one **if there is one to draw**; ``False`` draws none. Every backend accepts it, so the
             same call is valid everywhere (#254), but each reaches its own mechanism: ``matplotlib`` builds
             a colorbar, ``interactive`` toggles one, ``3d`` shows or hides the scalar bar, and ``web``
-            builds :meth:`~digitalearth.web.decoration.DecorationMixin.legend`.
+            builds :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend`.
 
             ``False`` is the half that is genuinely uniform: it reliably means "no key" on all four.
             ``True`` is not one behaviour but two. On ``matplotlib`` and ``web`` it **actively builds** a
@@ -752,7 +752,7 @@ def quickmap(
             What "nothing to draw" means also differs, and both active tiers skip **silently** rather than
             warning. ``matplotlib`` builds a colorbar for almost any mappable layer, and skips when the last
             layer has no mappable or is categorical. ``web`` keys only a **classification** — what a builder
-            recorded in :attr:`~digitalearth.web.base.WebMapBase.last_legend` — so an unclassified layer gets
+            recorded in :attr:`~digitalearth.web.core.base.WebMapBase.last_legend` — so an unclassified layer gets
             nothing. The split is not raster-vs-vector: the same unclassified polygon layer gets a colorbar
             on ``matplotlib`` and no key on ``web``, and every raster falls on the empty side there because
             ``field`` records no classification. Giving the web tier a continuous ramp key for a raster

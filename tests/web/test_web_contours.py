@@ -11,7 +11,7 @@ import pytest
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.web import ContourInterval, WebMap
-from digitalearth.web.vector import _even_levels
+from digitalearth.web.builders.vector import _even_levels
 
 
 class _Band:

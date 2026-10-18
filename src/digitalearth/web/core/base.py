@@ -360,7 +360,7 @@ class _DeckOverlay:
 
     Since #396 the only builder that still accumulates here is `tiles_3d`: `deck_scatter`, `deck_polygons`
     and the big-data routes of `points`/`polygons` each record a `LayerSpec` now (kinds `deck_scatter` /
-    `deck_polygons`, drawn by :func:`~digitalearth.web.bigdata.draw_deck_geojson`), so they own queue slots
+    `deck_polygons`, drawn by :func:`~digitalearth.web.builders.bigdata.draw_deck_geojson`), so they own queue slots
     and are ordered like `point_cloud`/`model`. `tiles_3d` streams its tileset from a URL rather than a
     feature frame this tier can serve, so it has no description to rebuild from and stays here.
     """
@@ -411,7 +411,7 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` carrying the object, or `None` when this process
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` carrying the object, or `None` when this process
         does not hold it. It carries no source of its own: a caller's layer names sources the caller wired
         up, so there is nothing here to add beside it.
 
@@ -420,7 +420,7 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
             answer every other unplaceable layer on this tier gets, so one ``except`` clause covers them.
     """
     from digitalearth.base.custom import MissingObject, held_object
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.render.renderer import DrawnLayer
 
     try:
         obj = held_object(
@@ -447,7 +447,7 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
 def _new_renderer(web_map: Any) -> Any:
     """Return the renderer a map draws through.
 
-    Imported here rather than at module scope: :mod:`digitalearth.web.renderer` resolves its drawers from
+    Imported here rather than at module scope: :mod:`digitalearth.web.render.renderer` resolves its drawers from
     the builder modules, and every one of those imports this module, so a top-level import would close a
     cycle.
 
@@ -455,9 +455,9 @@ def _new_renderer(web_map: Any) -> Any:
         web_map: The map the renderer serves.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.Renderer` bound to it.
+        A :class:`~digitalearth.web.render.renderer.Renderer` bound to it.
     """
-    from digitalearth.web.renderer import Renderer
+    from digitalearth.web.render.renderer import Renderer
 
     return Renderer(web_map)
 
@@ -630,7 +630,7 @@ class WebMapBase:
     Examples:
         - Construct and inspect the display configuration (needs no engine):
             ```python
-            >>> from digitalearth.web.base import WebMapBase
+            >>> from digitalearth.web.core.base import WebMapBase
             >>> m = WebMapBase(center=(8.0, 47.0), zoom=5, style="light", crs=4326, height=400)
             >>> (m.center, m.zoom, m.style, m.crs, m.height)
             ((8.0, 47.0), 5, 'light', 4326, 400)
@@ -640,7 +640,7 @@ class WebMapBase:
             ```
         - Data defaults to lon/lat (what MapLibre ingests):
             ```python
-            >>> from digitalearth.web.base import WebMapBase
+            >>> from digitalearth.web.core.base import WebMapBase
             >>> m = WebMapBase()
             >>> (m.crs, m.zoom)
             (4326, 2)
@@ -648,7 +648,7 @@ class WebMapBase:
             ```
         - Any other display CRS is refused rather than mis-placing the data:
             ```python
-            >>> from digitalearth.web.base import WebMapBase
+            >>> from digitalearth.web.core.base import WebMapBase
             >>> try:
             ...     WebMapBase(crs=3857)
             ... except ValueError as err:
@@ -717,7 +717,7 @@ class WebMapBase:
         self._layer_tree: LayerTree = LayerTree()
         #: Class breaks from the most recent layer that published a colour scale, for an out-of-band legend:
         #: a classified ``choropleth``/``points``, **or a raster band's ramp** — a band gained a colour
-        #: encoding of its own with order 24, and :meth:`~digitalearth.web.raster.RasterMixin._band_colour`
+        #: encoding of its own with order 24, and :meth:`~digitalearth.web.builders.raster.RasterMixin._band_colour`
         #: writes both accessors like any classifying builder, so a ``field()`` drawn over a choropleth is
         #: what these answer for (review L3).
         #: The same classification :attr:`last_legend` holds, stripped of the key's furniture: exactly
@@ -738,7 +738,7 @@ class WebMapBase:
         #: — the element type is the classified column's, which the tier does not constrain — where
         #: ``List[float]`` was a claim a caller could have written code against.
         self.last_breaks: list[Any] | None = None
-        #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
+        #: Everything :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` needs to draw a key for
         #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
         #: :attr:`last_breaks`, which stays the bare-``values`` accessor it has always been.
@@ -807,7 +807,7 @@ class WebMapBase:
         #: only ``"raster"`` is renderable to animation frames (``_temporal_frames``).
         self._temporal: dict | None = None
         #: The bare ``MapWidget`` :meth:`render` built last — the one on screen after ``show()`` or a notebook
-        #: repr — kept so :meth:`~digitalearth.web.decoration.DecorationMixin.drawn_features` can read what the
+        #: repr — kept so :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.drawn_features` can read what the
         #: user drew on it. ``None`` until the map is first rendered; :meth:`save` builds its own and leaves this.
         self._widget: Any = None
 
@@ -1109,7 +1109,7 @@ class WebMapBase:
     def _temporal_switcher(self) -> dict | None:
         """Return the automatic step picker for a temporal map, if this map is one.
 
-        Overridden in :mod:`digitalearth.web.temporal`; the base map has no time dimension.
+        Overridden in :mod:`digitalearth.web.temporal.temporal`; the base map has no time dimension.
 
         Returns:
             ``None``.
@@ -1188,7 +1188,7 @@ class WebMapBase:
             This is a **compatibility view** of what is drawn, not the map's state. The map is described by
             :attr:`figure_spec`, and layers are addressed by id through :attr:`layer_ids`,
             :meth:`get_layer` and :meth:`remove_layer`; a viewer shows and hides them with the switcher
-            :meth:`~digitalearth.web.decoration.DecorationMixin.layer_control` adds. It is kept because it is
+            :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.layer_control` adds. It is kept because it is
             the shape callers and this tier's own tests have always read — the same reason the 3-D tier kept
             its `(mesh, actor)` pairs after its seam.
 
@@ -1236,7 +1236,7 @@ class WebMapBase:
             each under the name #292 registers it with.
 
             A map built from a GeoDataFrame or a dataset already in memory can be handed straight to
-            :class:`~digitalearth.web.renderer.Renderer`, but not written: `to_dict()` refuses an `object:`
+            :class:`~digitalearth.web.render.renderer.Renderer`, but not written: `to_dict()` refuses an `object:`
             source, since a reference into this process's memory would be unreadable everywhere else. Give a
             builder a path or a URL to get a figure that can be stored.
 
@@ -1300,7 +1300,7 @@ class WebMapBase:
         widget is built from — and the description is installed only if it did. A figure that cannot be drawn
         was installed first on the 3-D tier and left in place when `apply` raised, so `layer_ids` and
         `figure_spec` advertised a layer that was never drawn and could not be (review H7). Nothing is rolled
-        back here because :meth:`~digitalearth.web.renderer.Renderer.apply` puts its record and the queue back
+        back here because :meth:`~digitalearth.web.render.renderer.Renderer.apply` puts its record and the queue back
         before it re-raises.
 
         Args:
@@ -1324,7 +1324,7 @@ class WebMapBase:
         # change it: `set_visible` hides the layer a key describes, `move_layer` changes which guided layer is
         # topmost, and `replace_layer` can take a guide off or put one on. Rebuilt here rather than in each of
         # the three, because this is the one path all of them go through.
-        from digitalearth.web.decoration import refresh_legend_panel
+        from digitalearth.web.decoration.decoration import refresh_legend_panel
 
         refresh_legend_panel(self)
 
@@ -1336,7 +1336,7 @@ class WebMapBase:
         ``self._title``/``self._furniture``), so those are restored here alongside the sources before
         :meth:`_change` runs — otherwise a web→web round trip would drop the title and the scale bar. As on the
         other 2-D tiers, ``_change`` derives sources from ``self._sources``, so the figure's own sources are
-        installed first or :meth:`~digitalearth.web.renderer.Renderer.apply` would have nothing to open.
+        installed first or :meth:`~digitalearth.web.render.renderer.Renderer.apply` would have nothing to open.
 
         Args:
             figure: The figure to draw. Its panel's :class:`~digitalearth.base.spec.Viewport` set the display
@@ -1356,7 +1356,7 @@ class WebMapBase:
         # carry (a raster's cmap/vmin/vmax/opacity, a vector's maplibre_type/paint), so a foreign figure draws
         # here instead of being refused at `required_props`. A same-tier figure already records them all, so
         # this is a no-op for it.
-        from digitalearth.web.renderer import hydrate_foreign_props
+        from digitalearth.web.render.renderer import hydrate_foreign_props
 
         figure = hydrate_foreign_props(figure)
         panel = figure.panels[0]
@@ -1493,11 +1493,11 @@ class WebMapBase:
 
         Note:
             This reaches the page: the widget is built by replaying the queue in order, and the reconcile
-            re-arranges the queue (:meth:`~digitalearth.web.renderer.Renderer._arrange`) — so what MapLibre
+            re-arranges the queue (:meth:`~digitalearth.web.render.renderer.Renderer._arrange`) — so what MapLibre
             adds last, and therefore draws on top, follows.
 
             A deck.gl layer (`point_cloud`, `model`, `deck_scatter`, `deck_polygons`, and the big-data routes
-            of `points`/`polygons` — see :attr:`~digitalearth.web.renderer.DrawnLayer.route`) is not a
+            of `points`/`polygons` — see :attr:`~digitalearth.web.render.renderer.DrawnLayer.route`) is not a
             MapLibre style layer, and the page composes all of them into **one** overlay handed over after
             the whole queue. A **described** one reaches the page all the same: the overlay is interleaved,
             so it names the style layer it draws beneath and deck.gl inserts it there.
@@ -1598,7 +1598,7 @@ class WebMapBase:
         CAPABILITIES.require(layer.kind, caller="WebMap.replace_layer")
         # Imported here, not at module scope: the renderer resolves its drawers from the builder modules, and
         # every one of those imports this module, so a top-level import would close a cycle.
-        from digitalearth.web.renderer import draws_from_description
+        from digitalearth.web.render.renderer import draws_from_description
 
         # `draws_from_description` is the tier's own answer to "does this layer's drawer read a figure
         # source?", which is the question this guard means to ask; the registry answers a different one —
@@ -1883,7 +1883,7 @@ class WebMapBase:
 
         Note:
             The tree places the layer in the band its kind declares, so nothing here computes a position.
-            For a kind in :data:`~digitalearth.web.renderer.DRAWN_KINDS` this then **draws it too**, from
+            For a kind in :data:`~digitalearth.web.render.renderer.DRAWN_KINDS` this then **draws it too**, from
             the description just recorded, and queues a reference to it in that same band — the builder has
             nothing left to queue. A kind the renderer does not own yet is still drawn by its builder, which
             queues the MapLibre closure itself — with :meth:`_queue` or one of the band registrations — into
@@ -1918,9 +1918,9 @@ class WebMapBase:
             self._sources[layer_id] = DataRef.of(
                 source, name=f"{self._objects_ns}:{layer_id}"
             )
-        # Imported here, not at module scope: `digitalearth.web.renderer` is reached through the package,
+        # Imported here, not at module scope: `digitalearth.web.render.renderer` is reached through the package,
         # whose `__init__` builds the map this module defines.
-        from digitalearth.web.renderer import DRAWN_KINDS, portable_encodings
+        from digitalearth.web.render.renderer import DRAWN_KINDS, portable_encodings
 
         recorded = Symbology() if symbology is None else symbology
         # The same style said twice: MapLibre's `paint` stays exactly as the builder wrote it, because that
@@ -1997,7 +1997,7 @@ class WebMapBase:
             tree unconditionally, turns a cleanup into a `KeyError` that hides whatever made the build
             stop. `tests/web/test_web_base.py` pins that, since `src/` cannot.
         """
-        from digitalearth.web.renderer import derived_ids
+        from digitalearth.web.render.renderer import derived_ids
 
         derived: tuple = ()
         if layer_id in self._layer_tree.ids:
@@ -2027,7 +2027,7 @@ class WebMapBase:
             without the key's furniture — ``last_legend["values"]`` and nothing else.
 
             Both are still load-bearing after order 24, for narrower jobs than before. The promotion no
-            longer decides what is **drawn** — :func:`~digitalearth.web.decoration.refresh_legend_panel`
+            longer decides what is **drawn** — :func:`~digitalearth.web.decoration.decoration.refresh_legend_panel`
             derives that from the guides the live layers carry — but :attr:`last_legend` is a public
             accessor, and one left describing a removed layer is the wrong answer to a question a caller is
             invited to ask. And `_filed_legend` still guards the filing itself: a description handed in
@@ -2101,7 +2101,7 @@ class WebMapBase:
             layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
                 takes the topmost **visible** layer that published a colour scale (a classified
                 ``choropleth``/``points``, or a raster band's ramp), and under ``visible=False`` the layer
-                whose key is drawn, as :meth:`~digitalearth.web.decoration.DecorationMixin.legend`
+                whose key is drawn, as :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend`
                 resolves it.
             label: What to call the key — the variable and its units, usually. Recorded as the guide's
                 ``title``.
@@ -2188,7 +2188,7 @@ class WebMapBase:
         Note:
             **The colour key goes with the layer.** A key is asked for by hanging a
             :class:`~digitalearth.base.spec.encoding.Guide` on the layer's own ``color`` encoding
-            (:meth:`~digitalearth.web.decoration.DecorationMixin.legend`), so removing the layer removes the
+            (:meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend`), so removing the layer removes the
             guide, and the panel — derived from the guides the live layers carry — is rebuilt without it. A
             surviving layer that carries its own guide then shows its own key. Nothing has to be rebuilt by
             hand, and no key describes a layer that is gone.
@@ -2228,7 +2228,7 @@ class WebMapBase:
 
                 ```
         """
-        from digitalearth.web.renderer import derived_ids
+        from digitalearth.web.render.renderer import derived_ids
 
         self._require_layer(layer_id)
         # The id is free again the moment it addresses nothing — the lifetime
@@ -2306,7 +2306,7 @@ class WebMapBase:
         # The guide went with the layer's description, so the key is rebuilt from what is left. This is the
         # one layer-management method that does not go through `_change` — the tree is written above, in a
         # sequence that also frees ids and unqueues closures — so it asks for the rebuild itself.
-        from digitalearth.web.decoration import refresh_legend_panel
+        from digitalearth.web.decoration.decoration import refresh_legend_panel
 
         refresh_legend_panel(self)
         return self
@@ -2349,7 +2349,7 @@ class WebMapBase:
                 ``name="roads "`` as a layer whose switcher row reads ``roads``, where the other three
                 crashed on it — so a script moved between tiers got a different id either way (review R2-H4).
             kind: The layer's kind, when its drawer adds MapLibre layers under ids derived from this one
-                (:data:`~digitalearth.web.renderer.DERIVED_SUFFIXES`). Those ids are reserved with it, and a
+                (:data:`~digitalearth.web.render.renderer.DERIVED_SUFFIXES`). Those ids are reserved with it, and a
                 candidate one of whose derived ids is taken is passed over like a taken id (review M5).
 
         Returns:
@@ -2406,7 +2406,7 @@ class WebMapBase:
         Returns:
             `True` when all of them were free and are now issued; `False`, reserving nothing, otherwise.
         """
-        from digitalearth.web.renderer import derived_ids
+        from digitalearth.web.render.renderer import derived_ids
 
         wanted = (candidate, *(derived_ids(kind, candidate) if kind else ()))
         if any(layer_id in self._issued_ids for layer_id in wanted):
@@ -2760,7 +2760,7 @@ class WebMapBase:
                 ```
 
         See Also:
-            digitalearth.web.bigdata.BigDataMixin._require_points: the narrower geometry-kind guard that
+            digitalearth.web.builders.bigdata.BigDataMixin._require_points: the narrower geometry-kind guard that
                 runs after this one for the heatmap/cluster builders.
         """
         require_vector(features, method, single="field", stack="timeslider")
@@ -2777,7 +2777,7 @@ class WebMapBase:
         than being left to the caller.
 
         ISO-8601 is the encoding because it is what GeoJSON consumers expect, it still sorts
-        lexicographically — which is what keeps :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider`
+        lexicographically — which is what keeps :meth:`~digitalearth.web.temporal.temporal.TemporalMixin.timeslider`
         ordering its steps correctly — and MapLibre expressions can compare the strings directly. Missing
         values become ``None`` (GeoJSON ``null``) rather than the string ``"NaT"``, which would otherwise
         surface in a popup as though it were a real value.
@@ -2864,7 +2864,7 @@ class WebMapBase:
                 ```
 
         See Also:
-            digitalearth.web.base.WebMapBase._display_gdf: the choke point that applies this to every
+            digitalearth.web.core.base.WebMapBase._display_gdf: the choke point that applies this to every
                 vector builder's input.
         """
         import pandas as pd
@@ -2930,9 +2930,9 @@ class WebMapBase:
                 resolver is registered for its URL scheme — both from :meth:`_opened`, which runs first.
 
         See Also:
-            digitalearth.web.base.WebMapBase._require_vector: the input guard applied first.
-            digitalearth.web.base.WebMapBase._placed: the reprojection, and the off-limb report.
-            digitalearth.web.base.WebMapBase._json_safe: the date encoding applied to the result.
+            digitalearth.web.core.base.WebMapBase._require_vector: the input guard applied first.
+            digitalearth.web.core.base.WebMapBase._placed: the reprojection, and the off-limb report.
+            digitalearth.web.core.base.WebMapBase._json_safe: the date encoding applied to the result.
         """
         features = self._opened(features)
         self._require_vector(features, method)
@@ -3216,7 +3216,7 @@ class WebMapBase:
 
         Four shapes reach here, in the order the queue holds them. A described layer is looked up in the
         renderer, and what it drew is applied by the route its drawer built for
-        (:attr:`~digitalearth.web.renderer.DrawnLayer.route`): a style layer is added source-first, then the
+        (:attr:`~digitalearth.web.render.renderer.DrawnLayer.route`): a style layer is added source-first, then the
         layer, then whatever extra layers the same description owns (a graticule's degree labels, a cluster's
         counts and loose points); terrain adds its DEM source and turns terrain on; and a deck.gl layer joins
         the one overlay the page composes. A description nothing was drawn for adds nothing, which is how a
@@ -3263,12 +3263,12 @@ class WebMapBase:
 
         Args:
             widget: The MapLibre ``MapWidget`` being assembled.
-            built: The :class:`~digitalearth.web.renderer.DrawnLayer` the renderer holds for the layer.
+            built: The :class:`~digitalearth.web.render.renderer.DrawnLayer` the renderer holds for the layer.
             deck: The list deck.gl layers are collected into, or ``None`` to apply each on its own.
             anchor: The style layer a deck-routed drawing draws beneath, or ``None`` for the top of the
                 stack. Read by the deck route alone: a style layer is placed by when it is added.
         """
-        from digitalearth.web.renderer import DECK_ROUTE, TERRAIN_ROUTE, shown
+        from digitalearth.web.render.renderer import DECK_ROUTE, TERRAIN_ROUTE, shown
 
         if built.route == DECK_ROUTE:
             self._collect_deck(widget, [built.layer], deck, anchor)
@@ -3356,7 +3356,7 @@ class WebMapBase:
             layer therefore anchors to the next style layer it *can* name, and a caller who wires their own
             layers orders them themselves.
         """
-        from digitalearth.web.renderer import STYLE_ROUTE
+        from digitalearth.web.render.renderer import STYLE_ROUTE
 
         if isinstance(entry, _Described):
             built = self._renderer.drawn.get(entry.layer_id)
@@ -3404,7 +3404,7 @@ class WebMapBase:
 
             # Imported here, not at module scope: decoration imports base, so the other direction has to
             # wait until it is needed.
-            from digitalearth.web.decoration import _PANEL_CSS
+            from digitalearth.web.decoration.decoration import _PANEL_CSS
 
             for content, position in self._panels.values():
                 widget.add_control(
@@ -3433,10 +3433,10 @@ class WebMapBase:
     def render(self) -> Any:
         """Build and return the configured map widget (an empty map if no layers are registered).
 
-        When a time-slider has been added (:meth:`~digitalearth.web.temporal.TemporalMixin.timeslider`), the
+        When a time-slider has been added (:meth:`~digitalearth.web.temporal.temporal.TemporalMixin.timeslider`), the
         map is wrapped in a slider composite so a notebook front-end renders both together; otherwise the bare
         MapLibre ``MapWidget`` is returned. Either way the bare widget is remembered, so
-        :meth:`~digitalearth.web.decoration.DecorationMixin.drawn_features` reads the one last put on screen.
+        :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.drawn_features` reads the one last put on screen.
 
         Returns:
             The ``maplibre.ipywidget.MapWidget``, or an ``ipywidgets`` container (slider + map) when temporal.
@@ -3464,7 +3464,7 @@ class WebMapBase:
 
         The output kind is ``fmt`` if given, else inferred from the suffix: ``.png`` renders a snapshot,
         ``.gif`` or ``.mp4`` runs the animation export
-        (:meth:`~digitalearth.web.export.ExportMixin.save_animation`, which needs a temporal map and a headless
+        (:meth:`~digitalearth.web.output.export.ExportMixin.save_animation`, which needs a temporal map and a headless
         browser), anything else writes the HTML page.
         HTML is serialised via ``MapWidget.to_html`` and written as UTF-8 ourselves — sidestepping maplibre's
         cp1252-on-Windows writer bug (see :func:`_patch_maplibre_html_encoding`). By default the page embeds
@@ -3485,7 +3485,7 @@ class WebMapBase:
 
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
-            ValueError: propagated from :meth:`~digitalearth.web.export.ExportMixin.save_animation` for a
+            ValueError: propagated from :meth:`~digitalearth.web.output.export.ExportMixin.save_animation` for a
                 ``.gif`` or ``.mp4`` destination on a map that carries no renderable time series.
 
         Examples:
@@ -3510,7 +3510,7 @@ class WebMapBase:
 
                 ```
             - The suffix, not a flag, picks the branch: ``.gif`` hands the call to
-              :meth:`~digitalearth.web.export.ExportMixin.save_animation` (as does ``.mp4``), which says so
+              :meth:`~digitalearth.web.output.export.ExportMixin.save_animation` (as does ``.mp4``), which says so
               when the map has nothing to animate. That dispatch needs no engine, so it runs here:
                 ```python
                 >>> from digitalearth.web import WebMap
@@ -3523,7 +3523,7 @@ class WebMapBase:
                 ```
 
         See Also:
-            digitalearth.web.export.ExportMixin.save_animation: the ``.gif``/``.mp4`` branch.
+            digitalearth.web.output.export.ExportMixin.save_animation: the ``.gif``/``.mp4`` branch.
             render: the in-notebook counterpart — the same widget, without writing a file.
         """
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")

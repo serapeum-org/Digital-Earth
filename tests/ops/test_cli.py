@@ -148,7 +148,7 @@ class TestPlotKwargs:
 class TestBackendCrsDefault:
     """The ``--crs`` default is backend-aware so ``--backend web`` works out of the box (M2).
 
-    The web tier renders in EPSG:4326 only (``digitalearth.web.base.DISPLAY_CRS``), so the shared 3857
+    The web tier renders in EPSG:4326 only (``digitalearth.web.core.base.DISPLAY_CRS``), so the shared 3857
     default made a bare ``--backend web`` always raise. When the caller passes no ``--crs``, the web backend
     now defaults to 4326 while every other tier keeps 3857; an explicit ``--crs`` is never overridden.
     """

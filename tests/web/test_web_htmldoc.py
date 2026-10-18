@@ -1,6 +1,6 @@
 """The standalone-export document (WB-13/17/20): structure of the HTML our own runtime emits.
 
-These are the no-browser checks — that :class:`~digitalearth.web.htmldoc.HtmlDocument` and
+These are the no-browser checks — that :class:`~digitalearth.web.output.htmldoc.HtmlDocument` and
 ``swipe_html`` emit the containers, the CDN library, our runtime/feature scripts and the bootstrap,
 and that each map's serialized state is embedded. The *behaviour* of the page in a browser (the maps
 render, the divider clips) is covered by the Playwright smoke test (``test_web_export_smoke.py``),
@@ -18,7 +18,7 @@ from digitalearth.web import (
     save_swipe,
     swipe_html,
 )
-from digitalearth.web.htmldoc import HtmlDocument, MapPanel
+from digitalearth.web.output.htmldoc import HtmlDocument, MapPanel
 
 
 @pytest.fixture
@@ -443,7 +443,7 @@ class TestOfflineInlining:
             branch routes the rendered page through it and writes the result, without a live fetch.
         """
         pytest.importorskip("maplibre")
-        from digitalearth.web import export as web_export
+        from digitalearth.web.output import export as web_export
 
         monkeypatch.setattr(
             web_export.ExportMixin,

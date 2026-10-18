@@ -1118,7 +1118,7 @@ class GuideMixin(_MixinBase):
 
         See Also:
             legend: the keyed list, for a layer coloured by classes.
-            digitalearth.web.base.WebMapBase.colorbar: the same name on the web tier.
+            digitalearth.web.core.base.WebMapBase.colorbar: the same name on the web tier.
         """
         self._record_guide(
             layer_id,
@@ -1203,7 +1203,7 @@ class GuideMixin(_MixinBase):
 
         See Also:
             colorbar: the scalar bar, for a layer coloured by a continuous ramp.
-            digitalearth.web.decoration.DecorationMixin.legend: the same name on the web tier.
+            digitalearth.web.decoration.decoration.DecorationMixin.legend: the same name on the web tier.
         """
         self._record_guide(
             layer_id,

@@ -209,7 +209,7 @@ include = ["digitalearth", "digitalearth.*"]
 [tool.setuptools.package-data]
 "digitalearth.base.autostyle" = ["library/*.yml"]
 # The web tier's own standalone-export runtime (WB-13/17/20): JS/CSS shipped as data and read at
-# save time by `digitalearth.web.htmldoc`, so a built wheel carries the export document's assets.
+# save time by `digitalearth.web.output.htmldoc`, so a built wheel carries the export document's assets.
 "digitalearth.web" = ["srcjs/*.js", "srcjs/*.css"]
 
 # Ruff replaces black + isort + flake8 + pyupgrade (and their nbqa notebook wrappers): one engine and one
@@ -298,7 +298,7 @@ module = "digitalearth.api"  # 19 errors at baseline
 disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.vector"  # 9 errors at baseline
+module = "digitalearth.web.builders.vector"  # 9 errors at baseline
 disable_error_code = ["attr-defined", "list-item", "no-any-return", "no-redef"]
 
 [[tool.mypy.overrides]]
@@ -306,11 +306,11 @@ module = "digitalearth.interactive.builders.vector"  # 8 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.threed"  # 8 errors at baseline
+module = "digitalearth.web.builders.threed"  # 8 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.base"  # 5 errors at baseline
+module = "digitalearth.web.core.base"  # 5 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return"]
 
 
@@ -319,7 +319,7 @@ module = "digitalearth.static.builders.animation"  # 4 errors at baseline
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.bigdata"  # 4 errors at baseline
+module = "digitalearth.web.builders.bigdata"  # 4 errors at baseline
 disable_error_code = ["attr-defined", "misc", "type-var"]
 
 [[tool.mypy.overrides]]
@@ -356,7 +356,7 @@ disable_error_code = ["arg-type"]
 # without a narrowing guard in two places, and a `str | None` is appended to a `list[str]`. Latent
 # Optional-narrowing gaps in that feature, not this branch's work, so they are recorded rather than
 # fixed here; worth a real fix by whoever owns the time-slider.
-module = "digitalearth.web.temporal"  # 6 errors
+module = "digitalearth.web.temporal.temporal"  # 6 errors
 disable_error_code = ["arg-type", "attr-defined", "union-attr"]
 
 [[tool.mypy.overrides]]
@@ -419,7 +419,7 @@ disable_error_code = ["union-attr"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.raster"  # 1 error at baseline
+module = "digitalearth.web.builders.raster"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
 [tool.commitizen]

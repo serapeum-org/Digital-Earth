@@ -31,7 +31,7 @@ for all four tiers.
 `WebMap` queues — which is what the widget is built from — nor what `figure_spec` reports, so a layer it
 added was in the record and never reached the widget, and one it removed left the record and stayed on the
 page. :meth:`Renderer._arrange` brings the queue to the applied figure's layers, in its draw order, band by
-band; and :meth:`~digitalearth.web.base.WebMapBase._change` — the path `set_visible`, `move_layer` and
+band; and :meth:`~digitalearth.web.core.base.WebMapBase._change` — the path `set_visible`, `move_layer` and
 `replace_layer` take — installs the description once this has returned, so a figure `apply` refuses is never
 one the map describes. What `_arrange` does **not** move is a queue entry no layer id addresses: the one deck
 overlay marker, and whatever a caller queued through `add_layer` as a callable, keep their slots.
@@ -178,7 +178,7 @@ DRAWN_KINDS: tuple[str, ...] = (
 #: else, so `WebMap.terrain_tiles` encodes a DEM to tiles when it is given one and the layer then draws from
 #: the tile-URL template its description carries. There is no figure source for a replacement to name, which
 #: is why :func:`draws_from_description` — the question
-#: :meth:`~digitalearth.web.base.WebMapBase.replace_layer` actually asks — starts here.
+#: :meth:`~digitalearth.web.core.base.WebMapBase.replace_layer` actually asks — starts here.
 DESCRIPTION_ONLY_KINDS: frozenset[str] = frozenset({"terrain"})
 
 
@@ -211,7 +211,7 @@ def draws_from_description(layer: LayerSpec) -> bool:
         - A tiled raster carries its own pixels' address, so it needs no source:
             ```python
             >>> from digitalearth.base.spec import LayerSpec, Symbology
-            >>> from digitalearth.web.renderer import draws_from_description
+            >>> from digitalearth.web.render.renderer import draws_from_description
             >>> tiled = Symbology(props={"tiles": "xyz", "tiles_url": "acc/{z}/{x}/{y}.png"})
             >>> draws_from_description(LayerSpec("acc", "raster", symbology=tiled))
             True
@@ -220,7 +220,7 @@ def draws_from_description(layer: LayerSpec) -> bool:
         - An inline one is encoded from the band, which the drawer has to be handed:
             ```python
             >>> from digitalearth.base.spec import LayerSpec
-            >>> from digitalearth.web.renderer import draws_from_description
+            >>> from digitalearth.web.render.renderer import draws_from_description
             >>> draws_from_description(LayerSpec("acc", "raster", source_id="acc"))
             False
 
@@ -256,7 +256,7 @@ def derived_ids(kind: str, layer_id: str) -> tuple[str, ...]:
     Examples:
         - A graticule labels its lines in a second layer, named after the first:
             ```python
-            >>> from digitalearth.web.renderer import derived_ids
+            >>> from digitalearth.web.render.renderer import derived_ids
             >>> derived_ids("graticule", "grid")
             ('grid-label',)
             >>> derived_ids("points", "wells")
@@ -311,7 +311,7 @@ PAINT_CHANNELS: Mapping[str, str] = MappingProxyType(
 #: Which flat property each of this tier's non-paint builders records a channel under.
 #:
 #: The raster builders compile their style at draw time rather than into a MapLibre ``paint`` dict — ``field``
-#: and ``rgb_composite`` record ``props["opacity"]`` flat, and :func:`~digitalearth.web.raster.draw_field`
+#: and ``rgb_composite`` record ``props["opacity"]`` flat, and :func:`~digitalearth.web.builders.raster.draw_field`
 #: turns it into ``raster-opacity`` — and ``graticule`` records the same way. So the ``raster-opacity`` row of
 #: :data:`PAINT_CHANNELS` translated a key no builder ever writes, and an unambiguous ``field(opacity=0.5)``
 #: published nothing at all while that row made the gap look covered (review R2-M12). This is the second
@@ -377,7 +377,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
         - A point layer publishes the channels its caller asked for, and only those:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.web.renderer import portable_encodings
+            >>> from digitalearth.web.render.renderer import portable_encodings
             >>> paint = {"circle-radius": 7.0, "circle-opacity": 0.5, "circle-color": "#f00"}
             >>> asked = ["circle-radius", "circle-opacity", "circle-color"]
             >>> lifted = portable_encodings(Symbology(props={"paint": paint, "asked": asked}))
@@ -389,7 +389,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
           because nothing is recorded as asked for:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.web.renderer import portable_encodings
+            >>> from digitalearth.web.render.renderer import portable_encodings
             >>> unstyled = {"circle-radius": 5.0, "circle-opacity": 0.9, "circle-color": "#3388ff"}
             >>> sorted(portable_encodings(Symbology(props={"paint": unstyled})))
             []
@@ -399,7 +399,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
           closed — no reading of the resolved style alone could tell these two apart:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.web.renderer import portable_encodings
+            >>> from digitalearth.web.render.renderer import portable_encodings
             >>> paint = {"circle-radius": 5.0, "circle-opacity": 0.9, "circle-color": "#3388ff"}
             >>> lifted = portable_encodings(
             ...     Symbology(props={"paint": paint, "asked": ["circle-radius"]})
@@ -411,7 +411,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
         - A raster records its opacity flat rather than in a paint dict, and it is read there too:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.web.renderer import portable_encodings
+            >>> from digitalearth.web.render.renderer import portable_encodings
             >>> field = {"cmap": "viridis", "vmin": 0.0, "vmax": 1.0, "opacity": 0.5, "band": 1}
             >>> recorded = Symbology(props=dict(field, asked=["opacity"]))
             >>> portable_encodings(recorded)["opacity"].resolve()
@@ -422,7 +422,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
           recorded the channel itself, and what it recorded is not a constant:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.web.renderer import portable_encodings
+            >>> from digitalearth.web.render.renderer import portable_encodings
             >>> expression = ("step", ("get", "pop"), "#440154", 5.0, "#fde725")
             >>> painted = Symbology(props={"paint": {"fill-color": expression}, "asked": ["fill-color"]})
             >>> sorted(portable_encodings(painted))
@@ -434,7 +434,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
           expression:
             ```python
             >>> from digitalearth.base.spec import Encoding, Scale, Symbology
-            >>> from digitalearth.web.renderer import portable_encodings
+            >>> from digitalearth.web.render.renderer import portable_encodings
             >>> recorded = Symbology(
             ...     encodings={"color": Encoding.by_field("color", "pop", scale=Scale.from_limits(1, 9))},
             ...     props={"paint": {"fill-color": ("step", ("get", "pop"))}, "asked": ["fill-color"]},
@@ -503,7 +503,7 @@ def shown(drawn: DrawnLayer) -> bool:
 
     Public because the widget builder asks it too: a terrain drawing is hidden by **not making** the
     ``setTerrain`` call, which is a decision at application time rather than a property on a layer object
-    (:meth:`~digitalearth.web.base.WebMapBase._apply_drawn`).
+    (:meth:`~digitalearth.web.core.base.WebMapBase._apply_drawn`).
 
     Args:
         drawn: What a drawer produced — its own layer and the extra layers the same description owns.
@@ -529,7 +529,7 @@ def _relaid(segment: Any, wanted: Any, marker: type) -> list:
     Everything that is not a marker keeps its place, because a closure is not addressed by a layer id and a
     reorder has nothing to say about where it goes. The markers are laid into the slots markers already
     occupied; when there are fewer markers than slots the extra slots close up, and when there are more the
-    remainder is appended — which is where :meth:`~digitalearth.web.base.WebMapBase._queue_in_band` puts a
+    remainder is appended — which is where :meth:`~digitalearth.web.core.base.WebMapBase._queue_in_band` puts a
     layer a builder has just drawn.
 
     Args:
@@ -545,7 +545,7 @@ def _relaid(segment: Any, wanted: Any, marker: type) -> list:
         - A closure keeps its place while the markers around it are reordered:
             ```python
             >>> from dataclasses import dataclass
-            >>> from digitalearth.web.renderer import _relaid
+            >>> from digitalearth.web.render.renderer import _relaid
             >>> @dataclass
             ... class Mark:
             ...     layer_id: str
@@ -556,7 +556,7 @@ def _relaid(segment: Any, wanted: Any, marker: type) -> list:
         - A layer the tree no longer holds gives its slot up:
             ```python
             >>> from dataclasses import dataclass
-            >>> from digitalearth.web.renderer import _relaid
+            >>> from digitalearth.web.render.renderer import _relaid
             >>> @dataclass
             ... class Mark:
             ...     layer_id: str
@@ -580,12 +580,12 @@ def _custom_drawer() -> Any:
     """Return the drawer for a caller's own MapLibre layer.
 
     Resolved through a function so the drawer table stays a table of names: `draw_custom` lives beside the
-    map that holds the objects, in :mod:`digitalearth.web.base`, rather than in a builder module.
+    map that holds the objects, in :mod:`digitalearth.web.core.base`, rather than in a builder module.
 
     Returns:
         The drawer.
     """
-    from digitalearth.web.base import draw_custom
+    from digitalearth.web.core.base import draw_custom
 
     return draw_custom
 
@@ -611,7 +611,7 @@ def drawer_for(kind: str) -> Any:
         - Kinds that differ only in what they mean share the drawer that draws them, because on this tier
           they are one GeoJSON source and one typed layer:
             ```python
-            >>> from digitalearth.web.renderer import drawer_for
+            >>> from digitalearth.web.render.renderer import drawer_for
             >>> drawer_for("points").__name__, drawer_for("polygons").__name__
             ('draw_vector', 'draw_vector')
             >>> drawer_for("raster").__name__
@@ -621,7 +621,7 @@ def drawer_for(kind: str) -> Any:
         - A kind this tier deliberately does not have is refused with the reason it declared, so the
           caller is told what to do instead rather than only that the kind is missing:
             ```python
-            >>> from digitalearth.web.renderer import drawer_for
+            >>> from digitalearth.web.render.renderer import drawer_for
             >>> drawer_for("mesh")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -630,7 +630,7 @@ def drawer_for(kind: str) -> Any:
             ```
         - A kind the tier neither draws nor decided against carries no reason, because it declared none:
             ```python
-            >>> from digitalearth.web.renderer import drawer_for
+            >>> from digitalearth.web.render.renderer import drawer_for
             >>> drawer_for("volume")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -652,7 +652,8 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the map, so a module-level
     # import would close a cycle, and a map that draws nothing should not pay for loading all of them.
-    from digitalearth.web import bigdata, decoration, raster, threed, vector
+    from digitalearth.web.builders import bigdata, raster, threed, vector
+    from digitalearth.web.decoration import decoration
 
     drawers = {
         "graticule": decoration.draw_graticule,
@@ -724,7 +725,7 @@ def required_props(layer: LayerSpec, *names: str) -> dict:
         - The props a drawer asked for come back as a plain dict it can read:
             ```python
             >>> from digitalearth.base.spec import LayerSpec, Symbology
-            >>> from digitalearth.web.renderer import required_props
+            >>> from digitalearth.web.render.renderer import required_props
             >>> wells = LayerSpec(
             ...     "wells",
             ...     "points",
@@ -739,7 +740,7 @@ def required_props(layer: LayerSpec, *names: str) -> dict:
         - A description carrying none of them is refused by layer, not by MapLibre key:
             ```python
             >>> from digitalearth.base.spec import LayerSpec
-            >>> from digitalearth.web.renderer import required_props
+            >>> from digitalearth.web.render.renderer import required_props
             >>> try:
             ...     required_props(LayerSpec("wells", "points"), "paint")
             ... except ValueError as error:
@@ -845,7 +846,7 @@ class Renderer:
 
     Examples:
         - A map's renderer holds what it drew, keyed by the same ids
-          :attr:`~digitalearth.web.base.WebMapBase.layer_ids` lists:
+          :attr:`~digitalearth.web.core.base.WebMapBase.layer_ids` lists:
             ```python
             >>> from digitalearth.web import WebMap
             >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam")
@@ -962,7 +963,7 @@ class Renderer:
         top.
 
         The figure the map *reports* is still the map's own:
-        :meth:`~digitalearth.web.base.WebMapBase._change` installs that once this has returned, so a figure
+        :meth:`~digitalearth.web.core.base.WebMapBase._change` installs that once this has returned, so a figure
         this refuses is never one the map describes.
 
         Reconciling is not atomic — the layers are drawn one after another — so anything that stops it
@@ -1057,9 +1058,9 @@ class Renderer:
         Args:
             after: The figure the map now draws.
         """
-        # Imported here, not at module scope: `digitalearth.web.base` imports this module (deferred, for the
+        # Imported here, not at module scope: `digitalearth.web.core.base` imports this module (deferred, for the
         # same reason), and the marker is that module's own queue vocabulary.
-        from digitalearth.web.base import _Described
+        from digitalearth.web.core.base import _Described
 
         queued = self._map._queued
         underlay, reference, overlay = self._band_counts()

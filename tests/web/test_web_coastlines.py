@@ -2,7 +2,7 @@
 
 ``graticule()`` shipped, but the tier drew no coastlines or country borders: they came only with whatever
 basemap style a caller picked. These two builders add them as **line** overlays in the reference band — over
-the basemap, under the data, which is what :meth:`~digitalearth.web.base.WebMapBase.add_reference` is for —
+the basemap, under the data, which is what :meth:`~digitalearth.web.core.base.WebMapBase.add_reference` is for —
 built as GeoJSON from cleopatra's ``natural_earth`` coordinate arrays (the same source the static tier reads),
 so no GIS is reimplemented here and the lines embed in a saved page. Land and ocean are out of scope: they are
 polygons that need interior-ring support (UP-2).

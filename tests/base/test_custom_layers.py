@@ -203,7 +203,7 @@ class TestWhatC7DoesNotCover:
         ("static", "digitalearth.static.render.renderer", "terrain"),
         ("interactive", "digitalearth.interactive.render.renderer", "terrain"),
         ("3d", "digitalearth.three_d.render.renderer", "hexbin"),
-        ("web", "digitalearth.web.renderer", "mesh"),
+        ("web", "digitalearth.web.render.renderer", "mesh"),
     ]
 
     @classmethod

@@ -10,7 +10,7 @@ import pathlib
 import pytest
 
 from digitalearth.web import WebMap
-from digitalearth.web.export import _ASSET_RE
+from digitalearth.web.output.export import _ASSET_RE
 
 
 @pytest.fixture

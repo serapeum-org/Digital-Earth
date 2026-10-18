@@ -614,7 +614,7 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.DecorationMixin.set_title: the same name on the web tier.
+            digitalearth.web.decoration.decoration.DecorationMixin.set_title: the same name on the web tier.
         """
         if not isinstance(heading, str):
             raise TypeError(

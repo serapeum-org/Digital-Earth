@@ -1355,7 +1355,7 @@ class TestStaticRendererConformance(RendererConformance):
 #: figure the scene still shows, so its `apply` has no handler of its own to agree with.
 _RENDERERS_THAT_ROLL_BACK = (
     "digitalearth.static.render.renderer",
-    "digitalearth.web.renderer",
+    "digitalearth.web.render.renderer",
     "digitalearth.interactive.render.renderer",
 )
 

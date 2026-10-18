@@ -27,10 +27,10 @@ from loguru import logger
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.spec import LayerSpec, Scale, Symbology
-from digitalearth.web.base import _require_layer_api, as_finite, placed_features
+from digitalearth.web.core.base import _require_layer_api, as_finite, placed_features
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.web.base import WebMapBase as _MixinBase
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -61,7 +61,7 @@ def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the description records no `paint` for the heatmap, naming the layer, its kind
@@ -70,7 +70,7 @@ def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
             places none of its geometry and the map is `strict` — both from :func:`placed_features`,
             which places the data when the drawer is handed nothing already placed.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
     paint = required_props(layer, "paint")["paint"]
@@ -100,7 +100,7 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` whose `extra_layers` hold the counts and the
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` whose `extra_layers` hold the counts and the
         unclustered points, drawn under the layer's own id suffixed ``-count`` and ``-unclustered``.
 
     Raises:
@@ -113,7 +113,7 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
-    from digitalearth.web.renderer import DrawnLayer, derived_ids, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, derived_ids, required_props
 
     layer_cls, layer_types = _require_layer_api()
     props = required_props(layer, "color", "text_color", "radius", "max_zoom")
@@ -174,12 +174,12 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
 def draw_deck_geojson(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the deck.gl ``GeoJsonLayer`` a `deck_scatter` or `deck_polygons` layer describes.
 
-    The big-data counterpart of :func:`~digitalearth.web.threed.draw_point_cloud` and
-    :func:`~digitalearth.web.threed.draw_model`: it rebuilds the deck.gl JSON layer from the template the
+    The big-data counterpart of :func:`~digitalearth.web.builders.threed.draw_point_cloud` and
+    :func:`~digitalearth.web.builders.threed.draw_model`: it rebuilds the deck.gl JSON layer from the template the
     builder recorded, serialising the layer's own feature collection into its ``data`` field. Because the
     layer owns a description and a queue slot (#396), it joins the page's one deck overlay from that slot —
     so it carries the style layer it draws beneath as ``beforeId`` and is addressable by id like every other
-    layer, which is what the single shared :class:`~digitalearth.web.base._DeckOverlay` slot could not give
+    layer, which is what the single shared :class:`~digitalearth.web.core.base._DeckOverlay` slot could not give
     the undescribed routes.
 
     Args:
@@ -189,7 +189,7 @@ def draw_deck_geojson(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
         the page composes into its one overlay.
 
     Raises:
@@ -200,7 +200,7 @@ def draw_deck_geojson(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from maplibre.sources import geopandas_to_geojson
 
-    from digitalearth.web.renderer import DECK_ROUTE, DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DECK_ROUTE, DrawnLayer, required_props
 
     _require_layer_api()
     template = required_props(layer, "deck")["deck"]
@@ -225,13 +225,13 @@ class BigDataMixin(_MixinBase):
     lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.core.base.WebMapBase`, the state ``WebMap`` inherits.
     At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
     before the annotation.
 
     See Also:
         digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
-        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+        digitalearth.web.core.base.WebMapBase: the typing-only base declared above the class.
     """
 
     @staticmethod
@@ -268,7 +268,7 @@ class BigDataMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             weight: Optional value column; cells are weighted by it (normalised to ``[0, 1]``). ``None``
                 weights every point equally.
@@ -349,7 +349,7 @@ class BigDataMixin(_MixinBase):
 
         Builds a clustered GeoJSON source and three layers: cluster bubbles (sized by point count), the count
         label, and the unclustered points. All three are **one description** under one id — the bubbles'
-        — so a layer switcher lists them once and :meth:`~digitalearth.web.base.WebMapBase.remove_layer`
+        — so a layer switcher lists them once and :meth:`~digitalearth.web.core.base.WebMapBase.remove_layer`
         takes all three off together. The count and the loose points are drawn beside it, under that id
         suffixed ``-count`` and ``-unclustered``.
 
@@ -357,10 +357,10 @@ class BigDataMixin(_MixinBase):
         of a feature property rather than one flat colour: MapLibre ``clusterProperties`` accumulate the
         property per cluster (``aggregate="sum"`` or ``"max"``) in the browser, and the bubble is painted by
         that aggregate with the same classified ``step``/``interpolate`` expression ``choropleth`` builds —
-        reused through :meth:`~digitalearth.web.vector.VectorMixin._color_expr`, not re-implemented here. A
+        reused through :meth:`~digitalearth.web.builders.vector.VectorMixin._color_expr`, not re-implemented here. A
         classified cluster is then **keyable** exactly as a choropleth is, so
-        :meth:`~digitalearth.web.decoration.DecorationMixin.legend` /
-        :meth:`~digitalearth.web.base.WebMapBase.colorbar` draw its key from the colours it rendered. The
+        :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` /
+        :meth:`~digitalearth.web.core.base.WebMapBase.colorbar` draw its key from the colours it rendered. The
         aggregate is computed per cluster in the browser, while the class breaks are derived from the
         **single-feature** column's own spread, so the key shows the breaks the paint was compiled from. That
         is **exact only for** ``aggregate="max"`` — a cluster's max lies within the feature range, so a
@@ -375,7 +375,7 @@ class BigDataMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             radius: Cluster radius in pixels (MapLibre ``clusterRadius``).
             max_zoom: Zoom at/after which points stop clustering (``clusterMaxZoom``).
@@ -388,7 +388,7 @@ class BigDataMixin(_MixinBase):
             aggregate: How to accumulate ``color_by`` across a cluster — ``"sum"`` or ``"max"`` (the
                 :data:`CLUSTER_AGGREGATES` MapLibre has). Ignored without ``color_by``.
             scheme: The classification of the aggregate's colours, as
-                :meth:`~digitalearth.web.vector.VectorMixin.choropleth` takes it — a cleopatra scheme or an
+                :meth:`~digitalearth.web.builders.vector.VectorMixin.choropleth` takes it — a cleopatra scheme or an
                 explicit edge sequence for a graduated ``step``, or ``None`` (the default) for a continuous
                 ramp. Ignored without ``color_by``.
             k: Number of classes for a graduated ``scheme``. Ignored without ``color_by``.
@@ -409,7 +409,7 @@ class BigDataMixin(_MixinBase):
         _require_layer_api()
         gdf = self._display_gdf(features, method="cluster")
         self._require_points(gdf, "cluster")
-        from digitalearth.web.renderer import derived_ids
+        from digitalearth.web.render.renderer import derived_ids
 
         props: dict = {
             "color": color,
@@ -469,7 +469,7 @@ class BigDataMixin(_MixinBase):
         The last off-tree deck route: `tiles_3d` alone reaches here. `deck_scatter`, `deck_polygons` and the
         big-data route of `points`/`polygons` were off-tree too until #396 gave each its own `LayerSpec` and
         queue slot — they now register through
-        :meth:`~digitalearth.web.base.WebMapBase._index_layer` and :func:`draw_deck_geojson`, exactly as
+        :meth:`~digitalearth.web.core.base.WebMapBase._index_layer` and :func:`draw_deck_geojson`, exactly as
         `point_cloud`/`model` do, and so are in `layer_ids`, removable and toggleable. `tiles_3d` stays here
         because its tileset streams from a URL rather than a feature frame this tier can serve.
 
@@ -492,7 +492,7 @@ class BigDataMixin(_MixinBase):
             (review R2-H5). A layer that has to sit under a style layer, or be reordered/removed/hidden by id,
             needs a description to be ordered by — which every deck builder but `tiles_3d` now has.
         """
-        from digitalearth.web.base import _DeckOverlay
+        from digitalearth.web.core.base import _DeckOverlay
 
         if self._deck_layers is None:
             self._deck_layers = []
@@ -513,24 +513,24 @@ class BigDataMixin(_MixinBase):
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
         Since #396 the layer owns a :class:`~digitalearth.base.spec.LayerSpec` and a queue slot, just as
-        `point_cloud` and `gltf` do: it appears in :attr:`~digitalearth.web.base.WebMapBase.layer_ids`, and
-        :meth:`~digitalearth.web.base.WebMapBase.remove_layer`,
-        :meth:`~digitalearth.web.base.WebMapBase.set_visible` and
-        :meth:`~digitalearth.web.base.WebMapBase.move_layer` address it by id. :func:`draw_deck_geojson`
+        `point_cloud` and `gltf` do: it appears in :attr:`~digitalearth.web.core.base.WebMapBase.layer_ids`, and
+        :meth:`~digitalearth.web.core.base.WebMapBase.remove_layer`,
+        :meth:`~digitalearth.web.core.base.WebMapBase.set_visible` and
+        :meth:`~digitalearth.web.core.base.WebMapBase.move_layer` address it by id. :func:`draw_deck_geojson`
         rebuilds the deck.gl layer from the recorded template, so a figure that names a path survives
-        :meth:`~digitalearth.web.base.WebMapBase.figure_spec`'s ``to_dict``/``from_dict`` round trip.
+        :meth:`~digitalearth.web.core.base.WebMapBase.figure_spec`'s ``to_dict``/``from_dict`` round trip.
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
             size: Point radius in pixels. The same ``size`` that means marker size on every tier, and
                 the same number
-                :meth:`~digitalearth.web.vector.VectorMixin.points` hands down when it routes a large
+                :meth:`~digitalearth.web.builders.vector.VectorMixin.points` hands down when it routes a large
                 layer here.
             name: What the layer is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
                 ``remove_layer`` all take it. ``None`` generates ``deck-scatter-1``, ``deck-scatter-2``, …
@@ -572,9 +572,9 @@ class BigDataMixin(_MixinBase):
 
                 ```
         See Also:
-            digitalearth.web.vector.VectorMixin.points: the per-feature path, which routes
+            digitalearth.web.builders.vector.VectorMixin.points: the per-feature path, which routes
                 here above ``big_data_threshold``.
-            digitalearth.web.bigdata.BigDataMixin.deck_polygons: the polygon counterpart.
+            digitalearth.web.builders.bigdata.BigDataMixin.deck_polygons: the polygon counterpart.
         """
         _require_layer_api()
         # `_placed` is the internal handoff from `points()`: it has already opened and placed the frame, so it
@@ -626,7 +626,7 @@ class BigDataMixin(_MixinBase):
         """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
         Since #396 the layer owns a :class:`~digitalearth.base.spec.LayerSpec` and a queue slot, so it is in
-        :attr:`~digitalearth.web.base.WebMapBase.layer_ids` and is removable, hideable and reorderable by id
+        :attr:`~digitalearth.web.core.base.WebMapBase.layer_ids` and is removable, hideable and reorderable by id
         — the polygon counterpart of :meth:`deck_scatter`.
 
         Args:
@@ -634,7 +634,7 @@ class BigDataMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             fill_color: RGBA fill colour (0-255 per channel).
             line_color: RGBA outline colour (0-255 per channel).
@@ -654,9 +654,9 @@ class BigDataMixin(_MixinBase):
                 (raised as the layer is drawn, through the shared off-limb policy).
 
         See Also:
-            digitalearth.web.vector.VectorMixin.polygons: the per-feature path, which routes
+            digitalearth.web.builders.vector.VectorMixin.polygons: the per-feature path, which routes
                 here above ``big_data_threshold``.
-            digitalearth.web.bigdata.BigDataMixin.deck_scatter: the point counterpart.
+            digitalearth.web.builders.bigdata.BigDataMixin.deck_scatter: the point counterpart.
         """
         _require_layer_api()
         # `_placed` is the internal handoff from `polygons()` (see deck_scatter): the placed frame, so the
@@ -693,7 +693,7 @@ class BigDataMixin(_MixinBase):
         """Resolve the feature count that routes a layer to the GPU: the call's, else the map's.
 
         The two ways of setting it are deliberately the same name: assigning
-        :attr:`~digitalearth.web.base.WebMapBase.big_data_threshold` on the map moves the cutoff for
+        :attr:`~digitalearth.web.core.base.WebMapBase.big_data_threshold` on the map moves the cutoff for
         every layer that follows, while passing ``big_data_threshold=`` to one builder moves it for that
         call alone and leaves the map's setting untouched.
 

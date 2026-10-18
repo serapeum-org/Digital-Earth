@@ -437,7 +437,7 @@ class _GridLine(NamedTuple):
     def text(self) -> str:
         """The degree label this line carries, e.g. ``"30°E"``.
 
-        The format is the web tier's own (``digitalearth.web.decoration._graticule_line``), to the
+        The format is the web tier's own (``digitalearth.web.decoration.decoration._graticule_line``), to the
         character: both build the label as `f"{abs(value):g}°{suffix}"`, so the same degree reads the same
         way on both tiers — with one exception, which is the *suffix* rather than the format. This tier
         empties the hemisphere at the antimeridian as well as at zero (the same line from either side), so

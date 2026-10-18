@@ -23,7 +23,7 @@ from matplotlib import image as mpimage
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Symbology
 from digitalearth.base.stretch import DEFAULT_COMPOSITE_BANDS
 from digitalearth.web import TileRoute, WebMap
-from digitalearth.web import raster as web_raster
+from digitalearth.web.builders import raster as web_raster
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
@@ -553,7 +553,7 @@ class TestTheCompositeSizeCeiling:
             refusal names the builder and both tiled routes, since a caller who is refused has to be told
             which parameter to reach for (#189).
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         m = WebMap().basemap()
@@ -587,7 +587,7 @@ class TestTheCompositeSizeCeiling:
             fail on a size its builder accepted. The check therefore stays with the builder — where it can
             still offer a route — and the drawer never re-runs it.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         built = WebMap().rgb_composite(dataset, bands=(1, 1, 1))
         figure = built.figure_spec
@@ -607,7 +607,7 @@ class TestTheCompositeSizeCeiling:
             integers therefore has no measurable size — and a fallback that guessed one would refuse a page
             weight nobody measured. With the ceiling at one pixel, any guess at all refuses.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         unmeasurable = type("Grid", (), {"rows": "many", "columns": 3})()
@@ -659,7 +659,7 @@ class TestTheTiledCompositeRoutes:
             tmp_path: pytest's temporary directory.
             monkeypatch: pytest's patcher, used to lower the ceiling.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         m = WebMap().hsv_composite(
@@ -713,7 +713,7 @@ class TestTheTiledCompositeRoutes:
             depends on where the fixture's extent falls in the tile grid. One hole must leave exactly one
             tile out; a blank tile written for it would leave the counts equal.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         real_stack = raster_module._tile_stack
         missed: list = []
@@ -821,7 +821,7 @@ class TestTheTiledCompositeRoutes:
             declined layer that still became ``_last_layer_id`` would have a later ``colorbar()`` label
             itself from a layer no widget holds.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         def _declines(web_map, data, layer):
             """Behave like a drawer that found nothing to draw.
@@ -943,7 +943,7 @@ class TestLimitsShapedLikeSomethingElse:
             float, or unpacking a triple — replaces that message with a `TypeError` from inside the web
             tier, about a private helper the caller never called.
         """
-        from digitalearth.web import raster as web_raster
+        from digitalearth.web.builders import raster as web_raster
 
         assert getattr(web_raster, translate)(limits) is limits, (
             f"{translate} rewrote a value it cannot read: {limits!r}"
@@ -957,7 +957,7 @@ class TestLimitsShapedLikeSomethingElse:
             conversion is inside a comprehension whose `ValueError` would otherwise escape from
             `rgb_composite` as if the builder itself were broken.
         """
-        from digitalearth.web.raster import _recorded_limits
+        from digitalearth.web.builders.raster import _recorded_limits
 
         limits = (("a", "b"),)
         assert _recorded_limits(limits) is limits, (
@@ -1127,7 +1127,7 @@ class TestTheHsvComposite:
             that cannot be drawn back from its own figure.
         """
         from digitalearth.web.capabilities import CAPABILITIES
-        from digitalearth.web.renderer import DRAWN_KINDS, drawer_for
+        from digitalearth.web.render.renderer import DRAWN_KINDS, drawer_for
 
         web_map = WebMap().hsv_composite(
             hue_wheel, bands=_BANDS, limits=_UNIT_LIMITS, name="hsv"

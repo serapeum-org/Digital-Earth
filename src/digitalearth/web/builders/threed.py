@@ -14,7 +14,7 @@ extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; de
 ``_add_deck_layer`` accumulator. maplibre/numpy are imported lazily.
 
 MapLibre terrain reads its heights from *tiles*, which is why this tier's terrain writes a pyramid rather than
-embedding a DEM the way :mod:`digitalearth.web.raster` can embed a band. The tile writing is pyramids'
+embedding a DEM the way :mod:`digitalearth.web.builders.raster` can embed a band. The tile writing is pyramids'
 (``to_terrain_rgb`` packs heights into R/G/B and warps to Web Mercator); what is here is the choice of where it
 goes and the promise that the page decodes with the scheme it was written with.
 """
@@ -24,18 +24,18 @@ from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.ask import UNSET, Ask, Maybe
 from digitalearth.base.spec import Encoding, LayerSpec, Symbology
-from digitalearth.web.base import _require_layer_api, as_finite, placed_features
-from digitalearth.web.bigdata import DECK_TYPE_KEY
+from digitalearth.web.builders.bigdata import DECK_TYPE_KEY
 
 # The tier writes two kinds of tile pyramid — a coloured raster and a terrain-RGB DEM — and they agree on where
 # the tiles go, how the zoom range is resolved and how the page addresses them. Shared rather than re-derived,
 # so a terrain pyramid cannot end up addressed one way and a raster pyramid another.
-from digitalearth.web.raster import (  # noqa: E402 - see the comment above
+from digitalearth.web.builders.raster import (  # noqa: E402 - see the comment above
     _TILE_SIZE,
     _destination,
     _lonlat_bounds,
     _zoom_range,
 )
+from digitalearth.web.core.base import _require_layer_api, as_finite, placed_features
 
 #: Default DEM for ``terrain_tiles`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. It is the
 #: fallback for a map that names no DEM of its own; a pyramids ``Dataset`` passed as ``dem`` is encoded to a
@@ -54,7 +54,7 @@ _TILE_TEMPLATE_MARK = "{z}"
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.web.base import WebMapBase as _MixinBase
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -69,7 +69,7 @@ def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the description records no `paint` for the extrusion, naming the layer, its kind
@@ -78,7 +78,7 @@ def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
             places none of its geometry and the map is `strict` — both from :func:`placed_features`,
             which places the data when the drawer is handed nothing already placed.
     """
-    from digitalearth.web.renderer import DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
     source_id = f"{layer.id}-src"
@@ -105,11 +105,11 @@ def draw_terrain(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     Args:
         _web_map: Unused — every drawer takes the map, and this one draws without it.
         _data: Unused — terrain has no source in the figure to open (see
-            :data:`~digitalearth.web.renderer.DESCRIPTION_ONLY_KINDS`).
+            :data:`~digitalearth.web.render.renderer.DESCRIPTION_ONLY_KINDS`).
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` on the terrain route: its source is the
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` on the terrain route: its source is the
         ``raster-dem`` source, and its "layer" is the ``set_terrain`` call's own arguments, which is what
         MapLibre takes in place of a style layer. Its visibility is read there, so hiding a terrain layer
         leaves the map flat instead of half-draped.
@@ -121,7 +121,11 @@ def draw_terrain(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """
     from maplibre.sources import RasterDEMSource
 
-    from digitalearth.web.renderer import TERRAIN_ROUTE, DrawnLayer, required_props
+    from digitalearth.web.render.renderer import (
+        TERRAIN_ROUTE,
+        DrawnLayer,
+        required_props,
+    )
 
     _require_layer_api()
     props = required_props(layer, "tiles", "encoding", "exaggeration")
@@ -152,7 +156,7 @@ def draw_point_cloud(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
         the page composes into its one overlay.
 
     Raises:
@@ -160,7 +164,7 @@ def draw_point_cloud(web_map: Any, data: Any, layer: LayerSpec) -> Any:
             its point size or the column its heights come from — naming the layer, its kind and what is
             missing.
     """
-    from digitalearth.web.renderer import DECK_ROUTE, DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DECK_ROUTE, DrawnLayer, required_props
 
     _require_layer_api()
     props = required_props(layer, "color", "size", "z_column")
@@ -195,14 +199,14 @@ def draw_model(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
         the page composes into its one overlay.
 
     Raises:
         ValueError: when the description records none of the values the model is placed from — its URL, its
             position or its size scale — naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DECK_ROUTE, DrawnLayer, required_props
+    from digitalearth.web.render.renderer import DECK_ROUTE, DrawnLayer, required_props
 
     _require_layer_api()
     props = required_props(layer, "url", "lng", "lat", "size")
@@ -244,7 +248,7 @@ class ThreeDMixin(_MixinBase):
                 A path or URL to one is taken too, and is the only input this layer can be
                 written down with — a pyramids object does not know where it came from. The reference
                 is opened at the display choke point
-                (:meth:`~digitalearth.web.base.WebMapBase._opened`) and the caller's own path is what
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
                 the figure records.
             height: Extrusion height — a column name (read with ``["get", name]``) or a constant in metres.
             column: Optional value column colouring the extrusions (graduated if ``scheme`` is set, else a
@@ -416,8 +420,8 @@ class ThreeDMixin(_MixinBase):
 
         Raises:
             TypeError: for anything that is neither a template, a path, nor a raster pyramids can encode.
-            ValueError: from :func:`~digitalearth.web.raster._destination` when a DEM names no destination,
-                or from :func:`~digitalearth.web.raster._zoom_range` for an unusable range.
+            ValueError: from :func:`~digitalearth.web.builders.raster._destination` when a DEM names no destination,
+                or from :func:`~digitalearth.web.builders.raster._zoom_range` for an unusable range.
             FileNotFoundError: when ``dem`` is a path that names nothing.
         """
         caller = "WebMap.terrain_tiles()"
@@ -594,7 +598,7 @@ class ThreeDMixin(_MixinBase):
 
                 ```
         See Also:
-            digitalearth.web.threed.ThreeDMixin.tiles_3d: streams a prebuilt 3-D tileset instead.
+            digitalearth.web.builders.threed.ThreeDMixin.tiles_3d: streams a prebuilt 3-D tileset instead.
             digitalearth.three_d.Scene3D.point_cloud: the PyVista tier's desktop counterpart.
         """
         _require_layer_api()

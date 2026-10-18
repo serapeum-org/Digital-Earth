@@ -532,7 +532,7 @@ class TestTheSwatchColourCannotCarryCss:
         Args:
             color: A colour the tier actually produces.
         """
-        from digitalearth.web.decoration import _css_color
+        from digitalearth.web.decoration.decoration import _css_color
 
         assert _css_color(color) == color
 
@@ -545,7 +545,7 @@ class TestTheSwatchColourCannotCarryCss:
         Args:
             color: A value that is not a plain colour.
         """
-        from digitalearth.web.decoration import _css_color
+        from digitalearth.web.decoration.decoration import _css_color
 
         assert _css_color(color) == "transparent"
 
@@ -1367,7 +1367,7 @@ class TestNoArgumentCanBeAddedBelowTheFlag:
             ``labels`` did not, because they sat below an early return the flag reaches. Rather than assert
             that about the three keywords known today, assert it about every parameter the body takes.
         """
-        from digitalearth.web.decoration import DecorationMixin
+        from digitalearth.web.decoration.decoration import DecorationMixin
 
         args, body = _method_source(DecorationMixin._record_key)
         described = set(_parameters(args)) - self.NOT_A_DESCRIPTION
@@ -1386,7 +1386,7 @@ class TestNoArgumentCanBeAddedBelowTheFlag:
 
     def test_the_check_reads_every_argument_it_is_handed(self):
         """Threading an argument into the check is not checking it, so the last link is pinned too."""
-        from digitalearth.web.decoration import DecorationMixin
+        from digitalearth.web.decoration.decoration import DecorationMixin
 
         args, body = _method_source(DecorationMixin._check_key_arguments)
         read = set()
@@ -1421,8 +1421,8 @@ class TestOneStopCountServesEveryRamp:
         Args:
             builder: Which of the two ramp builders to read.
         """
-        from digitalearth.web.raster import RasterMixin
-        from digitalearth.web.vector import VectorMixin
+        from digitalearth.web.builders.raster import RasterMixin
+        from digitalearth.web.builders.vector import VectorMixin
 
         method = (
             RasterMixin._band_key

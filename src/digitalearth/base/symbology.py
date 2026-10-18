@@ -28,7 +28,7 @@ This module has four distinct jobs, with **different scopes** — do not conflat
    ``column``/``scheme``/``k`` colours identically everywhere" rested on three functions staying in step.
 4. :func:`as_colormap` — the **resolver the two compilers above read through**, so a ``cmap`` given as a
    name and the same ``cmap`` given as a ``matplotlib.colors.Colormap`` classify identically (#315). It is
-   not in ``__all__``; ``digitalearth.web.raster`` imports it by name.
+   not in ``__all__``; ``digitalearth.web.builders.raster`` imports it by name.
 """
 
 from typing import Any

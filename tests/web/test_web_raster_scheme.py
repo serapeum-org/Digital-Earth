@@ -270,7 +270,7 @@ class TestClassedPng:
             Every cell NaN: ``_classed_png`` answers ``None`` rather than an all-clear image.
         """
         from digitalearth.base.raster_classes import classify_band
-        from digitalearth.web.raster import _classed_png
+        from digitalearth.web.builders.raster import _classed_png
 
         classes = classify_band(CODES, "categorical", None, None)
         assert _classed_png(np.full((2, 2), np.nan), classes) is None, (

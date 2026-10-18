@@ -25,7 +25,7 @@ import tempfile
 from typing import TYPE_CHECKING, Any
 
 from digitalearth.base.animation import DEFAULT_FPS
-from digitalearth.web.base import DEFAULT_TITLE
+from digitalearth.web.core.base import DEFAULT_TITLE
 
 # `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
 # defaults to lives in `digitalearth.base.animation`, so one number means one speed whichever backend renders
@@ -152,7 +152,7 @@ _ASSET_RE = re.compile(
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.web.base import WebMapBase as _MixinBase
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -165,13 +165,13 @@ class ExportMixin(_MixinBase):
     lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.core.base.WebMapBase`, the state ``WebMap`` inherits.
     At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
     before the annotation.
 
     See Also:
         digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
-        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+        digitalearth.web.core.base.WebMapBase: the typing-only base declared above the class.
     """
 
     def to_html(
@@ -339,7 +339,7 @@ class ExportMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
+            digitalearth.web.temporal.temporal.TemporalMixin.timeslider: builds the steps this animates.
         """
         if not math.isfinite(float(fps)):
             raise ValueError(f"fps= must be a finite rate; got {fps!r}")
@@ -480,7 +480,7 @@ def swipe_html(
     the same reason ``grid`` / ``shared_colorbar`` are functions. The page overlays the two maps,
     keeps their cameras in sync, and clips the ``after`` map to the right of a draggable divider,
     so a viewer wipes between two states of the same area (two basemaps, two dates, before/after an
-    event). It is rendered through :class:`~digitalearth.web.htmldoc.HtmlDocument`, our own export
+    event). It is rendered through :class:`~digitalearth.web.output.htmldoc.HtmlDocument`, our own export
     document, because py-maplibregl's single-container ``to_html`` cannot host two maps in one page.
 
     Args:
@@ -492,7 +492,7 @@ def swipe_html(
     Returns:
         The standalone HTML document as a string.
     """
-    from digitalearth.web.htmldoc import HtmlDocument
+    from digitalearth.web.output.htmldoc import HtmlDocument
 
     document = HtmlDocument.swipe(
         before._build_map_widget().to_dict(),
@@ -554,7 +554,7 @@ def minimap_html(
     A module-level function for the same reason as :func:`swipe_html` — it composes a main map and
     an overview into one artifact. The overview follows the main map at a lower zoom, draws a
     rectangle of the main map's current view, and recentres the main map when clicked. It is
-    rendered through our own :class:`~digitalearth.web.htmldoc.HtmlDocument`, because py-maplibregl's
+    rendered through our own :class:`~digitalearth.web.output.htmldoc.HtmlDocument`, because py-maplibregl's
     single-container ``to_html`` cannot host the second (overview) map.
 
     Args:
@@ -567,8 +567,8 @@ def minimap_html(
     Returns:
         The standalone HTML document as a string.
     """
-    from digitalearth.web.htmldoc import HtmlDocument
     from digitalearth.web.map import WebMap
+    from digitalearth.web.output.htmldoc import HtmlDocument
 
     inset = overview if overview is not None else WebMap().basemap()
     document = HtmlDocument.minimap(
@@ -634,11 +634,11 @@ def measure_html(
 
     The page adds a draw control; drawing a line shows its geodesic length and drawing a polygon
     shows its area, updated live in an on-map panel. It is rendered through our own
-    :class:`~digitalearth.web.htmldoc.HtmlDocument` because the readout needs the live map object
+    :class:`~digitalearth.web.output.htmldoc.HtmlDocument` because the readout needs the live map object
     and injected page JS, which py-maplibregl's sealed export does not expose. The readout is a
     convenience; the exact geodesic measure is still ``WebMap.drawn_features()`` through pyramids.
 
-    The map is passed **without** calling :meth:`~digitalearth.web.decoration.DecorationMixin.measure`
+    The map is passed **without** calling :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.measure`
     — the draw control is added by this page's own runtime, so a plain map is all that is needed.
 
     Args:
@@ -651,7 +651,7 @@ def measure_html(
     Returns:
         The standalone HTML document as a string.
     """
-    from digitalearth.web.htmldoc import HtmlDocument
+    from digitalearth.web.output.htmldoc import HtmlDocument
 
     document = HtmlDocument.measure(
         map_._build_map_widget().to_dict(),
