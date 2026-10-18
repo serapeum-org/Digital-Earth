@@ -376,3 +376,24 @@ class TestTheReadLeavesNothingBehind:
         assert len(_OBJECTS) == before, (
             f"the read pinned {len(_OBJECTS) - before} object(s) in the registry"
         )
+
+
+def test_the_large_raster_baseline_field_has_no_flip_or_transpose_symmetry():
+    """The image baseline can pin orientation only if its field has no flip or transpose symmetry (#480).
+
+    ``test_image_baselines.test_decimated_large_raster`` compares the decimated render against a committed
+    PNG, so it can only catch an orientation fault that *moves pixels*. A field equal to its own vertical flip
+    would let a y-sign / row-order regression pass unseen; the same holds for a horizontal flip and a
+    transpose. This asserts the baseline's field (``_large_field``) breaks all three — it fails on an even
+    field over a symmetric axis, the shape the fixture had before #480's review. It lives here, with the other
+    decimation property tests, so it runs in the main suite on every platform rather than only in the
+    single-runner image job the baseline itself lives in.
+    """
+    from tests.static.test_image_baselines import _large_field
+
+    arr = _large_field(64)
+    assert not np.array_equal(np.flipud(arr), arr), "a vertical flip would be invisible"
+    assert not np.array_equal(np.fliplr(arr), arr), (
+        "a horizontal flip would be invisible"
+    )
+    assert not np.array_equal(arr.T, arr), "a transpose would be invisible"

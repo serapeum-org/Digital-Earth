@@ -229,22 +229,6 @@ def large_raster(tmp_path):
     return Dataset.read_file(str(path))
 
 
-def test_large_raster_fixture_breaks_every_flip_and_transpose_symmetry():
-    """The decimation baseline can pin orientation only if its field has no flip or transpose symmetry (#480).
-
-    A field equal to its own vertical flip would let a y-sign / row-order regression pass the pixel baseline
-    unseen; the same holds for a horizontal flip and a transpose. This asserts :func:`_large_field` breaks all
-    three, so each orientation fault moves the baseline. It fails on an even field over a symmetric axis — the
-    shape this fixture had before #480's review — which is the regression it guards.
-    """
-    arr = _large_field(64)
-    assert not np.array_equal(np.flipud(arr), arr), "a vertical flip would be invisible"
-    assert not np.array_equal(np.fliplr(arr), arr), (
-        "a horizontal flip would be invisible"
-    )
-    assert not np.array_equal(arr.T, arr), "a transpose would be invisible"
-
-
 @pytest.mark.mpl_image_compare(**_BASELINE)
 def test_decimated_large_raster(large_raster):
     """A stability baseline for the decimated render of a raster far larger than the canvas (#480).
