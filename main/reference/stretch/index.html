@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4945,7 +4945,7 @@ whole animation stack and passing them back in freezes the stretch, so a composi
 pulse as each frame re-derives its own black and white point.</p>
 <p>A channel with no finite cell at all (fully nodata, or all <code>inf</code>) has no percentile to take and
 yields <code>(nan, nan)</code> rather than a warning; callers treat that as "this channel contributes no
-bound" — see :meth:<code>~digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits</code>, which
+bound" — see :meth:<code>~digitalearth.static.builders.animation.AnimationMixin._stack_channel_limits</code>, which
 drops it, and :func:<code>stretch_to_unit</code>, which falls back rather than dividing by it.</p>
 
 
@@ -5141,7 +5141,7 @@ digitalearth.static.map.Map.animate: Combines these across a whole stack so ever
 <a id="__codelineno-0-89" name="__codelineno-0-89"></a>
 <a id="__codelineno-0-90" name="__codelineno-0-90"></a><span class="sd">    A channel with no finite cell at all (fully nodata, or all ``inf``) has no percentile to take and</span>
 <a id="__codelineno-0-91" name="__codelineno-0-91"></a><span class="sd">    yields ``(nan, nan)`` rather than a warning; callers treat that as &quot;this channel contributes no</span>
-<a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">    bound&quot; — see :meth:`~digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits`, which</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">    bound&quot; — see :meth:`~digitalearth.static.builders.animation.AnimationMixin._stack_channel_limits`, which</span>
 <a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="sd">    drops it, and :func:`stretch_to_unit`, which falls back rather than dividing by it.</span>
 <a id="__codelineno-0-94" name="__codelineno-0-94"></a>
 <a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="sd">    Args:</span>

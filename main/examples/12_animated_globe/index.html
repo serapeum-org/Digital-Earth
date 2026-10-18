@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -5811,7 +5811,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">projections</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.view</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.glyphs.base.animation</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_gif</span>   <span class="c1"># cleopatra 0.13.0: FuncAnimation -&gt; GIF</span>
 
 <span class="c1"># The global rasters are committed under examples/data/global/, so this notebook runs offline:</span>
@@ -5832,7 +5832,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 from pyramids.dataset import Dataset
-from digitalearth.static import Map, projections
+from digitalearth.static import Map; from digitalearth.static.view import projections
 from cleopatra.glyphs.base.animation import embed_gif   # cleopatra 0.13.0: FuncAnimation -&gt; GIF
 
 # The global rasters are committed under examples/data/global/, so this notebook runs offline:

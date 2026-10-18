@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -6489,7 +6489,7 @@ WASM — GDAL does not run in the browser. <code>share()</code> syncs the view i
 
     <div class="doc doc-contents first">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="digitalearth.interactive.raster.RasterMixin">RasterMixin</span></code>, <code><span title="digitalearth.interactive.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.interactive.bigdata.BigDataMixin">BigDataMixin</span></code>, <code><span title="digitalearth.interactive.temporal.TemporalMixin">TemporalMixin</span></code>, <code><span title="digitalearth.interactive.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.interactive.interaction.InteractionMixin">InteractionMixin</span></code>, <code><span title="digitalearth.interactive.live.LiveMixin">LiveMixin</span></code>, <code><span title="digitalearth.interactive.projection.ProjectionMixin">ProjectionMixin</span></code>, <code><span title="digitalearth.interactive.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.interactive.dashboard.DashboardMixin">DashboardMixin</span></code>, <code><span title="digitalearth.interactive.base.InteractiveMapBase">InteractiveMapBase</span></code></p>
+              Bases: <code><span title="digitalearth.interactive.builders.raster.RasterMixin">RasterMixin</span></code>, <code><span title="digitalearth.interactive.builders.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.interactive.builders.bigdata.BigDataMixin">BigDataMixin</span></code>, <code><span title="digitalearth.interactive.temporal.temporal.TemporalMixin">TemporalMixin</span></code>, <code><span title="digitalearth.interactive.decoration.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.interactive.legends.legend.LegendMixin">LegendMixin</span></code>, <code><span title="digitalearth.interactive.app.interaction.InteractionMixin">InteractionMixin</span></code>, <code><span title="digitalearth.interactive.app.live.LiveMixin">LiveMixin</span></code>, <code><span title="digitalearth.interactive.view.projection.ProjectionMixin">ProjectionMixin</span></code>, <code><span title="digitalearth.interactive.temporal.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.interactive.app.dashboard.DashboardMixin">DashboardMixin</span></code>, <code><span title="digitalearth.interactive.core.base.InteractiveMapBase">InteractiveMapBase</span></code></p>
 
 
 
@@ -6540,8 +6540,7 @@ digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/digitalearth/interactive/map.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-26">26</a></span>
-<span class="normal"><a href="#__codelineno-0-27">27</a></span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-27">27</a></span>
 <span class="normal"><a href="#__codelineno-0-28">28</a></span>
 <span class="normal"><a href="#__codelineno-0-29">29</a></span>
 <span class="normal"><a href="#__codelineno-0-30">30</a></span>
@@ -6592,59 +6591,62 @@ digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.</p>
 <span class="normal"><a href="#__codelineno-0-75">75</a></span>
 <span class="normal"><a href="#__codelineno-0-76">76</a></span>
 <span class="normal"><a href="#__codelineno-0-77">77</a></span>
-<span class="normal"><a href="#__codelineno-0-78">78</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="k">class</span><span class="w"> </span><span class="nc">InteractiveMap</span><span class="p">(</span>
-<a id="__codelineno-0-27" name="__codelineno-0-27"></a>    <span class="n">RasterMixin</span><span class="p">,</span>
-<a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="n">VectorMixin</span><span class="p">,</span>
-<a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="n">BigDataMixin</span><span class="p">,</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30"></a>    <span class="n">TemporalMixin</span><span class="p">,</span>
-<a id="__codelineno-0-31" name="__codelineno-0-31"></a>    <span class="n">DecorationMixin</span><span class="p">,</span>
-<a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="n">InteractionMixin</span><span class="p">,</span>
-<a id="__codelineno-0-33" name="__codelineno-0-33"></a>    <span class="n">LiveMixin</span><span class="p">,</span>
-<a id="__codelineno-0-34" name="__codelineno-0-34"></a>    <span class="n">ProjectionMixin</span><span class="p">,</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35"></a>    <span class="n">AnimationMixin</span><span class="p">,</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="n">DashboardMixin</span><span class="p">,</span>
-<a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="n">InteractiveMapBase</span><span class="p">,</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="p">):</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Interactive 2-D web map: pan/zoom/hover Bokeh layers built from pyramids data.</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40"></a>
-<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">    The interactive sibling of the static :class:`~digitalearth.static.map.Map`: raster/vector builders</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42"></a><span class="sd">    turn pyramids objects into GeoViews elements (reprojected to the display CRS through pyramids first),</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">    register them as layers, and ``render()``/``save()`` compose them into one overlay. Needs the optional</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">    ``interactive`` extra (``pip install &#39;digitalearth[interactive]&#39;``) only when a builder/render method</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    is actually called — importing this module works without it.</span>
-<a id="__codelineno-0-46" name="__codelineno-0-46"></a>
-<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">        - Importing and constructing needs no HoloViz engine:</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap(crs=3857, width=800, height=600)</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">            &gt;&gt;&gt; m.layers</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">            []</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54"></a>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">        - Layers register in overlay order and the builders chain:</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap()</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">            &gt;&gt;&gt; m.add_layer(&quot;dem&quot;).add_layer(&quot;basemap&quot;) is m</span>
-<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">            True</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            &gt;&gt;&gt; m.layers</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            [&#39;dem&#39;, &#39;basemap&#39;]</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a>
-<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">        - With the ``interactive`` extra installed, a raster becomes a pan/zoom web map:</span>
-<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                      # doctest: +SKIP</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)      # doctest: +SKIP</span>
-<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().field(dem).basemap().save(&quot;map.html&quot;).name  # doctest: +SKIP</span>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">            &#39;map.html&#39;</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a>
-<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#__codelineno-0-79">79</a></span>
+<span class="normal"><a href="#__codelineno-0-80">80</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-27" name="__codelineno-0-27"></a><span class="k">class</span><span class="w"> </span><span class="nc">InteractiveMap</span><span class="p">(</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="n">RasterMixin</span><span class="p">,</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="n">VectorMixin</span><span class="p">,</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a>    <span class="n">BigDataMixin</span><span class="p">,</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a>    <span class="n">TemporalMixin</span><span class="p">,</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="n">DecorationMixin</span><span class="p">,</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a>    <span class="n">LegendMixin</span><span class="p">,</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a>    <span class="n">InteractionMixin</span><span class="p">,</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35"></a>    <span class="n">LiveMixin</span><span class="p">,</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="n">ProjectionMixin</span><span class="p">,</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="n">AnimationMixin</span><span class="p">,</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="n">DashboardMixin</span><span class="p">,</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="n">InteractiveMapBase</span><span class="p">,</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="p">):</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Interactive 2-D web map: pan/zoom/hover Bokeh layers built from pyramids data.</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42"></a>
+<a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">    The interactive sibling of the static :class:`~digitalearth.static.map.Map`: raster/vector builders</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">    turn pyramids objects into GeoViews elements (reprojected to the display CRS through pyramids first),</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">    register them as layers, and ``render()``/``save()`` compose them into one overlay. Needs the optional</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="sd">    ``interactive`` extra (``pip install &#39;digitalearth[interactive]&#39;``) only when a builder/render method</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    is actually called — importing this module works without it.</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">        - Importing and constructing needs no HoloViz engine:</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap(crs=3857, width=800, height=600)</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">            &gt;&gt;&gt; m.layers</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">            []</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">        - Layers register in overlay order and the builders chain:</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap()</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            &gt;&gt;&gt; m.add_layer(&quot;dem&quot;).add_layer(&quot;basemap&quot;) is m</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            True</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            &gt;&gt;&gt; m.layers</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">            [&#39;dem&#39;, &#39;basemap&#39;]</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        - With the ``interactive`` extra installed, a raster becomes a pan/zoom web map:</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                      # doctest: +SKIP</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)      # doctest: +SKIP</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().field(dem).basemap().save(&quot;map.html&quot;).name  # doctest: +SKIP</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">            &#39;map.html&#39;</span>
 <a id="__codelineno-0-74" name="__codelineno-0-74"></a>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">        digitalearth.static.map.Map: the static matplotlib sibling of this scene.</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">        digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.</span>
-<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">        digitalearth.static.map.Map: the static matplotlib sibling of this scene.</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">        digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="sd">    &quot;&quot;&quot;</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -7183,7 +7185,7 @@ did not build is not this map's control.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The view :class:<code>~digitalearth.interactive.base.InteractiveMapBase</code> builds from the display CRS,</p>
+                <p>The view :class:<code>~digitalearth.interactive.core.base.InteractiveMapBase</code> builds from the display CRS,</p>
               </div>
             </td>
           </tr>
@@ -7566,7 +7568,7 @@ under <code>"categorical"</code>, a band holding non-integer values, more than
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-531">531</a></span>
 <span class="normal"><a href="#__codelineno-0-532">532</a></span>
 <span class="normal"><a href="#__codelineno-0-533">533</a></span>
@@ -8081,7 +8083,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-762">762</a></span>
 <span class="normal"><a href="#__codelineno-0-763">763</a></span>
 <span class="normal"><a href="#__codelineno-0-764">764</a></span>
@@ -8420,7 +8422,7 @@ one <code>(lo, hi)</code> pair per channel.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-692">692</a></span>
 <span class="normal"><a href="#__codelineno-0-693">693</a></span>
 <span class="normal"><a href="#__codelineno-0-694">694</a></span>
@@ -8818,7 +8820,7 @@ is drawn, which is where the band is read.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-834">834</a></span>
 <span class="normal"><a href="#__codelineno-0-835">835</a></span>
 <span class="normal"><a href="#__codelineno-0-836">836</a></span>
@@ -9156,7 +9158,7 @@ explicit <code>color</code> or <code>cmap</code> here disables the per-member co
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1032">1032</a></span>
 <span class="normal"><a href="#__codelineno-0-1033">1033</a></span>
 <span class="normal"><a href="#__codelineno-0-1034">1034</a></span>
@@ -9572,7 +9574,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/raster.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1102">1102</a></span>
 <span class="normal"><a href="#__codelineno-0-1103">1103</a></span>
 <span class="normal"><a href="#__codelineno-0-1104">1104</a></span>
@@ -10151,7 +10153,7 @@ colour list shorter than the class count).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-677">677</a></span>
 <span class="normal"><a href="#__codelineno-0-678">678</a></span>
 <span class="normal"><a href="#__codelineno-0-679">679</a></span>
@@ -10426,7 +10428,7 @@ colour list shorter than the class count).</p>
 <a id="__codelineno-0-763" name="__codelineno-0-763"></a><span class="sd">            column cannot be classified (unknown scheme, no spread, ``k &lt; 1``, or an explicit</span>
 <a id="__codelineno-0-764" name="__codelineno-0-764"></a><span class="sd">            colour list shorter than the class count).</span>
 <a id="__codelineno-0-765" name="__codelineno-0-765"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive.bigdata</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive.builders.bigdata</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
 <a id="__codelineno-0-767" name="__codelineno-0-767"></a>        <span class="n">_feature_count</span><span class="p">,</span>
 <a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="n">_route_through_rasterize</span><span class="p">,</span>
 <a id="__codelineno-0-769" name="__codelineno-0-769"></a>    <span class="p">)</span>
@@ -10799,7 +10801,7 @@ shorter than the class count).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-864">864</a></span>
 <span class="normal"><a href="#__codelineno-0-865">865</a></span>
 <span class="normal"><a href="#__codelineno-0-866">866</a></span>
@@ -11419,7 +11421,7 @@ consistent with raw glyphs and does not warn.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-993"> 993</a></span>
 <span class="normal"><a href="#__codelineno-0-994"> 994</a></span>
 <span class="normal"><a href="#__codelineno-0-995"> 995</a></span>
@@ -11980,7 +11982,7 @@ constant column, <code>k &lt; 1</code>, …).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1596">1596</a></span>
 <span class="normal"><a href="#__codelineno-0-1597">1597</a></span>
 <span class="normal"><a href="#__codelineno-0-1598">1598</a></span>
@@ -12420,7 +12422,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2126">2126</a></span>
 <span class="normal"><a href="#__codelineno-0-2127">2127</a></span>
 <span class="normal"><a href="#__codelineno-0-2128">2128</a></span>
@@ -12687,7 +12689,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2181">2181</a></span>
 <span class="normal"><a href="#__codelineno-0-2182">2182</a></span>
 <span class="normal"><a href="#__codelineno-0-2183">2183</a></span>
@@ -12939,7 +12941,7 @@ hidden, so a switcher reading the figure agrees with the drawing (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2291">2291</a></span>
 <span class="normal"><a href="#__codelineno-0-2292">2292</a></span>
 <span class="normal"><a href="#__codelineno-0-2293">2293</a></span>
@@ -13231,7 +13233,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1748">1748</a></span>
 <span class="normal"><a href="#__codelineno-0-1749">1749</a></span>
 <span class="normal"><a href="#__codelineno-0-1750">1750</a></span>
@@ -13564,7 +13566,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1872">1872</a></span>
 <span class="normal"><a href="#__codelineno-0-1873">1873</a></span>
 <span class="normal"><a href="#__codelineno-0-1874">1874</a></span>
@@ -13906,7 +13908,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1808">1808</a></span>
 <span class="normal"><a href="#__codelineno-0-1809">1809</a></span>
 <span class="normal"><a href="#__codelineno-0-1810">1810</a></span>
@@ -14302,7 +14304,7 @@ builder and the raster entry points (#175).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/vector.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/vector.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1941">1941</a></span>
 <span class="normal"><a href="#__codelineno-0-1942">1942</a></span>
 <span class="normal"><a href="#__codelineno-0-1943">1943</a></span>
@@ -14770,7 +14772,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1234">1234</a></span>
 <span class="normal"><a href="#__codelineno-0-1235">1235</a></span>
 <span class="normal"><a href="#__codelineno-0-1236">1236</a></span>
@@ -15050,7 +15052,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1181">1181</a></span>
 <span class="normal"><a href="#__codelineno-0-1182">1182</a></span>
 <span class="normal"><a href="#__codelineno-0-1183">1183</a></span>
@@ -15436,7 +15438,7 @@ unreachable.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/temporal.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/temporal/temporal.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-170">170</a></span>
 <span class="normal"><a href="#__codelineno-0-171">171</a></span>
 <span class="normal"><a href="#__codelineno-0-172">172</a></span>
@@ -15910,7 +15912,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/bigdata.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/bigdata.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-360">360</a></span>
 <span class="normal"><a href="#__codelineno-0-361">361</a></span>
 <span class="normal"><a href="#__codelineno-0-362">362</a></span>
@@ -16322,7 +16324,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/bigdata.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/bigdata.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-443">443</a></span>
 <span class="normal"><a href="#__codelineno-0-444">444</a></span>
 <span class="normal"><a href="#__codelineno-0-445">445</a></span>
@@ -16751,7 +16753,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/bigdata.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/builders/bigdata.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-527">527</a></span>
 <span class="normal"><a href="#__codelineno-0-528">528</a></span>
 <span class="normal"><a href="#__codelineno-0-529">529</a></span>
@@ -17149,7 +17151,7 @@ needs a DataFrame to infer its columns).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/live.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/live.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-48"> 48</a></span>
 <span class="normal"><a href="#__codelineno-0-49"> 49</a></span>
 <span class="normal"><a href="#__codelineno-0-50"> 50</a></span>
@@ -17475,7 +17477,7 @@ needs a DataFrame to infer its columns).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/live.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/live.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-156">156</a></span>
 <span class="normal"><a href="#__codelineno-0-157">157</a></span>
 <span class="normal"><a href="#__codelineno-0-158">158</a></span>
@@ -17660,7 +17662,7 @@ or anything the layer's element accepts for a <code>Pipe</code>.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/live.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/live.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-184">184</a></span>
 <span class="normal"><a href="#__codelineno-0-185">185</a></span>
 <span class="normal"><a href="#__codelineno-0-186">186</a></span>
@@ -17902,7 +17904,7 @@ preset), when the display CRS is not Web Mercator, or when a non-Mercator projec
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-523">523</a></span>
 <span class="normal"><a href="#__codelineno-0-524">524</a></span>
 <span class="normal"><a href="#__codelineno-0-525">525</a></span>
@@ -18171,7 +18173,7 @@ element while the figure went on calling it visible (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/decoration.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/decoration/decoration.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-745">745</a></span>
 <span class="normal"><a href="#__codelineno-0-746">746</a></span>
 <span class="normal"><a href="#__codelineno-0-747">747</a></span>
@@ -18513,7 +18515,7 @@ Natural-Earth graticule spacings GeoViews can draw.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/view/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-388">388</a></span>
 <span class="normal"><a href="#__codelineno-0-389">389</a></span>
 <span class="normal"><a href="#__codelineno-0-390">390</a></span>
@@ -18877,7 +18879,7 @@ call being dropped; or, from <code>Bounds</code>, for a non-finite edge or a <co
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/view/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-159">159</a></span>
 <span class="normal"><a href="#__codelineno-0-160">160</a></span>
 <span class="normal"><a href="#__codelineno-0-161">161</a></span>
@@ -19110,7 +19112,7 @@ cannot compose with a non-Mercator projection).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/projection.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/view/projection.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-318">318</a></span>
 <span class="normal"><a href="#__codelineno-0-319">319</a></span>
 <span class="normal"><a href="#__codelineno-0-320">320</a></span>
@@ -19295,7 +19297,7 @@ dict. <code>None</code> clears the theme back to Bokeh's default.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2133">2133</a></span>
 <span class="normal"><a href="#__codelineno-0-2134">2134</a></span>
 <span class="normal"><a href="#__codelineno-0-2135">2135</a></span>
@@ -19460,7 +19462,7 @@ dict. <code>None</code> clears the theme back to Bokeh's default.</p>
 <code>None</code> (the default) configures the layer the caller added last, which is not
 <code>layers[-1]</code> whenever that layer is drawn beneath an overlay such as coastlines; an
 underlay added after data does not take it over (see
-:meth:<code>~digitalearth.interactive.base.InteractiveMapBase._last_layer_index</code>, which is that
+:meth:<code>~digitalearth.interactive.core.base.InteractiveMapBase._last_layer_index</code>, which is that
 rule. The colour keys read it too, but tighten it: a layer whose colour varies with nothing
 cannot take a key over, and a hover has no such condition — any layer can be hovered).</p>
               </div>
@@ -19520,7 +19522,7 @@ cannot take a key over, and a hover has no such condition — any layer can be h
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/interaction.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/interaction.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-45">45</a></span>
 <span class="normal"><a href="#__codelineno-0-46">46</a></span>
 <span class="normal"><a href="#__codelineno-0-47">47</a></span>
@@ -19575,7 +19577,7 @@ cannot take a key over, and a hover has no such condition — any layer can be h
 <a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">            ``None`` (the default) configures the layer the caller added last, which is not</span>
 <a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">            ``layers[-1]`` whenever that layer is drawn beneath an overlay such as coastlines; an</span>
 <a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">            underlay added after data does not take it over (see</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            :meth:`~digitalearth.interactive.base.InteractiveMapBase._last_layer_index`, which is that</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">            :meth:`~digitalearth.interactive.core.base.InteractiveMapBase._last_layer_index`, which is that</span>
 <a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">            rule. The colour keys read it too, but tighten it: a layer whose colour varies with nothing</span>
 <a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">            cannot take a key over, and a hover has no such condition — any layer can be hovered).</span>
 <a id="__codelineno-0-65" name="__codelineno-0-65"></a>
@@ -19714,7 +19716,7 @@ one drawn on top, which is a different layer whenever an overlay sits over it.</
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/interaction.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/interaction.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-84"> 84</a></span>
 <span class="normal"><a href="#__codelineno-0-85"> 85</a></span>
 <span class="normal"><a href="#__codelineno-0-86"> 86</a></span>
@@ -19912,7 +19914,7 @@ interactive feature over a static map. Needs a live kernel/server.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/interaction.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/interaction.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-115">115</a></span>
 <span class="normal"><a href="#__codelineno-0-116">116</a></span>
 <span class="normal"><a href="#__codelineno-0-117">117</a></span>
@@ -20169,7 +20171,7 @@ describes it hidden (#327).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/interaction.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/interaction.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-334">334</a></span>
 <span class="normal"><a href="#__codelineno-0-335">335</a></span>
 <span class="normal"><a href="#__codelineno-0-336">336</a></span>
@@ -20417,7 +20419,7 @@ this method only reads the drawn coordinates.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/interaction.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/interaction.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-525">525</a></span>
 <span class="normal"><a href="#__codelineno-0-526">526</a></span>
 <span class="normal"><a href="#__codelineno-0-527">527</a></span>
@@ -20682,7 +20684,7 @@ the same records in another; <code>None</code> links by the geometry/position in
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/interaction.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/interaction.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-547">547</a></span>
 <span class="normal"><a href="#__codelineno-0-548">548</a></span>
 <span class="normal"><a href="#__codelineno-0-549">549</a></span>
@@ -20893,7 +20895,7 @@ is the one policy this module applies to an explicit basemap request — the sam
             <td>
               <div class="doc-md-description">
                 <p>The layers to offer, by id from
-:attr:<code>~digitalearth.interactive.base.InteractiveMapBase.layer_ids</code>; <code>None</code> (default)
+:attr:<code>~digitalearth.interactive.core.base.InteractiveMapBase.layer_ids</code>; <code>None</code> (default)
 offers every layer on the map. A layer left out is hidden from the switch, <strong>not</strong> from the
 map — it stays in the composed overlay whatever the toggles say, which is what the web
 tier's <code>layers=</code> means too.</p>
@@ -21062,7 +21064,7 @@ digitalearth.base.controls.resolved_controls: the shared control vocabulary.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/dashboard.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/dashboard.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-985"> 985</a></span>
 <span class="normal"><a href="#__codelineno-0-986"> 986</a></span>
 <span class="normal"><a href="#__codelineno-0-987"> 987</a></span>
@@ -21271,7 +21273,7 @@ digitalearth.base.controls.resolved_controls: the shared control vocabulary.</p>
 <a id="__codelineno-0-1018" name="__codelineno-0-1018"></a>
 <a id="__codelineno-0-1019" name="__codelineno-0-1019"></a><span class="sd">    Args:</span>
 <a id="__codelineno-0-1020" name="__codelineno-0-1020"></a><span class="sd">        layers: The layers to offer, by id from</span>
-<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><span class="sd">            :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids`; ``None`` (default)</span>
+<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a><span class="sd">            :attr:`~digitalearth.interactive.core.base.InteractiveMapBase.layer_ids`; ``None`` (default)</span>
 <a id="__codelineno-0-1022" name="__codelineno-0-1022"></a><span class="sd">            offers every layer on the map. A layer left out is hidden from the switch, **not** from the</span>
 <a id="__codelineno-0-1023" name="__codelineno-0-1023"></a><span class="sd">            map — it stays in the composed overlay whatever the toggles say, which is what the web</span>
 <a id="__codelineno-0-1024" name="__codelineno-0-1024"></a><span class="sd">            tier&#39;s ``layers=`` means too.</span>
@@ -21581,7 +21583,7 @@ round-trip a <em>gesture</em>, but the Python link itself is live immediately.</
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/dashboard.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/dashboard.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1300">1300</a></span>
 <span class="normal"><a href="#__codelineno-0-1301">1301</a></span>
 <span class="normal"><a href="#__codelineno-0-1302">1302</a></span>
@@ -21780,7 +21782,7 @@ call is safe everywhere. A pyramids-backed app must be <strong>served</strong>, 
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/dashboard.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/dashboard.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1444">1444</a></span>
 <span class="normal"><a href="#__codelineno-0-1445">1445</a></span>
 <span class="normal"><a href="#__codelineno-0-1446">1446</a></span>
@@ -21873,7 +21875,7 @@ did-you-mean rather than silently dropped, and a new widget is one entry, not an
               </div>
             </td>
             <td>
-                  <code><span title="digitalearth.interactive.dashboard._DEFAULT_DASHBOARD_WIDGETS">_DEFAULT_DASHBOARD_WIDGETS</span></code>
+                  <code><span title="digitalearth.interactive.app.dashboard._DEFAULT_DASHBOARD_WIDGETS">_DEFAULT_DASHBOARD_WIDGETS</span></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -22002,7 +22004,7 @@ tiles in Web Mercator only).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/dashboard.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/dashboard.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-334">334</a></span>
 <span class="normal"><a href="#__codelineno-0-335">335</a></span>
 <span class="normal"><a href="#__codelineno-0-336">336</a></span>
@@ -22337,7 +22339,7 @@ no timer spins before a viewer connects), and each session's handle is kept on t
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/dashboard.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/dashboard.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-752">752</a></span>
 <span class="normal"><a href="#__codelineno-0-753">753</a></span>
 <span class="normal"><a href="#__codelineno-0-754">754</a></span>
@@ -22586,7 +22588,7 @@ snapshot (<code>False</code>).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/dashboard.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/app/dashboard.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-814">814</a></span>
 <span class="normal"><a href="#__codelineno-0-815">815</a></span>
 <span class="normal"><a href="#__codelineno-0-816">816</a></span>
@@ -22845,7 +22847,7 @@ is the only one most maps carry.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/animation.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/temporal/animation.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-147">147</a></span>
 <span class="normal"><a href="#__codelineno-0-148">148</a></span>
 <span class="normal"><a href="#__codelineno-0-149">149</a></span>
@@ -23105,7 +23107,7 @@ one rate every tier reads (#256).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>pathlib.Path: the file written, matching :meth:<code>~digitalearth.interactive.base.InteractiveMapBase.save</code> (#248).</p>
+                <p>pathlib.Path: the file written, matching :meth:<code>~digitalearth.interactive.core.base.InteractiveMapBase.save</code> (#248).</p>
               </div>
             </td>
           </tr>
@@ -23171,7 +23173,7 @@ one rate every tier reads (#256).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/animation.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/temporal/animation.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-219">219</a></span>
 <span class="normal"><a href="#__codelineno-0-220">220</a></span>
 <span class="normal"><a href="#__codelineno-0-221">221</a></span>
@@ -23266,7 +23268,7 @@ one rate every tier reads (#256).</p>
 <a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">            **kwargs: Forwarded to :func:`holoviews.save`.</span>
 <a id="__codelineno-0-239" name="__codelineno-0-239"></a>
 <a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">            pathlib.Path: the file written, matching :meth:`~digitalearth.interactive.base.\</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">            pathlib.Path: the file written, matching :meth:`~digitalearth.interactive.core.base.\</span>
 <a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">InteractiveMapBase.save` (#248).</span>
 <a id="__codelineno-0-243" name="__codelineno-0-243"></a>
 <a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">        Raises:</span>
@@ -23510,160 +23512,160 @@ does. Also for a <code>label</code> that is not a non-empty string, which
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1465">1465</a></span>
-<span class="normal"><a href="#__codelineno-0-1466">1466</a></span>
-<span class="normal"><a href="#__codelineno-0-1467">1467</a></span>
-<span class="normal"><a href="#__codelineno-0-1468">1468</a></span>
-<span class="normal"><a href="#__codelineno-0-1469">1469</a></span>
-<span class="normal"><a href="#__codelineno-0-1470">1470</a></span>
-<span class="normal"><a href="#__codelineno-0-1471">1471</a></span>
-<span class="normal"><a href="#__codelineno-0-1472">1472</a></span>
-<span class="normal"><a href="#__codelineno-0-1473">1473</a></span>
-<span class="normal"><a href="#__codelineno-0-1474">1474</a></span>
-<span class="normal"><a href="#__codelineno-0-1475">1475</a></span>
-<span class="normal"><a href="#__codelineno-0-1476">1476</a></span>
-<span class="normal"><a href="#__codelineno-0-1477">1477</a></span>
-<span class="normal"><a href="#__codelineno-0-1478">1478</a></span>
-<span class="normal"><a href="#__codelineno-0-1479">1479</a></span>
-<span class="normal"><a href="#__codelineno-0-1480">1480</a></span>
-<span class="normal"><a href="#__codelineno-0-1481">1481</a></span>
-<span class="normal"><a href="#__codelineno-0-1482">1482</a></span>
-<span class="normal"><a href="#__codelineno-0-1483">1483</a></span>
-<span class="normal"><a href="#__codelineno-0-1484">1484</a></span>
-<span class="normal"><a href="#__codelineno-0-1485">1485</a></span>
-<span class="normal"><a href="#__codelineno-0-1486">1486</a></span>
-<span class="normal"><a href="#__codelineno-0-1487">1487</a></span>
-<span class="normal"><a href="#__codelineno-0-1488">1488</a></span>
-<span class="normal"><a href="#__codelineno-0-1489">1489</a></span>
-<span class="normal"><a href="#__codelineno-0-1490">1490</a></span>
-<span class="normal"><a href="#__codelineno-0-1491">1491</a></span>
-<span class="normal"><a href="#__codelineno-0-1492">1492</a></span>
-<span class="normal"><a href="#__codelineno-0-1493">1493</a></span>
-<span class="normal"><a href="#__codelineno-0-1494">1494</a></span>
-<span class="normal"><a href="#__codelineno-0-1495">1495</a></span>
-<span class="normal"><a href="#__codelineno-0-1496">1496</a></span>
-<span class="normal"><a href="#__codelineno-0-1497">1497</a></span>
-<span class="normal"><a href="#__codelineno-0-1498">1498</a></span>
-<span class="normal"><a href="#__codelineno-0-1499">1499</a></span>
-<span class="normal"><a href="#__codelineno-0-1500">1500</a></span>
-<span class="normal"><a href="#__codelineno-0-1501">1501</a></span>
-<span class="normal"><a href="#__codelineno-0-1502">1502</a></span>
-<span class="normal"><a href="#__codelineno-0-1503">1503</a></span>
-<span class="normal"><a href="#__codelineno-0-1504">1504</a></span>
-<span class="normal"><a href="#__codelineno-0-1505">1505</a></span>
-<span class="normal"><a href="#__codelineno-0-1506">1506</a></span>
-<span class="normal"><a href="#__codelineno-0-1507">1507</a></span>
-<span class="normal"><a href="#__codelineno-0-1508">1508</a></span>
-<span class="normal"><a href="#__codelineno-0-1509">1509</a></span>
-<span class="normal"><a href="#__codelineno-0-1510">1510</a></span>
-<span class="normal"><a href="#__codelineno-0-1511">1511</a></span>
-<span class="normal"><a href="#__codelineno-0-1512">1512</a></span>
-<span class="normal"><a href="#__codelineno-0-1513">1513</a></span>
-<span class="normal"><a href="#__codelineno-0-1514">1514</a></span>
-<span class="normal"><a href="#__codelineno-0-1515">1515</a></span>
-<span class="normal"><a href="#__codelineno-0-1516">1516</a></span>
-<span class="normal"><a href="#__codelineno-0-1517">1517</a></span>
-<span class="normal"><a href="#__codelineno-0-1518">1518</a></span>
-<span class="normal"><a href="#__codelineno-0-1519">1519</a></span>
-<span class="normal"><a href="#__codelineno-0-1520">1520</a></span>
-<span class="normal"><a href="#__codelineno-0-1521">1521</a></span>
-<span class="normal"><a href="#__codelineno-0-1522">1522</a></span>
-<span class="normal"><a href="#__codelineno-0-1523">1523</a></span>
-<span class="normal"><a href="#__codelineno-0-1524">1524</a></span>
-<span class="normal"><a href="#__codelineno-0-1525">1525</a></span>
-<span class="normal"><a href="#__codelineno-0-1526">1526</a></span>
-<span class="normal"><a href="#__codelineno-0-1527">1527</a></span>
-<span class="normal"><a href="#__codelineno-0-1528">1528</a></span>
-<span class="normal"><a href="#__codelineno-0-1529">1529</a></span>
-<span class="normal"><a href="#__codelineno-0-1530">1530</a></span>
-<span class="normal"><a href="#__codelineno-0-1531">1531</a></span>
-<span class="normal"><a href="#__codelineno-0-1532">1532</a></span>
-<span class="normal"><a href="#__codelineno-0-1533">1533</a></span>
-<span class="normal"><a href="#__codelineno-0-1534">1534</a></span>
-<span class="normal"><a href="#__codelineno-0-1535">1535</a></span>
-<span class="normal"><a href="#__codelineno-0-1536">1536</a></span>
-<span class="normal"><a href="#__codelineno-0-1537">1537</a></span>
-<span class="normal"><a href="#__codelineno-0-1538">1538</a></span>
-<span class="normal"><a href="#__codelineno-0-1539">1539</a></span>
-<span class="normal"><a href="#__codelineno-0-1540">1540</a></span>
-<span class="normal"><a href="#__codelineno-0-1541">1541</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1465" name="__codelineno-0-1465"></a><span class="k">def</span><span class="w"> </span><span class="nf">colorbar</span><span class="p">(</span>
-<a id="__codelineno-0-1466" name="__codelineno-0-1466"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1467" name="__codelineno-0-1467"></a>    <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1468" name="__codelineno-0-1468"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1469" name="__codelineno-0-1469"></a>    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1471" name="__codelineno-0-1471"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-1472" name="__codelineno-0-1472"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Show the continuous colour key of a layer (the Core name, #261, order 24).</span>
-<a id="__codelineno-0-1473" name="__codelineno-0-1473"></a>
-<a id="__codelineno-0-1474" name="__codelineno-0-1474"></a><span class="sd">    A guide on the layer&#39;s own colour encoding rather than a ``show=`` toggle on whichever layer was</span>
-<a id="__codelineno-0-1475" name="__codelineno-0-1475"></a><span class="sd">    added last: it is recorded first and the HoloViews options are applied **from the record**, so the key</span>
-<a id="__codelineno-0-1476" name="__codelineno-0-1476"></a><span class="sd">    moves with its layer, goes away with it, and is carried by the figure.</span>
-<a id="__codelineno-0-1477" name="__codelineno-0-1477"></a>
-<a id="__codelineno-0-1478" name="__codelineno-0-1478"></a><span class="sd">    Bokeh draws **one** colorbar per plot, whatever the opts say. Measured: two guided rasters overlaid,</span>
-<a id="__codelineno-0-1479" name="__codelineno-0-1479"></a><span class="sd">    each with ``colorbar=True`` and its own ``clabel``, render a single ``ColorBar`` — the one belonging</span>
-<a id="__codelineno-0-1480" name="__codelineno-0-1480"></a><span class="sd">    to the layer lowest in draw order. So guiding a second layer does not stack a second bar; it decides</span>
-<a id="__codelineno-0-1481" name="__codelineno-0-1481"></a><span class="sd">    which layer&#39;s bar is the one drawn. That is the same one-key-per-panel limit the web tier states from</span>
-<a id="__codelineno-0-1482" name="__codelineno-0-1482"></a><span class="sd">    the other direction (&quot;a second legend replaces the first&quot;), and it is the engine&#39;s, not this tier&#39;s.</span>
-<a id="__codelineno-0-1483" name="__codelineno-0-1483"></a>
-<a id="__codelineno-0-1484" name="__codelineno-0-1484"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1485" name="__codelineno-0-1485"></a><span class="sd">        layer_id: Which layer&#39;s key to show. `None` (default) takes the most recent layer whose colour</span>
-<a id="__codelineno-0-1486" name="__codelineno-0-1486"></a><span class="sd">            varies with its data — see :meth:`_guided_layer` for exactly what &quot;most recent&quot; means, which</span>
-<a id="__codelineno-0-1487" name="__codelineno-0-1487"></a><span class="sd">            is the care the old toggle took plus one tightening.</span>
-<a id="__codelineno-0-1488" name="__codelineno-0-1488"></a><span class="sd">        label: What to call the key — the variable and its units, usually. It reaches the drawn bar as</span>
-<a id="__codelineno-0-1489" name="__codelineno-0-1489"></a><span class="sd">            HoloViews&#39; ``clabel``, and is recorded as the guide&#39;s title. `None` leaves whatever the</span>
-<a id="__codelineno-0-1490" name="__codelineno-0-1490"></a><span class="sd">            builder resolved (``field`` takes its own ``clabel=``, defaulting to the variable&#39;s units).</span>
-<a id="__codelineno-0-1491" name="__codelineno-0-1491"></a><span class="sd">        visible: Whether the key is drawn. `False` records the guide switched **off** and applies</span>
-<a id="__codelineno-0-1492" name="__codelineno-0-1492"></a><span class="sd">            ``colorbar=False``, so a caller passing a flag through does not have to branch — and the</span>
-<a id="__codelineno-0-1493" name="__codelineno-0-1493"></a><span class="sd">            layer is resolved and checked before the flag is read, so one spelling of a call is not valid</span>
-<a id="__codelineno-0-1494" name="__codelineno-0-1494"></a><span class="sd">            only half the time (the web tier&#39;s review L7).</span>
-<a id="__codelineno-0-1495" name="__codelineno-0-1495"></a>
-<a id="__codelineno-0-1496" name="__codelineno-0-1496"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1497" name="__codelineno-0-1497"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-1498" name="__codelineno-0-1498"></a>
-<a id="__codelineno-0-1499" name="__codelineno-0-1499"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1500" name="__codelineno-0-1500"></a><span class="sd">        KeyError: when `layer_id` names no layer on this map.</span>
-<a id="__codelineno-0-1501" name="__codelineno-0-1501"></a><span class="sd">        ValueError: when the named layer&#39;s colour varies with nothing, or — for `None` — when no layer&#39;s</span>
-<a id="__codelineno-0-1502" name="__codelineno-0-1502"></a><span class="sd">            does. Also for a ``label`` that is not a non-empty string, which</span>
-<a id="__codelineno-0-1503" name="__codelineno-0-1503"></a><span class="sd">            :class:`~digitalearth.base.spec.encoding.Guide` refuses.</span>
-<a id="__codelineno-0-1504" name="__codelineno-0-1504"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
-<a id="__codelineno-0-1505" name="__codelineno-0-1505"></a>
-<a id="__codelineno-0-1506" name="__codelineno-0-1506"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1507" name="__codelineno-0-1507"></a><span class="sd">        - Title the raster&#39;s colour key:</span>
-<a id="__codelineno-0-1508" name="__codelineno-0-1508"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1509" name="__codelineno-0-1509"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-1510" name="__codelineno-0-1510"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-1511" name="__codelineno-0-1511"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
-<a id="__codelineno-0-1512" name="__codelineno-0-1512"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().field(dem).colorbar(label=&quot;Flow (m³/s)&quot;)  # doctest: +SKIP</span>
-<a id="__codelineno-0-1513" name="__codelineno-0-1513"></a><span class="sd">            &gt;&gt;&gt; m.get_layer(m.layer_ids[0]).symbology.guide().title         # doctest: +SKIP</span>
-<a id="__codelineno-0-1514" name="__codelineno-0-1514"></a><span class="sd">            &#39;Flow (m³/s)&#39;</span>
-<a id="__codelineno-0-1515" name="__codelineno-0-1515"></a>
-<a id="__codelineno-0-1516" name="__codelineno-0-1516"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1517" name="__codelineno-0-1517"></a><span class="sd">        - Drop it again, by name:</span>
-<a id="__codelineno-0-1518" name="__codelineno-0-1518"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1519" name="__codelineno-0-1519"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-1520" name="__codelineno-0-1520"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-1521" name="__codelineno-0-1521"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
-<a id="__codelineno-0-1522" name="__codelineno-0-1522"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().field(dem, name=&quot;flow&quot;)                # doctest: +SKIP</span>
-<a id="__codelineno-0-1523" name="__codelineno-0-1523"></a><span class="sd">            &gt;&gt;&gt; m.colorbar(&quot;flow&quot;, visible=False).save(&quot;m.html&quot;).name       # doctest: +SKIP</span>
-<a id="__codelineno-0-1524" name="__codelineno-0-1524"></a><span class="sd">            &#39;m.html&#39;</span>
-<a id="__codelineno-0-1525" name="__codelineno-0-1525"></a>
-<a id="__codelineno-0-1526" name="__codelineno-0-1526"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1527" name="__codelineno-0-1527"></a>
-<a id="__codelineno-0-1528" name="__codelineno-0-1528"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1529" name="__codelineno-0-1529"></a><span class="sd">        digitalearth.base.spec.style.Symbology.with_guide: where the guide is attached.</span>
-<a id="__codelineno-0-1530" name="__codelineno-0-1530"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1531" name="__codelineno-0-1531"></a>    <span class="c1"># Called for its actionable ImportError before anything else: every option below is applied for the</span>
-<a id="__codelineno-0-1532" name="__codelineno-0-1532"></a>    <span class="c1"># Bokeh backend, and `_require_holoviz` is what registers it.</span>
-<a id="__codelineno-0-1533" name="__codelineno-0-1533"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
-<a id="__codelineno-0-1534" name="__codelineno-0-1534"></a>    <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guided_layer</span><span class="p">(</span><span class="s2">&quot;colorbar&quot;</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-1535" name="__codelineno-0-1535"></a>    <span class="n">described</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_record_guide</span><span class="p">(</span>
-<a id="__codelineno-0-1536" name="__codelineno-0-1536"></a>        <span class="n">target</span><span class="p">,</span> <span class="n">Guide</span><span class="p">(</span><span class="n">show</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">visible</span><span class="p">),</span> <span class="n">title</span><span class="o">=</span><span class="n">label</span><span class="p">),</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;colorbar&quot;</span>
-<a id="__codelineno-0-1537" name="__codelineno-0-1537"></a>    <span class="p">)</span>
-<a id="__codelineno-0-1538" name="__codelineno-0-1538"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_guide</span><span class="p">(</span>
-<a id="__codelineno-0-1539" name="__codelineno-0-1539"></a>        <span class="n">target</span><span class="p">,</span> <span class="s2">&quot;colorbar&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">fold_guide</span><span class="p">(</span><span class="n">described</span><span class="o">.</span><span class="n">symbology</span><span class="p">,</span> <span class="n">described</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
-<a id="__codelineno-0-1540" name="__codelineno-0-1540"></a>    <span class="p">)</span>
-<a id="__codelineno-0-1541" name="__codelineno-0-1541"></a>    <span class="k">return</span> <span class="bp">self</span>
+              <summary>Source code in <code>src/digitalearth/interactive/legends/legend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+<span class="normal"><a href="#__codelineno-0-214">214</a></span>
+<span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span>
+<span class="normal"><a href="#__codelineno-0-218">218</a></span>
+<span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span>
+<span class="normal"><a href="#__codelineno-0-224">224</a></span>
+<span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span>
+<span class="normal"><a href="#__codelineno-0-229">229</a></span>
+<span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span>
+<span class="normal"><a href="#__codelineno-0-235">235</a></span>
+<span class="normal"><a href="#__codelineno-0-236">236</a></span>
+<span class="normal"><a href="#__codelineno-0-237">237</a></span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span>
+<span class="normal"><a href="#__codelineno-0-240">240</a></span>
+<span class="normal"><a href="#__codelineno-0-241">241</a></span>
+<span class="normal"><a href="#__codelineno-0-242">242</a></span>
+<span class="normal"><a href="#__codelineno-0-243">243</a></span>
+<span class="normal"><a href="#__codelineno-0-244">244</a></span>
+<span class="normal"><a href="#__codelineno-0-245">245</a></span>
+<span class="normal"><a href="#__codelineno-0-246">246</a></span>
+<span class="normal"><a href="#__codelineno-0-247">247</a></span>
+<span class="normal"><a href="#__codelineno-0-248">248</a></span>
+<span class="normal"><a href="#__codelineno-0-249">249</a></span>
+<span class="normal"><a href="#__codelineno-0-250">250</a></span>
+<span class="normal"><a href="#__codelineno-0-251">251</a></span>
+<span class="normal"><a href="#__codelineno-0-252">252</a></span>
+<span class="normal"><a href="#__codelineno-0-253">253</a></span>
+<span class="normal"><a href="#__codelineno-0-254">254</a></span>
+<span class="normal"><a href="#__codelineno-0-255">255</a></span>
+<span class="normal"><a href="#__codelineno-0-256">256</a></span>
+<span class="normal"><a href="#__codelineno-0-257">257</a></span>
+<span class="normal"><a href="#__codelineno-0-258">258</a></span>
+<span class="normal"><a href="#__codelineno-0-259">259</a></span>
+<span class="normal"><a href="#__codelineno-0-260">260</a></span>
+<span class="normal"><a href="#__codelineno-0-261">261</a></span>
+<span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="k">def</span><span class="w"> </span><span class="nf">colorbar</span><span class="p">(</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a>    <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Show the continuous colour key of a layer (the Core name, #261, order 24).</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">    A guide on the layer&#39;s own colour encoding rather than a ``show=`` toggle on whichever layer was</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="sd">    added last: it is recorded first and the HoloViews options are applied **from the record**, so the key</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="sd">    moves with its layer, goes away with it, and is carried by the figure.</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">    Bokeh draws **one** colorbar per plot, whatever the opts say. Measured: two guided rasters overlaid,</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">    each with ``colorbar=True`` and its own ``clabel``, render a single ``ColorBar`` — the one belonging</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">    to the layer lowest in draw order. So guiding a second layer does not stack a second bar; it decides</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">    which layer&#39;s bar is the one drawn. That is the same one-key-per-panel limit the web tier states from</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">    the other direction (&quot;a second legend replaces the first&quot;), and it is the engine&#39;s, not this tier&#39;s.</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="sd">        layer_id: Which layer&#39;s key to show. `None` (default) takes the most recent layer whose colour</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="sd">            varies with its data — see :meth:`_guided_layer` for exactly what &quot;most recent&quot; means, which</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">            is the care the old toggle took plus one tightening.</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">        label: What to call the key — the variable and its units, usually. It reaches the drawn bar as</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">            HoloViews&#39; ``clabel``, and is recorded as the guide&#39;s title. `None` leaves whatever the</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">            builder resolved (``field`` takes its own ``clabel=``, defaulting to the variable&#39;s units).</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">        visible: Whether the key is drawn. `False` records the guide switched **off** and applies</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">            ``colorbar=False``, so a caller passing a flag through does not have to branch — and the</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">            layer is resolved and checked before the flag is read, so one spelling of a call is not valid</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">            only half the time (the web tier&#39;s review L7).</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">        KeyError: when `layer_id` names no layer on this map.</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">        ValueError: when the named layer&#39;s colour varies with nothing, or — for `None` — when no layer&#39;s</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">            does. Also for a ``label`` that is not a non-empty string, which</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">            :class:`~digitalearth.base.spec.encoding.Guide` refuses.</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">        - Title the raster&#39;s colour key:</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().field(dem).colorbar(label=&quot;Flow (m³/s)&quot;)  # doctest: +SKIP</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">            &gt;&gt;&gt; m.get_layer(m.layer_ids[0]).symbology.guide().title         # doctest: +SKIP</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="sd">            &#39;Flow (m³/s)&#39;</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="sd">        - Drop it again, by name:</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().field(dem, name=&quot;flow&quot;)                # doctest: +SKIP</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">            &gt;&gt;&gt; m.colorbar(&quot;flow&quot;, visible=False).save(&quot;m.html&quot;).name       # doctest: +SKIP</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">            &#39;m.html&#39;</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">        digitalearth.base.spec.style.Symbology.with_guide: where the guide is attached.</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="c1"># Called for its actionable ImportError before anything else: every option below is applied for the</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a>    <span class="c1"># Bokeh backend, and `_require_holoviz` is what registers it.</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>    <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guided_layer</span><span class="p">(</span><span class="s2">&quot;colorbar&quot;</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a>    <span class="n">described</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_record_guide</span><span class="p">(</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="n">target</span><span class="p">,</span> <span class="n">Guide</span><span class="p">(</span><span class="n">show</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">visible</span><span class="p">),</span> <span class="n">title</span><span class="o">=</span><span class="n">label</span><span class="p">),</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;colorbar&quot;</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>    <span class="p">)</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_guide</span><span class="p">(</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="n">target</span><span class="p">,</span> <span class="s2">&quot;colorbar&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">fold_guide</span><span class="p">(</span><span class="n">described</span><span class="o">.</span><span class="n">symbology</span><span class="p">,</span> <span class="n">described</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>    <span class="p">)</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -23872,176 +23874,176 @@ non-empty string.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1543">1543</a></span>
-<span class="normal"><a href="#__codelineno-0-1544">1544</a></span>
-<span class="normal"><a href="#__codelineno-0-1545">1545</a></span>
-<span class="normal"><a href="#__codelineno-0-1546">1546</a></span>
-<span class="normal"><a href="#__codelineno-0-1547">1547</a></span>
-<span class="normal"><a href="#__codelineno-0-1548">1548</a></span>
-<span class="normal"><a href="#__codelineno-0-1549">1549</a></span>
-<span class="normal"><a href="#__codelineno-0-1550">1550</a></span>
-<span class="normal"><a href="#__codelineno-0-1551">1551</a></span>
-<span class="normal"><a href="#__codelineno-0-1552">1552</a></span>
-<span class="normal"><a href="#__codelineno-0-1553">1553</a></span>
-<span class="normal"><a href="#__codelineno-0-1554">1554</a></span>
-<span class="normal"><a href="#__codelineno-0-1555">1555</a></span>
-<span class="normal"><a href="#__codelineno-0-1556">1556</a></span>
-<span class="normal"><a href="#__codelineno-0-1557">1557</a></span>
-<span class="normal"><a href="#__codelineno-0-1558">1558</a></span>
-<span class="normal"><a href="#__codelineno-0-1559">1559</a></span>
-<span class="normal"><a href="#__codelineno-0-1560">1560</a></span>
-<span class="normal"><a href="#__codelineno-0-1561">1561</a></span>
-<span class="normal"><a href="#__codelineno-0-1562">1562</a></span>
-<span class="normal"><a href="#__codelineno-0-1563">1563</a></span>
-<span class="normal"><a href="#__codelineno-0-1564">1564</a></span>
-<span class="normal"><a href="#__codelineno-0-1565">1565</a></span>
-<span class="normal"><a href="#__codelineno-0-1566">1566</a></span>
-<span class="normal"><a href="#__codelineno-0-1567">1567</a></span>
-<span class="normal"><a href="#__codelineno-0-1568">1568</a></span>
-<span class="normal"><a href="#__codelineno-0-1569">1569</a></span>
-<span class="normal"><a href="#__codelineno-0-1570">1570</a></span>
-<span class="normal"><a href="#__codelineno-0-1571">1571</a></span>
-<span class="normal"><a href="#__codelineno-0-1572">1572</a></span>
-<span class="normal"><a href="#__codelineno-0-1573">1573</a></span>
-<span class="normal"><a href="#__codelineno-0-1574">1574</a></span>
-<span class="normal"><a href="#__codelineno-0-1575">1575</a></span>
-<span class="normal"><a href="#__codelineno-0-1576">1576</a></span>
-<span class="normal"><a href="#__codelineno-0-1577">1577</a></span>
-<span class="normal"><a href="#__codelineno-0-1578">1578</a></span>
-<span class="normal"><a href="#__codelineno-0-1579">1579</a></span>
-<span class="normal"><a href="#__codelineno-0-1580">1580</a></span>
-<span class="normal"><a href="#__codelineno-0-1581">1581</a></span>
-<span class="normal"><a href="#__codelineno-0-1582">1582</a></span>
-<span class="normal"><a href="#__codelineno-0-1583">1583</a></span>
-<span class="normal"><a href="#__codelineno-0-1584">1584</a></span>
-<span class="normal"><a href="#__codelineno-0-1585">1585</a></span>
-<span class="normal"><a href="#__codelineno-0-1586">1586</a></span>
-<span class="normal"><a href="#__codelineno-0-1587">1587</a></span>
-<span class="normal"><a href="#__codelineno-0-1588">1588</a></span>
-<span class="normal"><a href="#__codelineno-0-1589">1589</a></span>
-<span class="normal"><a href="#__codelineno-0-1590">1590</a></span>
-<span class="normal"><a href="#__codelineno-0-1591">1591</a></span>
-<span class="normal"><a href="#__codelineno-0-1592">1592</a></span>
-<span class="normal"><a href="#__codelineno-0-1593">1593</a></span>
-<span class="normal"><a href="#__codelineno-0-1594">1594</a></span>
-<span class="normal"><a href="#__codelineno-0-1595">1595</a></span>
-<span class="normal"><a href="#__codelineno-0-1596">1596</a></span>
-<span class="normal"><a href="#__codelineno-0-1597">1597</a></span>
-<span class="normal"><a href="#__codelineno-0-1598">1598</a></span>
-<span class="normal"><a href="#__codelineno-0-1599">1599</a></span>
-<span class="normal"><a href="#__codelineno-0-1600">1600</a></span>
-<span class="normal"><a href="#__codelineno-0-1601">1601</a></span>
-<span class="normal"><a href="#__codelineno-0-1602">1602</a></span>
-<span class="normal"><a href="#__codelineno-0-1603">1603</a></span>
-<span class="normal"><a href="#__codelineno-0-1604">1604</a></span>
-<span class="normal"><a href="#__codelineno-0-1605">1605</a></span>
-<span class="normal"><a href="#__codelineno-0-1606">1606</a></span>
-<span class="normal"><a href="#__codelineno-0-1607">1607</a></span>
-<span class="normal"><a href="#__codelineno-0-1608">1608</a></span>
-<span class="normal"><a href="#__codelineno-0-1609">1609</a></span>
-<span class="normal"><a href="#__codelineno-0-1610">1610</a></span>
-<span class="normal"><a href="#__codelineno-0-1611">1611</a></span>
-<span class="normal"><a href="#__codelineno-0-1612">1612</a></span>
-<span class="normal"><a href="#__codelineno-0-1613">1613</a></span>
-<span class="normal"><a href="#__codelineno-0-1614">1614</a></span>
-<span class="normal"><a href="#__codelineno-0-1615">1615</a></span>
-<span class="normal"><a href="#__codelineno-0-1616">1616</a></span>
-<span class="normal"><a href="#__codelineno-0-1617">1617</a></span>
-<span class="normal"><a href="#__codelineno-0-1618">1618</a></span>
-<span class="normal"><a href="#__codelineno-0-1619">1619</a></span>
-<span class="normal"><a href="#__codelineno-0-1620">1620</a></span>
-<span class="normal"><a href="#__codelineno-0-1621">1621</a></span>
-<span class="normal"><a href="#__codelineno-0-1622">1622</a></span>
-<span class="normal"><a href="#__codelineno-0-1623">1623</a></span>
-<span class="normal"><a href="#__codelineno-0-1624">1624</a></span>
-<span class="normal"><a href="#__codelineno-0-1625">1625</a></span>
-<span class="normal"><a href="#__codelineno-0-1626">1626</a></span>
-<span class="normal"><a href="#__codelineno-0-1627">1627</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1543" name="__codelineno-0-1543"></a><span class="k">def</span><span class="w"> </span><span class="nf">legend</span><span class="p">(</span>
-<a id="__codelineno-0-1544" name="__codelineno-0-1544"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1545" name="__codelineno-0-1545"></a>    <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1546" name="__codelineno-0-1546"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1547" name="__codelineno-0-1547"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1548" name="__codelineno-0-1548"></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1549" name="__codelineno-0-1549"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1550" name="__codelineno-0-1550"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-1551" name="__codelineno-0-1551"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Show the keyed colour list of a layer (the Core name, #261, order 24).</span>
-<a id="__codelineno-0-1552" name="__codelineno-0-1552"></a>
-<a id="__codelineno-0-1553" name="__codelineno-0-1553"></a><span class="sd">    The same guide :meth:`colorbar` records, drawn as Bokeh&#39;s keyed box instead of a continuous bar. Both</span>
-<a id="__codelineno-0-1554" name="__codelineno-0-1554"></a><span class="sd">    methods explain one layer&#39;s ``color`` encoding and so write one guide: calling both on a layer leaves</span>
-<a id="__codelineno-0-1555" name="__codelineno-0-1555"></a><span class="sd">    the last title and the last ``visible``, and draws both keys.</span>
-<a id="__codelineno-0-1556" name="__codelineno-0-1556"></a>
-<a id="__codelineno-0-1557" name="__codelineno-0-1557"></a><span class="sd">    Bokeh builds **one** legend per plot, from the labelled members of the overlay, so ``show_legend``</span>
-<a id="__codelineno-0-1558" name="__codelineno-0-1558"></a><span class="sd">    decides whether this layer *contributes a row* rather than whether it gets a box of its own —</span>
-<a id="__codelineno-0-1559" name="__codelineno-0-1559"></a><span class="sd">    measured: a single element with ``show_legend=True`` renders no legend at all, because there is no</span>
-<a id="__codelineno-0-1560" name="__codelineno-0-1560"></a><span class="sd">    overlay to build one from. A layer&#39;s row is captioned by its ``name=``, which is what ``labels``</span>
-<a id="__codelineno-0-1561" name="__codelineno-0-1561"></a><span class="sd">    renames.</span>
-<a id="__codelineno-0-1562" name="__codelineno-0-1562"></a>
-<a id="__codelineno-0-1563" name="__codelineno-0-1563"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1564" name="__codelineno-0-1564"></a><span class="sd">        layer_id: Which layer&#39;s key to show. `None` (default) is the most recent layer whose colour</span>
-<a id="__codelineno-0-1565" name="__codelineno-0-1565"></a><span class="sd">            varies with its data, exactly as :meth:`colorbar` resolves it.</span>
-<a id="__codelineno-0-1566" name="__codelineno-0-1566"></a><span class="sd">        title: Heading above the key. It reaches the drawn box through Bokeh&#39;s own ``Legend.title``, and</span>
-<a id="__codelineno-0-1567" name="__codelineno-0-1567"></a><span class="sd">            is recorded as the guide&#39;s title.</span>
-<a id="__codelineno-0-1568" name="__codelineno-0-1568"></a><span class="sd">        labels: Explicit row labels, replacing the derived one. A layer contributes **one** row to a</span>
-<a id="__codelineno-0-1569" name="__codelineno-0-1569"></a><span class="sd">            Bokeh legend — its own label — so this takes one entry; a count that does not match is</span>
-<a id="__codelineno-0-1570" name="__codelineno-0-1570"></a><span class="sd">            refused rather than zipped, which would drop the difference and leave rows out of the key</span>
-<a id="__codelineno-0-1571" name="__codelineno-0-1571"></a><span class="sd">            (the web tier&#39;s rule, for the same reason).</span>
-<a id="__codelineno-0-1572" name="__codelineno-0-1572"></a><span class="sd">        visible: Whether the layer contributes to the key. `False` records the guide switched off and</span>
-<a id="__codelineno-0-1573" name="__codelineno-0-1573"></a><span class="sd">            applies ``show_legend=False``. Checked after the layer is resolved, never before.</span>
-<a id="__codelineno-0-1574" name="__codelineno-0-1574"></a>
-<a id="__codelineno-0-1575" name="__codelineno-0-1575"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1576" name="__codelineno-0-1576"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-1577" name="__codelineno-0-1577"></a>
-<a id="__codelineno-0-1578" name="__codelineno-0-1578"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1579" name="__codelineno-0-1579"></a><span class="sd">        KeyError: when `layer_id` names no layer on this map.</span>
-<a id="__codelineno-0-1580" name="__codelineno-0-1580"></a><span class="sd">        ValueError: when the named layer&#39;s colour varies with nothing, or — for `None` — when no layer&#39;s</span>
-<a id="__codelineno-0-1581" name="__codelineno-0-1581"></a><span class="sd">            does; when ``labels`` does not hold one entry per row; and for a ``title`` that is not a</span>
-<a id="__codelineno-0-1582" name="__codelineno-0-1582"></a><span class="sd">            non-empty string.</span>
-<a id="__codelineno-0-1583" name="__codelineno-0-1583"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
-<a id="__codelineno-0-1584" name="__codelineno-0-1584"></a>
-<a id="__codelineno-0-1585" name="__codelineno-0-1585"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><span class="sd">        - Key a contour layer, and title the box:</span>
-<a id="__codelineno-0-1587" name="__codelineno-0-1587"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1588" name="__codelineno-0-1588"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-1589" name="__codelineno-0-1589"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-1590" name="__codelineno-0-1590"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
-<a id="__codelineno-0-1591" name="__codelineno-0-1591"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem).legend(title=&quot;Contours&quot;)  # doctest: +SKIP</span>
-<a id="__codelineno-0-1592" name="__codelineno-0-1592"></a><span class="sd">            &gt;&gt;&gt; m.get_layer(m.layer_ids[0]).symbology.guide().show          # doctest: +SKIP</span>
-<a id="__codelineno-0-1593" name="__codelineno-0-1593"></a><span class="sd">            True</span>
-<a id="__codelineno-0-1594" name="__codelineno-0-1594"></a>
-<a id="__codelineno-0-1595" name="__codelineno-0-1595"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1596" name="__codelineno-0-1596"></a><span class="sd">        - Or take it off again:</span>
-<a id="__codelineno-0-1597" name="__codelineno-0-1597"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1598" name="__codelineno-0-1598"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-1599" name="__codelineno-0-1599"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-1600" name="__codelineno-0-1600"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
-<a id="__codelineno-0-1601" name="__codelineno-0-1601"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem).legend(visible=False)    # doctest: +SKIP</span>
-<a id="__codelineno-0-1602" name="__codelineno-0-1602"></a><span class="sd">            &gt;&gt;&gt; m.save(&quot;m.html&quot;).name                                       # doctest: +SKIP</span>
-<a id="__codelineno-0-1603" name="__codelineno-0-1603"></a><span class="sd">            &#39;m.html&#39;</span>
-<a id="__codelineno-0-1604" name="__codelineno-0-1604"></a>
-<a id="__codelineno-0-1605" name="__codelineno-0-1605"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1606" name="__codelineno-0-1606"></a>
-<a id="__codelineno-0-1607" name="__codelineno-0-1607"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-1608" name="__codelineno-0-1608"></a><span class="sd">        digitalearth.base.spec.style.Symbology.with_guide: where the guide is attached.</span>
-<a id="__codelineno-0-1609" name="__codelineno-0-1609"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1610" name="__codelineno-0-1610"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
-<a id="__codelineno-0-1611" name="__codelineno-0-1611"></a>    <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guided_layer</span><span class="p">(</span><span class="s2">&quot;legend&quot;</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-1612" name="__codelineno-0-1612"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">labels</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
-<a id="__codelineno-0-1613" name="__codelineno-0-1613"></a>    <span class="n">derived</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">label</span><span class="p">]</span>
-<a id="__codelineno-0-1614" name="__codelineno-0-1614"></a>    <span class="k">if</span> <span class="n">rows</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">derived</span><span class="p">):</span>
-<a id="__codelineno-0-1615" name="__codelineno-0-1615"></a>        <span class="c1"># Refused before the guide is recorded, so a rejected call leaves the description untouched.</span>
-<a id="__codelineno-0-1616" name="__codelineno-0-1616"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-1617" name="__codelineno-0-1617"></a>            <span class="sa">f</span><span class="s2">&quot;legend(labels=...) has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span><span class="si">}</span><span class="s2"> entries and layer </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2"> contributes &quot;</span>
-<a id="__codelineno-0-1618" name="__codelineno-0-1618"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">derived</span><span class="p">)</span><span class="si">}</span><span class="s2"> row to a Bokeh legend (</span><span class="si">{</span><span class="n">derived</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">); zip would drop the difference and &quot;</span>
-<a id="__codelineno-0-1619" name="__codelineno-0-1619"></a>            <span class="s2">&quot;leave rows out of the key&quot;</span>
-<a id="__codelineno-0-1620" name="__codelineno-0-1620"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1621" name="__codelineno-0-1621"></a>    <span class="n">described</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_record_guide</span><span class="p">(</span>
-<a id="__codelineno-0-1622" name="__codelineno-0-1622"></a>        <span class="n">target</span><span class="p">,</span> <span class="n">Guide</span><span class="p">(</span><span class="n">show</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">visible</span><span class="p">),</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">),</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;legend&quot;</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">rows</span>
-<a id="__codelineno-0-1623" name="__codelineno-0-1623"></a>    <span class="p">)</span>
-<a id="__codelineno-0-1624" name="__codelineno-0-1624"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_guide</span><span class="p">(</span>
-<a id="__codelineno-0-1625" name="__codelineno-0-1625"></a>        <span class="n">target</span><span class="p">,</span> <span class="s2">&quot;legend&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">fold_guide</span><span class="p">(</span><span class="n">described</span><span class="o">.</span><span class="n">symbology</span><span class="p">,</span> <span class="n">described</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
-<a id="__codelineno-0-1626" name="__codelineno-0-1626"></a>    <span class="p">)</span>
-<a id="__codelineno-0-1627" name="__codelineno-0-1627"></a>    <span class="k">return</span> <span class="bp">self</span>
+              <summary>Source code in <code>src/digitalearth/interactive/legends/legend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span>
+<span class="normal"><a href="#__codelineno-0-304">304</a></span>
+<span class="normal"><a href="#__codelineno-0-305">305</a></span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span>
+<span class="normal"><a href="#__codelineno-0-309">309</a></span>
+<span class="normal"><a href="#__codelineno-0-310">310</a></span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span>
+<span class="normal"><a href="#__codelineno-0-313">313</a></span>
+<span class="normal"><a href="#__codelineno-0-314">314</a></span>
+<span class="normal"><a href="#__codelineno-0-315">315</a></span>
+<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span>
+<span class="normal"><a href="#__codelineno-0-348">348</a></span>
+<span class="normal"><a href="#__codelineno-0-349">349</a></span>
+<span class="normal"><a href="#__codelineno-0-350">350</a></span>
+<span class="normal"><a href="#__codelineno-0-351">351</a></span>
+<span class="normal"><a href="#__codelineno-0-352">352</a></span>
+<span class="normal"><a href="#__codelineno-0-353">353</a></span>
+<span class="normal"><a href="#__codelineno-0-354">354</a></span>
+<span class="normal"><a href="#__codelineno-0-355">355</a></span>
+<span class="normal"><a href="#__codelineno-0-356">356</a></span>
+<span class="normal"><a href="#__codelineno-0-357">357</a></span>
+<span class="normal"><a href="#__codelineno-0-358">358</a></span>
+<span class="normal"><a href="#__codelineno-0-359">359</a></span>
+<span class="normal"><a href="#__codelineno-0-360">360</a></span>
+<span class="normal"><a href="#__codelineno-0-361">361</a></span>
+<span class="normal"><a href="#__codelineno-0-362">362</a></span>
+<span class="normal"><a href="#__codelineno-0-363">363</a></span>
+<span class="normal"><a href="#__codelineno-0-364">364</a></span>
+<span class="normal"><a href="#__codelineno-0-365">365</a></span>
+<span class="normal"><a href="#__codelineno-0-366">366</a></span>
+<span class="normal"><a href="#__codelineno-0-367">367</a></span>
+<span class="normal"><a href="#__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#__codelineno-0-371">371</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="k">def</span><span class="w"> </span><span class="nf">legend</span><span class="p">(</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>    <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="n">labels</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Show the keyed colour list of a layer (the Core name, #261, order 24).</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="sd">    The same guide :meth:`colorbar` records, drawn as Bokeh&#39;s keyed box instead of a continuous bar. Both</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">    methods explain one layer&#39;s ``color`` encoding and so write one guide: calling both on a layer leaves</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a><span class="sd">    the last title and the last ``visible``, and draws both keys.</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">    Bokeh builds **one** legend per plot, from the labelled members of the overlay, so ``show_legend``</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">    decides whether this layer *contributes a row* rather than whether it gets a box of its own —</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">    measured: a single element with ``show_legend=True`` renders no legend at all, because there is no</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">    overlay to build one from. A layer&#39;s row is captioned by its ``name=``, which is what ``labels``</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">    renames.</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">        layer_id: Which layer&#39;s key to show. `None` (default) is the most recent layer whose colour</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">            varies with its data, exactly as :meth:`colorbar` resolves it.</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">        title: Heading above the key. It reaches the drawn box through Bokeh&#39;s own ``Legend.title``, and</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">            is recorded as the guide&#39;s title.</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">        labels: Explicit row labels, replacing the derived one. A layer contributes **one** row to a</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">            Bokeh legend — its own label — so this takes one entry; a count that does not match is</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">            refused rather than zipped, which would drop the difference and leave rows out of the key</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">            (the web tier&#39;s rule, for the same reason).</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        visible: Whether the layer contributes to the key. `False` records the guide switched off and</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">            applies ``show_legend=False``. Checked after the layer is resolved, never before.</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="sd">        KeyError: when `layer_id` names no layer on this map.</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">        ValueError: when the named layer&#39;s colour varies with nothing, or — for `None` — when no layer&#39;s</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a><span class="sd">            does; when ``labels`` does not hold one entry per row; and for a ``title`` that is not a</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">            non-empty string.</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a><span class="sd">        ImportError: when the ``interactive`` extra is not installed.</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">        - Key a contour layer, and title the box:</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem).legend(title=&quot;Contours&quot;)  # doctest: +SKIP</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">            &gt;&gt;&gt; m.get_layer(m.layer_ids[0]).symbology.guide().show          # doctest: +SKIP</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="sd">            True</span>
+<a id="__codelineno-0-338" name="__codelineno-0-338"></a>
+<a id="__codelineno-0-339" name="__codelineno-0-339"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">        - Or take it off again:</span>
+<a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-342" name="__codelineno-0-342"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem).legend(visible=False)    # doctest: +SKIP</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">            &gt;&gt;&gt; m.save(&quot;m.html&quot;).name                                       # doctest: +SKIP</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="sd">            &#39;m.html&#39;</span>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">        digitalearth.base.spec.style.Symbology.with_guide: where the guide is attached.</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-354" name="__codelineno-0-354"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
+<a id="__codelineno-0-355" name="__codelineno-0-355"></a>    <span class="n">target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guided_layer</span><span class="p">(</span><span class="s2">&quot;legend&quot;</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-356" name="__codelineno-0-356"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">labels</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a>    <span class="n">derived</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">label</span><span class="p">]</span>
+<a id="__codelineno-0-358" name="__codelineno-0-358"></a>    <span class="k">if</span> <span class="n">rows</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">derived</span><span class="p">):</span>
+<a id="__codelineno-0-359" name="__codelineno-0-359"></a>        <span class="c1"># Refused before the guide is recorded, so a rejected call leaves the description untouched.</span>
+<a id="__codelineno-0-360" name="__codelineno-0-360"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-361" name="__codelineno-0-361"></a>            <span class="sa">f</span><span class="s2">&quot;legend(labels=...) has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span><span class="si">}</span><span class="s2"> entries and layer </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2"> contributes &quot;</span>
+<a id="__codelineno-0-362" name="__codelineno-0-362"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">derived</span><span class="p">)</span><span class="si">}</span><span class="s2"> row to a Bokeh legend (</span><span class="si">{</span><span class="n">derived</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">!r}</span><span class="s2">); zip would drop the difference and &quot;</span>
+<a id="__codelineno-0-363" name="__codelineno-0-363"></a>            <span class="s2">&quot;leave rows out of the key&quot;</span>
+<a id="__codelineno-0-364" name="__codelineno-0-364"></a>        <span class="p">)</span>
+<a id="__codelineno-0-365" name="__codelineno-0-365"></a>    <span class="n">described</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_record_guide</span><span class="p">(</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a>        <span class="n">target</span><span class="p">,</span> <span class="n">Guide</span><span class="p">(</span><span class="n">show</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">visible</span><span class="p">),</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">),</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;legend&quot;</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">rows</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a>    <span class="p">)</span>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_guide</span><span class="p">(</span>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a>        <span class="n">target</span><span class="p">,</span> <span class="s2">&quot;legend&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">fold_guide</span><span class="p">(</span><span class="n">described</span><span class="o">.</span><span class="n">symbology</span><span class="p">,</span> <span class="n">described</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a>    <span class="p">)</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -24155,7 +24157,7 @@ non-empty string.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1071">1071</a></span>
 <span class="normal"><a href="#__codelineno-0-1072">1072</a></span>
 <span class="normal"><a href="#__codelineno-0-1073">1073</a></span>
@@ -24347,7 +24349,7 @@ rebuilds that list in the new order.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1195">1195</a></span>
 <span class="normal"><a href="#__codelineno-0-1196">1196</a></span>
 <span class="normal"><a href="#__codelineno-0-1197">1197</a></span>
@@ -24544,7 +24546,7 @@ it, and drawing that figure again needs it; :meth:<code>close</code> is where th
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1095">1095</a></span>
 <span class="normal"><a href="#__codelineno-0-1096">1096</a></span>
 <span class="normal"><a href="#__codelineno-0-1097">1097</a></span>
@@ -24658,7 +24660,7 @@ again from the new description, since a HoloViews element carries the options it
 replacement that changes only what the figure <em>says</em> about such a layer — its label, its band,
 whether it is drawn — is honoured, and one that changes what the element <em>is</em> is refused: its kind,
 its source, its slice, its symbology, its filter or its group. Hand the new object to
-:meth:<code>add_layer</code> instead (:data:<code>~digitalearth.interactive.renderer.KEPT_KINDS</code>).</p>
+:meth:<code>add_layer</code> instead (:data:<code>~digitalearth.interactive.render.renderer.KEPT_KINDS</code>).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -24783,7 +24785,7 @@ the drawers read the source out of the figure, and a missing one reaches the dra
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1234">1234</a></span>
 <span class="normal"><a href="#__codelineno-0-1235">1235</a></span>
 <span class="normal"><a href="#__codelineno-0-1236">1236</a></span>
@@ -24856,7 +24858,7 @@ the drawers read the source out of the figure, and a missing one reaches the dra
 <a id="__codelineno-0-1241" name="__codelineno-0-1241"></a><span class="sd">    replacement that changes only what the figure *says* about such a layer — its label, its band,</span>
 <a id="__codelineno-0-1242" name="__codelineno-0-1242"></a><span class="sd">    whether it is drawn — is honoured, and one that changes what the element *is* is refused: its kind,</span>
 <a id="__codelineno-0-1243" name="__codelineno-0-1243"></a><span class="sd">    its source, its slice, its symbology, its filter or its group. Hand the new object to</span>
-<a id="__codelineno-0-1244" name="__codelineno-0-1244"></a><span class="sd">    :meth:`add_layer` instead (:data:`~digitalearth.interactive.renderer.KEPT_KINDS`).</span>
+<a id="__codelineno-0-1244" name="__codelineno-0-1244"></a><span class="sd">    :meth:`add_layer` instead (:data:`~digitalearth.interactive.render.renderer.KEPT_KINDS`).</span>
 <a id="__codelineno-0-1245" name="__codelineno-0-1245"></a>
 <a id="__codelineno-0-1246" name="__codelineno-0-1246"></a><span class="sd">    Args:</span>
 <a id="__codelineno-0-1247" name="__codelineno-0-1247"></a><span class="sd">        layer: The new description. Its id names the layer it replaces.</span>
@@ -25042,7 +25044,7 @@ what tells a saved figure that the layer is there but not drawn.</p>
                 <p>when the element has no keyword to say it with — a basemap, a <code>dynamic=True</code> layer
 whose <code>DynamicMap</code> has produced no frame yet, or an object handed to :meth:<code>add_layer</code> that
 HoloViews has no option tree for at all. The layer stays drawn and the warning says so
-(:func:<code>~digitalearth.interactive.renderer._show</code>).</p>
+(:func:<code>~digitalearth.interactive.render.renderer._show</code>).</p>
               </div>
             </td>
           </tr>
@@ -25080,7 +25082,7 @@ even the warning above (review H8).</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1141">1141</a></span>
 <span class="normal"><a href="#__codelineno-0-1142">1142</a></span>
 <span class="normal"><a href="#__codelineno-0-1143">1143</a></span>
@@ -25153,7 +25155,7 @@ even the warning above (review H8).</p>
 <a id="__codelineno-0-1158" name="__codelineno-0-1158"></a><span class="sd">        UserWarning: when the element has no keyword to say it with — a basemap, a `dynamic=True` layer</span>
 <a id="__codelineno-0-1159" name="__codelineno-0-1159"></a><span class="sd">            whose `DynamicMap` has produced no frame yet, or an object handed to :meth:`add_layer` that</span>
 <a id="__codelineno-0-1160" name="__codelineno-0-1160"></a><span class="sd">            HoloViews has no option tree for at all. The layer stays drawn and the warning says so</span>
-<a id="__codelineno-0-1161" name="__codelineno-0-1161"></a><span class="sd">            (:func:`~digitalearth.interactive.renderer._show`).</span>
+<a id="__codelineno-0-1161" name="__codelineno-0-1161"></a><span class="sd">            (:func:`~digitalearth.interactive.render.renderer._show`).</span>
 <a id="__codelineno-0-1162" name="__codelineno-0-1162"></a>
 <a id="__codelineno-0-1163" name="__codelineno-0-1163"></a><span class="sd">    Note:</span>
 <a id="__codelineno-0-1164" name="__codelineno-0-1164"></a><span class="sd">        Every layer is hidden **on its element**: Bokeh takes `visible=False` and draws nothing for it,</span>
@@ -25253,7 +25255,7 @@ kind this tier draws — that one is built by its drawer from <code>symbology</c
             <td>
               <div class="doc-md-description">
                 <p>The registered, engine-neutral kind the layer is — <code>"raster"</code>, <code>"points"</code>, … A kind
-listed in :data:<code>~digitalearth.interactive.renderer.DRAWN_KINDS</code> is drawn from its
+listed in :data:<code>~digitalearth.interactive.render.renderer.DRAWN_KINDS</code> is drawn from its
 description; <code>None</code> makes it a custom layer (<code>custom:holoviews</code>).</p>
               </div>
             </td>
@@ -25529,7 +25531,7 @@ declined one is.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1344">1344</a></span>
 <span class="normal"><a href="#__codelineno-0-1345">1345</a></span>
 <span class="normal"><a href="#__codelineno-0-1346">1346</a></span>
@@ -25726,7 +25728,7 @@ declined one is.</p>
 <a id="__codelineno-0-1373" name="__codelineno-0-1373"></a><span class="sd">        layer: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a</span>
 <a id="__codelineno-0-1374" name="__codelineno-0-1374"></a><span class="sd">            kind this tier draws — that one is built by its drawer from ``symbology``.</span>
 <a id="__codelineno-0-1375" name="__codelineno-0-1375"></a><span class="sd">        kind: The registered, engine-neutral kind the layer is — ``&quot;raster&quot;``, ``&quot;points&quot;``, … A kind</span>
-<a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">            listed in :data:`~digitalearth.interactive.renderer.DRAWN_KINDS` is drawn from its</span>
+<a id="__codelineno-0-1376" name="__codelineno-0-1376"></a><span class="sd">            listed in :data:`~digitalearth.interactive.render.renderer.DRAWN_KINDS` is drawn from its</span>
 <a id="__codelineno-0-1377" name="__codelineno-0-1377"></a><span class="sd">            description; ``None`` makes it a custom layer (``custom:holoviews``).</span>
 <a id="__codelineno-0-1378" name="__codelineno-0-1378"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id when it is free and as its label.</span>
 <a id="__codelineno-0-1379" name="__codelineno-0-1379"></a><span class="sd">        visible: Whether the layer is described as visible — and, for a kind this tier draws, applied:</span>
@@ -25802,7 +25804,7 @@ declined one is.</p>
 <a id="__codelineno-0-1449" name="__codelineno-0-1449"></a>    <span class="c1"># A builder that says what it drew is described; one that does not is a caller&#39;s own object,</span>
 <a id="__codelineno-0-1450" name="__codelineno-0-1450"></a>    <span class="c1"># which has no description to write beyond the fact that it exists</span>
 <a id="__codelineno-0-1451" name="__codelineno-0-1451"></a>    <span class="c1"># (:mod:`digitalearth.base.custom`).</span>
-<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">DRAWN_KINDS</span>
+<a id="__codelineno-0-1452" name="__codelineno-0-1452"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive.render.renderer</span><span class="w"> </span><span class="kn">import</span> <span class="n">DRAWN_KINDS</span>
 <a id="__codelineno-0-1453" name="__codelineno-0-1453"></a>
 <a id="__codelineno-0-1454" name="__codelineno-0-1454"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_guard_element_crs</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;add_layer&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-1455" name="__codelineno-0-1455"></a>    <span class="n">resolved</span> <span class="o">=</span> <span class="n">kind</span> <span class="ow">or</span> <span class="n">custom_kind</span><span class="p">(</span><span class="s2">&quot;holoviews&quot;</span><span class="p">)</span>
@@ -25976,7 +25978,7 @@ declined one is.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2202">2202</a></span>
 <span class="normal"><a href="#__codelineno-0-2203">2203</a></span>
 <span class="normal"><a href="#__codelineno-0-2204">2204</a></span>
@@ -26214,7 +26216,7 @@ file.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2279">2279</a></span>
 <span class="normal"><a href="#__codelineno-0-2280">2280</a></span>
 <span class="normal"><a href="#__codelineno-0-2281">2281</a></span>
@@ -26407,7 +26409,7 @@ file.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2343">2343</a></span>
 <span class="normal"><a href="#__codelineno-0-2344">2344</a></span>
 <span class="normal"><a href="#__codelineno-0-2345">2345</a></span>
@@ -26494,7 +26496,7 @@ acts on a layer that is still there, which is why the pointer is not cleared her
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/interactive/base.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/interactive/core/base.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-2363">2363</a></span>
 <span class="normal"><a href="#__codelineno-0-2364">2364</a></span>
 <span class="normal"><a href="#__codelineno-0-2365">2365</a></span>

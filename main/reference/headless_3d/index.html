@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4537,7 +4537,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#digitalearth.three_d.headless.start_xvfb" class="md-nav__link">
+  <a href="#digitalearth.three_d.app.headless.start_xvfb" class="md-nav__link">
     <span class="md-ellipsis">
       
         start_xvfb
@@ -4848,7 +4848,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#digitalearth.three_d.headless.start_xvfb" class="md-nav__link">
+  <a href="#digitalearth.three_d.app.headless.start_xvfb" class="md-nav__link">
     <span class="md-ellipsis">
       
         start_xvfb
@@ -4965,10 +4965,10 @@ particular backend.</p>
 <div class="doc doc-object doc-function">
 
 
-<h2 id="digitalearth.three_d.headless.start_xvfb" class="doc doc-heading"><a href="#digitalearth.three_d.headless.start_xvfb" class="toclink">
-            <code class="highlight language-python"><span class="n">digitalearth</span><span class="o">.</span><span class="n">three_d</span><span class="o">.</span><span class="n">headless</span><span class="o">.</span><span class="n">start_xvfb</span><span class="p">(</span><span class="n">display</span><span class="o">=</span><span class="s1">&#39;:99&#39;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">window_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">768</span><span class="p">),</span> <span class="n">wait</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span></code>
+<h2 id="digitalearth.three_d.app.headless.start_xvfb" class="doc doc-heading"><a href="#digitalearth.three_d.app.headless.start_xvfb" class="toclink">
+            <code class="highlight language-python"><span class="n">digitalearth</span><span class="o">.</span><span class="n">three_d</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">headless</span><span class="o">.</span><span class="n">start_xvfb</span><span class="p">(</span><span class="n">display</span><span class="o">=</span><span class="s1">&#39;:99&#39;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">window_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">768</span><span class="p">),</span> <span class="n">wait</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span></code>
 
-</a><a href="#digitalearth.three_d.headless.start_xvfb" class="headerlink" title="Permanent link">#</a></h2>
+</a><a href="#digitalearth.three_d.app.headless.start_xvfb" class="headerlink" title="Permanent link">#</a></h2>
 
 
     <div class="doc doc-contents first">
@@ -5175,11 +5175,11 @@ or <code>wait</code> is not a positive finite number of seconds.</p>
 
 <details class="see-also" open>
   <summary>See Also</summary>
-  <p>digitalearth.three_d.base.Scene3DBase: <code>off_screen=</code> is the other half of rendering headless.</p>
+  <p>digitalearth.three_d.core.base.Scene3DBase: <code>off_screen=</code> is the other half of rendering headless.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/three_d/headless.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/three_d/app/headless.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-46"> 46</a></span>
 <span class="normal"><a href="#__codelineno-0-47"> 47</a></span>
 <span class="normal"><a href="#__codelineno-0-48"> 48</a></span>
@@ -5390,7 +5390,7 @@ or <code>wait</code> is not a positive finite number of seconds.</p>
 <a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-131" name="__codelineno-0-131"></a>
 <a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">        digitalearth.three_d.base.Scene3DBase: ``off_screen=`` is the other half of rendering headless.</span>
+<a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">        digitalearth.three_d.core.base.Scene3DBase: ``off_screen=`` is the other half of rendering headless.</span>
 <a id="__codelineno-0-134" name="__codelineno-0-134"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-135" name="__codelineno-0-135"></a>    <span class="n">_check_request</span><span class="p">(</span><span class="n">display</span><span class="p">,</span> <span class="n">window_size</span><span class="p">,</span> <span class="n">wait</span><span class="p">)</span>
 <a id="__codelineno-0-136" name="__codelineno-0-136"></a>    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;DISPLAY&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;linux&quot;</span><span class="p">):</span>
