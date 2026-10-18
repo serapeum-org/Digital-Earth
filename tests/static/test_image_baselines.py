@@ -55,8 +55,36 @@ _BASELINE = {"savefig_kwargs": {"dpi": 80}, "style": "default"}
 _FIGSIZE = (4.0, 4.0)
 
 #: Degrees the decimation fixture's raster spans on each side — a fine grid over a small region, so the
-#: 1200 cells a side are detail to be decimated rather than a grid running off the end of the world.
+#: cells a side are detail to be decimated rather than a grid running off the end of the world.
 _LARGE_SPAN = 20.0
+
+#: Cells a side for the decimation fixture's raster — far past the baseline canvas (a few hundred device
+#: pixels a side), so the static tier reads it at a reduced resolution instead of decoding every cell.
+_LARGE_SIDE = 1200
+
+
+def _large_field(side):
+    """Build the decimation fixture's analytic field — smooth, but asymmetric on every axis.
+
+    The surface is low-frequency, so the decimated read and a full decode are the same picture at figure
+    resolution (the equivalence ``test_the_decimated_render_matches_a_full_decode`` proves). It is built to
+    have **no** flip or transpose symmetry, so a vertical flip (a y-sign or row-order regression), a
+    horizontal flip and a transpose each move the pixels past the baseline's tolerance. The row axis is
+    offset off the origin (``linspace(-0.4, 1.6, …)``) and carries a linear ramp precisely so it is not even
+    about its centre — a ``cos`` field over a symmetric ``linspace(-1, 1, …)`` axis equals its own vertical
+    flip bit-for-bit, which would leave a whole class of orientation fault invisible.
+
+    Args:
+        side: Cells on each side.
+
+    Returns:
+        numpy.ndarray: the ``(side, side)`` ``float32`` field.
+    """
+    yv = np.linspace(-0.4, 1.6, side, dtype="float32")[:, None]
+    xv = np.linspace(-1.0, 1.0, side, dtype="float32")[None, :]
+    return (
+        np.sin(2.0 * np.pi * xv + 0.4) * np.cos(1.5 * np.pi * yv) + 0.35 * yv
+    ).astype("float32")
 
 
 @pytest.fixture
@@ -162,35 +190,51 @@ def global_raster():
 
 @pytest.fixture
 def large_raster(tmp_path):
-    """A raster far larger than the baseline canvas, on disk so it is read through pyramids' overviews.
+    """A raster far larger than the baseline canvas, on disk so the static tier reads it decimated.
 
-    At ``_FIGSIZE`` the canvas is a few hundred device pixels a side, so a 1200-cell-a-side raster trips the
-    static tier's decimation threshold (``digitalearth.static.builders.raster._DECIMATE_ABOVE``) and is read
-    at a lower resolution through pyramids' ``read_part`` rather than being fully decoded. The field is a
-    smooth, low-frequency analytic surface, so at figure resolution the decimated read and a full decode are
-    the same picture — which is what lets one committed baseline stand for both (#480).
+    At ``_FIGSIZE`` the canvas is a few hundred device pixels a side, so a :data:`_LARGE_SIDE`-cell-a-side
+    raster trips the static tier's decimation threshold
+    (``digitalearth.static.builders.raster._DECIMATE_ABOVE``) and is read at a reduced resolution through
+    pyramids' ``read_part`` — a decimated windowed read, which GDAL resamples on the fly (the plain GeoTIFF
+    carries no overview pyramid) — rather than decoding every cell. The field is :func:`_large_field`: smooth,
+    so the decimated read and a full decode are the same picture at figure resolution, and asymmetric, so an
+    orientation regression is not hidden by a symmetry.
 
     Args:
-        tmp_path: pytest's temporary directory; the raster is written here so it exposes the ``read_part`` /
-            overview surface. An in-memory array would be drawn whole, since only a file-backed dataset
-            offers the windowed read the decimation path needs.
+        tmp_path: pytest's temporary directory; the raster is written here so it exposes pyramids' windowed
+            read (``read_part``). An in-memory array would be drawn whole, since only a file-backed dataset
+            offers the windowed read the decimation path takes.
 
     Returns:
-        Dataset: a single-band EPSG:4326 raster, 1200 cells a side over :data:`_LARGE_SPAN` degrees.
+        Dataset: a single-band EPSG:4326 raster, :data:`_LARGE_SIDE` cells a side over :data:`_LARGE_SPAN`
+        degrees.
     """
-    side = 1200
-    axis = np.linspace(-1.0, 1.0, side, dtype="float32")
-    arr = (
-        np.sin(1.5 * np.pi * axis)[None, :] * np.cos(1.5 * np.pi * axis)[:, None]
-    ).astype("float32")
     path = tmp_path / "large.tif"
     Dataset.from_array(
-        arr=arr,
+        arr=_large_field(_LARGE_SIDE),
         geo_ref=GeoReference(
-            top_left_corner=(0.0, _LARGE_SPAN), cell_size=_LARGE_SPAN / side, epsg=4326
+            top_left_corner=(0.0, _LARGE_SPAN),
+            cell_size=_LARGE_SPAN / _LARGE_SIDE,
+            epsg=4326,
         ),
     ).to_file(str(path))
     return Dataset.read_file(str(path))
+
+
+def test_large_raster_fixture_breaks_every_flip_and_transpose_symmetry():
+    """The decimation baseline can pin orientation only if its field has no flip or transpose symmetry (#480).
+
+    A field equal to its own vertical flip would let a y-sign / row-order regression pass the pixel baseline
+    unseen; the same holds for a horizontal flip and a transpose. This asserts :func:`_large_field` breaks all
+    three, so each orientation fault moves the baseline. It fails on an even field over a symmetric axis — the
+    shape this fixture had before #480's review — which is the regression it guards.
+    """
+    arr = _large_field(64)
+    assert not np.array_equal(np.flipud(arr), arr), "a vertical flip would be invisible"
+    assert not np.array_equal(np.fliplr(arr), arr), (
+        "a horizontal flip would be invisible"
+    )
+    assert not np.array_equal(arr.T, arr), "a transpose would be invisible"
 
 
 @pytest.mark.mpl_image_compare(**_BASELINE)
