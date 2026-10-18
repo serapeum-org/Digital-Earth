@@ -102,11 +102,15 @@ def _mixins() -> tuple:
     """
     found = []
     for backend in BACKENDS:
-        for path in sorted(_module_path(backend).glob("*.py")):
+        # rglob, not glob: the mixins now live in per-concern subpackages (builders/, decoration/,
+        # legends/, view/, temporal/, app/), not flat under the backend, so recurse to find them all.
+        for path in sorted(_module_path(backend).rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in tree.body:
                 if isinstance(node, ast.ClassDef) and node.name.endswith("Mixin"):
-                    module = f"{backend}.{path.stem}"
+                    module = ".".join(
+                        path.relative_to(ROOT / "src").with_suffix("").parts
+                    )
                     found.append((backend, module, node.name, node, tree))
     return tuple(found)
 
@@ -304,6 +308,7 @@ class TestComposedClassMro:
                     "BigDataMixin",
                     "TemporalMixin",
                     "DecorationMixin",
+                    "LegendMixin",
                     "InteractionMixin",
                     "LiveMixin",
                     "ProjectionMixin",
@@ -324,6 +329,7 @@ class TestComposedClassMro:
                     "ThreeDMixin",
                     "TemporalMixin",
                     "DecorationMixin",
+                    "LegendMixin",
                     "ExportMixin",
                     "WebMapBase",
                     "object",
@@ -513,7 +519,7 @@ class TestSelfReturningBuilders:
             nothing but this catches that, because the wrong annotation still runs perfectly.
         """
         offenders = []
-        for path in sorted(_module_path(backend).glob("*.py")):
+        for path in sorted(_module_path(backend).rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 is_function = isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -705,11 +711,14 @@ def _contract_classes() -> tuple:
     """
     found = []
     for backend in BACKENDS:
-        for path in sorted(_module_path(backend).glob("*.py")):
+        for path in sorted(_module_path(backend).rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for klass in tree.body:
                 if isinstance(klass, ast.ClassDef) and klass.name.endswith("Mixin"):
-                    found.append((f"{backend}.{path.stem}", klass))
+                    module = ".".join(
+                        path.relative_to(ROOT / "src").with_suffix("").parts
+                    )
+                    found.append((module, klass))
     for module, names in COMPOSED_CLASSES.items():
         path = _module_path(module).with_suffix(".py")
         tree = ast.parse(path.read_text(encoding="utf-8"))

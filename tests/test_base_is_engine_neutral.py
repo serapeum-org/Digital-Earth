@@ -264,8 +264,8 @@ class TestOffenderRules:
         )
 
     def test_relative_imports_are_resolved_and_checked(self):
-        """``from ..static.figures import fig_of`` must be caught like its absolute spelling."""
-        source = "from ..static.figures import fig_of\n"
+        """``from ..static.charts.figures import fig_of`` must be caught like its absolute spelling."""
+        source = "from ..static.charts.figures import fig_of\n"
         module = BASE / "symbology.py"
         targets = _imported_targets(ast.parse(source), module)
         assert "digitalearth.static.charts.figures" in targets, (
