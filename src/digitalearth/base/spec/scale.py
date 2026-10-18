@@ -271,7 +271,12 @@ class Scale:
 
     @classmethod
     def breaks_of(
-        cls, values: Any, scheme: str, k: int = DEFAULT_CLASS_COUNT
+        cls,
+        values: Any,
+        scheme: str,
+        k: int = DEFAULT_CLASS_COUNT,
+        *,
+        clip: tuple[float | None, float | None] | None = None,
     ) -> tuple[float, ...]:
         """Cut class edges without deriving a domain, for a caller that only wants the classes.
 
@@ -283,13 +288,24 @@ class Scale:
             values: The data to classify.
             scheme: Classification scheme name.
             k: Number of classes.
+            clip: An optional ``(vmin, vmax)`` window the classes are pinned to (#378). When given, the
+                recorded domain is the window and a cell outside it is clamped to the nearer bound, so an
+                outlier lands in the first or last class instead of stretching the classes and two bands
+                given the same window share one comparable scale. The interior is the scheme's own: an
+                ``"equal_interval"`` window is split into equal parts of the window itself, while a
+                data-driven scheme (``"quantiles"``, ``"natural_breaks"``, …) cuts its interior over the
+                clamped data and only has its *outer* edges pinned to the bounds — the two synthetic bound
+                points are never mixed into the statistic. Either bound may be ``None`` to leave that side at
+                the data's own extent. A reversed window (``vmin > vmax``) is refused, and a zero-width one
+                (``vmin == vmax``) is widened, the same as :meth:`from_values` treats explicit limits.
 
         Returns:
             The class edges, ``k + 1`` of them for ``k`` classes.
 
         Raises:
-            ValueError: if the scheme is unknown to the classifier, or `k` is not a usable class count. The
-                message names the scheme and the count, exactly as :meth:`from_values` does.
+            ValueError: if the scheme is unknown to the classifier, `k` is not a usable class count, a
+                `clip` window is reversed, or a data-driven scheme's window holds fewer than two distinct
+                values. The message names the scheme and the count, as :meth:`from_values` does.
 
         Examples:
             - Three classes, four edges, and no domain derived:
@@ -299,8 +315,129 @@ class Scale:
                 4
 
                 ```
+            - An ``equal_interval`` window is split into equal parts of the window; the 999 outlier lands in
+              the top class rather than stretching the edges:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.breaks_of([5, 10, 15, 20, 40, 999], "equal_interval", 2, clip=(0.0, 100.0))
+                (0.0, 50.0, 100.0)
+
+                ```
         """
-        return cls._breaks(values, scheme, k)
+        if clip is None:
+            return cls._breaks(values, scheme, k)
+        lo, hi = cls._clip_window(clip)
+        clamped = cls._clamped_finite(values, lo, hi)
+        if scheme == "equal_interval":
+            # equal_interval's classes are a pure split of the domain, so cutting the window itself gives
+            # equal parts of `[lo, hi]` whatever the data holds. A data-driven scheme must not take this
+            # path: splitting the window would discard the distribution the scheme names. An open bound
+            # falls back to the clamped data's extent, or to a unit span when no cell survived.
+            left = (
+                float(lo) if lo is not None else cls._open_bound(clamped, np.min, 0.0)
+            )
+            right = (
+                float(hi) if hi is not None else cls._open_bound(clamped, np.max, 1.0)
+            )
+            if right <= left:
+                left, right = cls._widen(left)
+            return tuple(float(edge) for edge in np.linspace(left, right, k + 1))
+        if np.unique(clamped).size < 2:
+            # A data-driven scheme needs spread; with every cell on one side of the window (or a degenerate
+            # window) the clamped sample is one value and the classifier cannot cut it. Name the window, not
+            # the data, since the window is the cause.
+            raise ValueError(
+                f"scheme={scheme!r} cannot cut classes in the window [{lo}, {hi}]: it holds fewer than two "
+                "distinct values, so every cell falls on one side of it; widen the window, or use "
+                "'equal_interval', which splits the window regardless of the data"
+            )
+        edges = cls._breaks(clamped, scheme, k)
+        return cls._pin_outer_edges(edges, lo, hi)
+
+    @staticmethod
+    def _clip_window(
+        clip: tuple[float | None, float | None],
+    ) -> tuple[float | None, float | None]:
+        """Validate a ``(vmin, vmax)`` clip window, refusing a reversed one and widening a zero-width one.
+
+        Args:
+            clip: A ``(vmin, vmax)`` pair; ``None`` on a side leaves it open.
+
+        Returns:
+            The window, with a ``vmin == vmax`` pair widened (as :meth:`from_limits` widens a constant).
+
+        Raises:
+            ValueError: for a reversed window, with the same message :meth:`from_values` gives a reversed
+                explicit pair — so the classified and continuous paths refuse a transposed pair alike.
+        """
+        lo, hi = clip
+        if lo is not None and hi is not None:
+            if hi < lo:
+                raise ValueError(
+                    f"Scale needs vmin <= vmax; got vmin={float(lo)}, vmax={float(hi)}. Both were given "
+                    "explicitly, so this is a reversed pair rather than a constant domain to widen — check "
+                    "their order"
+                )
+            if hi == lo:
+                return Scale._widen(float(lo))
+        return lo, hi
+
+    @staticmethod
+    def _clamped_finite(values: Any, lo: float | None, hi: float | None) -> Any:
+        """Return the finite values clamped into the ``[lo, hi]`` window, in one pass.
+
+        Args:
+            values: The data to confine; non-finite and masked cells are dropped.
+            lo: Lower bound, or ``None`` to leave the low side at the data's extent.
+            hi: Upper bound, or ``None`` to leave the high side open.
+
+        Returns:
+            A 1-D float array clamped into the window. ``np.clip`` treats a ``None`` bound as no bound on
+            that side (relied on since numpy 2); both ``None`` is the no-op the ``clip=(None, None)`` path
+            takes.
+        """
+        array = np.ma.compressed(
+            np.ma.masked_invalid(np.ma.asarray(values, dtype="float64"))
+        )
+        return np.clip(array, lo, hi)
+
+    @staticmethod
+    def _open_bound(clamped: Any, reducer: Any, default: float) -> float:
+        """Return the clamped data's extent on one side, or ``default`` when no cell survived.
+
+        Args:
+            clamped: The clamped finite values.
+            reducer: ``numpy.min`` or ``numpy.max`` — which extent to take.
+            default: The bound to use when ``clamped`` is empty.
+
+        Returns:
+            ``float(reducer(clamped))``, or ``default`` for an empty array.
+        """
+        return float(reducer(clamped)) if clamped.size else default
+
+    @staticmethod
+    def _pin_outer_edges(
+        edges: tuple[float, ...], lo: float | None, hi: float | None
+    ) -> tuple[float, ...]:
+        """Replace the outer class edges with the window bounds, keeping the scheme's interior.
+
+        The clamped data lies inside ``[lo, hi]``, so the classifier's own outer edges are the clamped
+        extent; swapping them for the window bounds pins the recorded domain to the window without touching
+        the interior cuts. Any interior edge that coincides with a bound is dropped so the edges stay
+        strictly increasing.
+
+        Args:
+            edges: The classifier's edges over the clamped data.
+            lo: Lower bound to pin, or ``None`` to keep the classifier's own.
+            hi: Upper bound to pin, or ``None`` to keep the classifier's own.
+
+        Returns:
+            The edges with their ends pinned to the given bounds.
+        """
+        left = float(lo) if lo is not None else edges[0]
+        right = float(hi) if hi is not None else edges[-1]
+        interior = [edge for edge in edges[1:-1] if left < edge < right]
+        return (left, *interior, right)
 
     @classmethod
     def from_limits(

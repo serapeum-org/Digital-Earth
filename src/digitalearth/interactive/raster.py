@@ -222,7 +222,13 @@ def _class_options(classes: BandClasses) -> dict[str, Any]:
 
 
 def _band_classes(
-    interactive_map: Any, data: Any, band: int, scheme: Any, k: int | None, cmap: Any
+    interactive_map: Any,
+    data: Any,
+    band: int,
+    scheme: Any,
+    k: int | None,
+    cmap: Any,
+    clip: tuple[float | None, float | None] | None = None,
 ) -> BandClasses:
     """Classify a band at build time, so the layer's description carries its classes.
 
@@ -239,6 +245,10 @@ def _band_classes(
         k: Classes for a named graduated scheme.
         cmap: The caller's colormap — a categorical palette for codes, the colormap graduated classes are
             sampled from otherwise — or ``None``.
+        clip: The caller's ``limits`` as the ``(vmin, vmax)`` window a graduated scheme is pinned to (#378), so
+            the classes span the window and outliers land in an end class; ``None`` cuts them over the whole
+            band. Ignored by :func:`~digitalearth.base.raster_classes.classify_band` for a categorical scheme
+            or explicit edges, which have no range to pin.
 
     Returns:
         The band's classes.
@@ -284,7 +294,7 @@ def _band_classes(
     palette = (
         cmap if asks_categorical(scheme) else interactive_map._auto_cmap(src, cmap)
     )
-    return classify_band(src.z.values, scheme, k, palette)
+    return classify_band(src.z.values, scheme, k, palette, clip=clip)
 
 
 def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
@@ -549,7 +559,9 @@ class RasterMixin(_MixinBase):
                 ``clim``. A list is taken too, and is the spelling the figure records — a tuple is what the
                 travel rule refuses, so the documented pair used to be dropped from every saved figure
                 (review R2-M13). The drawer hands HoloViews the tuple its own option is declared with either
-                way. Ignored when ``scheme`` classifies the band, whose limits are its class edges.
+                way. Under a graduated ``scheme`` it pins the classes to this window (#378): they span it
+                exactly and an outlier lands in an end class; ``"categorical"`` and explicit edges ignore it,
+                having no range to pin.
             scheme: Colour the band class by class rather than along a ramp. A named graduated scheme
                 (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) or an explicit list of edges cuts
                 classes coloured from ``cmap``; ``"categorical"`` gives each integer code a class of its own,
@@ -627,7 +639,15 @@ class RasterMixin(_MixinBase):
         """
         scale = limits_scale(limits)
         if scheme is not None:
-            scale = _band_classes(self, data, band, scheme, k, cmap).scale
+            # Pin the classes to `limits` only when it is a real `(lo, hi)` pair; a malformed `limits` is left
+            # to `limits_scale`'s tolerant handling above (it draws rather than raising), so the classify path
+            # must not turn the same bad value into a cryptic unpack error (review L3).
+            window = (
+                limits
+                if isinstance(limits, (tuple, list)) and len(limits) == 2
+                else None
+            )
+            scale = _band_classes(self, data, band, scheme, k, cmap, clip=window).scale
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
         # into the description, and what has no JSON form — a colormap object, a callable — is held beside
         # the layer, because a figure is saved as JSON.

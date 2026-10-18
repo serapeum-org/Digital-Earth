@@ -1629,7 +1629,9 @@ class RasterMixin(_MixinBase):
                 the autostyle default for the variable.
             limits: The contract's name for the colour limits, as ``(vmin, vmax)`` — the one spelling every
                 tier answers to (#299). ``vmin``/``vmax`` remain, and naming both is refused rather than
-                silently resolved one way.
+                silently resolved one way. Under a graduated ``scheme`` they pin the classes to this window
+                (#378): the classes span it exactly, an outlier lands in an end class, and the colorbar reads
+                the requested limits; ``"categorical"`` and explicit edges ignore them, having no range to pin.
             units: What the band's values are measured in, recorded as
                 :attr:`~digitalearth.web.base.WebMapBase.last_units` so a key built from them can say so.
                 ``None`` (the default) takes the variable's units from
@@ -1820,7 +1822,11 @@ class RasterMixin(_MixinBase):
             # Codes take the categorical palette unless the caller names one; graduated classes the colormap
             # the band resolved, the one a ramp would have used.
             palette = cmap if asks_categorical(scheme) else cmap_name
-            classes = classify_band(source.z.values, scheme, k, palette)
+            # `vmin`/`vmax` (the resolved `limits=`) pin a graduated scheme's classes to span that window, so
+            # the colorbar reads the requested limits and outliers land in an end class (#378); `classify_band`
+            # leaves the pair off for a categorical scheme or explicit edges, which have no range to pin.
+            clip = (vmin, vmax) if vmin is not None or vmax is not None else None
+            classes = classify_band(source.z.values, scheme, k, palette, clip=clip)
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
         # caller's request as much as `cmap=` is. The image — orientation included — is encoded by
