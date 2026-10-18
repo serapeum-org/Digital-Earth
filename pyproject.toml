@@ -579,7 +579,7 @@ dev = { features = ["dev"], solve-group = "default" }
 notebook = { features = ["notebook"], solve-group = "default" }
 # The docs env carries **every** rendering tier, not just mkdocs, for two reasons. First, mkdocstrings
 # imports the documented modules at build time, and docs/reference/*.md references three_d.scene3d,
-# three_d.headless, interactive.map and web.map, so VTK, the HoloViz stack and MapLibre must all import or
+# three_d.app.headless, interactive.map and web.map, so VTK, the HoloViz stack and MapLibre must all import or
 # the build fails - this holds even though the pyvista notebooks are excluded from execution. Second, the
 # interactive and web notebooks that DO execute (notebooks-path) need their runtimes. `numba-numpy` rides
 # along because the interactive feature needs numpy <2.5 (see the note on that feature). Its own
