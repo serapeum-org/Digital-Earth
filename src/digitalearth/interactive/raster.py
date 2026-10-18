@@ -643,7 +643,9 @@ class RasterMixin(_MixinBase):
             # to `limits_scale`'s tolerant handling above (it draws rather than raising), so the classify path
             # must not turn the same bad value into a cryptic unpack error (review L3).
             window = (
-                limits if isinstance(limits, (tuple, list)) and len(limits) == 2 else None
+                limits
+                if isinstance(limits, (tuple, list)) and len(limits) == 2
+                else None
             )
             scale = _band_classes(self, data, band, scheme, k, cmap, clip=window).scale
         # The caller's raw HoloViews keywords are split per value (review M3): the JSON-safe half goes
