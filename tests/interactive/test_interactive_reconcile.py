@@ -2,7 +2,7 @@
 
 The dashboard's cmap/alpha/basemap widgets and the layer switcher's visibility/opacity widgets used to
 rebuild the overlay three different ways. They route through one
-:meth:`~digitalearth.interactive.dashboard.DashboardMixin._reconcile_view` now, which re-styles only the
+:meth:`~digitalearth.interactive.app.dashboard.DashboardMixin._reconcile_view` now, which re-styles only the
 layers a widget value reaches and hands every other layer's element back untouched — a reconcile, not a
 rebuild.
 """

@@ -380,7 +380,7 @@ def guide_kind(layer: LayerSpec) -> str:
 
     A **categorical** scale is the one case where no tier can use a bar: matplotlib's would read the class
     codes cleopatra assigned and Bokeh draws no ``ColorBar`` from a ``CategoricalColorMapper`` at all
-    (:func:`~digitalearth.interactive.style_fold.guide_kind`).
+    (:func:`~digitalearth.interactive.render.style_fold.guide_kind`).
 
     Args:
         layer: The layer's description.

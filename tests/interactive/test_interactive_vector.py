@@ -520,7 +520,7 @@ class TestAVectorLayerIsReprojectedOnce:
             `_display_gdf` too — for a row count and a column's values, which a warp does not change — and
             discarded the result, so every one of these warped the frame twice (review M8).
         """
-        from digitalearth.interactive import vector
+        from digitalearth.interactive.builders import vector
 
         warps = []
         real = vector.reproject

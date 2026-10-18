@@ -89,7 +89,7 @@ _INSTALL_HINT = (
 def _new_renderer(interactive_map: Any) -> Any:
     """Return the renderer a map draws through.
 
-    Imported here rather than at module scope: :mod:`digitalearth.interactive.renderer` resolves its
+    Imported here rather than at module scope: :mod:`digitalearth.interactive.render.renderer` resolves its
     drawers from the builder modules, and every one of those imports this module, so a top-level import
     would close a cycle.
 
@@ -97,9 +97,9 @@ def _new_renderer(interactive_map: Any) -> Any:
         interactive_map: The map the renderer serves.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.Renderer` bound to it.
+        A :class:`~digitalearth.interactive.render.renderer.Renderer` bound to it.
     """
-    from digitalearth.interactive.renderer import Renderer
+    from digitalearth.interactive.render.renderer import Renderer
 
     return Renderer(interactive_map)
 
@@ -488,7 +488,7 @@ class InteractiveMapBase:
     Examples:
         - Construct and inspect the display configuration (needs no HoloViz engine):
             ```python
-            >>> from digitalearth.interactive.base import InteractiveMapBase
+            >>> from digitalearth.interactive.core.base import InteractiveMapBase
             >>> m = InteractiveMapBase(crs=4326, width=800, height=400, title="rain")
             >>> m.crs
             4326
@@ -500,7 +500,7 @@ class InteractiveMapBase:
             ```
         - Defaults target the Web-Mercator tile contract:
             ```python
-            >>> from digitalearth.interactive.base import InteractiveMapBase
+            >>> from digitalearth.interactive.core.base import InteractiveMapBase
             >>> m = InteractiveMapBase()
             >>> m.crs
             3857
@@ -510,7 +510,7 @@ class InteractiveMapBase:
             ```
         - Off-limb data is skipped by default, and the big-data cutoff is a plain attribute:
             ```python
-            >>> from digitalearth.interactive.base import InteractiveMapBase
+            >>> from digitalearth.interactive.core.base import InteractiveMapBase
             >>> m = InteractiveMapBase()
             >>> m.strict
             False
@@ -756,9 +756,9 @@ class InteractiveMapBase:
             self._sources[layer_id] = DataRef.of(
                 source, name=f"{self._objects_ns}:{layer_id}"
             )
-        # Imported here, not at module scope: `digitalearth.interactive.style_fold` is reached through the
+        # Imported here, not at module scope: `digitalearth.interactive.render.style_fold` is reached through the
         # package, whose `__init__` builds the map this module defines.
-        from digitalearth.interactive.style_fold import portable_encodings
+        from digitalearth.interactive.render.style_fold import portable_encodings
 
         recorded = Symbology() if symbology is None else symbology
         # The same style said twice: the resolved HoloViews options stay exactly where every drawer reads
@@ -905,7 +905,7 @@ class InteractiveMapBase:
         figure that cannot be drawn — a kind this tier has no drawer for — was installed first on the 3-D
         tier and left in place when `apply` raised, so `layer_ids` and `figure_spec` advertised a layer that
         was never drawn and could not be (review H7). Nothing is rolled back here because
-        :meth:`~digitalearth.interactive.renderer.Renderer.apply` rolls its own record back before it
+        :meth:`~digitalearth.interactive.render.renderer.Renderer.apply` rolls its own record back before it
         re-raises, and :attr:`layers` is not touched until it has returned.
 
         **`apply` moves the overlay with it.** :attr:`layers` is what `render()` composes, and only the
@@ -919,7 +919,7 @@ class InteractiveMapBase:
 
         Raises:
             CapabilityError: when the change would have to build a layer of a kind this tier keeps rather
-                than draws (:data:`~digitalearth.interactive.renderer.KEPT_KINDS`).
+                than draws (:data:`~digitalearth.interactive.render.renderer.KEPT_KINDS`).
             KeyError: when a layer names a kind this tier does not draw.
         """
         candidate = self._figure_with(figure.layers)
@@ -950,7 +950,7 @@ class InteractiveMapBase:
         This tier's counterpart of the 3-D scene's ``draw_figure``, with the same plumbing difference the
         static tier has: :meth:`_change` derives a candidate's sources from ``self._sources`` (filtered to the
         tree), not from the incoming figure, so the figure's own sources are installed here first — otherwise
-        :meth:`~digitalearth.interactive.renderer.Renderer.apply` would have nothing to open.
+        :meth:`~digitalearth.interactive.render.renderer.Renderer.apply` would have nothing to open.
 
         Args:
             figure: The figure to draw. Its panel's :class:`~digitalearth.base.spec.Viewport` set the display
@@ -968,7 +968,7 @@ class InteractiveMapBase:
         # Translate any recipe recorded by another tier to this tier's own before drawing, so a figure that
         # crossed from the web or static tier draws here instead of being refused for an unknown `via`. A
         # same-tier figure passes through unchanged.
-        from digitalearth.interactive.renderer import retarget_via
+        from digitalearth.interactive.render.renderer import retarget_via
 
         figure = retarget_via(figure)
         self._sources = dict(figure.sources)
@@ -1020,7 +1020,7 @@ class InteractiveMapBase:
     def from_share_url(cls, url: str, **scene_kwargs: Any) -> Self:
         """Rebuild a map from a URL produced by ``share_url`` (IN-14).
 
-        The decode half of :meth:`~digitalearth.interactive.dashboard.DashboardMixin.share_url`: it reads the
+        The decode half of :meth:`~digitalearth.interactive.app.dashboard.DashboardMixin.share_url`: it reads the
         ``?state=`` blob, decodes the figure and draws it through :meth:`from_figure`. A figure that carried
         only path/URL sources reconstructs fully; one whose sources were in-memory could not be encoded in
         the first place, so there is no half-open case here.
@@ -1158,7 +1158,7 @@ class InteractiveMapBase:
             UserWarning: when the element has no keyword to say it with — a basemap, a `dynamic=True` layer
                 whose `DynamicMap` has produced no frame yet, or an object handed to :meth:`add_layer` that
                 HoloViews has no option tree for at all. The layer stays drawn and the warning says so
-                (:func:`~digitalearth.interactive.renderer._show`).
+                (:func:`~digitalearth.interactive.render.renderer._show`).
 
         Note:
             Every layer is hidden **on its element**: Bokeh takes `visible=False` and draws nothing for it,
@@ -1241,7 +1241,7 @@ class InteractiveMapBase:
         replacement that changes only what the figure *says* about such a layer — its label, its band,
         whether it is drawn — is honoured, and one that changes what the element *is* is refused: its kind,
         its source, its slice, its symbology, its filter or its group. Hand the new object to
-        :meth:`add_layer` instead (:data:`~digitalearth.interactive.renderer.KEPT_KINDS`).
+        :meth:`add_layer` instead (:data:`~digitalearth.interactive.render.renderer.KEPT_KINDS`).
 
         Args:
             layer: The new description. Its id names the layer it replaces.
@@ -1373,7 +1373,7 @@ class InteractiveMapBase:
             layer: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a
                 kind this tier draws — that one is built by its drawer from ``symbology``.
             kind: The registered, engine-neutral kind the layer is — ``"raster"``, ``"points"``, … A kind
-                listed in :data:`~digitalearth.interactive.renderer.DRAWN_KINDS` is drawn from its
+                listed in :data:`~digitalearth.interactive.render.renderer.DRAWN_KINDS` is drawn from its
                 description; ``None`` makes it a custom layer (``custom:holoviews``).
             name: The caller's own name for the layer, used as its id when it is free and as its label.
             visible: Whether the layer is described as visible — and, for a kind this tier draws, applied:
@@ -1449,7 +1449,7 @@ class InteractiveMapBase:
         # A builder that says what it drew is described; one that does not is a caller's own object,
         # which has no description to write beyond the fact that it exists
         # (:mod:`digitalearth.base.custom`).
-        from digitalearth.interactive.renderer import DRAWN_KINDS
+        from digitalearth.interactive.render.renderer import DRAWN_KINDS
 
         self._guard_element_crs(layer, caller="add_layer")
         resolved = kind or custom_kind("holoviews")
@@ -1843,7 +1843,7 @@ class InteractiveMapBase:
     def _auto_cmap_for_band(self, dataset: Any, band: int, cmap: str | None) -> str:
         """Resolve a colormap from a raster band's **name**, without reading the band (#249).
 
-        The windowed reader (:meth:`~digitalearth.interactive.raster.RasterMixin.large_image`) must not
+        The windowed reader (:meth:`~digitalearth.interactive.builders.raster.RasterMixin.large_image`) must not
         materialise the array just to style it, so the autostyle lookup is fed a metadata-only
         :class:`Source`: :func:`~digitalearth.base.autostyle.auto_style` reads the variable name (and CF
         attributes), never the values, so a 1×1 placeholder array is enough to drive it.
@@ -1921,7 +1921,7 @@ class InteractiveMapBase:
         # may hand us the target name when the styled element is a lazy wrapper (a `DynamicMap` whose `.type`
         # is not yet resolved); otherwise we read it off the element, unwrapping a HoloMap/DynamicMap through
         # its resolved `.type` when it has one.
-        from digitalearth.interactive.style_fold import validate_opts
+        from digitalearth.interactive.render.style_fold import validate_opts
 
         resolved_name = element_name or type(element).__name__
         if element_name is None and resolved_name in ("DynamicMap", "HoloMap"):

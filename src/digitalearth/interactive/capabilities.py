@@ -12,7 +12,7 @@ option at all, so it is absent here with that reason.
 The `text` *channel* has no option either — HoloViews draws a label as a `Labels` value dimension rather than
 styling it — but it is not listed as absent, because the tier draws a `text` *layer* and one name cannot be
 both claimed and disclaimed. Which channels fold is
-:data:`~digitalearth.interactive.style_fold.UNEXPRESSIBLE`'s answer; this declaration answers what a caller can
+:data:`~digitalearth.interactive.render.style_fold.UNEXPRESSIBLE`'s answer; this declaration answers what a caller can
 ask the tier to draw.
 
 **Three capabilities here are conditional, and stay tier checks.** `basemap`, `coastlines` and the Natural
@@ -20,7 +20,7 @@ Earth `features` are declared — the tier draws all three — but only on the d
 because Bokeh renders tiles and GeoViews' Bokeh features in EPSG:3857 only and on any other CRS they would
 misalign with the pre-reprojected data silently. A `Capabilities` answers by name, not by the value of
 another parameter, so it cannot say "yes, when `crs=3857`";
-:meth:`~digitalearth.interactive.base.InteractiveMapBase._require_web_mercator` says it instead, at the six
+:meth:`~digitalearth.interactive.core.base.InteractiveMapBase._require_web_mercator` says it instead, at the six
 call sites that need it, and is named here so the two are read together.
 """
 

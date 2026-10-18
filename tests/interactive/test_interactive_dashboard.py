@@ -68,7 +68,7 @@ class TestDashboard:
 
     def test_the_widget_vocabulary_is_declared_data(self, m):
         """IN-9 — the builders are driven by the declared vocabulary, not an if/elif."""
-        from digitalearth.interactive.dashboard import _DASHBOARD_WIDGETS
+        from digitalearth.interactive.app.dashboard import _DASHBOARD_WIDGETS
 
         assert set(m._dashboard_widget_builders(pn)) == set(_DASHBOARD_WIDGETS)
 
@@ -211,7 +211,7 @@ class TestCrossTierPane:
 
     def test_missing_vtk_degrades_with_actionable_error(self, m, monkeypatch):
         """With vtk unavailable (find_spec → None), a clear ImportError naming [3d] surfaces."""
-        import digitalearth.interactive.dashboard as dash
+        import digitalearth.interactive.app.dashboard as dash
 
         monkeypatch.setattr(dash, "find_spec", lambda name: None, raising=False)
 
@@ -224,7 +224,7 @@ class TestCrossTierPane:
 
     def test_pane_built_when_vtk_present(self, m, monkeypatch):
         """When vtk is importable, the helper hands the render window to panel.pane.VTK."""
-        import digitalearth.interactive.dashboard as dash
+        import digitalearth.interactive.app.dashboard as dash
 
         monkeypatch.setattr(dash, "find_spec", lambda name: object(), raising=False)
         captured = {}
@@ -343,7 +343,7 @@ class TestBasemapWidgetIsWired:
 
     def test_dashboard_basemap_offers_the_shared_provider_list(self, m):
         """One provider list backs the dashboard widget and the layer-control switch."""
-        from digitalearth.interactive.dashboard import _BASEMAP_CHOICES
+        from digitalearth.interactive.app.dashboard import _BASEMAP_CHOICES
 
         app = m.dashboard(widgets=("basemap",))
         selects = [w for w in app.select(pn.widgets.Select) if w.name == "Basemap"]
@@ -649,7 +649,7 @@ class TestADynamicLayerIsClassifiedByWhatItDraws:
             sent `cmap` to every datashaded, trajectory and bundled-network layer. HoloViews refuses it —
             from inside the callback, where `param` logs the error and the map stops updating (review H5).
         """
-        from digitalearth.interactive.dashboard import _drawn_type
+        from digitalearth.interactive.app.dashboard import _drawn_type
 
         m = InteractiveMap(crs=4326)
         m.datashade(scattered)
@@ -675,7 +675,7 @@ class TestADynamicLayerIsClassifiedByWhatItDraws:
         Args:
             dataset: The raster fixture.
         """
-        from digitalearth.interactive.dashboard import _drawn_type
+        from digitalearth.interactive.app.dashboard import _drawn_type
 
         m = InteractiveMap(crs=dataset.epsg)
         m.large_image(dataset, cmap="magma")

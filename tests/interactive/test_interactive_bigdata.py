@@ -542,7 +542,7 @@ class TestAFigureThatCarriesNoReduction:
         """
         import datashader as ds
 
-        from digitalearth.interactive.bigdata import _resolve_aggregator
+        from digitalearth.interactive.builders.bigdata import _resolve_aggregator
 
         resolved = _resolve_aggregator(None, None)
         assert isinstance(resolved, type(ds.count())), (

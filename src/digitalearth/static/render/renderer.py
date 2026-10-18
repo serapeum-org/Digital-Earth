@@ -48,7 +48,7 @@ re-arranges the picture.
 
 **The drawer table is keyed by kind and then by recipe.** The kind vocabulary is shared with every other
 tier and names *what* a layer is, so it cannot say which builder made it — each builder records that under
-`via`, and that is the second key (the shape :mod:`digitalearth.interactive.renderer` settled on). Seven
+`via`, and that is the second key (the shape :mod:`digitalearth.interactive.render.renderer` settled on). Seven
 kinds are drawn more than one way, and these are all of them (measured off `_recipes()`):
 
 * `choropleth` — `cartogram`, `choropleth`, `grid_cells`, `hexbin`, `quadtree`, `voronoi`

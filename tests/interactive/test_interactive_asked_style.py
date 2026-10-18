@@ -8,8 +8,8 @@ time the options exist.
 This tier answers that question in **two** places, and both are checked here.
 
 * A keyword the caller writes in ``**opts`` is already theirs by construction — it lands in
-  :data:`~digitalearth.interactive.style_fold.ASKED_BUCKET`, which the lift reads unfiltered — and `opacity=`
-  reaches the same bucket through :func:`~digitalearth.interactive.vector.apply_opacity`, which writes it only
+  :data:`~digitalearth.interactive.render.style_fold.ASKED_BUCKET`, which the lift reads unfiltered — and `opacity=`
+  reaches the same bucket through :func:`~digitalearth.interactive.builders.vector.apply_opacity`, which writes it only
   when it was passed. Those need no record, and the probes below pin that they do not get one.
 * A builder *parameter* resolves its default before anything is recorded, and there are exactly two on this
   tier that drive a declared channel: ``points(size=)`` and ``field(opacity=)``. Those now default to

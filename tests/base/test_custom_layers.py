@@ -201,7 +201,7 @@ class TestWhatC7DoesNotCover:
     #: what lets all four tiers be asked from the engine-free base env.
     UNDRAWN_PER_TIER = [
         ("static", "digitalearth.static.render.renderer", "terrain"),
-        ("interactive", "digitalearth.interactive.renderer", "terrain"),
+        ("interactive", "digitalearth.interactive.render.renderer", "terrain"),
         ("3d", "digitalearth.three_d.render.renderer", "hexbin"),
         ("web", "digitalearth.web.renderer", "mesh"),
     ]

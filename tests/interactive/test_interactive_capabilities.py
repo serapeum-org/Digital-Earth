@@ -44,7 +44,7 @@ class TestTheDeclaration:
 
     def test_the_channels_are_the_ones_the_fold_measured(self):
         """#298 measured them against HoloViews, so the declaration repeats no guess."""
-        from digitalearth.interactive.style_fold import CHANNEL_OPTIONS
+        from digitalearth.interactive.render.style_fold import CHANNEL_OPTIONS
 
         folded = {entry.channel for entry in CHANNEL_OPTIONS}
         assert CAPABILITIES.channels == folded, (
@@ -63,7 +63,7 @@ class TestTheDeclaration:
             caught this: the tier draws `text` layers and cannot style a `text` channel, and those are two
             different questions.
         """
-        from digitalearth.interactive.style_fold import UNEXPRESSIBLE
+        from digitalearth.interactive.render.style_fold import UNEXPRESSIBLE
 
         assert "text" in CAPABILITIES.kinds, sorted(CAPABILITIES.kinds)
         assert "text" in UNEXPRESSIBLE, sorted(UNEXPRESSIBLE)
@@ -133,7 +133,7 @@ class TestEveryDeclaredKindIsDrawnOrKept:
             *exactly* that one name is what makes this catch a kind added to the declaration with no drawer
             and no builder: the seam test's "everything drawn is declared" passes happily for such a kind.
         """
-        from digitalearth.interactive.renderer import DRAWN_KINDS
+        from digitalearth.interactive.render.renderer import DRAWN_KINDS
 
         residue = sorted(CAPABILITIES.kinds - set(DRAWN_KINDS))
         assert residue == ["custom:holoviews"], residue
@@ -160,7 +160,10 @@ class TestEveryDeclaredChannelFolds:
             from an element's registered options — fails here rather than staying true on paper.
         """
         from digitalearth.base.spec import Symbology
-        from digitalearth.interactive.style_fold import CHANNEL_OPTIONS, fold_symbology
+        from digitalearth.interactive.render.style_fold import (
+            CHANNEL_OPTIONS,
+            fold_symbology,
+        )
 
         asked = {
             "color": "#ff0000",
@@ -184,7 +187,7 @@ class TestEveryDeclaredChannelFolds:
     def test_the_data_driven_channel_takes_a_column(self):
         """`color` is the one channel this tier can drive from a field, and it folds to the column."""
         from digitalearth.base.spec import Encoding, Scale, Symbology
-        from digitalearth.interactive.style_fold import fold_symbology
+        from digitalearth.interactive.render.style_fold import fold_symbology
 
         driven = Symbology(
             encodings={
@@ -203,7 +206,7 @@ class TestEveryDeclaredChannelFolds:
             resolved. Declaring `opacity` as `data_driven` would make this message a lie.
         """
         from digitalearth.base.spec import Encoding, Scale, Symbology
-        from digitalearth.interactive.style_fold import fold_symbology
+        from digitalearth.interactive.render.style_fold import fold_symbology
 
         assert "opacity" not in CAPABILITIES.data_driven, sorted(
             CAPABILITIES.data_driven
@@ -247,7 +250,7 @@ class TestAKindRefusalReadsTheDeclaration:
             unconditionally would be the hand-written sentence #294 exists to remove, wearing the
             declaration's clothes.
         """
-        from digitalearth.interactive.renderer import drawer_for
+        from digitalearth.interactive.render.renderer import drawer_for
 
         assert CAPABILITIES.reason("terrain") is None, CAPABILITIES.absent
         with pytest.raises(KeyError) as refused:
@@ -266,7 +269,7 @@ class TestAKindRefusalReadsTheDeclaration:
             against a refusal that ignores the declaration entirely. Handing the renderer a row that does
             declare one is what separates "reads the declaration" from "happens to say nothing".
         """
-        from digitalearth.interactive import renderer
+        from digitalearth.interactive.render import renderer
 
         monkeypatch.setattr(
             renderer,

@@ -59,7 +59,10 @@ BACKENDS = {
         "digitalearth.static.builders.base",
         "GeoLayerBase",
     ),
-    "digitalearth.interactive": ("digitalearth.interactive.base", "InteractiveMapBase"),
+    "digitalearth.interactive": (
+        "digitalearth.interactive.core.base",
+        "InteractiveMapBase",
+    ),
     "digitalearth.three_d": ("digitalearth.three_d.core.base", "Scene3DBase"),
     "digitalearth.web": ("digitalearth.web.base", "WebMapBase"),
 }
@@ -557,7 +560,7 @@ COMPOSED_CLASSES = {
     "digitalearth.static.map": ("Map",),
     "digitalearth.static.globe.textured_globe": ("TexturedGlobe",),
     "digitalearth.static.builders.base": ("GeoLayerBase",),
-    "digitalearth.interactive.base": ("InteractiveMapBase",),
+    "digitalearth.interactive.core.base": ("InteractiveMapBase",),
     "digitalearth.interactive.map": ("InteractiveMap",),
     "digitalearth.three_d.core.base": ("Scene3DBase",),
     "digitalearth.three_d.scene3d": ("Scene3D",),

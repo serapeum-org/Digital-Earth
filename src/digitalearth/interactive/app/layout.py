@@ -14,7 +14,7 @@ share their axes under Bokeh, so panning one pans the others — the linked-view
 
 from typing import Any
 
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.core.base import _require_holoviz
 
 __all__ = ["panels", "tabs", "swipe", "linked_views", "grid"]
 
@@ -76,7 +76,7 @@ def panels(*maps: Any, cols: int | None = None) -> Any:
         - Two maps become a two-panel layout (needs the engine):
             ```python
             >>> from digitalearth.interactive import InteractiveMap          # doctest: +SKIP
-            >>> from digitalearth.interactive.layout import panels           # doctest: +SKIP
+            >>> from digitalearth.interactive.app.layout import panels           # doctest: +SKIP
             >>> layout = panels(InteractiveMap().field(a), InteractiveMap().field(b))  # doctest: +SKIP
             >>> len(layout)                                                   # doctest: +SKIP
             2
@@ -184,7 +184,7 @@ def linked_views(detail: Any, overview: Any, *, axes: str = "both") -> Any:
         - An overview drives a detail on both axes (needs the engine):
             ```python
             >>> from digitalearth.interactive import InteractiveMap             # doctest: +SKIP
-            >>> from digitalearth.interactive.layout import linked_views        # doctest: +SKIP
+            >>> from digitalearth.interactive.app.layout import linked_views        # doctest: +SKIP
             >>> layout = linked_views(                                          # doctest: +SKIP
             ...     InteractiveMap().field(a), InteractiveMap().field(a)
             ... )
@@ -226,7 +226,7 @@ def grid(*maps: Any, cols: int = 2) -> Any:
         - Four maps become a 2x2 linked grid (needs the engine):
             ```python
             >>> from digitalearth.interactive import InteractiveMap             # doctest: +SKIP
-            >>> from digitalearth.interactive.layout import grid                # doctest: +SKIP
+            >>> from digitalearth.interactive.app.layout import grid                # doctest: +SKIP
             >>> gs = grid(m1, m2, m3, m4, cols=2)                               # doctest: +SKIP
             >>> sorted(gs.keys())                                               # doctest: +SKIP
             [(0, 0), (0, 1), (1, 0), (1, 1)]

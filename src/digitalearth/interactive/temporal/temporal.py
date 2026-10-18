@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.clim import sample_evenly, stack_scale
 from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Symbology
-from digitalearth.interactive.base import (
+from digitalearth.interactive.builders.raster import _engine_pair, _travelling_pair
+from digitalearth.interactive.core.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
@@ -24,7 +25,6 @@ from digitalearth.interactive.base import (
     describe_opts,
     held_props,
 )
-from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 
 
 def _iso_labels(labels: Sequence | None) -> list | None:
@@ -49,7 +49,7 @@ def _iso_labels(labels: Sequence | None) -> list | None:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -63,9 +63,9 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -130,13 +130,13 @@ class TemporalMixin(_MixinBase):
     supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
     ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
     ``InteractiveMap`` MRO exactly what it was before the annotation.
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     def _global_clim(self, collection: Any, band: int) -> tuple[float, float]:

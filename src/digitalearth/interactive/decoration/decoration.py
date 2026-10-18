@@ -35,13 +35,13 @@ from digitalearth.base.basemaps import (
 )
 from digitalearth.base.spec import Encoding, Guide, LayerSpec, Symbology
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.interactive.base import (
+from digitalearth.interactive.core.base import (
     _require_holoviz,
     _skips_off_limb,
     describe_opts,
     held_props,
 )
-from digitalearth.interactive.style_fold import (
+from digitalearth.interactive.render.style_fold import (
     GUIDE_KIND_KEY,
     GUIDE_LABELS_KEY,
     fold_guide,
@@ -53,7 +53,7 @@ from digitalearth.interactive.style_fold import (
 # raw URL, each refusing the other's input — so a name and a URL no longer arrive through one argument.
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -263,14 +263,14 @@ def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the recorded provider names no tile service :meth:`DecorationMixin._build_tiles`
             knows, or carries preset keywords a non-keyed provider takes none of.
         ImportError: when the recorded provider needs a credential and the map holds none for this layer.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -300,9 +300,9 @@ def draw_natural_earth(interactive_map: Any, _data: Any, layer: LayerSpec) -> An
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -325,14 +325,14 @@ def draw_labels(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
 
     Raises:
         KeyError: when the recorded column is absent from the reprojected frame. The builder refuses a
             column it can see is missing, but a features object that exposes no ``columns`` — a pyramids
             ``FeatureCollection`` rather than a GeoDataFrame — is only read here.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -363,9 +363,9 @@ def draw_text(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -391,9 +391,9 @@ def draw_coastlines(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -414,13 +414,13 @@ class DecorationMixin(_MixinBase):
     supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
     ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
     ``InteractiveMap`` MRO exactly what it was before the annotation.
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     def basemap(
@@ -1296,7 +1296,7 @@ class DecorationMixin(_MixinBase):
             key can explain — there are no values to label and no scale to sample — and the two answer as one
             here because the question a guide asks is whether there is anything to explain at all. The
             distinction matters: a caller's own ``color="#f00"`` is lifted onto the channel as a constant by
-            :func:`~digitalearth.interactive.style_fold.portable_encodings`, so "publishes a colour encoding"
+            :func:`~digitalearth.interactive.render.style_fold.portable_encodings`, so "publishes a colour encoding"
             on its own would have let a key onto a layer painted one colour.
         """
         encoding = self._layer_tree.get(layer_id).symbology.encoding("color")
@@ -1313,7 +1313,7 @@ class DecorationMixin(_MixinBase):
             The id of the layer the key describes.
 
             ``None`` means **the most recent layer that carries a colour encoding**. The care
-            :meth:`~digitalearth.interactive.base.InteractiveMapBase._last_layer_index` took is kept — the
+            :meth:`~digitalearth.interactive.core.base.InteractiveMapBase._last_layer_index` took is kept — the
             layer the last builder call added, not the one drawn on top, so a raster added after a coastline
             is still the one this reaches, and an underlay added after data does not take it over — and the
             rule is tightened by exactly one thing: a layer with no colour encoding cannot take it over
@@ -1392,27 +1392,27 @@ class DecorationMixin(_MixinBase):
         layer that comes back, and `to_dict()`/`from_dict()` carry it.
 
         Written **straight into the tree** rather than through
-        :meth:`~digitalearth.interactive.base.InteractiveMapBase.replace_layer`. A guide is description and
+        :meth:`~digitalearth.interactive.core.base.InteractiveMapBase.replace_layer`. A guide is description and
         nothing else — the drawn key is the `.opts()` the caller's method applies next — so there is no
         difference for a renderer to reconcile, and going through `_change` would restyle the layer, redraw
         it (re-reading its source), and hand back a *new* element: the styles
-        :attr:`~digitalearth.interactive.base.InteractiveMapBase._styles` files by ``id()`` and any stream a
+        :attr:`~digitalearth.interactive.core.base.InteractiveMapBase._styles` files by ``id()`` and any stream a
         `hover()` attached are both keyed on the object this would have replaced. The panel `figure_spec`
         reports is derived from the tree on every read, so it follows this write without being told.
 
         **What is recorded beside the guide is what the redraw needs.** A `Guide` says whether, what the key
         is called and where — never which furniture, because the tiers that draw one kind of key need no such
         field. This tier draws two, so the kind and a caller's own row labels go into the symbology's
-        ``props`` (:data:`~digitalearth.interactive.style_fold.GUIDE_KIND_KEY`,
-        :data:`~digitalearth.interactive.style_fold.GUIDE_LABELS_KEY`), which is what lets
-        :func:`~digitalearth.interactive.style_fold.fold_guide` build the same options again when the layer
+        ``props`` (:data:`~digitalearth.interactive.render.style_fold.GUIDE_KIND_KEY`,
+        :data:`~digitalearth.interactive.render.style_fold.GUIDE_LABELS_KEY`), which is what lets
+        :func:`~digitalearth.interactive.render.style_fold.fold_guide` build the same options again when the layer
         is drawn again — the static tier records the same two under the same names.
 
         Args:
             layer_id: The layer to explain. Already resolved and checked by :meth:`_guided_layer`.
             guide: What to say about its colour.
             kind: Which key it asks for — ``"colorbar"`` or ``"legend"``
-                (:data:`~digitalearth.interactive.style_fold.GUIDE_KINDS`).
+                (:data:`~digitalearth.interactive.render.style_fold.GUIDE_KINDS`).
             labels: The caller's own row labels, or `None` to leave the derived one. `None` also *clears*
                 labels an earlier call recorded, so one call's override does not outlive it.
 
@@ -1445,7 +1445,7 @@ class DecorationMixin(_MixinBase):
                 ``hv.Image`` takes ``colorbar``, ``clabel`` and ``show_legend`` but **not** ``legend_opts``
                 or ``legend_labels`` (measured against the registered Bokeh options), because a Bokeh legend
                 is built from an overlay's labelled members and a raster contributes no label to name. Saying
-                so is the choice :func:`~digitalearth.interactive.renderer._show` already made for the same
+                so is the choice :func:`~digitalearth.interactive.render.renderer._show` already made for the same
                 shape of question — a caller who asked for something the engine cannot draw hears about it
                 rather than watching it vanish.
         """

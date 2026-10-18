@@ -1,7 +1,7 @@
 """Chart data preparation — turning a column name or array-like into plottable values.
 
 Shared by every backend that draws charts. Lifted out of the static backend's ``charts`` module, which is
-where these lived while :mod:`digitalearth.interactive.charts` imported them across the backend boundary —
+where these lived while :mod:`digitalearth.interactive.charts.charts` imported them across the backend boundary —
 the clearest sign they were shared logic in the wrong place. Pure numpy/pandas: no renderer here.
 
 The four helpers split by what the chart needs from the data:

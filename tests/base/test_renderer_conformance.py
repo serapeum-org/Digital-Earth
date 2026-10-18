@@ -1127,7 +1127,7 @@ class InteractiveContract(RendererContract):
         Returns:
             The drawable kinds.
         """
-        from digitalearth.interactive.renderer import DRAWN_KINDS
+        from digitalearth.interactive.render.renderer import DRAWN_KINDS
 
         return DRAWN_KINDS
 
@@ -1140,7 +1140,7 @@ class InteractiveContract(RendererContract):
         Returns:
             The drawer.
         """
-        from digitalearth.interactive.renderer import drawer_for
+        from digitalearth.interactive.render.renderer import drawer_for
 
         return drawer_for(kind)
 
@@ -1356,7 +1356,7 @@ class TestStaticRendererConformance(RendererConformance):
 _RENDERERS_THAT_ROLL_BACK = (
     "digitalearth.static.render.renderer",
     "digitalearth.web.renderer",
-    "digitalearth.interactive.renderer",
+    "digitalearth.interactive.render.renderer",
 )
 
 

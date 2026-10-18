@@ -241,7 +241,7 @@ class TestM8TheBigDataCutoffIsOneNumberAndOneRule:
             Two literals meant either tier could be retuned alone, silently moving the size at which a layer
             changes rendering strategy on one backend only.
         """
-        from digitalearth.interactive.base import (
+        from digitalearth.interactive.core.base import (
             DEFAULT_BIG_DATA_THRESHOLD as interactive_default,
         )
         from digitalearth.web.base import DEFAULT_BIG_DATA_THRESHOLD as web_default
@@ -256,7 +256,7 @@ class TestM8TheBigDataCutoffIsOneNumberAndOneRule:
             Reading the value alone cannot tell a shared constant from a literal that happens to match, which
             is exactly the state the finding described. Parsing the module is what distinguishes them.
         """
-        tree = _tree("interactive/base.py")
+        tree = _tree("interactive/core/base.py")
         assert "DEFAULT_BIG_DATA_THRESHOLD" not in _assigned_names(tree)
         assert "DEFAULT_BIG_DATA_THRESHOLD" in _imports_from(
             tree, "digitalearth.base.bigdata"
@@ -308,7 +308,7 @@ class TestM9TheAnimationRateIsOneConstant:
         ("module", "attribute"),
         [
             ("digitalearth.static.builders.animation", "DEFAULT_FPS"),
-            ("digitalearth.interactive.animation", "DEFAULT_FPS"),
+            ("digitalearth.interactive.temporal.animation", "DEFAULT_FPS"),
             ("digitalearth.web.export", "DEFAULT_FPS"),
         ],
         ids=["static", "interactive", "web"],
@@ -373,7 +373,7 @@ class TestM9TheAnimationRateIsOneConstant:
         "module",
         [
             "static/builders/animation.py",
-            "interactive/animation.py",
+            "interactive/temporal/animation.py",
             "three_d/temporal/animation.py",
             "web/export.py",
         ],
@@ -417,7 +417,7 @@ class TestL11TheColormapSamplerIsShared:
             Its ``_cmap_hex`` was a stop-for-stop copy of the web tier's, with a docstring promising they
             matched — a promise nothing enforced.
         """
-        tree = _tree("interactive/vector.py")
+        tree = _tree("interactive/builders/vector.py")
         assert "sample_cmap" in _imports_from(tree, "digitalearth.base.symbology")
         assert "_cmap_hex" not in _function_names(tree)
 

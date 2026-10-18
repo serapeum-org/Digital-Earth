@@ -17,7 +17,7 @@ import pytest
 
 from digitalearth.base.sources.source import Source
 from digitalearth.interactive import InteractiveMap
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.core.base import _require_holoviz
 from tests.test_no_competitor_imports import (
     FORBIDDEN,
     _top_level_imports,
@@ -217,7 +217,7 @@ class TestStyledAndHelpers:
         """A masked array becomes float with NaN at masked cells; plain arrays pass through."""
         import numpy as np
 
-        from digitalearth.interactive.base import _masked_to_nan
+        from digitalearth.interactive.core.base import _masked_to_nan
 
         masked = np.ma.masked_array([1.0, 2.0, 3.0], mask=[False, True, False])
         out = _masked_to_nan(masked)
@@ -291,7 +291,7 @@ class TestStyleReadBack:
         """``_styled`` calls ``_require_holoviz()`` for its error, without binding names it never uses."""
         import inspect
 
-        from digitalearth.interactive.base import InteractiveMapBase
+        from digitalearth.interactive.core.base import InteractiveMapBase
 
         source = inspect.getsource(InteractiveMapBase._styled)
         assert "gv, hv = _require_holoviz()" not in source, (
@@ -427,17 +427,17 @@ class TestConstructionDefaults:
             The MRO must contain every mixin the architecture promises, so later DI tasks
             can land methods on them without touching the composition.
         """
-        from digitalearth.interactive.animation import AnimationMixin
-        from digitalearth.interactive.base import InteractiveMapBase
-        from digitalearth.interactive.bigdata import BigDataMixin
-        from digitalearth.interactive.dashboard import DashboardMixin
-        from digitalearth.interactive.decoration import DecorationMixin
-        from digitalearth.interactive.interaction import InteractionMixin
-        from digitalearth.interactive.live import LiveMixin
-        from digitalearth.interactive.projection import ProjectionMixin
-        from digitalearth.interactive.raster import RasterMixin
-        from digitalearth.interactive.temporal import TemporalMixin
-        from digitalearth.interactive.vector import VectorMixin
+        from digitalearth.interactive.app.dashboard import DashboardMixin
+        from digitalearth.interactive.app.interaction import InteractionMixin
+        from digitalearth.interactive.app.live import LiveMixin
+        from digitalearth.interactive.builders.bigdata import BigDataMixin
+        from digitalearth.interactive.builders.raster import RasterMixin
+        from digitalearth.interactive.builders.vector import VectorMixin
+        from digitalearth.interactive.core.base import InteractiveMapBase
+        from digitalearth.interactive.decoration.decoration import DecorationMixin
+        from digitalearth.interactive.temporal.animation import AnimationMixin
+        from digitalearth.interactive.temporal.temporal import TemporalMixin
+        from digitalearth.interactive.view.projection import ProjectionMixin
 
         mro = InteractiveMap.__mro__
         for cls in (

@@ -49,7 +49,7 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
-from digitalearth.interactive.base import (
+from digitalearth.interactive.core.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
@@ -58,14 +58,14 @@ from digitalearth.interactive.base import (
     describe_opts,
     held_props,
 )
-from digitalearth.interactive.style_fold import TIER_BUCKET, limits_scale
+from digitalearth.interactive.render.style_fold import TIER_BUCKET, limits_scale
 
 #: What an unstyled colour-mapped raster is drawn at on this tier. The value left `field`'s signature with
 #: #334, for the reason `POINT_SIZE` gives on the vector side, and this is where it lives instead.
 FIELD_ALPHA = 1.0
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -97,10 +97,10 @@ def coloured_by(data: Any, band: int = DEFAULT_BAND) -> str:
     Order 24 hangs a colour key on the layer's own colour encoding, and an encoding bound to a field needs
     that field's name at the moment the layer is *described* — which is before any drawer has run. The drawer
     reads the name off the reprojected :class:`~digitalearth.base.sources.source.Source`
-    (:meth:`~digitalearth.interactive.base.InteractiveMapBase._vdim_name`), and reprojecting here to ask the
+    (:meth:`~digitalearth.interactive.core.base.InteractiveMapBase._vdim_name`), and reprojecting here to ask the
     same question would do the drawer's work a second time and throw the result away — the duplication review
     M8 took out of the vector builders. So the name is read off the raster's own metadata instead, the way
-    :meth:`~digitalearth.interactive.base.InteractiveMapBase._auto_cmap_for_band` already reads a band name to
+    :meth:`~digitalearth.interactive.core.base.InteractiveMapBase._auto_cmap_for_band` already reads a band name to
     resolve a colormap without touching the band.
 
     The shared :func:`~digitalearth.base.sources.band_field_name` reads it off the raster's own metadata
@@ -108,7 +108,7 @@ def coloured_by(data: Any, band: int = DEFAULT_BAND) -> str:
     throw the result away — the duplication review M8 took out of the vector builders.
 
     The name agrees by construction with the drawn element's value dimension
-    (:meth:`~digitalearth.interactive.base.InteractiveMapBase._vdim_name`): the extractor records a
+    (:meth:`~digitalearth.interactive.core.base.InteractiveMapBase._vdim_name`): the extractor records a
     `Dataset`'s ``band_names[band - 1]`` as the source's ``variable`` and a `NetCDF`'s first variable name
     likewise, and those are exactly what is read here. Measured on ``examples/data/acc4000.tif``: this answers
     ``'Band_1'`` and the drawn ``hv.Image``'s value dimension is ``'Band_1'``.
@@ -154,7 +154,7 @@ def _engine_pair(pair: Any) -> Any:
     """Return a recorded ``(low, high)`` in the spelling HoloViews declares the option with.
 
     Args:
-        pair: The recorded value, thawed by :func:`~digitalearth.interactive.base.held_props`.
+        pair: The recorded value, thawed by :func:`~digitalearth.interactive.core.base.held_props`.
 
     Returns:
         A tuple for a two-item sequence, and the value untouched otherwise — including `None`, which is a
@@ -190,7 +190,7 @@ def _class_options(classes: BandClasses) -> dict[str, Any]:
             ```python
             >>> import numpy as np
             >>> from digitalearth.base.raster_classes import classify_band
-            >>> from digitalearth.interactive.raster import _class_options
+            >>> from digitalearth.interactive.builders.raster import _class_options
             >>> options = _class_options(classify_band(np.arange(10.0), "equal_interval", 3, "viridis"))
             >>> options["color_levels"], options["clim"]
             ([0.0, 3.0, 6.0, 9.0], (0.0, 9.0))
@@ -200,7 +200,7 @@ def _class_options(classes: BandClasses) -> dict[str, Any]:
             ```python
             >>> import numpy as np
             >>> from digitalearth.base.raster_classes import classify_band
-            >>> from digitalearth.interactive.raster import _class_options
+            >>> from digitalearth.interactive.builders.raster import _class_options
             >>> options = _class_options(classify_band(np.array([1, 4, 4]), "categorical", None, None))
             >>> options["color_levels"], options["colorbar_opts"]["ticker"].ticks, options["cmap"]
             ([0.5, 2.5, 4.5], [1, 4], ['#1f77b4', '#ff7f0e'])
@@ -263,7 +263,7 @@ def _band_classes(
             >>> import numpy as np
             >>> from digitalearth.base.sources import get_source
             >>> from digitalearth.interactive import InteractiveMap
-            >>> from digitalearth.interactive.raster import _band_classes
+            >>> from digitalearth.interactive.builders.raster import _band_classes
             >>> src = get_source(np.arange(10.0).reshape(2, 5), x=np.arange(5.0), y=np.array([1.0, 0.0]))
             >>> classes = _band_classes(InteractiveMap(), src, 1, "equal_interval", 3, None)
             >>> classes.edges, classes.colors
@@ -275,7 +275,7 @@ def _band_classes(
             >>> import numpy as np
             >>> from digitalearth.base.sources import get_source
             >>> from digitalearth.interactive import InteractiveMap
-            >>> from digitalearth.interactive.raster import _band_classes
+            >>> from digitalearth.interactive.builders.raster import _band_classes
             >>> codes = np.array([[1.0, 1.0, 2.0], [3.0, 3.0, 2.0]])
             >>> src = get_source(codes, x=np.array([0.0, 1.0, 2.0]), y=np.array([1.0, 0.0]))
             >>> classes = _band_classes(InteractiveMap(), src, 1, "categorical", None, None)
@@ -312,9 +312,9 @@ def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     props = held_props(interactive_map, layer)
     src = interactive_map._to_display_source(data, band=props["band"])
@@ -355,7 +355,7 @@ def draw_rgb(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the recorded ``limits`` do not hold one ``(lo, hi)`` pair per channel. The band
@@ -363,7 +363,7 @@ def draw_rgb(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
             here, where the stretch that reads them runs.
     """
     from digitalearth.base.sources import get_stack
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -399,9 +399,9 @@ def draw_quadmesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -432,9 +432,9 @@ def draw_contours(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     # Guarded before holoviews is reached, so a missing stack is refused by the message that names the
     # extra to install rather than by holoviews' own ImportError.
@@ -484,9 +484,9 @@ def draw_large_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     props = held_props(interactive_map, layer)
     element, style = interactive_map._draw_large_image(data, props)

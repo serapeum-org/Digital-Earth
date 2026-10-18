@@ -198,7 +198,7 @@ class TemporalMixin(_MixinBase):
             digitalearth.web.raster.RasterMixin.field: draw a single raster with no time dimension.
             digitalearth.static.builders.animation.AnimationMixin.animate: the matplotlib tier's raster
                 time-stack animation.
-            digitalearth.interactive.temporal.TemporalMixin.timecube: the interactive tier's raster
+            digitalearth.interactive.temporal.temporal.TemporalMixin.timecube: the interactive tier's raster
                 time cube.
         """
         import pandas as pd

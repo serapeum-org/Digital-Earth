@@ -20,7 +20,7 @@ pytest.importorskip("geoviews")
 
 import holoviews as hv  # noqa: E402
 
-from digitalearth.interactive.style_fold import (  # noqa: E402
+from digitalearth.interactive.render.style_fold import (  # noqa: E402
     CHANNEL_KEYWORDS,
     CHANNEL_OPTIONS,
     INTERACTIVE_STYLE_SCHEMA,
@@ -265,7 +265,7 @@ class TestTheImportCost:
             Run in a subprocess, since this session has HoloViews loaded already.
         """
         code = (
-            "import sys; import digitalearth.interactive.style_fold as fold;"
+            "import sys; import digitalearth.interactive.render.style_fold as fold;"
             "print('holoviews' in sys.modules, len(fold.CHANNEL_OPTIONS) > 0)"
         )
         result = subprocess.run(

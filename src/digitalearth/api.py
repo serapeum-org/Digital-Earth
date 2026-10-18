@@ -1228,7 +1228,7 @@ def _add_interactive_key(scene: Any, *, visible: bool) -> None:
     `CategoricalColorMapper` and draws no ``ColorBar`` from at all: rendering one with ``colorbar=True``
     produces zero bars, while ``legend()`` produces one keyed box. So the builder's ``colorbar: False`` is
     load-bearing and stays; what changes is that the key asked for is the one the scale calls for, which is
-    :func:`~digitalearth.interactive.style_fold.guide_kind`'s question.
+    :func:`~digitalearth.interactive.render.style_fold.guide_kind`'s question.
 
     Args:
         scene: The `InteractiveMap` whose most recent colour-driven layer the key describes.
@@ -1238,7 +1238,7 @@ def _add_interactive_key(scene: Any, *, visible: bool) -> None:
     Returns:
         Nothing. Both methods return the map itself, as the Core declares.
     """
-    from digitalearth.interactive.style_fold import guide_kind
+    from digitalearth.interactive.render.style_fold import guide_kind
 
     # A layer whose colour varies with nothing — plain `points`, an outline-only `polygons`, a map with no
     # data layer at all — has no key to speak about, and `colorbar=False` asking for a map without one is

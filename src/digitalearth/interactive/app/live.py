@@ -12,7 +12,7 @@ CRS, like a hand-built element handed to ``add_layer`` — a live feed is pushed
 pyramids on every tick, so reproject once at the source.
 
 A layer's stream goes when its layer does: removing the layer, or drawing a different figure over it, drops
-the stream, and :meth:`~digitalearth.interactive.base.InteractiveMapBase.close` lets every live stream go with
+the stream, and :meth:`~digitalearth.interactive.core.base.InteractiveMapBase.close` lets every live stream go with
 the rest of the map's data. After any of those, :meth:`LiveMixin.push`/:meth:`LiveMixin.live_stream` refuse
 the id even though a closed map still renders the layer's last frame — a push is a data operation, and the
 data has been let go.
@@ -20,14 +20,14 @@ data has been let go.
 
 from typing import TYPE_CHECKING, Any, Self
 
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.core.base import _require_holoviz
 
 #: The element kinds a live layer can draw — geospatial point feeds and growing tracks.
 _LIVE_KINDS: tuple[str, ...] = ("points", "path")
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -42,7 +42,7 @@ class LiveMixin(_MixinBase):
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     def live(

@@ -16,10 +16,10 @@ from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.spec import DEFAULT_BAND
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.core.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -33,13 +33,13 @@ class InteractionMixin(_MixinBase):
     supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
     ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
     ``InteractiveMap`` MRO exactly what it was before the annotation.
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     def hover(
@@ -59,7 +59,7 @@ class InteractionMixin(_MixinBase):
                 ``None`` (the default) configures the layer the caller added last, which is not
                 ``layers[-1]`` whenever that layer is drawn beneath an overlay such as coastlines; an
                 underlay added after data does not take it over (see
-                :meth:`~digitalearth.interactive.base.InteractiveMapBase._last_layer_index`, which is that
+                :meth:`~digitalearth.interactive.core.base.InteractiveMapBase._last_layer_index`, which is that
                 rule. The colour keys read it too, but tighten it: a layer whose colour varies with nothing
                 cannot take a key over, and a hover has no such condition — any layer can be hovered).
 

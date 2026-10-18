@@ -36,7 +36,7 @@ pytest.importorskip(
 from digitalearth.base.crs import OffLimbError  # noqa: E402
 from digitalearth.base.custom import MissingObject, held_object  # noqa: E402
 from digitalearth.interactive import InteractiveMap  # noqa: E402
-from digitalearth.interactive.base import _skips_off_limb  # noqa: E402
+from digitalearth.interactive.core.base import _skips_off_limb  # noqa: E402
 
 #: The layer both refusals name, so the two messages are read side by side.
 LAYER = "wells"

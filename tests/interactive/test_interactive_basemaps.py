@@ -73,14 +73,14 @@ class TestUpperPlaceholders:
             and the other query parameters do not. The name previously claimed only the tile-coordinate
             *path* was touched, which the second ``{z}`` contradicts.
         """
-        from digitalearth.interactive.decoration import _upper_placeholders
+        from digitalearth.interactive.decoration.decoration import _upper_placeholders
 
         out = _upper_placeholders("https://a/{z}/{x}/{y}.png?api_key=abc&m={z}x")
         assert out == "https://a/{Z}/{X}/{Y}.png?api_key=abc&m={Z}x", out
 
     def test_no_other_placeholder_is_touched(self):
         """``{mosaic}`` and ``{api_key}`` are the tile service's, not Bokeh's, and must survive as they are."""
-        from digitalearth.interactive.decoration import _upper_placeholders
+        from digitalearth.interactive.decoration.decoration import _upper_placeholders
 
         out = _upper_placeholders("https://a/{mosaic}/{z}/{x}/{y}?k={api_key}")
         assert out == "https://a/{mosaic}/{Z}/{X}/{Y}?k={api_key}", out
@@ -171,7 +171,7 @@ class TestTheAttributionHookLeavesOtherRenderersAlone:
             A glyph renderer has no ``tile_source``; assigning an attribution to one would either fail
             or invent an attribute on someone else's object.
         """
-        from digitalearth.interactive.decoration import _attribution_hook
+        from digitalearth.interactive.decoration.decoration import _attribution_hook
 
         class TileRenderer:
             """Stands in for a Bokeh tile renderer."""
@@ -226,7 +226,7 @@ class TestAProviderWhoseOwnFieldsAreInItsTemplate:
             returning the last spelling tried, or the provider itself, writes the credential into every
             saved figure and every notebook that holds one.
         """
-        from digitalearth.interactive.decoration import _provider_description
+        from digitalearth.interactive.decoration.decoration import _provider_description
 
         assert _provider_description(self._leaky_provider()) is None, (
             "a provider with no credential-free spelling must be described as nothing"
@@ -241,7 +241,7 @@ class TestAProviderWhoseOwnFieldsAreInItsTemplate:
         """
         import xyzservices
 
-        from digitalearth.interactive.decoration import _provider_description
+        from digitalearth.interactive.decoration.decoration import _provider_description
 
         template = "https://tiles.example/{z}/{x}/{y}.png?k={apikey}"
         ordinary = xyzservices.TileProvider(
@@ -279,7 +279,7 @@ class TestAProviderDescribedByItsNameDrawsBackFromTheFigure:
         import xyzservices
         import xyzservices.providers as xyz
 
-        from digitalearth.interactive.decoration import _provider_description
+        from digitalearth.interactive.decoration.decoration import _provider_description
 
         found = {}
 

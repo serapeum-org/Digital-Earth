@@ -17,7 +17,7 @@ import pytest
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.interactive import InteractiveMap
-from digitalearth.interactive.renderer import (
+from digitalearth.interactive.render.renderer import (
     DRAWN_KINDS,
     Renderer,
     _is_shown,
@@ -170,7 +170,7 @@ class TestAKindThisTierDoesNotDraw:
             Such a kind would raise a bare `KeyError` on a dict lookup, where the message that names the
             tier and its kinds belongs.
         """
-        from digitalearth.interactive import renderer
+        from digitalearth.interactive.render import renderer
 
         monkeypatch.setattr(renderer, "DRAWN_KINDS", DRAWN_KINDS + ("nonesuch",))
         with pytest.raises(KeyError, match="drawer table and DRAWN_KINDS disagree"):
@@ -186,7 +186,7 @@ class TestAKindThisTierDoesNotDraw:
             A kind in the table but not in `DRAWN_KINDS` is refused with a message that is simply false —
             the tier says it cannot draw something it has a drawer for.
         """
-        from digitalearth.interactive import renderer
+        from digitalearth.interactive.render import renderer
 
         monkeypatch.setattr(renderer, "DRAWN_KINDS", ("points",))
         with pytest.raises(KeyError, match="drawer table and DRAWN_KINDS disagree"):

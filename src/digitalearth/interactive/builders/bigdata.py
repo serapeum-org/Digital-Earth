@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING, Any, Self
 from loguru import logger
 
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.interactive.base import (
+from digitalearth.interactive.builders.raster import _engine_pair, _travelling_pair
+from digitalearth.interactive.core.base import (
     _require_holoviz,
     cmap_name,
     describe,
@@ -25,7 +26,6 @@ from digitalearth.interactive.base import (
     held_props,
     style_value,
 )
-from digitalearth.interactive.raster import _engine_pair, _travelling_pair
 
 #: Datashader reduction names accepted as ``aggregator=`` strings. ``count`` needs no column; the rest
 #: aggregate the ``column=`` argument; ``count_cat`` blends per-category counts (DI.2a).
@@ -120,7 +120,7 @@ def _color_key(recorded: Any) -> Any:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -170,7 +170,7 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the recorded reduction is not one :func:`_resolve_aggregator` knows, or is one
@@ -178,7 +178,7 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from holoviews.operation.datashader import rasterize as _rasterize
 
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -216,7 +216,7 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the recorded reduction is not one :func:`_resolve_aggregator` knows, or is one
@@ -224,7 +224,7 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from holoviews.operation.datashader import datashade as _datashade
 
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -272,12 +272,12 @@ def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
     from holoviews.operation.datashader import datashade as _datashade
     from holoviews.operation.datashader import dynspread as _dynspread
 
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -327,13 +327,13 @@ class BigDataMixin(_MixinBase):
     supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
     ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
     ``InteractiveMap`` MRO exactly what it was before the annotation.
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     def _as_element(self, layer: Any, *, method: str, vdims: list | None = None) -> Any:

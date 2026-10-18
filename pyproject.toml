@@ -302,7 +302,7 @@ module = "digitalearth.web.vector"  # 9 errors at baseline
 disable_error_code = ["attr-defined", "list-item", "no-any-return", "no-redef"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.vector"  # 8 errors at baseline
+module = "digitalearth.interactive.builders.vector"  # 8 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
 
 [[tool.mypy.overrides]]
@@ -323,15 +323,15 @@ module = "digitalearth.web.bigdata"  # 4 errors at baseline
 disable_error_code = ["attr-defined", "misc", "type-var"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.base"  # 3 errors at baseline
+module = "digitalearth.interactive.core.base"  # 3 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.bigdata"  # 3 errors at baseline
+module = "digitalearth.interactive.builders.bigdata"  # 3 errors at baseline
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.raster"  # 3 errors at baseline
+module = "digitalearth.interactive.builders.raster"  # 3 errors at baseline
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
@@ -364,11 +364,11 @@ module = "digitalearth.base.crs"  # 2 errors at baseline
 disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.decoration"  # 2 errors at baseline
+module = "digitalearth.interactive.decoration.decoration"  # 2 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.temporal"  # 2 errors at baseline
+module = "digitalearth.interactive.temporal.temporal"  # 2 errors at baseline
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]

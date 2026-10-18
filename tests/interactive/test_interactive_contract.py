@@ -28,10 +28,10 @@ from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources import Source
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.interactive import InteractiveMap
-from digitalearth.interactive import base as interactive_base
-from digitalearth.interactive import decoration as interactive_decoration
-from digitalearth.interactive import raster as interactive_raster
-from digitalearth.interactive import vector as interactive_vector
+from digitalearth.interactive.builders import raster as interactive_raster
+from digitalearth.interactive.builders import vector as interactive_vector
+from digitalearth.interactive.core import base as interactive_base
+from digitalearth.interactive.decoration import decoration as interactive_decoration
 
 hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
@@ -544,7 +544,7 @@ class TestBasemapDefault:
 
     def test_the_dashboard_offers_the_default_first(self):
         """The basemap switcher's first (=selected) choice is the same shared default."""
-        from digitalearth.interactive.dashboard import _BASEMAP_CHOICES
+        from digitalearth.interactive.app.dashboard import _BASEMAP_CHOICES
 
         assert _BASEMAP_CHOICES[0] == interactive_decoration.DEFAULT_BASEMAP_PROVIDER
         assert len(_BASEMAP_CHOICES) == len(set(_BASEMAP_CHOICES)), _BASEMAP_CHOICES

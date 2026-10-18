@@ -28,8 +28,8 @@ from digitalearth.base.controls import (
     resolved_controls,
 )
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.interactive.base import _require_holoviz
-from digitalearth.interactive.decoration import DEFAULT_BASEMAP_PROVIDER
+from digitalearth.interactive.core.base import _require_holoviz
+from digitalearth.interactive.decoration.decoration import DEFAULT_BASEMAP_PROVIDER
 
 #: Basemap providers offered by the basemap switchers — the **one** list behind both the dashboard's
 #: ``"basemap"`` widget and the layer-control switch, so the two cannot offer different providers.
@@ -158,7 +158,7 @@ class ExportPlan:
     Examples:
         - A colormap Select (8 options) and a sampled opacity slider (3) make 24 pre-rendered states:
             ```python
-            >>> from digitalearth.interactive.dashboard import ExportPlan
+            >>> from digitalearth.interactive.app.dashboard import ExportPlan
             >>> plan = ExportPlan(widgets=(("cmap", 8), ("alpha", 3)), total_states=24, max_states=1000)
             >>> plan.total_states, plan.embeddable
             (24, True)
@@ -216,7 +216,7 @@ class Deployment:
     Examples:
         - A threaded single-process deployment that refreshes every half-second:
             ```python
-            >>> from digitalearth.interactive.dashboard import Deployment
+            >>> from digitalearth.interactive.app.dashboard import Deployment
             >>> plan = Deployment(title="rain", threaded=True, num_procs=1, has_onload=True, periodic_ms=500)
             >>> plan.live, plan.periodic_ms
             (True, 500)
@@ -308,7 +308,7 @@ def _require_panel() -> Any:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -322,13 +322,13 @@ class DashboardMixin(_MixinBase):
     supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
     ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
     ``InteractiveMap`` MRO exactly what it was before the annotation.
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     def dashboard(
@@ -546,7 +546,7 @@ class DashboardMixin(_MixinBase):
         """Compose ``obj`` over the ``provider`` tile layer, replacing any basemap already in it.
 
         The provider name is resolved through the same
-        :meth:`~digitalearth.interactive.decoration.DecorationMixin._build_tiles` path ``tiles()`` uses, so
+        :meth:`~digitalearth.interactive.decoration.decoration.DecorationMixin._build_tiles` path ``tiles()`` uses, so
         the widget and the builder agree on provider names. Any tile element already in ``obj`` is dropped
         first — stacking a second basemap *underneath* the old one is what would make the switcher look
         inert on a map that already called ``tiles()``.
@@ -920,7 +920,7 @@ class DashboardMixin(_MixinBase):
         Positions, because the human-readable toggle label still shows the build-time index (``"0: Image"``);
         the control's *value*, though, is the layer id the position maps to (IN-1), so
         :meth:`_compose_visible_layers` reads ids, never a parsed position. ``self.layers`` and
-        :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` are built in step — each element
+        :attr:`~digitalearth.interactive.core.base.InteractiveMapBase.layer_ids` are built in step — each element
         is inserted at the position its id holds in the tree — so one indexes the other.
 
         Args:
@@ -1018,7 +1018,7 @@ class DashboardMixin(_MixinBase):
 
         Args:
             layers: The layers to offer, by id from
-                :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids`; ``None`` (default)
+                :attr:`~digitalearth.interactive.core.base.InteractiveMapBase.layer_ids`; ``None`` (default)
                 offers every layer on the map. A layer left out is hidden from the switch, **not** from the
                 map — it stays in the composed overlay whatever the toggles say, which is what the web
                 tier's ``layers=`` means too.
@@ -1162,7 +1162,7 @@ class DashboardMixin(_MixinBase):
         """Build the per-layer up/down reorder buttons for ``layer_control(reorder=True)`` (IN-1).
 
         Each offered layer gets a ``▲``/``▼`` pair whose click moves it one place within its band
-        (:meth:`~digitalearth.interactive.base.InteractiveMapBase.move_layer`) and then re-triggers the
+        (:meth:`~digitalearth.interactive.core.base.InteractiveMapBase.move_layer`) and then re-triggers the
         composed view by poking ``trigger`` — the visibility group the bound compose function reads — so the
         overlay re-stacks without rebuilding the control. A move past either end is a no-op: the top end
         overshoots the list and ``move_layer`` raises ``IndexError``, which is caught; the bottom end would
@@ -1263,7 +1263,7 @@ class DashboardMixin(_MixinBase):
         """Compose the layers named in ``shown`` into a styled overlay (the layer-control view).
 
         The opacity is applied over the style the builders recorded for **each** of those layers (read back
-        through :meth:`~digitalearth.interactive.base.InteractiveMapBase.style_of`), so hiding and re-showing
+        through :meth:`~digitalearth.interactive.core.base.InteractiveMapBase.style_of`), so hiding and re-showing
         a layer cannot quietly drop its ``cmap``/``clim`` — nor repaint it in another layer's colours, which
         is what merging them into one spec did (#300).
 
@@ -1468,10 +1468,10 @@ class DashboardMixin(_MixinBase):
         """Encode the **whole figure** into a shareable URL, not four hardcoded names (IN-14).
 
         Where :meth:`share` syncs a fixed handful of view parameters into a running server's URL, this
-        serialises the entire :attr:`~digitalearth.interactive.base.InteractiveMapBase.figure_spec` — every
+        serialises the entire :attr:`~digitalearth.interactive.core.base.InteractiveMapBase.figure_spec` — every
         layer, its source, its symbology and the view — into a URL-safe ``?state=`` blob, so a link
         reconstructs the map exactly through
-        :meth:`~digitalearth.interactive.base.InteractiveMapBase.from_share_url`. It needs no server, which is
+        :meth:`~digitalearth.interactive.core.base.InteractiveMapBase.from_share_url`. It needs no server, which is
         what makes it the general answer the four-name ``share`` is not.
 
         The figure must be one that can be *written*: a layer built from an in-memory ``FeatureCollection`` or

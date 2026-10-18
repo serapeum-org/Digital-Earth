@@ -32,7 +32,7 @@ from digitalearth.base.spec import (
     Symbology,
 )
 from digitalearth.base.symbology import sample_cmap
-from digitalearth.interactive.base import (
+from digitalearth.interactive.core.base import (
     _masked_to_nan,
     _require_holoviz,
     _skips_off_limb,
@@ -43,10 +43,10 @@ from digitalearth.interactive.base import (
     held_props,
     style_value,
 )
-from digitalearth.interactive.style_fold import limits_scale
+from digitalearth.interactive.render.style_fold import limits_scale
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -259,9 +259,9 @@ def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     props = held_props(interactive_map, layer)
     gdf = interactive_map._display_gdf(data, method=layer.kind)
@@ -298,7 +298,7 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
 
     Raises:
         KeyError: when the recorded ``column`` is absent from the reprojected frame — the value column a
@@ -306,7 +306,7 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     import numpy as np
 
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -363,9 +363,9 @@ def draw_kde(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     _, hv = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -392,13 +392,13 @@ def draw_uv_field(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
 
     Raises:
         ValueError: when the recorded ``density`` is not in ``(0, 1]`` — the field is decimated by
             ``round(1 / density)``, which nothing outside that range names.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -486,9 +486,9 @@ def draw_graph(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     props = held_props(interactive_map, layer)
     nodes, edges = data
@@ -526,9 +526,9 @@ def draw_trimesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
     """
-    from digitalearth.interactive.renderer import DrawnLayer
+    from digitalearth.interactive.render.renderer import DrawnLayer
 
     gv, _ = _require_holoviz()
     props = held_props(interactive_map, layer)
@@ -563,13 +563,13 @@ class VectorMixin(_MixinBase):
     supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
     ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
     ``InteractiveMap`` MRO exactly what it was before the annotation.
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     @staticmethod
@@ -763,7 +763,7 @@ class VectorMixin(_MixinBase):
                 column cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit
                 colour list shorter than the class count).
         """
-        from digitalearth.interactive.bigdata import (
+        from digitalearth.interactive.builders.bigdata import (
             _feature_count,
             _route_through_rasterize,
         )
@@ -1261,7 +1261,7 @@ class VectorMixin(_MixinBase):
         Raises:
             ImportError: when the layer routes through Datashader and ``spatialpandas`` is not installed.
         """
-        from digitalearth.interactive.bigdata import (
+        from digitalearth.interactive.builders.bigdata import (
             _feature_count,
             _route_through_rasterize,
         )

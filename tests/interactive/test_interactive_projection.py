@@ -8,7 +8,7 @@ PNG export. Runs in the ``interactive`` pixi env.
 import pytest
 
 from digitalearth.interactive import InteractiveMap
-from digitalearth.interactive.projection import _element_extent
+from digitalearth.interactive.view.projection import _element_extent
 
 hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
@@ -265,7 +265,7 @@ class TestGraticuleSpacing:
             two tiers' named defaults are held equal as well, so neither can move its spacing without the
             other and reopen the drift the named constant exists to prevent.
         """
-        from digitalearth.interactive.projection import (
+        from digitalearth.interactive.view.projection import (
             DEFAULT_GRATICULE_STEP as INTERACTIVE_DEFAULT,
         )
         from digitalearth.static.builders.projection import (

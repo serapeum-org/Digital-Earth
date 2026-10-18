@@ -1,7 +1,7 @@
 """AnimationMixin — animation playback & export for :class:`~digitalearth.interactive.map.InteractiveMap`.
 
 Owns ``play`` and ``save_animation`` (DI.11), the interactive counterparts of ``Map.animate``/``rotate``.
-They operate on the ``hv.DynamicMap`` a :meth:`~digitalearth.interactive.temporal.TemporalMixin.timecube`
+They operate on the ``hv.DynamicMap`` a :meth:`~digitalearth.interactive.temporal.temporal.TemporalMixin.timecube`
 registered: ``play`` binds a ``panel.widgets.Player`` to its time kdim for auto-advancing playback, and
 ``save_animation`` materialises the (lazy) DynamicMap to a finite ``HoloMap`` and writes a GIF/MP4 via the
 matplotlib backend or a client-side **scrubber** HTML that animates offline with no server.
@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.base.animation import DEFAULT_FPS
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.core.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -29,13 +29,13 @@ class AnimationMixin(_MixinBase):
     supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
     ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
     ``InteractiveMap`` MRO exactly what it was before the annotation.
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
     """
 
     def frames(
@@ -49,7 +49,7 @@ class AnimationMixin(_MixinBase):
         """Register any sequence of elements as one animatable **temporal layer** (IN-12).
 
         The Selection-frame layer model the gap names: ``play``/``save_animation`` could only drive the
-        raster ``hv.DynamicMap`` a :meth:`~digitalearth.interactive.temporal.TemporalMixin.timecube` built,
+        raster ``hv.DynamicMap`` a :meth:`~digitalearth.interactive.temporal.temporal.TemporalMixin.timecube` built,
         so "animate any temporal layer" was unreachable for, say, a time-varying *vector* layer. This folds
         an arbitrary frame set — a mapping ``{key: element}`` or a plain sequence — into one ``hv.HoloMap``
         keyed by ``dimension``, a selectable-by-key layer that :meth:`play` and :meth:`save_animation` then
@@ -238,7 +238,7 @@ class AnimationMixin(_MixinBase):
             **kwargs: Forwarded to :func:`holoviews.save`.
 
         Returns:
-            pathlib.Path: the file written, matching :meth:`~digitalearth.interactive.base.\
+            pathlib.Path: the file written, matching :meth:`~digitalearth.interactive.core.base.\
 InteractiveMapBase.save` (#248).
 
         Raises:

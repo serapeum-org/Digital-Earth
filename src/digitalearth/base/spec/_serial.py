@@ -843,7 +843,7 @@ def travels_in_a_figure(value: Any) -> bool:
     **Which tiers ask, and which do not.** Measured: the two that hand a caller's keywords straight to their
     engine ask it per value and keep both halves — the static tier in
     :func:`~digitalearth.static.core.scene.described_opts` (held in ``Scene._layer_opts``) and the interactive
-    tier in :func:`~digitalearth.interactive.base.describe` (held in ``InteractiveMapBase._layer_held``).
+    tier in :func:`~digitalearth.interactive.core.base.describe` (held in ``InteractiveMapBase._layer_held``).
     The web and 3-D tiers take named, typed parameters and resolve them into their engine's own spelling
     before recording, so they have no caller keyword to split and no held half of their own; the web drawer
     thaws what it reads all the same (``web/renderer.py``), and the 3-D tier calls no thaw at all.

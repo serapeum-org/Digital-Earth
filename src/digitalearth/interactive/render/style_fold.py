@@ -106,7 +106,7 @@ class ChannelOption:
     Examples:
         - Marker size is a point's, and a polygon's answer says so:
             ```python
-            >>> from digitalearth.interactive.style_fold import CHANNEL_OPTIONS
+            >>> from digitalearth.interactive.render.style_fold import CHANNEL_OPTIONS
             >>> size = next(entry for entry in CHANNEL_OPTIONS if entry.channel == "size")
             >>> size.option, "Points" in size.elements, "Polygons" in size.elements
             ('size', True, False)
@@ -280,7 +280,7 @@ def guide_kind(symbology: Symbology) -> str:
         - What the recording call filed wins:
             ```python
             >>> from digitalearth.base.spec import Encoding, Symbology
-            >>> from digitalearth.interactive.style_fold import GUIDE_KIND_KEY, guide_kind
+            >>> from digitalearth.interactive.render.style_fold import GUIDE_KIND_KEY, guide_kind
             >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
             >>> guide_kind(sym.with_props(**{GUIDE_KIND_KEY: "legend"}))
             'legend'
@@ -289,7 +289,7 @@ def guide_kind(symbology: Symbology) -> str:
         - And without one, the scale answers:
             ```python
             >>> from digitalearth.base.spec import Encoding, Scale, Symbology
-            >>> from digitalearth.interactive.style_fold import guide_kind
+            >>> from digitalearth.interactive.render.style_fold import guide_kind
             >>> classes = Scale.categorical(["a", "b"], ["#f00", "#00f"])
             >>> guide_kind(Symbology(
             ...     encodings={"color": Encoding.by_field("color", "zone", scale=classes)}
@@ -329,7 +329,7 @@ def fold_guide(symbology: Symbology, label: str | None = None) -> dict[str, Any]
         - A guide switched off, with a title, is a named bar that is not drawn:
             ```python
             >>> from digitalearth.base.spec import Encoding, Guide, Symbology
-            >>> from digitalearth.interactive.style_fold import fold_guide
+            >>> from digitalearth.interactive.render.style_fold import fold_guide
             >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
             >>> fold_guide(sym.with_guide(Guide(show=False, title="People")))
             {'colorbar': False, 'clabel': 'People'}
@@ -338,7 +338,7 @@ def fold_guide(symbology: Symbology, label: str | None = None) -> dict[str, Any]
         - The same guide recorded as a legend folds into Bokeh's keyed box instead:
             ```python
             >>> from digitalearth.base.spec import Encoding, Guide, Symbology
-            >>> from digitalearth.interactive.style_fold import fold_guide, GUIDE_KIND_KEY
+            >>> from digitalearth.interactive.render.style_fold import fold_guide, GUIDE_KIND_KEY
             >>> sym = Symbology(encodings={"color": Encoding.by_field("color", "pop")})
             >>> sym = sym.with_props(**{GUIDE_KIND_KEY: "legend"}).with_guide(Guide(title="People"))
             >>> fold_guide(sym)
@@ -348,7 +348,7 @@ def fold_guide(symbology: Symbology, label: str | None = None) -> dict[str, Any]
         - A symbology nobody asked for a key on folds into nothing at all:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import fold_guide
+            >>> from digitalearth.interactive.render.style_fold import fold_guide
             >>> fold_guide(Symbology.of(color="#f00"))
             {}
 
@@ -420,7 +420,7 @@ def route_flat_style(flat: Mapping[str, Any]) -> tuple[Symbology, dict[str, Any]
     Examples:
         - A channel keyword and an engine option travel in one dict and are separated:
             ```python
-            >>> from digitalearth.interactive.style_fold import route_flat_style
+            >>> from digitalearth.interactive.render.style_fold import route_flat_style
             >>> symbology, leftover = route_flat_style({"alpha": 0.4, "cmap": "viridis"})
             >>> symbology.encoding("opacity").resolve(), dict(symbology.props)
             (0.4, {'cmap': 'viridis'})
@@ -429,7 +429,7 @@ def route_flat_style(flat: Mapping[str, Any]) -> tuple[Symbology, dict[str, Any]
         - A keyword the schema does not declare is carried as a property, for the fold to check against the
           element it will be applied to:
             ```python
-            >>> from digitalearth.interactive.style_fold import fold_symbology, route_flat_style
+            >>> from digitalearth.interactive.render.style_fold import fold_symbology, route_flat_style
             >>> symbology, _ = route_flat_style({"alhpa": 0.4})
             >>> fold_symbology(symbology, "Points")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
@@ -543,7 +543,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
         - A marker size the caller asked for and an opacity they wrote in ``**opts`` both read back:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> from digitalearth.interactive.render.style_fold import portable_encodings
             >>> props = {"via": "geometry", "hv_type": "Points", "common": {"size": 7.0}}
             >>> recorded = Symbology(props=dict(props, opts={"alpha": 0.5}, asked=["size"]))
             >>> lifted = portable_encodings(recorded)
@@ -554,7 +554,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
         - The same options as `points()` writes them when nobody styled the layer publish nothing at all:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> from digitalearth.interactive.render.style_fold import portable_encodings
             >>> unstyled = {"via": "geometry", "hv_type": "Points", "common": {"size": 6.0}, "opts": {}}
             >>> sorted(portable_encodings(Symbology(props=unstyled)))
             []
@@ -563,7 +563,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
         - And a caller asking for exactly that default publishes it, which the table could not do:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> from digitalearth.interactive.render.style_fold import portable_encodings
             >>> asked = {"via": "geometry", "common": {"size": 6.0}, "asked": ["size"]}
             >>> portable_encodings(Symbology(props=asked))["size"].resolve()
             6.0
@@ -572,7 +572,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
         - The caller's own bucket needs no record — every key in it was written by the caller:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> from digitalearth.interactive.render.style_fold import portable_encodings
             >>> own = portable_encodings(Symbology(props={"via": "image", "opts": {"alpha": 1.0}}))
             >>> sorted(own), own["opacity"].resolve()
             (['opacity'], 1.0)
@@ -581,7 +581,7 @@ def portable_encodings(symbology: Symbology) -> dict[str, Encoding]:
         - A colour that names a value dimension is a column, not a colour, so it is left unclaimed:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import portable_encodings
+            >>> from digitalearth.interactive.render.style_fold import portable_encodings
             >>> classified = {"vdims": ("pop",), "common": {"color": "pop"}, "asked": ["color"]}
             >>> sorted(portable_encodings(Symbology(props=classified)))
             []
@@ -629,21 +629,21 @@ def limits_scale(limits: Any) -> Scale | None:
     Examples:
         - A caller's limits become the domain the key is labelled with:
             ```python
-            >>> from digitalearth.interactive.style_fold import limits_scale
+            >>> from digitalearth.interactive.render.style_fold import limits_scale
             >>> limits_scale([0.0, 60.0]).as_limits()
             (0.0, 60.0)
 
             ```
         - No limits is no scale, which is how a layer says its domain is the engine's to measure:
             ```python
-            >>> from digitalearth.interactive.style_fold import limits_scale
+            >>> from digitalearth.interactive.render.style_fold import limits_scale
             >>> limits_scale(None) is None, limits_scale([1.0]) is None
             (True, True)
 
             ```
         - And a pair no scale can hold is refused the same way rather than raised:
             ```python
-            >>> from digitalearth.interactive.style_fold import limits_scale
+            >>> from digitalearth.interactive.render.style_fold import limits_scale
             >>> limits_scale([float("nan"), 1.0]) is None
             True
 
@@ -677,7 +677,7 @@ def allowed_options(
     Examples:
         - A Bokeh image takes a colormap as style and colour limits as a plot option:
             ```python
-            >>> from digitalearth.interactive.style_fold import allowed_options
+            >>> from digitalearth.interactive.render.style_fold import allowed_options
             >>> options = allowed_options("Image")
             >>> "cmap" in options["style"], "clim" in options["plot"]
             (True, True)
@@ -685,7 +685,7 @@ def allowed_options(
             ```
         - A marker size belongs to points, and nothing else here:
             ```python
-            >>> from digitalearth.interactive.style_fold import allowed_options
+            >>> from digitalearth.interactive.render.style_fold import allowed_options
             >>> "size" in allowed_options("Points")["style"], "size" in allowed_options("Polygons")["style"]
             (True, False)
 
@@ -738,7 +738,7 @@ def fold_symbology(
         - Opacity and size fold onto a point's own keywords:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import fold_symbology
+            >>> from digitalearth.interactive.render.style_fold import fold_symbology
             >>> grouped, unsupported = fold_symbology(Symbology.of(opacity=0.5, size=6), "Points")
             >>> grouped["style"], unsupported
             ({'alpha': 0.5, 'size': 6}, {})
@@ -747,7 +747,7 @@ def fold_symbology(
         - A polygon has no marker size, and says so rather than dropping it:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.interactive.style_fold import fold_symbology
+            >>> from digitalearth.interactive.render.style_fold import fold_symbology
             >>> _, unsupported = fold_symbology(Symbology.of(opacity=0.5, size=6), "Polygons")
             >>> unsupported["size"]
             'only a marker has a size; a shape is as big as its geometry'
@@ -756,7 +756,7 @@ def fold_symbology(
         - A colour driven by a field becomes the column plus its limits:
             ```python
             >>> from digitalearth.base.spec import Encoding, Scale, Symbology
-            >>> from digitalearth.interactive.style_fold import fold_symbology
+            >>> from digitalearth.interactive.render.style_fold import fold_symbology
             >>> by_pop = Encoding.by_field("color", "pop", scale=Scale.from_limits(0.0, 100.0))
             >>> grouped, _ = fold_symbology(Symbology.of(color=by_pop), "Points")
             >>> grouped["style"]["color"], grouped["plot"]["clim"]
@@ -823,7 +823,7 @@ def validate_opts(
     Examples:
         - A misspelt option is refused before it reaches HoloViews:
             ```python
-            >>> from digitalearth.interactive.style_fold import validate_opts
+            >>> from digitalearth.interactive.render.style_fold import validate_opts
             >>> validate_opts({"colour": "red"}, "Points")
             Traceback (most recent call last):
             ValueError: 'colour' is not an option Points takes on the bokeh backend; did you mean [...]?
@@ -831,7 +831,7 @@ def validate_opts(
             ```
         - An element HoloViews does not know is left alone (nothing to check it against):
             ```python
-            >>> from digitalearth.interactive.style_fold import validate_opts
+            >>> from digitalearth.interactive.render.style_fold import validate_opts
             >>> validate_opts({"anything": 1}, "NotAnElement")  # no raise
 
             ```

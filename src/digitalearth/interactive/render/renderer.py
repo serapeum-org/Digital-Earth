@@ -13,7 +13,7 @@ refuses an ``object:`` source, so only a figure whose builders were given paths 
 one built from a `FeatureCollection` or a dataset already in memory is drawn from its description in this
 process and handed to a renderer directly. And a caller's keyword that does not travel in a figure — a
 colormap built on the spot, a callable hook, a tuple such as a dash pattern, an array — is held on the map
-beside the layer rather than in its description (:func:`~digitalearth.interactive.base.describe_opts`), so a
+beside the layer rather than in its description (:func:`~digitalearth.interactive.core.base.describe_opts`), so a
 figure read back elsewhere draws that layer with the engine's default in its place. A ``list`` or ``dict``
 of plain values is **not** in that half: JSON reads it back as itself, so it is described, which is what
 keeps a reloaded figure's palette (#330). Measured: ``describe_opts`` describes
@@ -32,7 +32,7 @@ elements `render()` overlays — the map's `layers` — nor what `figure_spec` r
 a figure had moved a record and nothing a viewer sees. Two halves close that. :meth:`Renderer._arrange`
 re-lays `InteractiveMap.layers` from the applied figure's draw order, so a removed layer leaves the overlay,
 an added one enters it and a moved one changes what is on top; and
-:meth:`~digitalearth.interactive.base.InteractiveMapBase._change` — the path `get_layer`, `remove_layer`,
+:meth:`~digitalearth.interactive.core.base.InteractiveMapBase._change` — the path `get_layer`, `remove_layer`,
 `set_visible`, `move_layer` and `replace_layer` take — installs the description once this has returned, so a
 figure `apply` refuses is never one the map describes. Visibility was the one thing that always reached the
 element, because `.opts()` writes into HoloViews' global `Store` against the object the map holds.
@@ -111,7 +111,7 @@ class DrawnLayer:
         Examples:
             - The style rides along untouched, and the original still holds the element it was made with:
                 ```python
-                >>> from digitalearth.interactive.renderer import DrawnLayer
+                >>> from digitalearth.interactive.render.renderer import DrawnLayer
                 >>> drawn = DrawnLayer(element="points", style={"size": 4})
                 >>> drawn.drawn_as("points, keyed")
                 DrawnLayer(element='points, keyed', style={'size': 4})
@@ -178,7 +178,7 @@ KEPT_KINDS: Mapping[str, str] = MappingProxyType(
 #: The Bokeh style keywords that mean "do not draw this". Nearly every element spells it `visible`; a
 #: graph-shaped one (`TriMesh`, `Graph`) splits the question into its edges and its nodes and has no single
 #: `visible` at all. Which of these an element actually takes is read from the engine's own option table
-#: rather than listed per element here, the way :mod:`digitalearth.interactive.style_fold` reads everything
+#: rather than listed per element here, the way :mod:`digitalearth.interactive.render.style_fold` reads everything
 #: else it folds — so this cannot drift from what HoloViews accepts.
 _VISIBILITY_KEYWORDS: tuple[str, ...] = ("visible", "edge_visible", "node_visible")
 
@@ -197,7 +197,7 @@ def _visibility_keywords(element: Any) -> tuple[str, ...]:
         produced a frame, so every `dynamic=True` rasterize, datashade, trajectory or `large_image`
         layer.
     """
-    from digitalearth.interactive.style_fold import allowed_options
+    from digitalearth.interactive.render.style_fold import allowed_options
 
     element_type = type(element)
     # A `DynamicMap` is a producer of elements rather than one itself, so the options are the element
@@ -258,9 +258,9 @@ def _draw_recorded_guide(layer: LayerSpec, drawn: DrawnLayer) -> DrawnLayer:
     calling :meth:`~digitalearth.static.render.renderer.Renderer.draw_guide` from its own `draw_layer`.
 
     Reapplied **here** rather than by recording through
-    :meth:`~digitalearth.interactive.base.InteractiveMapBase._change`: a guide is description and nothing
+    :meth:`~digitalearth.interactive.core.base.InteractiveMapBase._change`: a guide is description and nothing
     else, and routing the record through a reconcile would restyle the layer, redraw it and hand back a new
-    element — orphaning the styles :attr:`~digitalearth.interactive.base.InteractiveMapBase._styles` files by
+    element — orphaning the styles :attr:`~digitalearth.interactive.core.base.InteractiveMapBase._styles` files by
     ``id()`` and any stream a `hover()` attached. So the record still goes straight into the tree, and the
     *draw* reads it back.
 
@@ -273,7 +273,10 @@ def _draw_recorded_guide(layer: LayerSpec, drawn: DrawnLayer) -> DrawnLayer:
         — or describes one this element has no option to draw, which the recording call already warned
         about and which a redraw would only repeat once per rebuild.
     """
-    from digitalearth.interactive.style_fold import fold_guide, split_guide_options
+    from digitalearth.interactive.render.style_fold import (
+        fold_guide,
+        split_guide_options,
+    )
 
     opts = fold_guide(layer.symbology, layer.label)
     if not opts:
@@ -324,14 +327,10 @@ def _recipes() -> dict[str, dict[str, Any]]:
     """
     # Imported here rather than at module level: every builder module imports the map, so a
     # module-level import would close a cycle.
-    from digitalearth.interactive import (
-        bigdata,
-        decoration,
-        projection,
-        raster,
-        temporal,
-        vector,
-    )
+    from digitalearth.interactive.builders import bigdata, raster, vector
+    from digitalearth.interactive.decoration import decoration
+    from digitalearth.interactive.temporal import temporal
+    from digitalearth.interactive.view import projection
 
     return {
         "graticule": {"graticule": projection.draw_graticule},
@@ -432,7 +431,7 @@ def drawer_for(kind: str) -> Any:
     Examples:
         - A kind this tier has no drawer for is refused with the kinds it does draw:
             ```python
-            >>> from digitalearth.interactive.renderer import drawer_for
+            >>> from digitalearth.interactive.render.renderer import drawer_for
             >>> drawer_for("model")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -443,7 +442,7 @@ def drawer_for(kind: str) -> Any:
           builder recorded — because one kind is drawn more than one way here:
             ```python
             >>> from digitalearth.base.spec import LayerSpec, Symbology
-            >>> from digitalearth.interactive.renderer import drawer_for
+            >>> from digitalearth.interactive.render.renderer import drawer_for
             >>> invented = LayerSpec("wells", "points", symbology=Symbology(props={"via": "smoke"}))
             >>> drawer_for("points")(None, None, invented)
             Traceback (most recent call last):
@@ -516,7 +515,7 @@ class Renderer:
 
     Examples:
         - A map's renderer holds what it drew, keyed by the same ids
-          :attr:`~digitalearth.interactive.base.InteractiveMapBase.layer_ids` lists, in the order the
+          :attr:`~digitalearth.interactive.core.base.InteractiveMapBase.layer_ids` lists, in the order the
           layers were drawn. Each generated id counts **within its kind**, so the second layer of a
           second kind is ``-1`` and not ``-2``: this example said ``graticule-2`` until review R2-M10
           gave the tier one counter per prefix, and it is the drawn ids themselves that say otherwise
@@ -626,13 +625,13 @@ class Renderer:
         layer leave the picture, an added one enter it, and a moved one change what is on top.
 
         The figure the map *reports* is still the map's own:
-        :meth:`~digitalearth.interactive.base.InteractiveMapBase._change` installs that once this has
+        :meth:`~digitalearth.interactive.core.base.InteractiveMapBase._change` installs that once this has
         returned, so a figure this refuses is never one the map describes.
 
         **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
         difference between two figures is read off their descriptions, and a keyword that does not travel in
         one — a colormap built on the spot, a callable hook, a dash pattern — is held on the map beside the
-        layer rather than described (:func:`~digitalearth.interactive.base.describe_opts`). Two layers
+        layer rather than described (:func:`~digitalearth.interactive.core.base.describe_opts`). Two layers
         differing only in one of those therefore compare **equal**: `diff` reports no restyle,
         :meth:`_reaches_holoviews` answers `False`, and nothing is redrawn, although the two draw different
         pictures. A plain scalar is described and does reach here, so this is exactly the set
@@ -690,7 +689,7 @@ class Renderer:
         """Re-arrange what the map overlays so it is `after`'s layers, in `after`'s draw order.
 
         In place, because `colorbar`, `legend` and `add_tool` assign into
-        :attr:`~digitalearth.interactive.base.InteractiveMapBase.layers` by index and a caller may hold the
+        :attr:`~digitalearth.interactive.core.base.InteractiveMapBase.layers` by index and a caller may hold the
         list: replacing the object would leave those writing into a list nothing composes.
 
         Which element each layer contributes is the part worth reading. A layer this reconcile **drew** — one
@@ -854,7 +853,7 @@ class Renderer:
         the style filed against it, are the ones this changes.
 
         **A layer of the caller's own is reached through the map**, because this record never holds one: the
-        object is in :attr:`~digitalearth.interactive.base.InteractiveMapBase.layers` and nowhere else, and
+        object is in :attr:`~digitalearth.interactive.core.base.InteractiveMapBase.layers` and nowhere else, and
         it is the same `.opts()` call that hides it. Before, an id with nothing recorded was ignored, so
         `set_visible` on a custom layer changed the description, reached no engine, and did not emit the
         warning its own contract promises for a layer it leaves drawn — review H8. `is_visible` still
