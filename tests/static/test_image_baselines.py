@@ -33,6 +33,14 @@ Determinism:
     seed or the network: the rasters are the committed ``examples/data`` fixtures or small arrays built in
     the test, and the Natural-Earth overlays come from the committed ``tests/data/naturalearth`` assets that
     the session fixture in ``conftest.py`` copies into cleopatra's cache.
+
+    Two notes for ``test_decimated_large_raster``, the one baseline whose pixels pass through a decimated
+    read. The ``dpi=80`` above is the *savefig* resolution; whether that raster decimates is decided by a
+    separate budget, ``figsize × figure.dpi`` (matplotlib's default ``figure.dpi`` of 100 is ~400 px a side,
+    while the PNG is saved at 320), so it rests on that default staying 100 rather than on the 80. And its
+    pixels flow through pyramids'/GDAL's on-the-fly decimation resampling — the only baseline here that does —
+    so, unlike the other 21, a change to GDAL's default decimation algorithm would move it; regenerate it if a
+    GDAL upgrade on the CI image does.
 """
 
 import numpy as np
