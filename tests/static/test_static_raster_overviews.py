@@ -169,6 +169,49 @@ class TestALargeRasterIsReadThroughAWindow:
             f"the decimated read lost the band's identity: {decimated!r} vs {undecimated!r}"
         )
 
+    def test_the_decimated_render_matches_a_full_decode(self, tmp_path, monkeypatch):
+        """At figure resolution the decimated read draws the same picture a full decode would (#480).
+
+        Args:
+            tmp_path: pytest's temporary directory, holding the raster on disk.
+            monkeypatch: lifts the decimation threshold for the reference render, so the same field path
+                reads the whole band instead of a decimated window.
+
+        Test scenario:
+            The ``pytest-mpl`` baseline in ``test_image_baselines.py`` is generated from the decimated render,
+            so it can only pin that the decimated render stays like itself — it cannot prove the decimated read
+            equals a *full* decode, which is what #480 asked for. That needs both drawn into one canvas and
+            compared. The same 1200-cell raster is rendered twice at one figure size — once decimated, once
+            with ``_DECIMATE_ABOVE`` raised so the band is read whole — and the two RGBA buffers are differenced.
+            A smooth field decimates without aliasing, so the two are the same picture to a fraction of a
+            greylevel; the full read is confirmed whole and the decimated one confirmed smaller, so the match is
+            between genuinely different reads rather than two identical ones.
+        """
+        from digitalearth.static.builders import raster as raster_mod
+
+        dataset = _raster(1200, path=tmp_path / "big.tif")
+
+        def _render():
+            with Map(crs=4326, figsize=(4, 4)) as scene:
+                scene.field(dataset, name="f")
+                shape = _drawn_shape(scene, "f")
+                scene.fig.canvas.draw()
+                buffer = np.asarray(scene.fig.canvas.buffer_rgba(), dtype=float)
+            return shape, buffer
+
+        decimated_shape, decimated = _render()
+        monkeypatch.setattr(raster_mod, "_DECIMATE_ABOVE", 1.0e9)
+        full_shape, full = _render()
+
+        assert max(decimated_shape) < 1200, (
+            f"the reference read was decimated too, so there is nothing to compare: {decimated_shape}"
+        )
+        assert full_shape == (1200, 1200), f"the full read was not whole: {full_shape}"
+        rms = float(np.sqrt(np.mean((decimated - full) ** 2)))
+        assert rms < 2.0, (
+            f"the decimated render differs from a full decode: RMS {rms:.4f} over 0-255"
+        )
+
 
 class TestTheCanvasMeasurement:
     """The budget comes from the figure, so what it measures is worth pinning."""

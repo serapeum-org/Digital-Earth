@@ -239,21 +239,25 @@ def test_large_raster_fixture_breaks_every_flip_and_transpose_symmetry():
 
 @pytest.mark.mpl_image_compare(**_BASELINE)
 def test_decimated_large_raster(large_raster):
-    """A raster far larger than the canvas renders from a decimated overview — the picture a full decode draws (#480).
+    """A stability baseline for the decimated render of a raster far larger than the canvas (#480).
 
     Test scenario:
-        ST-5 gave the static tier a view-dependent overview read: a band well past the canvas is read at a
-        lower resolution through pyramids' ``read_part`` instead of being fully decoded (closed as #220). The
-        property tests in ``test_static_raster_overviews.py`` pin the *shape* of that read; this is the pixel
-        half #480 asked for — proof that the decimated read is placed, oriented and coloured exactly as a full
-        decode would be at figure resolution. The field is smooth, so the decimated read and a full decode are
-        the same picture and one baseline stands for both.
+        ST-5 gave the static tier a view-dependent read: a band well past the canvas is read at a reduced
+        resolution through pyramids' ``read_part`` instead of being fully decoded (closed as #220). This pins
+        the *pixels* of that render — a regression in the decimation path (a wrong decimation factor,
+        misplacement, a flipped or transposed read, a lost band identity that changes the colormap) moves the
+        baseline. It is a **stability** baseline, like the other 21: the committed PNG is generated from this
+        same decimated render, so the comparison proves the render stays like itself, not that it equals a full
+        decode. That equivalence — the decimated read drawing the same picture a full decode would — is proven
+        separately, into one canvas, by ``test_static_raster_overviews.TestALargeRasterIsReadThroughAWindow.
+        test_the_decimated_render_matches_a_full_decode``.
 
         The in-test guard asserts the read was actually decimated, so a regression that silently reverted to a
-        full decode fails here loudly rather than quietly re-committing a baseline that only looks the same.
+        full decode fails here loudly rather than quietly re-committing a look-alike baseline.
 
     Args:
-        large_raster: a 1200-cell-a-side raster that trips the decimation threshold at ``_FIGSIZE``.
+        large_raster: a raster :data:`_LARGE_SIDE` cells a side that trips the decimation threshold at
+            ``_FIGSIZE``.
 
     Returns:
         Figure: the rendered map.
@@ -261,8 +265,8 @@ def test_decimated_large_raster(large_raster):
     m = Map(crs=large_raster.epsg, figsize=_FIGSIZE)
     m.field(large_raster, name="big", cmap="viridis")
     drawn = np.asarray(m.artist("big").get_array()).shape
-    assert max(drawn) < 1200, (
-        f"the raster was not decimated — read {drawn}, file 1200x1200"
+    assert max(drawn) < _LARGE_SIDE, (
+        f"the raster was not decimated — read {drawn}, file {_LARGE_SIDE}x{_LARGE_SIDE}"
     )
     return m.fig
 
