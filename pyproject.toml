@@ -368,6 +368,10 @@ module = "digitalearth.interactive.decoration.decoration"  # 2 errors at baselin
 disable_error_code = ["attr-defined", "no-any-return"]
 
 [[tool.mypy.overrides]]
+module = "digitalearth.interactive.legends.legend"  # guide code moved here from decoration
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
 module = "digitalearth.interactive.temporal.temporal"  # 2 errors at baseline
 disable_error_code = ["union-attr"]
 

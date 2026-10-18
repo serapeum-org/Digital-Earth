@@ -18,6 +18,7 @@ from digitalearth.interactive.builders.raster import RasterMixin
 from digitalearth.interactive.builders.vector import VectorMixin
 from digitalearth.interactive.core.base import InteractiveMapBase
 from digitalearth.interactive.decoration.decoration import DecorationMixin
+from digitalearth.interactive.legends.legend import LegendMixin
 from digitalearth.interactive.temporal.animation import AnimationMixin
 from digitalearth.interactive.temporal.temporal import TemporalMixin
 from digitalearth.interactive.view.projection import ProjectionMixin
@@ -29,6 +30,7 @@ class InteractiveMap(
     BigDataMixin,
     TemporalMixin,
     DecorationMixin,
+    LegendMixin,
     InteractionMixin,
     LiveMixin,
     ProjectionMixin,
