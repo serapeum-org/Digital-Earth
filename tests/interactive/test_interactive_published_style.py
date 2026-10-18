@@ -357,7 +357,7 @@ class TestAnUnstyledLayerPublishesNothing:
 #: A field binding is not style — it is what the layer *is*. `field(dem)` colours by the band it draws and
 #: `choropleth(gdf, "pop")` by the column, whether or not anybody styled either, which is why these are
 #: published for an unstyled layer while the constants beside them are not. They are also what a colour key
-#: hangs on: :meth:`~digitalearth.interactive.decoration.decoration.DecorationMixin.colorbar` attaches a
+#: hangs on: :meth:`~digitalearth.interactive.legends.legend.LegendMixin.colorbar` attaches a
 #: :class:`~digitalearth.base.spec.encoding.Guide` to this encoding, so a builder that publishes none refuses
 #: a key — which makes this table the list of builders whose layers can carry one.
 #:

@@ -425,8 +425,10 @@ class TestNoMessageNamesAMethodTheTierLost:
         import digitalearth.three_d as tier
 
         live: set = set()
-        for info in pkgutil.iter_modules(tier.__path__):
-            module = importlib.import_module(f"{tier.__name__}.{info.name}")
+        # walk_packages, not iter_modules: the tier's classes now live in per-concern subpackages
+        # (render/, builders/, …), so recurse rather than reading only the top-level modules.
+        for info in pkgutil.walk_packages(tier.__path__, prefix=f"{tier.__name__}."):
+            module = importlib.import_module(info.name)
             for _, held in inspect.getmembers(module, inspect.isclass):
                 if held.__module__.startswith(tier.__name__):
                     live |= set(dir(held))
