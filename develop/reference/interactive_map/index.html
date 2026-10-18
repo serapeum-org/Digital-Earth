@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -7724,7 +7724,9 @@ under <code>"categorical"</code>, a band holding non-integer values, more than
 <span class="normal"><a href="#__codelineno-0-685">685</a></span>
 <span class="normal"><a href="#__codelineno-0-686">686</a></span>
 <span class="normal"><a href="#__codelineno-0-687">687</a></span>
-<span class="normal"><a href="#__codelineno-0-688">688</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="nd">@_skips_off_limb</span>
+<span class="normal"><a href="#__codelineno-0-688">688</a></span>
+<span class="normal"><a href="#__codelineno-0-689">689</a></span>
+<span class="normal"><a href="#__codelineno-0-690">690</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="nd">@_skips_off_limb</span>
 <a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span>
 <a id="__codelineno-0-533" name="__codelineno-0-533"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-534" name="__codelineno-0-534"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
@@ -7839,49 +7841,51 @@ under <code>"categorical"</code>, a band holding non-integer values, more than
 <a id="__codelineno-0-643" name="__codelineno-0-643"></a>        <span class="c1"># to `limits_scale`&#39;s tolerant handling above (it draws rather than raising), so the classify path</span>
 <a id="__codelineno-0-644" name="__codelineno-0-644"></a>        <span class="c1"># must not turn the same bad value into a cryptic unpack error (review L3).</span>
 <a id="__codelineno-0-645" name="__codelineno-0-645"></a>        <span class="n">window</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-646" name="__codelineno-0-646"></a>            <span class="n">limits</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">limits</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">))</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">limits</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="k">else</span> <span class="kc">None</span>
-<a id="__codelineno-0-647" name="__codelineno-0-647"></a>        <span class="p">)</span>
-<a id="__codelineno-0-648" name="__codelineno-0-648"></a>        <span class="n">scale</span> <span class="o">=</span> <span class="n">_band_classes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">scheme</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="n">window</span><span class="p">)</span><span class="o">.</span><span class="n">scale</span>
-<a id="__codelineno-0-649" name="__codelineno-0-649"></a>    <span class="c1"># The caller&#39;s raw HoloViews keywords are split per value (review M3): the JSON-safe half goes</span>
-<a id="__codelineno-0-650" name="__codelineno-0-650"></a>    <span class="c1"># into the description, and what has no JSON form — a colormap object, a callable — is held beside</span>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a>    <span class="c1"># the layer, because a figure is saved as JSON.</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
-<a id="__codelineno-0-654" name="__codelineno-0-654"></a>    <span class="n">ask</span> <span class="o">=</span> <span class="n">Ask</span><span class="p">()</span>
-<a id="__codelineno-0-655" name="__codelineno-0-655"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-656" name="__codelineno-0-656"></a>        <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-657" name="__codelineno-0-657"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-658" name="__codelineno-0-658"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-659" name="__codelineno-0-659"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;raster&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a>        <span class="n">source</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a>            <span class="c1"># The layer&#39;s colour varies with the band it draws, so that is published as a binding rather</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a>            <span class="c1"># than left for a reader to infer from `cmap`. It is what a colorbar hangs on (order 24): a</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a>            <span class="c1"># `Guide` explains an encoding, so a layer with no colour encoding has no key, and a layer</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a>            <span class="c1"># with this one has a key that moves, hides and disappears with it.</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a>                <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a>                    <span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">coloured_by</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="p">),</span> <span class="n">scale</span><span class="o">=</span><span class="n">scale</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a>                <span class="p">)</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a>            <span class="p">},</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;image&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a>                <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band</span><span class="p">,</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a>                <span class="s2">&quot;clim&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;clim&quot;</span><span class="p">,</span> <span class="n">_travelling_pair</span><span class="p">(</span><span class="n">limits</span><span class="p">)),</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677"></a>                <span class="s2">&quot;scheme&quot;</span><span class="p">:</span> <span class="n">scheme</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678"></a>                <span class="k">if</span> <span class="n">scheme</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
-<a id="__codelineno-0-679" name="__codelineno-0-679"></a>                <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">scheme</span><span class="p">),</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680"></a>                <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681"></a>                <span class="s2">&quot;alpha&quot;</span><span class="p">:</span> <span class="n">ask</span><span class="p">(</span><span class="s2">&quot;alpha&quot;</span><span class="p">,</span> <span class="n">opacity</span><span class="p">,</span> <span class="n">FIELD_ALPHA</span><span class="p">),</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682"></a>                <span class="s2">&quot;colorbar&quot;</span><span class="p">:</span> <span class="n">colorbar</span><span class="p">,</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683"></a>                <span class="s2">&quot;clabel&quot;</span><span class="p">:</span> <span class="n">clabel</span><span class="p">,</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
-<a id="__codelineno-0-685" name="__codelineno-0-685"></a>                <span class="o">**</span><span class="n">ask</span><span class="o">.</span><span class="n">record</span><span class="p">,</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686"></a>            <span class="p">},</span>
-<a id="__codelineno-0-687" name="__codelineno-0-687"></a>        <span class="p">),</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688"></a>    <span class="p">)</span>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a>            <span class="n">limits</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647"></a>            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">limits</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">))</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">limits</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648"></a>            <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-0-649" name="__codelineno-0-649"></a>        <span class="p">)</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a>        <span class="n">scale</span> <span class="o">=</span> <span class="n">_band_classes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">scheme</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="n">window</span><span class="p">)</span><span class="o">.</span><span class="n">scale</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a>    <span class="c1"># The caller&#39;s raw HoloViews keywords are split per value (review M3): the JSON-safe half goes</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a>    <span class="c1"># into the description, and what has no JSON form — a colormap object, a callable — is held beside</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a>    <span class="c1"># the layer, because a figure is saved as JSON.</span>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+<a id="__codelineno-0-656" name="__codelineno-0-656"></a>    <span class="n">ask</span> <span class="o">=</span> <span class="n">Ask</span><span class="p">()</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a>        <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;raster&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a>        <span class="n">source</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a>            <span class="c1"># The layer&#39;s colour varies with the band it draws, so that is published as a binding rather</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a>            <span class="c1"># than left for a reader to infer from `cmap`. It is what a colorbar hangs on (order 24): a</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a>            <span class="c1"># `Guide` explains an encoding, so a layer with no colour encoding has no key, and a layer</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a>            <span class="c1"># with this one has a key that moves, hides and disappears with it.</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a>                <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a>                    <span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">coloured_by</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="p">),</span> <span class="n">scale</span><span class="o">=</span><span class="n">scale</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a>                <span class="p">)</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a>            <span class="p">},</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;image&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a>                <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band</span><span class="p">,</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a>                <span class="s2">&quot;clim&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;clim&quot;</span><span class="p">,</span> <span class="n">_travelling_pair</span><span class="p">(</span><span class="n">limits</span><span class="p">)),</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a>                <span class="s2">&quot;scheme&quot;</span><span class="p">:</span> <span class="n">scheme</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a>                <span class="k">if</span> <span class="n">scheme</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+<a id="__codelineno-0-681" name="__codelineno-0-681"></a>                <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">scheme</span><span class="p">),</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a>                <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a>                <span class="s2">&quot;alpha&quot;</span><span class="p">:</span> <span class="n">ask</span><span class="p">(</span><span class="s2">&quot;alpha&quot;</span><span class="p">,</span> <span class="n">opacity</span><span class="p">,</span> <span class="n">FIELD_ALPHA</span><span class="p">),</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a>                <span class="s2">&quot;colorbar&quot;</span><span class="p">:</span> <span class="n">colorbar</span><span class="p">,</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a>                <span class="s2">&quot;clabel&quot;</span><span class="p">:</span> <span class="n">clabel</span><span class="p">,</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a>                <span class="o">**</span><span class="n">ask</span><span class="o">.</span><span class="n">record</span><span class="p">,</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a>            <span class="p">},</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a>        <span class="p">),</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8078,9 +8082,7 @@ element while the figure went on calling it visible (#327).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-760">760</a></span>
-<span class="normal"><a href="#__codelineno-0-761">761</a></span>
-<span class="normal"><a href="#__codelineno-0-762">762</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-762">762</a></span>
 <span class="normal"><a href="#__codelineno-0-763">763</a></span>
 <span class="normal"><a href="#__codelineno-0-764">764</a></span>
 <span class="normal"><a href="#__codelineno-0-765">765</a></span>
@@ -8148,77 +8150,79 @@ element while the figure went on calling it visible (#327).</p>
 <span class="normal"><a href="#__codelineno-0-827">827</a></span>
 <span class="normal"><a href="#__codelineno-0-828">828</a></span>
 <span class="normal"><a href="#__codelineno-0-829">829</a></span>
-<span class="normal"><a href="#__codelineno-0-830">830</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-760" name="__codelineno-0-760"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a><span class="k">def</span><span class="w"> </span><span class="nf">quadmesh</span><span class="p">(</span>
-<a id="__codelineno-0-762" name="__codelineno-0-762"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-763" name="__codelineno-0-763"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-764" name="__codelineno-0-764"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-765" name="__codelineno-0-765"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="n">clabel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-769" name="__codelineno-0-769"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a><span class="sd">    Unlike :meth:`field` (regular grid), a ``QuadMesh`` draws each cell from its coordinate</span>
-<a id="__codelineno-0-775" name="__codelineno-0-775"></a><span class="sd">    arrays, so irregularly spaced or 2-D (curvilinear) coordinates render without resampling.</span>
-<a id="__codelineno-0-776" name="__codelineno-0-776"></a>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a><span class="sd">        data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.</span>
-<a id="__codelineno-0-779" name="__codelineno-0-779"></a><span class="sd">        band: 1-based band to render.</span>
-<a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="sd">        cmap: Colormap name; ``None`` (default) resolves it from the variable via</span>
-<a id="__codelineno-0-781" name="__codelineno-0-781"></a><span class="sd">            ``autostyle.auto_style`` (DI.12) — consistent with :meth:`field`.</span>
-<a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="sd">        clabel: Colorbar label; ``None`` (default) takes the variable&#39;s ``units`` from</span>
-<a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">            ``autostyle.auto_style`` (#230), as :meth:`field` does.</span>
-<a id="__codelineno-0-784" name="__codelineno-0-784"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
-<a id="__codelineno-0-786" name="__codelineno-0-786"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-787" name="__codelineno-0-787"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-788" name="__codelineno-0-788"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
-<a id="__codelineno-0-789" name="__codelineno-0-789"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
-<a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
-<a id="__codelineno-0-791" name="__codelineno-0-791"></a>
-<a id="__codelineno-0-792" name="__codelineno-0-792"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-793" name="__codelineno-0-793"></a><span class="sd">        - Draw an irregular grid without resampling to axis-aligned:</span>
-<a id="__codelineno-0-794" name="__codelineno-0-794"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-797" name="__codelineno-0-797"></a><span class="sd">            &gt;&gt;&gt; grid = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)       # doctest: +SKIP</span>
-<a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().quadmesh(grid).save(&quot;mesh.html&quot;).name      # doctest: +SKIP</span>
-<a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">            &#39;mesh.html&#39;</span>
-<a id="__codelineno-0-800" name="__codelineno-0-800"></a>
-<a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-830">830</a></span>
+<span class="normal"><a href="#__codelineno-0-831">831</a></span>
+<span class="normal"><a href="#__codelineno-0-832">832</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-762" name="__codelineno-0-762"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a><span class="k">def</span><span class="w"> </span><span class="nf">quadmesh</span><span class="p">(</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a>    <span class="n">clabel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).</span>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a>
+<a id="__codelineno-0-776" name="__codelineno-0-776"></a><span class="sd">    Unlike :meth:`field` (regular grid), a ``QuadMesh`` draws each cell from its coordinate</span>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">    arrays, so irregularly spaced or 2-D (curvilinear) coordinates render without resampling.</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="sd">        data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.</span>
+<a id="__codelineno-0-781" name="__codelineno-0-781"></a><span class="sd">        band: 1-based band to render.</span>
+<a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="sd">        cmap: Colormap name; ``None`` (default) resolves it from the variable via</span>
+<a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">            ``autostyle.auto_style`` (DI.12) — consistent with :meth:`field`.</span>
+<a id="__codelineno-0-784" name="__codelineno-0-784"></a><span class="sd">        clabel: Colorbar label; ``None`` (default) takes the variable&#39;s ``units`` from</span>
+<a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">            ``autostyle.auto_style`` (#230), as :meth:`field` does.</span>
+<a id="__codelineno-0-786" name="__codelineno-0-786"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-787" name="__codelineno-0-787"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
+<a id="__codelineno-0-788" name="__codelineno-0-788"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-789" name="__codelineno-0-789"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
+<a id="__codelineno-0-791" name="__codelineno-0-791"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
+<a id="__codelineno-0-792" name="__codelineno-0-792"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
+<a id="__codelineno-0-793" name="__codelineno-0-793"></a>
+<a id="__codelineno-0-794" name="__codelineno-0-794"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="sd">        - Draw an irregular grid without resampling to axis-aligned:</span>
+<a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-797" name="__codelineno-0-797"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">            &gt;&gt;&gt; grid = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)       # doctest: +SKIP</span>
+<a id="__codelineno-0-800" name="__codelineno-0-800"></a><span class="sd">            &gt;&gt;&gt; InteractiveMap().quadmesh(grid).save(&quot;mesh.html&quot;).name      # doctest: +SKIP</span>
+<a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">            &#39;mesh.html&#39;</span>
 <a id="__codelineno-0-802" name="__codelineno-0-802"></a>
-<a id="__codelineno-0-803" name="__codelineno-0-803"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">        This map (chainable).</span>
-<a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-806" name="__codelineno-0-806"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
-<a id="__codelineno-0-807" name="__codelineno-0-807"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-808" name="__codelineno-0-808"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
-<a id="__codelineno-0-809" name="__codelineno-0-809"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-810" name="__codelineno-0-810"></a>        <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-811" name="__codelineno-0-811"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-812" name="__codelineno-0-812"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-813" name="__codelineno-0-813"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-814" name="__codelineno-0-814"></a>        <span class="n">source</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-815" name="__codelineno-0-815"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
-<a id="__codelineno-0-816" name="__codelineno-0-816"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-817" name="__codelineno-0-817"></a>            <span class="c1"># Coloured by its band, exactly as `field` is; it takes no `clim=`, so the domain is the</span>
-<a id="__codelineno-0-818" name="__codelineno-0-818"></a>            <span class="c1"># engine&#39;s to measure and the encoding carries no scale rather than a guessed one.</span>
-<a id="__codelineno-0-819" name="__codelineno-0-819"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-820" name="__codelineno-0-820"></a>                <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span><span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">coloured_by</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="p">))</span>
-<a id="__codelineno-0-821" name="__codelineno-0-821"></a>            <span class="p">},</span>
-<a id="__codelineno-0-822" name="__codelineno-0-822"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-823" name="__codelineno-0-823"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;quadmesh&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-824" name="__codelineno-0-824"></a>                <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band</span><span class="p">,</span>
-<a id="__codelineno-0-825" name="__codelineno-0-825"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
-<a id="__codelineno-0-826" name="__codelineno-0-826"></a>                <span class="s2">&quot;clabel&quot;</span><span class="p">:</span> <span class="n">clabel</span><span class="p">,</span>
-<a id="__codelineno-0-827" name="__codelineno-0-827"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
-<a id="__codelineno-0-828" name="__codelineno-0-828"></a>            <span class="p">},</span>
-<a id="__codelineno-0-829" name="__codelineno-0-829"></a>        <span class="p">),</span>
-<a id="__codelineno-0-830" name="__codelineno-0-830"></a>    <span class="p">)</span>
+<a id="__codelineno-0-803" name="__codelineno-0-803"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-804" name="__codelineno-0-804"></a>
+<a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-806" name="__codelineno-0-806"></a><span class="sd">        This map (chainable).</span>
+<a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-808" name="__codelineno-0-808"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
+<a id="__codelineno-0-809" name="__codelineno-0-809"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-810" name="__codelineno-0-810"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+<a id="__codelineno-0-811" name="__codelineno-0-811"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
+<a id="__codelineno-0-812" name="__codelineno-0-812"></a>        <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-813" name="__codelineno-0-813"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-814" name="__codelineno-0-814"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-815" name="__codelineno-0-815"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;mesh&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-816" name="__codelineno-0-816"></a>        <span class="n">source</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-817" name="__codelineno-0-817"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
+<a id="__codelineno-0-818" name="__codelineno-0-818"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-819" name="__codelineno-0-819"></a>            <span class="c1"># Coloured by its band, exactly as `field` is; it takes no `clim=`, so the domain is the</span>
+<a id="__codelineno-0-820" name="__codelineno-0-820"></a>            <span class="c1"># engine&#39;s to measure and the encoding carries no scale rather than a guessed one.</span>
+<a id="__codelineno-0-821" name="__codelineno-0-821"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-822" name="__codelineno-0-822"></a>                <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span><span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">coloured_by</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="p">))</span>
+<a id="__codelineno-0-823" name="__codelineno-0-823"></a>            <span class="p">},</span>
+<a id="__codelineno-0-824" name="__codelineno-0-824"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-825" name="__codelineno-0-825"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;quadmesh&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-826" name="__codelineno-0-826"></a>                <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band</span><span class="p">,</span>
+<a id="__codelineno-0-827" name="__codelineno-0-827"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
+<a id="__codelineno-0-828" name="__codelineno-0-828"></a>                <span class="s2">&quot;clabel&quot;</span><span class="p">:</span> <span class="n">clabel</span><span class="p">,</span>
+<a id="__codelineno-0-829" name="__codelineno-0-829"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
+<a id="__codelineno-0-830" name="__codelineno-0-830"></a>            <span class="p">},</span>
+<a id="__codelineno-0-831" name="__codelineno-0-831"></a>        <span class="p">),</span>
+<a id="__codelineno-0-832" name="__codelineno-0-832"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8417,9 +8421,7 @@ one <code>(lo, hi)</code> pair per channel.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-690">690</a></span>
-<span class="normal"><a href="#__codelineno-0-691">691</a></span>
-<span class="normal"><a href="#__codelineno-0-692">692</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-692">692</a></span>
 <span class="normal"><a href="#__codelineno-0-693">693</a></span>
 <span class="normal"><a href="#__codelineno-0-694">694</a></span>
 <span class="normal"><a href="#__codelineno-0-695">695</a></span>
@@ -8485,75 +8487,77 @@ one <code>(lo, hi)</code> pair per channel.</p>
 <span class="normal"><a href="#__codelineno-0-755">755</a></span>
 <span class="normal"><a href="#__codelineno-0-756">756</a></span>
 <span class="normal"><a href="#__codelineno-0-757">757</a></span>
-<span class="normal"><a href="#__codelineno-0-758">758</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb</span><span class="p">(</span>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">ChannelLimits</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a true-colour composite from three raster bands (2–98 % percentile stretch).</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">        data: A pyramids multiband ``Dataset``; reprojected to the display CRS first.</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a><span class="sd">        bands: The three 1-based band indices composing ``(R, G, B)``.</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">        limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="sd">            percentile scan, so a sequence of frames can share one black and white point.</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
-<a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715"></a>
-<a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="sd">        This map (chainable).</span>
-<a id="__codelineno-0-718" name="__codelineno-0-718"></a>
-<a id="__codelineno-0-719" name="__codelineno-0-719"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">        - Compose three bands of a satellite stack into true colour:</span>
-<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-723" name="__codelineno-0-723"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">            &gt;&gt;&gt; stack = Dataset.read_file(&quot;sentinel.tif&quot;)                   # doctest: +SKIP</span>
-<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().rgb(stack, bands=(4, 3, 2))            # doctest: +SKIP</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">            &gt;&gt;&gt; [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">            [&#39;R&#39;, &#39;G&#39;, &#39;B&#39;]</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728"></a>
-<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-758">758</a></span>
+<span class="normal"><a href="#__codelineno-0-759">759</a></span>
+<span class="normal"><a href="#__codelineno-0-760">760</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb</span><span class="p">(</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_COMPOSITE_BANDS</span><span class="p">,</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">ChannelLimits</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a true-colour composite from three raster bands (2–98 % percentile stretch).</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">        data: A pyramids multiband ``Dataset``; reprojected to the display CRS first.</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="sd">        bands: The three 1-based band indices composing ``(R, G, B)``.</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">        limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">            percentile scan, so a sequence of frames can share one black and white point.</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a><span class="sd">        This map (chainable).</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">        - Compose three bands of a satellite stack into true colour:</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">            &gt;&gt;&gt; stack = Dataset.read_file(&quot;sentinel.tif&quot;)                   # doctest: +SKIP</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().rgb(stack, bands=(4, 3, 2))            # doctest: +SKIP</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">            &gt;&gt;&gt; [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">            [&#39;R&#39;, &#39;G&#39;, &#39;B&#39;]</span>
 <a id="__codelineno-0-730" name="__codelineno-0-730"></a>
-<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-732" name="__codelineno-0-732"></a><span class="sd">        ValueError: when ``bands`` does not name exactly three bands, or ``limits`` is given without</span>
-<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">            one ``(lo, hi)`` pair per channel.</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
-<a id="__codelineno-0-736" name="__codelineno-0-736"></a>    <span class="c1"># Refused here rather than in the drawer, because the message names the argument the caller wrote.</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741"></a>        <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a>        <span class="n">source</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;rgb&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a>                <span class="s2">&quot;bands&quot;</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">bands</span><span class="p">),</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a>                <span class="c1"># A frozen stretch whose channel had no finite cell holds `(nan, nan)`, which JSON has</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a>                <span class="c1"># no spelling for. Such limits are held beside the layer and described as not given,</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a>                <span class="c1"># which is what a reader without them derives per frame.</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a>                <span class="s2">&quot;limits&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;limits&quot;</span><span class="p">,</span> <span class="n">limits</span><span class="p">),</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a>            <span class="p">}</span>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a>        <span class="p">),</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a>    <span class="p">)</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">        ValueError: when ``bands`` does not name exactly three bands, or ``limits`` is given without</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">            one ``(lo, hi)`` pair per channel.</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a>    <span class="c1"># Refused here rather than in the drawer, because the message names the argument the caller wrote.</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a>        <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a>        <span class="n">source</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;rgb&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a>                <span class="s2">&quot;bands&quot;</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">bands</span><span class="p">),</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a>                <span class="c1"># A frozen stretch whose channel had no finite cell holds `(nan, nan)`, which JSON has</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a>                <span class="c1"># no spelling for. Such limits are held beside the layer and described as not given,</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a>                <span class="c1"># which is what a reader without them derives per frame.</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a>                <span class="s2">&quot;limits&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;limits&quot;</span><span class="p">,</span> <span class="n">limits</span><span class="p">),</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a>            <span class="p">}</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a>        <span class="p">),</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8815,9 +8819,7 @@ is drawn, which is where the band is read.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-832">832</a></span>
-<span class="normal"><a href="#__codelineno-0-833">833</a></span>
-<span class="normal"><a href="#__codelineno-0-834">834</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-834">834</a></span>
 <span class="normal"><a href="#__codelineno-0-835">835</a></span>
 <span class="normal"><a href="#__codelineno-0-836">836</a></span>
 <span class="normal"><a href="#__codelineno-0-837">837</a></span>
@@ -8902,94 +8904,96 @@ is drawn, which is where the band is read.</p>
 <span class="normal"><a href="#__codelineno-0-916">916</a></span>
 <span class="normal"><a href="#__codelineno-0-917">917</a></span>
 <span class="normal"><a href="#__codelineno-0-918">918</a></span>
-<span class="normal"><a href="#__codelineno-0-919">919</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-832" name="__codelineno-0-832"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-833" name="__codelineno-0-833"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
-<a id="__codelineno-0-834" name="__codelineno-0-834"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-835" name="__codelineno-0-835"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-836" name="__codelineno-0-836"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-837" name="__codelineno-0-837"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
-<a id="__codelineno-0-838" name="__codelineno-0-838"></a>    <span class="n">levels</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-839" name="__codelineno-0-839"></a>    <span class="n">interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-840" name="__codelineno-0-840"></a>    <span class="n">filled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-841" name="__codelineno-0-841"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-842" name="__codelineno-0-842"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-843" name="__codelineno-0-843"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Trace iso-value lines of a raster band, or fill the bands between them.</span>
-<a id="__codelineno-0-846" name="__codelineno-0-846"></a>
-<a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="sd">    The three keywords the Tier-2 contract declares — ``levels``, ``interval`` and ``filled`` — on the</span>
-<a id="__codelineno-0-848" name="__codelineno-0-848"></a><span class="sd">    one method that answers to the name, so a call written against the web or static tier runs here</span>
-<a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="sd">    unchanged (#262). This tier also had a second method, ``filled_contours``, for what ``filled=True``</span>
-<a id="__codelineno-0-850" name="__codelineno-0-850"></a><span class="sd">    says here; it was deleted in review M3, and ``interval=`` used to fall through ``**opts`` to</span>
-<a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">    HoloViews, which refused it as an unknown *style* option.</span>
-<a id="__codelineno-0-852" name="__codelineno-0-852"></a>
-<a id="__codelineno-0-853" name="__codelineno-0-853"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-854" name="__codelineno-0-854"></a><span class="sd">        dataset: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.</span>
-<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">        band: 1-based band to contour.</span>
-<a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">        levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the</span>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">            variable&#39;s canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.</span>
-<a id="__codelineno-0-858" name="__codelineno-0-858"></a><span class="sd">            Give at most one of this or ``interval``.</span>
-<a id="__codelineno-0-859" name="__codelineno-0-859"></a><span class="sd">        interval: Spacing between levels — one level every N, in the band&#39;s own units. Resolved</span>
-<a id="__codelineno-0-860" name="__codelineno-0-860"></a><span class="sd">            against the band when the layer is drawn, because it is the band that decides which</span>
-<a id="__codelineno-0-861" name="__codelineno-0-861"></a><span class="sd">            multiples of the spacing lie inside it, and only the ones *strictly* inside are traced: a</span>
-<a id="__codelineno-0-862" name="__codelineno-0-862"></a><span class="sd">            level on an extreme draws the frame&#39;s edge or nothing. The arithmetic is</span>
-<a id="__codelineno-0-863" name="__codelineno-0-863"></a><span class="sd">            :func:`~digitalearth.base.levels.levels_every`, shared with the static tier so the two</span>
-<a id="__codelineno-0-864" name="__codelineno-0-864"></a><span class="sd">            cannot disagree about which multiples are inside.</span>
-<a id="__codelineno-0-865" name="__codelineno-0-865"></a><span class="sd">        filled: Fill the bands between the levels instead of drawing the levels as lines. It is also</span>
-<a id="__codelineno-0-866" name="__codelineno-0-866"></a><span class="sd">            what the layer&#39;s kind records — ``&quot;filled_contours&quot;`` against ``&quot;contours&quot;`` — so a figure</span>
-<a id="__codelineno-0-867" name="__codelineno-0-867"></a><span class="sd">            says which of the two renders it holds.</span>
-<a id="__codelineno-0-868" name="__codelineno-0-868"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
-<a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-871" name="__codelineno-0-871"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-872" name="__codelineno-0-872"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
-<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
-<a id="__codelineno-0-874" name="__codelineno-0-874"></a>
-<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-876" name="__codelineno-0-876"></a><span class="sd">        ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one thing,</span>
-<a id="__codelineno-0-877" name="__codelineno-0-877"></a><span class="sd">            so neither can be silently preferred; when ``interval`` is not a positive finite number; or</span>
-<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">            when no multiple of it lies inside the band&#39;s range. The last two are refused as the layer</span>
-<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">            is drawn, which is where the band is read.</span>
-<a id="__codelineno-0-880" name="__codelineno-0-880"></a>
-<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-882" name="__codelineno-0-882"></a><span class="sd">        - Contour a raster at five levels:</span>
-<a id="__codelineno-0-883" name="__codelineno-0-883"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-885" name="__codelineno-0-885"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-886" name="__codelineno-0-886"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
-<a id="__codelineno-0-887" name="__codelineno-0-887"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem, levels=5)                # doctest: +SKIP</span>
-<a id="__codelineno-0-888" name="__codelineno-0-888"></a><span class="sd">            &gt;&gt;&gt; len(m.layers)                                               # doctest: +SKIP</span>
-<a id="__codelineno-0-889" name="__codelineno-0-889"></a><span class="sd">            1</span>
-<a id="__codelineno-0-890" name="__codelineno-0-890"></a>
-<a id="__codelineno-0-891" name="__codelineno-0-891"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-892" name="__codelineno-0-892"></a><span class="sd">        - One level every 100 m, filled, from the same method:</span>
-<a id="__codelineno-0-893" name="__codelineno-0-893"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-894" name="__codelineno-0-894"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
-<a id="__codelineno-0-895" name="__codelineno-0-895"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
-<a id="__codelineno-0-897" name="__codelineno-0-897"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem, interval=100, filled=True)  # doctest: +SKIP</span>
-<a id="__codelineno-0-898" name="__codelineno-0-898"></a><span class="sd">            &gt;&gt;&gt; type(m.layers[0]).__name__                                  # doctest: +SKIP</span>
-<a id="__codelineno-0-899" name="__codelineno-0-899"></a><span class="sd">            &#39;Polygons&#39;</span>
-<a id="__codelineno-0-900" name="__codelineno-0-900"></a>
-<a id="__codelineno-0-901" name="__codelineno-0-901"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-919">919</a></span>
+<span class="normal"><a href="#__codelineno-0-920">920</a></span>
+<span class="normal"><a href="#__codelineno-0-921">921</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-834" name="__codelineno-0-834"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-835" name="__codelineno-0-835"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
+<a id="__codelineno-0-836" name="__codelineno-0-836"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-837" name="__codelineno-0-837"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-838" name="__codelineno-0-838"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-839" name="__codelineno-0-839"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
+<a id="__codelineno-0-840" name="__codelineno-0-840"></a>    <span class="n">levels</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-841" name="__codelineno-0-841"></a>    <span class="n">interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-842" name="__codelineno-0-842"></a>    <span class="n">filled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-843" name="__codelineno-0-843"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-844" name="__codelineno-0-844"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-845" name="__codelineno-0-845"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Trace iso-value lines of a raster band, or fill the bands between them.</span>
+<a id="__codelineno-0-848" name="__codelineno-0-848"></a>
+<a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="sd">    The three keywords the Tier-2 contract declares — ``levels``, ``interval`` and ``filled`` — on the</span>
+<a id="__codelineno-0-850" name="__codelineno-0-850"></a><span class="sd">    one method that answers to the name, so a call written against the web or static tier runs here</span>
+<a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">    unchanged (#262). This tier also had a second method, ``filled_contours``, for what ``filled=True``</span>
+<a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="sd">    says here; it was deleted in review M3, and ``interval=`` used to fall through ``**opts`` to</span>
+<a id="__codelineno-0-853" name="__codelineno-0-853"></a><span class="sd">    HoloViews, which refused it as an unknown *style* option.</span>
+<a id="__codelineno-0-854" name="__codelineno-0-854"></a>
+<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">        dataset: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.</span>
+<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">        band: 1-based band to contour.</span>
+<a id="__codelineno-0-858" name="__codelineno-0-858"></a><span class="sd">        levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the</span>
+<a id="__codelineno-0-859" name="__codelineno-0-859"></a><span class="sd">            variable&#39;s canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.</span>
+<a id="__codelineno-0-860" name="__codelineno-0-860"></a><span class="sd">            Give at most one of this or ``interval``.</span>
+<a id="__codelineno-0-861" name="__codelineno-0-861"></a><span class="sd">        interval: Spacing between levels — one level every N, in the band&#39;s own units. Resolved</span>
+<a id="__codelineno-0-862" name="__codelineno-0-862"></a><span class="sd">            against the band when the layer is drawn, because it is the band that decides which</span>
+<a id="__codelineno-0-863" name="__codelineno-0-863"></a><span class="sd">            multiples of the spacing lie inside it, and only the ones *strictly* inside are traced: a</span>
+<a id="__codelineno-0-864" name="__codelineno-0-864"></a><span class="sd">            level on an extreme draws the frame&#39;s edge or nothing. The arithmetic is</span>
+<a id="__codelineno-0-865" name="__codelineno-0-865"></a><span class="sd">            :func:`~digitalearth.base.levels.levels_every`, shared with the static tier so the two</span>
+<a id="__codelineno-0-866" name="__codelineno-0-866"></a><span class="sd">            cannot disagree about which multiples are inside.</span>
+<a id="__codelineno-0-867" name="__codelineno-0-867"></a><span class="sd">        filled: Fill the bands between the levels instead of drawing the levels as lines. It is also</span>
+<a id="__codelineno-0-868" name="__codelineno-0-868"></a><span class="sd">            what the layer&#39;s kind records — ``&quot;filled_contours&quot;`` against ``&quot;contours&quot;`` — so a figure</span>
+<a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="sd">            says which of the two renders it holds.</span>
+<a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-871" name="__codelineno-0-871"></a><span class="sd">            (default) generates one from the kind, and a name already on the figure is suffixed</span>
+<a id="__codelineno-0-872" name="__codelineno-0-872"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-874" name="__codelineno-0-874"></a><span class="sd">            hidden, so a switcher reading the figure agrees with the drawing (#327).</span>
+<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
+<a id="__codelineno-0-876" name="__codelineno-0-876"></a>
+<a id="__codelineno-0-877" name="__codelineno-0-877"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">        ValueError: when both ``levels`` and ``interval`` are given — two ways of asking for one thing,</span>
+<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">            so neither can be silently preferred; when ``interval`` is not a positive finite number; or</span>
+<a id="__codelineno-0-880" name="__codelineno-0-880"></a><span class="sd">            when no multiple of it lies inside the band&#39;s range. The last two are refused as the layer</span>
+<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">            is drawn, which is where the band is read.</span>
+<a id="__codelineno-0-882" name="__codelineno-0-882"></a>
+<a id="__codelineno-0-883" name="__codelineno-0-883"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">        - Contour a raster at five levels:</span>
+<a id="__codelineno-0-885" name="__codelineno-0-885"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-886" name="__codelineno-0-886"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-887" name="__codelineno-0-887"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-888" name="__codelineno-0-888"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
+<a id="__codelineno-0-889" name="__codelineno-0-889"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem, levels=5)                # doctest: +SKIP</span>
+<a id="__codelineno-0-890" name="__codelineno-0-890"></a><span class="sd">            &gt;&gt;&gt; len(m.layers)                                               # doctest: +SKIP</span>
+<a id="__codelineno-0-891" name="__codelineno-0-891"></a><span class="sd">            1</span>
+<a id="__codelineno-0-892" name="__codelineno-0-892"></a>
+<a id="__codelineno-0-893" name="__codelineno-0-893"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-894" name="__codelineno-0-894"></a><span class="sd">        - One level every 100 m, filled, from the same method:</span>
+<a id="__codelineno-0-895" name="__codelineno-0-895"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                        # doctest: +SKIP</span>
+<a id="__codelineno-0-897" name="__codelineno-0-897"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-898" name="__codelineno-0-898"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)        # doctest: +SKIP</span>
+<a id="__codelineno-0-899" name="__codelineno-0-899"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().contours(dem, interval=100, filled=True)  # doctest: +SKIP</span>
+<a id="__codelineno-0-900" name="__codelineno-0-900"></a><span class="sd">            &gt;&gt;&gt; type(m.layers[0]).__name__                                  # doctest: +SKIP</span>
+<a id="__codelineno-0-901" name="__codelineno-0-901"></a><span class="sd">            &#39;Polygons&#39;</span>
 <a id="__codelineno-0-902" name="__codelineno-0-902"></a>
-<a id="__codelineno-0-903" name="__codelineno-0-903"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-904" name="__codelineno-0-904"></a><span class="sd">        This map (chainable).</span>
-<a id="__codelineno-0-905" name="__codelineno-0-905"></a>
-<a id="__codelineno-0-906" name="__codelineno-0-906"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-907" name="__codelineno-0-907"></a><span class="sd">        digitalearth.base.levels.levels_every: the shared interval-to-levels arithmetic.</span>
-<a id="__codelineno-0-908" name="__codelineno-0-908"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-909" name="__codelineno-0-909"></a>    <span class="n">_one_spacing_only</span><span class="p">(</span><span class="s2">&quot;contours&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">interval</span><span class="p">)</span>
-<a id="__codelineno-0-910" name="__codelineno-0-910"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_contour_layer</span><span class="p">(</span>
-<a id="__codelineno-0-911" name="__codelineno-0-911"></a>        <span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-0-912" name="__codelineno-0-912"></a>        <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span>
-<a id="__codelineno-0-913" name="__codelineno-0-913"></a>        <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">,</span>
-<a id="__codelineno-0-914" name="__codelineno-0-914"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">,</span>
-<a id="__codelineno-0-915" name="__codelineno-0-915"></a>        <span class="n">filled</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
-<a id="__codelineno-0-916" name="__codelineno-0-916"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-917" name="__codelineno-0-917"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-918" name="__codelineno-0-918"></a>        <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-919" name="__codelineno-0-919"></a>    <span class="p">)</span>
+<a id="__codelineno-0-903" name="__codelineno-0-903"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-904" name="__codelineno-0-904"></a>
+<a id="__codelineno-0-905" name="__codelineno-0-905"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-906" name="__codelineno-0-906"></a><span class="sd">        This map (chainable).</span>
+<a id="__codelineno-0-907" name="__codelineno-0-907"></a>
+<a id="__codelineno-0-908" name="__codelineno-0-908"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-909" name="__codelineno-0-909"></a><span class="sd">        digitalearth.base.levels.levels_every: the shared interval-to-levels arithmetic.</span>
+<a id="__codelineno-0-910" name="__codelineno-0-910"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-911" name="__codelineno-0-911"></a>    <span class="n">_one_spacing_only</span><span class="p">(</span><span class="s2">&quot;contours&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">interval</span><span class="p">)</span>
+<a id="__codelineno-0-912" name="__codelineno-0-912"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_contour_layer</span><span class="p">(</span>
+<a id="__codelineno-0-913" name="__codelineno-0-913"></a>        <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-914" name="__codelineno-0-914"></a>        <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span>
+<a id="__codelineno-0-915" name="__codelineno-0-915"></a>        <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">,</span>
+<a id="__codelineno-0-916" name="__codelineno-0-916"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">,</span>
+<a id="__codelineno-0-917" name="__codelineno-0-917"></a>        <span class="n">filled</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
+<a id="__codelineno-0-918" name="__codelineno-0-918"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-919" name="__codelineno-0-919"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-920" name="__codelineno-0-920"></a>        <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-921" name="__codelineno-0-921"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -9153,9 +9157,7 @@ explicit <code>color</code> or <code>cmap</code> here disables the per-member co
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1030">1030</a></span>
-<span class="normal"><a href="#__codelineno-0-1031">1031</a></span>
-<span class="normal"><a href="#__codelineno-0-1032">1032</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1032">1032</a></span>
 <span class="normal"><a href="#__codelineno-0-1033">1033</a></span>
 <span class="normal"><a href="#__codelineno-0-1034">1034</a></span>
 <span class="normal"><a href="#__codelineno-0-1035">1035</a></span>
@@ -9221,75 +9223,77 @@ explicit <code>color</code> or <code>cmap</code> here disables the per-member co
 <span class="normal"><a href="#__codelineno-0-1095">1095</a></span>
 <span class="normal"><a href="#__codelineno-0-1096">1096</a></span>
 <span class="normal"><a href="#__codelineno-0-1097">1097</a></span>
-<span class="normal"><a href="#__codelineno-0-1098">1098</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1030" name="__codelineno-0-1030"></a><span class="k">def</span><span class="w"> </span><span class="nf">spaghetti</span><span class="p">(</span>
-<a id="__codelineno-0-1031" name="__codelineno-0-1031"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1032" name="__codelineno-0-1032"></a>    <span class="n">collection</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1033" name="__codelineno-0-1033"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1034" name="__codelineno-0-1034"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
-<a id="__codelineno-0-1035" name="__codelineno-0-1035"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1036" name="__codelineno-0-1036"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1037" name="__codelineno-0-1037"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1038" name="__codelineno-0-1038"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-1039" name="__codelineno-0-1039"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay each member of a ``DatasetCollection`` as line contours (ensemble spaghetti).</span>
-<a id="__codelineno-0-1040" name="__codelineno-0-1040"></a>
-<a id="__codelineno-0-1041" name="__codelineno-0-1041"></a><span class="sd">    Each member gets a distinct colour from a cycling palette so the strands are</span>
-<a id="__codelineno-0-1042" name="__codelineno-0-1042"></a><span class="sd">    distinguishable, unless the caller passes an explicit ``color``/``cmap`` in ``opts``.</span>
-<a id="__codelineno-0-1043" name="__codelineno-0-1043"></a>
-<a id="__codelineno-0-1044" name="__codelineno-0-1044"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1045" name="__codelineno-0-1045"></a><span class="sd">        collection: A pyramids ``DatasetCollection`` whose members share a grid.</span>
-<a id="__codelineno-0-1046" name="__codelineno-0-1046"></a><span class="sd">        band: 1-based band contoured in every member.</span>
-<a id="__codelineno-0-1047" name="__codelineno-0-1047"></a><span class="sd">        name: The caller&#39;s own name for the layers, used as their ids and labels; ``None``</span>
-<a id="__codelineno-0-1048" name="__codelineno-0-1048"></a><span class="sd">            (default) generates one per member. One call draws **one layer per member**, so a</span>
-<a id="__codelineno-0-1049" name="__codelineno-0-1049"></a><span class="sd">            single name is shared and the second and later take ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-1050" name="__codelineno-0-1050"></a><span class="sd">        visible: Whether the members are drawn. ``False`` builds them hidden **and** describes</span>
-<a id="__codelineno-0-1051" name="__codelineno-0-1051"></a><span class="sd">            them hidden (#327).</span>
-<a id="__codelineno-0-1052" name="__codelineno-0-1052"></a><span class="sd">        **opts: Extra HoloViews style options applied to each member&#39;s contour element. An</span>
-<a id="__codelineno-0-1053" name="__codelineno-0-1053"></a><span class="sd">            explicit ``color`` or ``cmap`` here disables the per-member colour cycle.</span>
-<a id="__codelineno-0-1054" name="__codelineno-0-1054"></a>
-<a id="__codelineno-0-1055" name="__codelineno-0-1055"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1056" name="__codelineno-0-1056"></a><span class="sd">        - Overlay a three-member ensemble as spaghetti contours:</span>
-<a id="__codelineno-0-1057" name="__codelineno-0-1057"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1058" name="__codelineno-0-1058"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP</span>
-<a id="__codelineno-0-1059" name="__codelineno-0-1059"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
-<a id="__codelineno-0-1060" name="__codelineno-0-1060"></a><span class="sd">            &gt;&gt;&gt; dc = DatasetCollection.from_files([&quot;examples/data/acc4000.tif&quot;] * 3)  # doctest: +SKIP</span>
-<a id="__codelineno-0-1061" name="__codelineno-0-1061"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().spaghetti(dc, levels=4)                # doctest: +SKIP</span>
-<a id="__codelineno-0-1062" name="__codelineno-0-1062"></a><span class="sd">            &gt;&gt;&gt; len(m.layers)                                               # doctest: +SKIP</span>
-<a id="__codelineno-0-1063" name="__codelineno-0-1063"></a><span class="sd">            3</span>
-<a id="__codelineno-0-1064" name="__codelineno-0-1064"></a>
-<a id="__codelineno-0-1065" name="__codelineno-0-1065"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-1098">1098</a></span>
+<span class="normal"><a href="#__codelineno-0-1099">1099</a></span>
+<span class="normal"><a href="#__codelineno-0-1100">1100</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1032" name="__codelineno-0-1032"></a><span class="k">def</span><span class="w"> </span><span class="nf">spaghetti</span><span class="p">(</span>
+<a id="__codelineno-0-1033" name="__codelineno-0-1033"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-1034" name="__codelineno-0-1034"></a>    <span class="n">collection</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1035" name="__codelineno-0-1035"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-1036" name="__codelineno-0-1036"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
+<a id="__codelineno-0-1037" name="__codelineno-0-1037"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1038" name="__codelineno-0-1038"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1039" name="__codelineno-0-1039"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1040" name="__codelineno-0-1040"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-1041" name="__codelineno-0-1041"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay each member of a ``DatasetCollection`` as line contours (ensemble spaghetti).</span>
+<a id="__codelineno-0-1042" name="__codelineno-0-1042"></a>
+<a id="__codelineno-0-1043" name="__codelineno-0-1043"></a><span class="sd">    Each member gets a distinct colour from a cycling palette so the strands are</span>
+<a id="__codelineno-0-1044" name="__codelineno-0-1044"></a><span class="sd">    distinguishable, unless the caller passes an explicit ``color``/``cmap`` in ``opts``.</span>
+<a id="__codelineno-0-1045" name="__codelineno-0-1045"></a>
+<a id="__codelineno-0-1046" name="__codelineno-0-1046"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1047" name="__codelineno-0-1047"></a><span class="sd">        collection: A pyramids ``DatasetCollection`` whose members share a grid.</span>
+<a id="__codelineno-0-1048" name="__codelineno-0-1048"></a><span class="sd">        band: 1-based band contoured in every member.</span>
+<a id="__codelineno-0-1049" name="__codelineno-0-1049"></a><span class="sd">        name: The caller&#39;s own name for the layers, used as their ids and labels; ``None``</span>
+<a id="__codelineno-0-1050" name="__codelineno-0-1050"></a><span class="sd">            (default) generates one per member. One call draws **one layer per member**, so a</span>
+<a id="__codelineno-0-1051" name="__codelineno-0-1051"></a><span class="sd">            single name is shared and the second and later take ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-1052" name="__codelineno-0-1052"></a><span class="sd">        visible: Whether the members are drawn. ``False`` builds them hidden **and** describes</span>
+<a id="__codelineno-0-1053" name="__codelineno-0-1053"></a><span class="sd">            them hidden (#327).</span>
+<a id="__codelineno-0-1054" name="__codelineno-0-1054"></a><span class="sd">        **opts: Extra HoloViews style options applied to each member&#39;s contour element. An</span>
+<a id="__codelineno-0-1055" name="__codelineno-0-1055"></a><span class="sd">            explicit ``color`` or ``cmap`` here disables the per-member colour cycle.</span>
+<a id="__codelineno-0-1056" name="__codelineno-0-1056"></a>
+<a id="__codelineno-0-1057" name="__codelineno-0-1057"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1058" name="__codelineno-0-1058"></a><span class="sd">        - Overlay a three-member ensemble as spaghetti contours:</span>
+<a id="__codelineno-0-1059" name="__codelineno-0-1059"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1060" name="__codelineno-0-1060"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP</span>
+<a id="__codelineno-0-1061" name="__codelineno-0-1061"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap         # doctest: +SKIP</span>
+<a id="__codelineno-0-1062" name="__codelineno-0-1062"></a><span class="sd">            &gt;&gt;&gt; dc = DatasetCollection.from_files([&quot;examples/data/acc4000.tif&quot;] * 3)  # doctest: +SKIP</span>
+<a id="__codelineno-0-1063" name="__codelineno-0-1063"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().spaghetti(dc, levels=4)                # doctest: +SKIP</span>
+<a id="__codelineno-0-1064" name="__codelineno-0-1064"></a><span class="sd">            &gt;&gt;&gt; len(m.layers)                                               # doctest: +SKIP</span>
+<a id="__codelineno-0-1065" name="__codelineno-0-1065"></a><span class="sd">            3</span>
 <a id="__codelineno-0-1066" name="__codelineno-0-1066"></a>
-<a id="__codelineno-0-1067" name="__codelineno-0-1067"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1068" name="__codelineno-0-1068"></a><span class="sd">        This map (chainable) — one contour layer registered per member.</span>
-<a id="__codelineno-0-1069" name="__codelineno-0-1069"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1070" name="__codelineno-0-1070"></a>    <span class="n">cycle_colour</span> <span class="o">=</span> <span class="s2">&quot;color&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">opts</span> <span class="ow">and</span> <span class="s2">&quot;cmap&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">opts</span>
-<a id="__codelineno-0-1071" name="__codelineno-0-1071"></a>    <span class="c1"># `levels` is a parameter of the shared funnel rather than a style option, so it is taken out of</span>
-<a id="__codelineno-0-1072" name="__codelineno-0-1072"></a>    <span class="c1"># the caller&#39;s keywords here instead of being handed to it twice.</span>
-<a id="__codelineno-0-1073" name="__codelineno-0-1073"></a>    <span class="n">levels</span> <span class="o">=</span> <span class="n">opts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;levels&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-1074" name="__codelineno-0-1074"></a>    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">member</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">collection</span><span class="o">.</span><span class="n">datasets</span><span class="p">):</span>
-<a id="__codelineno-0-1075" name="__codelineno-0-1075"></a>        <span class="c1"># The cycle goes in the *derived* bucket, not in the caller&#39;s. Passing it through `**opts`</span>
-<a id="__codelineno-0-1076" name="__codelineno-0-1076"></a>        <span class="c1"># filed a colour nobody asked for under the one bucket `portable_encodings` lifts unfiltered,</span>
-<a id="__codelineno-0-1077" name="__codelineno-0-1077"></a>        <span class="c1"># so three unstyled members published three different colours as three caller intents — and a</span>
-<a id="__codelineno-0-1078" name="__codelineno-0-1078"></a>        <span class="c1"># figure carried to another tier repainted itself in this tier&#39;s cycle (review R2-H3).</span>
-<a id="__codelineno-0-1079" name="__codelineno-0-1079"></a>        <span class="n">derived</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-1080" name="__codelineno-0-1080"></a>            <span class="p">{</span><span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_SPAGHETTI_COLORS</span><span class="p">[</span><span class="n">index</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_SPAGHETTI_COLORS</span><span class="p">)]}</span>
-<a id="__codelineno-0-1081" name="__codelineno-0-1081"></a>            <span class="k">if</span> <span class="n">cycle_colour</span>
-<a id="__codelineno-0-1082" name="__codelineno-0-1082"></a>            <span class="k">else</span> <span class="p">{}</span>
-<a id="__codelineno-0-1083" name="__codelineno-0-1083"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1084" name="__codelineno-0-1084"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_contour_layer</span><span class="p">(</span>
-<a id="__codelineno-0-1085" name="__codelineno-0-1085"></a>            <span class="n">member</span><span class="p">,</span>
-<a id="__codelineno-0-1086" name="__codelineno-0-1086"></a>            <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span>
-<a id="__codelineno-0-1087" name="__codelineno-0-1087"></a>            <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">,</span>
-<a id="__codelineno-0-1088" name="__codelineno-0-1088"></a>            <span class="n">filled</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-1089" name="__codelineno-0-1089"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-1090" name="__codelineno-0-1090"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-1091" name="__codelineno-0-1091"></a>            <span class="n">derived</span><span class="o">=</span><span class="n">derived</span><span class="p">,</span>
-<a id="__codelineno-0-1092" name="__codelineno-0-1092"></a>            <span class="c1"># A member&#39;s strands are one flat colour — the cycle&#39;s, or the caller&#39;s own `color=` — so the</span>
-<a id="__codelineno-0-1093" name="__codelineno-0-1093"></a>            <span class="c1"># layer publishes no colour encoding and takes no colour key. A `cmap=` is the one keyword</span>
-<a id="__codelineno-0-1094" name="__codelineno-0-1094"></a>            <span class="c1"># that makes the strands vary with the value they trace, and only then is there a key to draw.</span>
-<a id="__codelineno-0-1095" name="__codelineno-0-1095"></a>            <span class="n">coloured_by_value</span><span class="o">=</span><span class="s2">&quot;cmap&quot;</span> <span class="ow">in</span> <span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-1096" name="__codelineno-0-1096"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
-<a id="__codelineno-0-1097" name="__codelineno-0-1097"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1098" name="__codelineno-0-1098"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-1067" name="__codelineno-0-1067"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1068" name="__codelineno-0-1068"></a>
+<a id="__codelineno-0-1069" name="__codelineno-0-1069"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1070" name="__codelineno-0-1070"></a><span class="sd">        This map (chainable) — one contour layer registered per member.</span>
+<a id="__codelineno-0-1071" name="__codelineno-0-1071"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1072" name="__codelineno-0-1072"></a>    <span class="n">cycle_colour</span> <span class="o">=</span> <span class="s2">&quot;color&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">opts</span> <span class="ow">and</span> <span class="s2">&quot;cmap&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">opts</span>
+<a id="__codelineno-0-1073" name="__codelineno-0-1073"></a>    <span class="c1"># `levels` is a parameter of the shared funnel rather than a style option, so it is taken out of</span>
+<a id="__codelineno-0-1074" name="__codelineno-0-1074"></a>    <span class="c1"># the caller&#39;s keywords here instead of being handed to it twice.</span>
+<a id="__codelineno-0-1075" name="__codelineno-0-1075"></a>    <span class="n">levels</span> <span class="o">=</span> <span class="n">opts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;levels&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-1076" name="__codelineno-0-1076"></a>    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">member</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">collection</span><span class="o">.</span><span class="n">datasets</span><span class="p">):</span>
+<a id="__codelineno-0-1077" name="__codelineno-0-1077"></a>        <span class="c1"># The cycle goes in the *derived* bucket, not in the caller&#39;s. Passing it through `**opts`</span>
+<a id="__codelineno-0-1078" name="__codelineno-0-1078"></a>        <span class="c1"># filed a colour nobody asked for under the one bucket `portable_encodings` lifts unfiltered,</span>
+<a id="__codelineno-0-1079" name="__codelineno-0-1079"></a>        <span class="c1"># so three unstyled members published three different colours as three caller intents — and a</span>
+<a id="__codelineno-0-1080" name="__codelineno-0-1080"></a>        <span class="c1"># figure carried to another tier repainted itself in this tier&#39;s cycle (review R2-H3).</span>
+<a id="__codelineno-0-1081" name="__codelineno-0-1081"></a>        <span class="n">derived</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-1082" name="__codelineno-0-1082"></a>            <span class="p">{</span><span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_SPAGHETTI_COLORS</span><span class="p">[</span><span class="n">index</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_SPAGHETTI_COLORS</span><span class="p">)]}</span>
+<a id="__codelineno-0-1083" name="__codelineno-0-1083"></a>            <span class="k">if</span> <span class="n">cycle_colour</span>
+<a id="__codelineno-0-1084" name="__codelineno-0-1084"></a>            <span class="k">else</span> <span class="p">{}</span>
+<a id="__codelineno-0-1085" name="__codelineno-0-1085"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1086" name="__codelineno-0-1086"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_contour_layer</span><span class="p">(</span>
+<a id="__codelineno-0-1087" name="__codelineno-0-1087"></a>            <span class="n">member</span><span class="p">,</span>
+<a id="__codelineno-0-1088" name="__codelineno-0-1088"></a>            <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span>
+<a id="__codelineno-0-1089" name="__codelineno-0-1089"></a>            <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">,</span>
+<a id="__codelineno-0-1090" name="__codelineno-0-1090"></a>            <span class="n">filled</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-1091" name="__codelineno-0-1091"></a>            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-1092" name="__codelineno-0-1092"></a>            <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-1093" name="__codelineno-0-1093"></a>            <span class="n">derived</span><span class="o">=</span><span class="n">derived</span><span class="p">,</span>
+<a id="__codelineno-0-1094" name="__codelineno-0-1094"></a>            <span class="c1"># A member&#39;s strands are one flat colour — the cycle&#39;s, or the caller&#39;s own `color=` — so the</span>
+<a id="__codelineno-0-1095" name="__codelineno-0-1095"></a>            <span class="c1"># layer publishes no colour encoding and takes no colour key. A `cmap=` is the one keyword</span>
+<a id="__codelineno-0-1096" name="__codelineno-0-1096"></a>            <span class="c1"># that makes the strands vary with the value they trace, and only then is there a key to draw.</span>
+<a id="__codelineno-0-1097" name="__codelineno-0-1097"></a>            <span class="n">coloured_by_value</span><span class="o">=</span><span class="s2">&quot;cmap&quot;</span> <span class="ow">in</span> <span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-1098" name="__codelineno-0-1098"></a>            <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">,</span>
+<a id="__codelineno-0-1099" name="__codelineno-0-1099"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1100" name="__codelineno-0-1100"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -9569,9 +9573,7 @@ element while the figure went on calling it visible (#327).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/interactive/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1100">1100</a></span>
-<span class="normal"><a href="#__codelineno-0-1101">1101</a></span>
-<span class="normal"><a href="#__codelineno-0-1102">1102</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1102">1102</a></span>
 <span class="normal"><a href="#__codelineno-0-1103">1103</a></span>
 <span class="normal"><a href="#__codelineno-0-1104">1104</a></span>
 <span class="normal"><a href="#__codelineno-0-1105">1105</a></span>
@@ -9694,132 +9696,134 @@ element while the figure went on calling it visible (#327).</p>
 <span class="normal"><a href="#__codelineno-0-1222">1222</a></span>
 <span class="normal"><a href="#__codelineno-0-1223">1223</a></span>
 <span class="normal"><a href="#__codelineno-0-1224">1224</a></span>
-<span class="normal"><a href="#__codelineno-0-1225">1225</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1100" name="__codelineno-0-1100"></a><span class="nd">@_skips_off_limb</span>
-<a id="__codelineno-0-1101" name="__codelineno-0-1101"></a><span class="k">def</span><span class="w"> </span><span class="nf">large_image</span><span class="p">(</span>
-<a id="__codelineno-0-1102" name="__codelineno-0-1102"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-1103" name="__codelineno-0-1103"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1104" name="__codelineno-0-1104"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-1105" name="__codelineno-0-1105"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
-<a id="__codelineno-0-1106" name="__codelineno-0-1106"></a>    <span class="n">max_pixels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4_000_000</span><span class="p">,</span>
-<a id="__codelineno-0-1107" name="__codelineno-0-1107"></a>    <span class="n">dynamic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1108" name="__codelineno-0-1108"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1109" name="__codelineno-0-1109"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1110" name="__codelineno-0-1110"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-1111" name="__codelineno-0-1111"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-1112" name="__codelineno-0-1112"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-1113" name="__codelineno-0-1113"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a large raster / COG by loading only the viewport at a decimated overview (DI.14).</span>
-<a id="__codelineno-0-1114" name="__codelineno-0-1114"></a>
-<a id="__codelineno-0-1115" name="__codelineno-0-1115"></a><span class="sd">    The raster analogue of the vector Datashader path: instead of materialising a multi-GB raster,</span>
-<a id="__codelineno-0-1116" name="__codelineno-0-1116"></a><span class="sd">    it reads only the visible window at a suitable overview via **pyramids** and re-reads on pan/</span>
-<a id="__codelineno-0-1117" name="__codelineno-0-1117"></a><span class="sd">    zoom. Cloud-native partial reads for remote COGs over ``/vsicurl/`` come for free.</span>
-<a id="__codelineno-0-1118" name="__codelineno-0-1118"></a>
-<a id="__codelineno-0-1119" name="__codelineno-0-1119"></a><span class="sd">    **Every frame is a read through the data tier** (#297): the window, the canvas and the budget are a</span>
-<a id="__codelineno-0-1120" name="__codelineno-0-1120"></a><span class="sd">    :class:`~digitalearth.base.spec.RenderTarget` request, and</span>
-<a id="__codelineno-0-1121" name="__codelineno-0-1121"></a><span class="sd">    :class:`~digitalearth.base.sources.view.SourceView` answers it — snapping the window to source pixel</span>
-<a id="__codelineno-0-1122" name="__codelineno-0-1122"></a><span class="sd">    edges, never asking for more cells than the window holds, masking what is missing, and drawing an</span>
-<a id="__codelineno-0-1123" name="__codelineno-0-1123"></a><span class="sd">    empty frame for a window off the data. A raster in another CRS is read through pyramids&#39;</span>
-<a id="__codelineno-0-1124" name="__codelineno-0-1124"></a><span class="sd">    ``Dataset.warped_view``, so each frame warps only its own window rather than the whole raster once.</span>
-<a id="__codelineno-0-1125" name="__codelineno-0-1125"></a>
-<a id="__codelineno-0-1126" name="__codelineno-0-1126"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-1127" name="__codelineno-0-1127"></a><span class="sd">        dataset: A pyramids ``Dataset`` (ideally a COG with overviews). Must expose ``read_part``.</span>
-<a id="__codelineno-0-1128" name="__codelineno-0-1128"></a><span class="sd">        band: 1-based band to read.</span>
-<a id="__codelineno-0-1129" name="__codelineno-0-1129"></a><span class="sd">        max_pixels: Cell budget per rendered frame. The canvas follows the map&#39;s own width and height</span>
-<a id="__codelineno-0-1130" name="__codelineno-0-1130"></a><span class="sd">            within it, so a wide map reads a wide window rather than a square one.</span>
-<a id="__codelineno-0-1131" name="__codelineno-0-1131"></a><span class="sd">        dynamic: Re-read the viewport on pan/zoom via a ``RangeXY`` stream **and on a browser-window</span>
-<a id="__codelineno-0-1132" name="__codelineno-0-1132"></a><span class="sd">            resize via a ``PlotSize`` stream** (IN-6 #432), both needing a live server; ``False``</span>
-<a id="__codelineno-0-1133" name="__codelineno-0-1133"></a><span class="sd">            renders one frame of the whole raster within the budget (deterministic — what tests assert).</span>
-<a id="__codelineno-0-1134" name="__codelineno-0-1134"></a><span class="sd">        cmap: Colormap; ``None`` (default) resolves from the band&#39;s variable name via</span>
-<a id="__codelineno-0-1135" name="__codelineno-0-1135"></a><span class="sd">            ``autostyle.auto_style`` (#249), with ``&quot;viridis&quot;`` behind the lookup as the fallback.</span>
-<a id="__codelineno-0-1136" name="__codelineno-0-1136"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
-<a id="__codelineno-0-1137" name="__codelineno-0-1137"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
-<a id="__codelineno-0-1138" name="__codelineno-0-1138"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
-<a id="__codelineno-0-1139" name="__codelineno-0-1139"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
-<a id="__codelineno-0-1140" name="__codelineno-0-1140"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
-<a id="__codelineno-0-1141" name="__codelineno-0-1141"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
-<a id="__codelineno-0-1142" name="__codelineno-0-1142"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
-<a id="__codelineno-0-1143" name="__codelineno-0-1143"></a>
-<a id="__codelineno-0-1144" name="__codelineno-0-1144"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-1145" name="__codelineno-0-1145"></a><span class="sd">        This map (chainable).</span>
-<a id="__codelineno-0-1146" name="__codelineno-0-1146"></a>
-<a id="__codelineno-0-1147" name="__codelineno-0-1147"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-1148" name="__codelineno-0-1148"></a><span class="sd">        ValueError: when ``band`` is below 1 (the tier&#39;s band numbering is 1-based, like GDAL).</span>
-<a id="__codelineno-0-1149" name="__codelineno-0-1149"></a><span class="sd">        AttributeError: when ``dataset`` lacks the pyramids COG/overview read surface</span>
-<a id="__codelineno-0-1150" name="__codelineno-0-1150"></a><span class="sd">            (``read_part``/``preview``) — file a pyramids issue rather than reaching around it.</span>
-<a id="__codelineno-0-1151" name="__codelineno-0-1151"></a>
-<a id="__codelineno-0-1152" name="__codelineno-0-1152"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-1153" name="__codelineno-0-1153"></a><span class="sd">        - ``dynamic=False`` reads one frame of the whole raster — deterministic, and the one</span>
-<a id="__codelineno-0-1154" name="__codelineno-0-1154"></a><span class="sd">          form that works with no live server behind it. A raster already under the budget comes back</span>
-<a id="__codelineno-0-1155" name="__codelineno-0-1155"></a><span class="sd">          whole, so the budget only ever *caps* what is materialised:</span>
-<a id="__codelineno-0-1156" name="__codelineno-0-1156"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1157" name="__codelineno-0-1157"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                       # doctest: +SKIP</span>
-<a id="__codelineno-0-1158" name="__codelineno-0-1158"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap        # doctest: +SKIP</span>
-<a id="__codelineno-0-1159" name="__codelineno-0-1159"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)       # doctest: +SKIP</span>
-<a id="__codelineno-0-1160" name="__codelineno-0-1160"></a><span class="sd">            &gt;&gt;&gt; (dem.rows, dem.columns)                                    # doctest: +SKIP</span>
-<a id="__codelineno-0-1161" name="__codelineno-0-1161"></a><span class="sd">            (13, 14)</span>
-<a id="__codelineno-0-1162" name="__codelineno-0-1162"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().large_image(dem, dynamic=False)       # doctest: +SKIP</span>
-<a id="__codelineno-0-1163" name="__codelineno-0-1163"></a><span class="sd">            &gt;&gt;&gt; m.layers[0].dimension_values(2, flat=False).shape          # doctest: +SKIP</span>
-<a id="__codelineno-0-1164" name="__codelineno-0-1164"></a><span class="sd">            (13, 14)</span>
-<a id="__codelineno-0-1165" name="__codelineno-0-1165"></a>
-<a id="__codelineno-0-1166" name="__codelineno-0-1166"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1167" name="__codelineno-0-1167"></a><span class="sd">        - The default ``dynamic=True`` registers a viewport-driven layer instead, carrying two</span>
-<a id="__codelineno-0-1168" name="__codelineno-0-1168"></a><span class="sd">          streams — a ``RangeXY`` that re-reads the window from the axes ranges on every pan/zoom, and</span>
-<a id="__codelineno-0-1169" name="__codelineno-0-1169"></a><span class="sd">          a ``PlotSize`` that re-reads at the new resolution on a browser-window resize (IN-6):</span>
-<a id="__codelineno-0-1170" name="__codelineno-0-1170"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1171" name="__codelineno-0-1171"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap        # doctest: +SKIP</span>
-<a id="__codelineno-0-1172" name="__codelineno-0-1172"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().large_image(dem)                      # doctest: +SKIP</span>
-<a id="__codelineno-0-1173" name="__codelineno-0-1173"></a><span class="sd">            &gt;&gt;&gt; len(m.layers[0].streams)                                   # doctest: +SKIP</span>
-<a id="__codelineno-0-1174" name="__codelineno-0-1174"></a><span class="sd">            2</span>
-<a id="__codelineno-0-1175" name="__codelineno-0-1175"></a><span class="sd">            &gt;&gt;&gt; sorted(m.layers[0].streams[0].contents)                    # doctest: +SKIP</span>
-<a id="__codelineno-0-1176" name="__codelineno-0-1176"></a><span class="sd">            [&#39;x_range&#39;, &#39;y_range&#39;]</span>
-<a id="__codelineno-0-1177" name="__codelineno-0-1177"></a>
-<a id="__codelineno-0-1178" name="__codelineno-0-1178"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1179" name="__codelineno-0-1179"></a><span class="sd">        - A raster without pyramids&#39; windowed-read surface is refused by name, rather than</span>
-<a id="__codelineno-0-1180" name="__codelineno-0-1180"></a><span class="sd">          being quietly read whole:</span>
-<a id="__codelineno-0-1181" name="__codelineno-0-1181"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-1182" name="__codelineno-0-1182"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap        # doctest: +SKIP</span>
-<a id="__codelineno-0-1183" name="__codelineno-0-1183"></a><span class="sd">            &gt;&gt;&gt; try:                                                       # doctest: +SKIP</span>
-<a id="__codelineno-0-1184" name="__codelineno-0-1184"></a><span class="sd">            ...     InteractiveMap().large_image(object())</span>
-<a id="__codelineno-0-1185" name="__codelineno-0-1185"></a><span class="sd">            ... except AttributeError as error:</span>
-<a id="__codelineno-0-1186" name="__codelineno-0-1186"></a><span class="sd">            ...     print(str(error).split(&quot; (&quot;)[0])</span>
-<a id="__codelineno-0-1187" name="__codelineno-0-1187"></a><span class="sd">            large_image needs pyramids&#39; COG/overview read surface</span>
-<a id="__codelineno-0-1188" name="__codelineno-0-1188"></a>
-<a id="__codelineno-0-1189" name="__codelineno-0-1189"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-1190" name="__codelineno-0-1190"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-1191" name="__codelineno-0-1191"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
-<a id="__codelineno-0-1192" name="__codelineno-0-1192"></a>    <span class="c1"># Both refusals stay with the builder, because each names an argument the caller wrote.</span>
-<a id="__codelineno-0-1193" name="__codelineno-0-1193"></a>    <span class="k">if</span> <span class="n">band</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-<a id="__codelineno-0-1194" name="__codelineno-0-1194"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;band is 1-based; got </span><span class="si">{</span><span class="n">band</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-1195" name="__codelineno-0-1195"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;read_part&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;preview&quot;</span><span class="p">):</span>
-<a id="__codelineno-0-1196" name="__codelineno-0-1196"></a>        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span>
-<a id="__codelineno-0-1197" name="__codelineno-0-1197"></a>            <span class="s2">&quot;large_image needs pyramids&#39; COG/overview read surface (Dataset.read_part / &quot;</span>
-<a id="__codelineno-0-1198" name="__codelineno-0-1198"></a>            <span class="s2">&quot;.preview); upgrade pyramids or use field() for a small raster&quot;</span>
-<a id="__codelineno-0-1199" name="__codelineno-0-1199"></a>        <span class="p">)</span>
-<a id="__codelineno-0-1200" name="__codelineno-0-1200"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-0-1201" name="__codelineno-0-1201"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
-<a id="__codelineno-0-1202" name="__codelineno-0-1202"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
-<a id="__codelineno-0-1203" name="__codelineno-0-1203"></a>        <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-1204" name="__codelineno-0-1204"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-1205" name="__codelineno-0-1205"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-1206" name="__codelineno-0-1206"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;raster&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-1207" name="__codelineno-0-1207"></a>        <span class="n">source</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
-<a id="__codelineno-0-1208" name="__codelineno-0-1208"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
-<a id="__codelineno-0-1209" name="__codelineno-0-1209"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
-<a id="__codelineno-0-1210" name="__codelineno-0-1210"></a>            <span class="c1"># Coloured by its band like `field`, and named the same warp-free way — which matters more</span>
-<a id="__codelineno-0-1211" name="__codelineno-0-1211"></a>            <span class="c1"># here than anywhere else, since the whole point of this builder is never to read the raster</span>
-<a id="__codelineno-0-1212" name="__codelineno-0-1212"></a>            <span class="c1"># whole. No scale: each frame is stretched to the window it read.</span>
-<a id="__codelineno-0-1213" name="__codelineno-0-1213"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-1214" name="__codelineno-0-1214"></a>                <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span><span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">coloured_by</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">band</span><span class="p">))</span>
-<a id="__codelineno-0-1215" name="__codelineno-0-1215"></a>            <span class="p">},</span>
-<a id="__codelineno-0-1216" name="__codelineno-0-1216"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-1217" name="__codelineno-0-1217"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;large_image&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-1218" name="__codelineno-0-1218"></a>                <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band</span><span class="p">,</span>
-<a id="__codelineno-0-1219" name="__codelineno-0-1219"></a>                <span class="s2">&quot;max_pixels&quot;</span><span class="p">:</span> <span class="n">max_pixels</span><span class="p">,</span>
-<a id="__codelineno-0-1220" name="__codelineno-0-1220"></a>                <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">dynamic</span><span class="p">,</span>
-<a id="__codelineno-0-1221" name="__codelineno-0-1221"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
-<a id="__codelineno-0-1222" name="__codelineno-0-1222"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
-<a id="__codelineno-0-1223" name="__codelineno-0-1223"></a>            <span class="p">},</span>
-<a id="__codelineno-0-1224" name="__codelineno-0-1224"></a>        <span class="p">),</span>
-<a id="__codelineno-0-1225" name="__codelineno-0-1225"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-1225">1225</a></span>
+<span class="normal"><a href="#__codelineno-0-1226">1226</a></span>
+<span class="normal"><a href="#__codelineno-0-1227">1227</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1102" name="__codelineno-0-1102"></a><span class="nd">@_skips_off_limb</span>
+<a id="__codelineno-0-1103" name="__codelineno-0-1103"></a><span class="k">def</span><span class="w"> </span><span class="nf">large_image</span><span class="p">(</span>
+<a id="__codelineno-0-1104" name="__codelineno-0-1104"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-1105" name="__codelineno-0-1105"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1106" name="__codelineno-0-1106"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-1107" name="__codelineno-0-1107"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_BAND</span><span class="p">,</span>
+<a id="__codelineno-0-1108" name="__codelineno-0-1108"></a>    <span class="n">max_pixels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4_000_000</span><span class="p">,</span>
+<a id="__codelineno-0-1109" name="__codelineno-0-1109"></a>    <span class="n">dynamic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1110" name="__codelineno-0-1110"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1111" name="__codelineno-0-1111"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1112" name="__codelineno-0-1112"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-1113" name="__codelineno-0-1113"></a>    <span class="o">**</span><span class="n">opts</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-1114" name="__codelineno-0-1114"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-1115" name="__codelineno-0-1115"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a large raster / COG by loading only the viewport at a decimated overview (DI.14).</span>
+<a id="__codelineno-0-1116" name="__codelineno-0-1116"></a>
+<a id="__codelineno-0-1117" name="__codelineno-0-1117"></a><span class="sd">    The raster analogue of the vector Datashader path: instead of materialising a multi-GB raster,</span>
+<a id="__codelineno-0-1118" name="__codelineno-0-1118"></a><span class="sd">    it reads only the visible window at a suitable overview via **pyramids** and re-reads on pan/</span>
+<a id="__codelineno-0-1119" name="__codelineno-0-1119"></a><span class="sd">    zoom. Cloud-native partial reads for remote COGs over ``/vsicurl/`` come for free.</span>
+<a id="__codelineno-0-1120" name="__codelineno-0-1120"></a>
+<a id="__codelineno-0-1121" name="__codelineno-0-1121"></a><span class="sd">    **Every frame is a read through the data tier** (#297): the window, the canvas and the budget are a</span>
+<a id="__codelineno-0-1122" name="__codelineno-0-1122"></a><span class="sd">    :class:`~digitalearth.base.spec.RenderTarget` request, and</span>
+<a id="__codelineno-0-1123" name="__codelineno-0-1123"></a><span class="sd">    :class:`~digitalearth.base.sources.view.SourceView` answers it — snapping the window to source pixel</span>
+<a id="__codelineno-0-1124" name="__codelineno-0-1124"></a><span class="sd">    edges, never asking for more cells than the window holds, masking what is missing, and drawing an</span>
+<a id="__codelineno-0-1125" name="__codelineno-0-1125"></a><span class="sd">    empty frame for a window off the data. A raster in another CRS is read through pyramids&#39;</span>
+<a id="__codelineno-0-1126" name="__codelineno-0-1126"></a><span class="sd">    ``Dataset.warped_view``, so each frame warps only its own window rather than the whole raster once.</span>
+<a id="__codelineno-0-1127" name="__codelineno-0-1127"></a>
+<a id="__codelineno-0-1128" name="__codelineno-0-1128"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1129" name="__codelineno-0-1129"></a><span class="sd">        dataset: A pyramids ``Dataset`` (ideally a COG with overviews). Must expose ``read_part``.</span>
+<a id="__codelineno-0-1130" name="__codelineno-0-1130"></a><span class="sd">        band: 1-based band to read.</span>
+<a id="__codelineno-0-1131" name="__codelineno-0-1131"></a><span class="sd">        max_pixels: Cell budget per rendered frame. The canvas follows the map&#39;s own width and height</span>
+<a id="__codelineno-0-1132" name="__codelineno-0-1132"></a><span class="sd">            within it, so a wide map reads a wide window rather than a square one.</span>
+<a id="__codelineno-0-1133" name="__codelineno-0-1133"></a><span class="sd">        dynamic: Re-read the viewport on pan/zoom via a ``RangeXY`` stream **and on a browser-window</span>
+<a id="__codelineno-0-1134" name="__codelineno-0-1134"></a><span class="sd">            resize via a ``PlotSize`` stream** (IN-6 #432), both needing a live server; ``False``</span>
+<a id="__codelineno-0-1135" name="__codelineno-0-1135"></a><span class="sd">            renders one frame of the whole raster within the budget (deterministic — what tests assert).</span>
+<a id="__codelineno-0-1136" name="__codelineno-0-1136"></a><span class="sd">        cmap: Colormap; ``None`` (default) resolves from the band&#39;s variable name via</span>
+<a id="__codelineno-0-1137" name="__codelineno-0-1137"></a><span class="sd">            ``autostyle.auto_style`` (#249), with ``&quot;viridis&quot;`` behind the lookup as the fallback.</span>
+<a id="__codelineno-0-1138" name="__codelineno-0-1138"></a><span class="sd">        name: The caller&#39;s own name for the layer, used as its id and its label; ``None``</span>
+<a id="__codelineno-0-1139" name="__codelineno-0-1139"></a><span class="sd">            (default) generates one from the kind, and a name already on the map is suffixed</span>
+<a id="__codelineno-0-1140" name="__codelineno-0-1140"></a><span class="sd">            ``-2``, ``-3``, … (#321).</span>
+<a id="__codelineno-0-1141" name="__codelineno-0-1141"></a><span class="sd">        visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it</span>
+<a id="__codelineno-0-1142" name="__codelineno-0-1142"></a><span class="sd">            hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the</span>
+<a id="__codelineno-0-1143" name="__codelineno-0-1143"></a><span class="sd">            element while the figure went on calling it visible (#327).</span>
+<a id="__codelineno-0-1144" name="__codelineno-0-1144"></a><span class="sd">        **opts: Extra HoloViews style options applied to the element.</span>
+<a id="__codelineno-0-1145" name="__codelineno-0-1145"></a>
+<a id="__codelineno-0-1146" name="__codelineno-0-1146"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1147" name="__codelineno-0-1147"></a><span class="sd">        This map (chainable).</span>
+<a id="__codelineno-0-1148" name="__codelineno-0-1148"></a>
+<a id="__codelineno-0-1149" name="__codelineno-0-1149"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1150" name="__codelineno-0-1150"></a><span class="sd">        ValueError: when ``band`` is below 1 (the tier&#39;s band numbering is 1-based, like GDAL).</span>
+<a id="__codelineno-0-1151" name="__codelineno-0-1151"></a><span class="sd">        AttributeError: when ``dataset`` lacks the pyramids COG/overview read surface</span>
+<a id="__codelineno-0-1152" name="__codelineno-0-1152"></a><span class="sd">            (``read_part``/``preview``) — file a pyramids issue rather than reaching around it.</span>
+<a id="__codelineno-0-1153" name="__codelineno-0-1153"></a>
+<a id="__codelineno-0-1154" name="__codelineno-0-1154"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1155" name="__codelineno-0-1155"></a><span class="sd">        - ``dynamic=False`` reads one frame of the whole raster — deterministic, and the one</span>
+<a id="__codelineno-0-1156" name="__codelineno-0-1156"></a><span class="sd">          form that works with no live server behind it. A raster already under the budget comes back</span>
+<a id="__codelineno-0-1157" name="__codelineno-0-1157"></a><span class="sd">          whole, so the budget only ever *caps* what is materialised:</span>
+<a id="__codelineno-0-1158" name="__codelineno-0-1158"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1159" name="__codelineno-0-1159"></a><span class="sd">            &gt;&gt;&gt; from pyramids.dataset import Dataset                       # doctest: +SKIP</span>
+<a id="__codelineno-0-1160" name="__codelineno-0-1160"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap        # doctest: +SKIP</span>
+<a id="__codelineno-0-1161" name="__codelineno-0-1161"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)       # doctest: +SKIP</span>
+<a id="__codelineno-0-1162" name="__codelineno-0-1162"></a><span class="sd">            &gt;&gt;&gt; (dem.rows, dem.columns)                                    # doctest: +SKIP</span>
+<a id="__codelineno-0-1163" name="__codelineno-0-1163"></a><span class="sd">            (13, 14)</span>
+<a id="__codelineno-0-1164" name="__codelineno-0-1164"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().large_image(dem, dynamic=False)       # doctest: +SKIP</span>
+<a id="__codelineno-0-1165" name="__codelineno-0-1165"></a><span class="sd">            &gt;&gt;&gt; m.layers[0].dimension_values(2, flat=False).shape          # doctest: +SKIP</span>
+<a id="__codelineno-0-1166" name="__codelineno-0-1166"></a><span class="sd">            (13, 14)</span>
+<a id="__codelineno-0-1167" name="__codelineno-0-1167"></a>
+<a id="__codelineno-0-1168" name="__codelineno-0-1168"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1169" name="__codelineno-0-1169"></a><span class="sd">        - The default ``dynamic=True`` registers a viewport-driven layer instead, carrying two</span>
+<a id="__codelineno-0-1170" name="__codelineno-0-1170"></a><span class="sd">          streams — a ``RangeXY`` that re-reads the window from the axes ranges on every pan/zoom, and</span>
+<a id="__codelineno-0-1171" name="__codelineno-0-1171"></a><span class="sd">          a ``PlotSize`` that re-reads at the new resolution on a browser-window resize (IN-6):</span>
+<a id="__codelineno-0-1172" name="__codelineno-0-1172"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1173" name="__codelineno-0-1173"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap        # doctest: +SKIP</span>
+<a id="__codelineno-0-1174" name="__codelineno-0-1174"></a><span class="sd">            &gt;&gt;&gt; m = InteractiveMap().large_image(dem)                      # doctest: +SKIP</span>
+<a id="__codelineno-0-1175" name="__codelineno-0-1175"></a><span class="sd">            &gt;&gt;&gt; len(m.layers[0].streams)                                   # doctest: +SKIP</span>
+<a id="__codelineno-0-1176" name="__codelineno-0-1176"></a><span class="sd">            2</span>
+<a id="__codelineno-0-1177" name="__codelineno-0-1177"></a><span class="sd">            &gt;&gt;&gt; sorted(m.layers[0].streams[0].contents)                    # doctest: +SKIP</span>
+<a id="__codelineno-0-1178" name="__codelineno-0-1178"></a><span class="sd">            [&#39;x_range&#39;, &#39;y_range&#39;]</span>
+<a id="__codelineno-0-1179" name="__codelineno-0-1179"></a>
+<a id="__codelineno-0-1180" name="__codelineno-0-1180"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1181" name="__codelineno-0-1181"></a><span class="sd">        - A raster without pyramids&#39; windowed-read surface is refused by name, rather than</span>
+<a id="__codelineno-0-1182" name="__codelineno-0-1182"></a><span class="sd">          being quietly read whole:</span>
+<a id="__codelineno-0-1183" name="__codelineno-0-1183"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1184" name="__codelineno-0-1184"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.interactive import InteractiveMap        # doctest: +SKIP</span>
+<a id="__codelineno-0-1185" name="__codelineno-0-1185"></a><span class="sd">            &gt;&gt;&gt; try:                                                       # doctest: +SKIP</span>
+<a id="__codelineno-0-1186" name="__codelineno-0-1186"></a><span class="sd">            ...     InteractiveMap().large_image(object())</span>
+<a id="__codelineno-0-1187" name="__codelineno-0-1187"></a><span class="sd">            ... except AttributeError as error:</span>
+<a id="__codelineno-0-1188" name="__codelineno-0-1188"></a><span class="sd">            ...     print(str(error).split(&quot; (&quot;)[0])</span>
+<a id="__codelineno-0-1189" name="__codelineno-0-1189"></a><span class="sd">            large_image needs pyramids&#39; COG/overview read surface</span>
+<a id="__codelineno-0-1190" name="__codelineno-0-1190"></a>
+<a id="__codelineno-0-1191" name="__codelineno-0-1191"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1192" name="__codelineno-0-1192"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1193" name="__codelineno-0-1193"></a>    <span class="n">_require_holoviz</span><span class="p">()</span>
+<a id="__codelineno-0-1194" name="__codelineno-0-1194"></a>    <span class="c1"># Both refusals stay with the builder, because each names an argument the caller wrote.</span>
+<a id="__codelineno-0-1195" name="__codelineno-0-1195"></a>    <span class="k">if</span> <span class="n">band</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+<a id="__codelineno-0-1196" name="__codelineno-0-1196"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;band is 1-based; got </span><span class="si">{</span><span class="n">band</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1197" name="__codelineno-0-1197"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;read_part&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;preview&quot;</span><span class="p">):</span>
+<a id="__codelineno-0-1198" name="__codelineno-0-1198"></a>        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span>
+<a id="__codelineno-0-1199" name="__codelineno-0-1199"></a>            <span class="s2">&quot;large_image needs pyramids&#39; COG/overview read surface (Dataset.read_part / &quot;</span>
+<a id="__codelineno-0-1200" name="__codelineno-0-1200"></a>            <span class="s2">&quot;.preview); upgrade pyramids or use field() for a small raster&quot;</span>
+<a id="__codelineno-0-1201" name="__codelineno-0-1201"></a>        <span class="p">)</span>
+<a id="__codelineno-0-1202" name="__codelineno-0-1202"></a>    <span class="n">held</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-0-1203" name="__codelineno-0-1203"></a>    <span class="n">described_opts</span> <span class="o">=</span> <span class="n">describe_opts</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+<a id="__codelineno-0-1204" name="__codelineno-0-1204"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span>
+<a id="__codelineno-0-1205" name="__codelineno-0-1205"></a>        <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-1206" name="__codelineno-0-1206"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-1207" name="__codelineno-0-1207"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-1208" name="__codelineno-0-1208"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;raster&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-1209" name="__codelineno-0-1209"></a>        <span class="n">source</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-1210" name="__codelineno-0-1210"></a>        <span class="n">held</span><span class="o">=</span><span class="n">held</span><span class="p">,</span>
+<a id="__codelineno-0-1211" name="__codelineno-0-1211"></a>        <span class="n">symbology</span><span class="o">=</span><span class="n">Symbology</span><span class="p">(</span>
+<a id="__codelineno-0-1212" name="__codelineno-0-1212"></a>            <span class="c1"># Coloured by its band like `field`, and named the same warp-free way — which matters more</span>
+<a id="__codelineno-0-1213" name="__codelineno-0-1213"></a>            <span class="c1"># here than anywhere else, since the whole point of this builder is never to read the raster</span>
+<a id="__codelineno-0-1214" name="__codelineno-0-1214"></a>            <span class="c1"># whole. No scale: each frame is stretched to the window it read.</span>
+<a id="__codelineno-0-1215" name="__codelineno-0-1215"></a>            <span class="n">encodings</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-1216" name="__codelineno-0-1216"></a>                <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">Encoding</span><span class="o">.</span><span class="n">by_field</span><span class="p">(</span><span class="s2">&quot;color&quot;</span><span class="p">,</span> <span class="n">coloured_by</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">band</span><span class="p">))</span>
+<a id="__codelineno-0-1217" name="__codelineno-0-1217"></a>            <span class="p">},</span>
+<a id="__codelineno-0-1218" name="__codelineno-0-1218"></a>            <span class="n">props</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-1219" name="__codelineno-0-1219"></a>                <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;large_image&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-1220" name="__codelineno-0-1220"></a>                <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band</span><span class="p">,</span>
+<a id="__codelineno-0-1221" name="__codelineno-0-1221"></a>                <span class="s2">&quot;max_pixels&quot;</span><span class="p">:</span> <span class="n">max_pixels</span><span class="p">,</span>
+<a id="__codelineno-0-1222" name="__codelineno-0-1222"></a>                <span class="s2">&quot;dynamic&quot;</span><span class="p">:</span> <span class="n">dynamic</span><span class="p">,</span>
+<a id="__codelineno-0-1223" name="__codelineno-0-1223"></a>                <span class="s2">&quot;cmap&quot;</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="n">held</span><span class="p">,</span> <span class="s2">&quot;cmap&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="p">,</span> <span class="n">cmap_name</span><span class="p">(</span><span class="n">cmap</span><span class="p">)),</span>
+<a id="__codelineno-0-1224" name="__codelineno-0-1224"></a>                <span class="s2">&quot;opts&quot;</span><span class="p">:</span> <span class="n">described_opts</span><span class="p">,</span>
+<a id="__codelineno-0-1225" name="__codelineno-0-1225"></a>            <span class="p">},</span>
+<a id="__codelineno-0-1226" name="__codelineno-0-1226"></a>        <span class="p">),</span>
+<a id="__codelineno-0-1227" name="__codelineno-0-1227"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
