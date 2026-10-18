@@ -286,11 +286,11 @@ _LAZY_MODULES = {
         "TexturedGlobe",
         "facet",
         "grid",
-        "projections",
         "quickpanels",
         "shared_colorbar",
     ),
-    "digitalearth.static.charts": (
+    "digitalearth.static.view": ("projections",),
+    "digitalearth.static.charts.charts": (
         "bar",
         "bar_by",
         "histogram",
@@ -299,7 +299,7 @@ _LAZY_MODULES = {
         "scatter",
         "statistics",
     ),
-    "digitalearth.static.series": (
+    "digitalearth.static.charts.series": (
         "boxplot",
         "envelope",
         "multiboxplot",
@@ -341,11 +341,10 @@ if TYPE_CHECKING:
         TexturedGlobe,
         facet,
         grid,
-        projections,
         quickpanels,
         shared_colorbar,
     )
-    from digitalearth.static.charts import (
+    from digitalearth.static.charts.charts import (
         bar,
         bar_by,
         histogram,
@@ -354,7 +353,7 @@ if TYPE_CHECKING:
         scatter,
         statistics,
     )
-    from digitalearth.static.series import (
+    from digitalearth.static.charts.series import (
         boxplot,
         envelope,
         multiboxplot,
@@ -362,6 +361,7 @@ if TYPE_CHECKING:
         stripes,
     )
     from digitalearth.static.temporal import Climatology, TimeSeries
+    from digitalearth.static.view import projections
 
 __all__ = [
     # one-call API + composition

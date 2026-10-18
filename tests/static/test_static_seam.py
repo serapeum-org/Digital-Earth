@@ -21,7 +21,7 @@ from pyramids.feature import FeatureCollection
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.registry import KIND_BANDS, band_of
 from digitalearth.static import Map, Scene
-from digitalearth.static.scene import PANEL_ID
+from digitalearth.static.core.scene import PANEL_ID
 
 
 @pytest.fixture
@@ -243,7 +243,7 @@ def offline_tiles(monkeypatch):
     Returns:
         The list the stand-in appends to, one entry per call that reached it.
     """
-    from digitalearth.static.maps import decoration
+    from digitalearth.static.builders import decoration
 
     drawn = []
 
@@ -320,7 +320,7 @@ class TestEveryBuilderDescribesWhatItDrew:
             before it. This one raises, as a tile service that is down does, and the figure must come out
             of it naming no basemap at all.
         """
-        from digitalearth.static.maps import decoration
+        from digitalearth.static.builders import decoration
 
         def unreachable(ax, source=None, crs=None, **kwargs):
             """Fail the way an unreachable tile service does.
@@ -1029,7 +1029,7 @@ class TestAPlainKeywordTravelsInTheFigure:
         """
         from matplotlib.colors import Normalize
 
-        from digitalearth.static.scene import drawing_style
+        from digitalearth.static.core.scene import drawing_style
 
         norm = Normalize(0.0, 10.0)
         canvas = Map(crs=dataset.epsg)
@@ -1668,7 +1668,7 @@ class TestADescriptionCarriesWhatTheDrawingNeeds:
         """A globe's land fill recorded ``alpha`` and ``edgecolor`` and then drew neither."""
         from matplotlib.colors import to_rgba
 
-        from digitalearth.static import projections
+        from digitalearth.static.view import projections
 
         canvas = Map(crs=projections.orthographic(0, 0), globe=True)
         canvas.land(alpha=0.3, edgecolor="red")

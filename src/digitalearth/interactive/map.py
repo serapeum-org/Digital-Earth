@@ -2,7 +2,7 @@
 
 A thin composition, mirroring the 2-D ``Map(GeoLayerBase, RasterMixin, …)`` and 3-D
 ``Scene3D(Scene3DBase, TerrainMixin, …)`` patterns: all behaviour lives in
-:class:`~digitalearth.interactive.base.InteractiveMapBase` and the capability mixins; this module only
+:class:`~digitalearth.interactive.core.base.InteractiveMapBase` and the capability mixins; this module only
 assembles them. Builder methods return ``self`` so calls chain::
 
     from digitalearth.interactive import InteractiveMap
@@ -10,17 +10,18 @@ assembles them. Builder methods return ``self`` so calls chain::
     InteractiveMap().field(dem).choropleth(gdf, column="pop").basemap().save("map.html")
 """
 
-from digitalearth.interactive.animation import AnimationMixin
-from digitalearth.interactive.base import InteractiveMapBase
-from digitalearth.interactive.bigdata import BigDataMixin
-from digitalearth.interactive.dashboard import DashboardMixin
-from digitalearth.interactive.decoration import DecorationMixin
-from digitalearth.interactive.interaction import InteractionMixin
-from digitalearth.interactive.live import LiveMixin
-from digitalearth.interactive.projection import ProjectionMixin
-from digitalearth.interactive.raster import RasterMixin
-from digitalearth.interactive.temporal import TemporalMixin
-from digitalearth.interactive.vector import VectorMixin
+from digitalearth.interactive.app.dashboard import DashboardMixin
+from digitalearth.interactive.app.interaction import InteractionMixin
+from digitalearth.interactive.app.live import LiveMixin
+from digitalearth.interactive.builders.bigdata import BigDataMixin
+from digitalearth.interactive.builders.raster import RasterMixin
+from digitalearth.interactive.builders.vector import VectorMixin
+from digitalearth.interactive.core.base import InteractiveMapBase
+from digitalearth.interactive.decoration.decoration import DecorationMixin
+from digitalearth.interactive.legends.legend import LegendMixin
+from digitalearth.interactive.temporal.animation import AnimationMixin
+from digitalearth.interactive.temporal.temporal import TemporalMixin
+from digitalearth.interactive.view.projection import ProjectionMixin
 
 
 class InteractiveMap(
@@ -29,6 +30,7 @@ class InteractiveMap(
     BigDataMixin,
     TemporalMixin,
     DecorationMixin,
+    LegendMixin,
     InteractionMixin,
     LiveMixin,
     ProjectionMixin,

@@ -1,4 +1,4 @@
-"""Tests for digitalearth.static.maps.inset — the locator map (ST-19).
+"""Tests for digitalearth.static.builders.inset — the locator map (ST-19).
 
 Two things carry the risk and are covered closely. The **extent box is drawn in the locator's own CRS**, and
 a box reprojected by its corners alone lands wrong — the EPSG:3031 case below is the proof: all four corners
@@ -15,8 +15,9 @@ import pytest
 from matplotlib.patches import PathPatch, Polygon
 from pyramids.base.crs import reproject_coordinates
 
-from digitalearth.static import Map, projections
-from digitalearth.static.maps.inset import _CORNER_PAD, _CORNERS
+from digitalearth.static import Map
+from digitalearth.static.builders.inset import _CORNER_PAD, _CORNERS
+from digitalearth.static.view import projections
 
 #: The largest side a named corner can hold: the inset keeps :data:`_CORNER_PAD` on both sides of it.
 LARGEST_CORNER = 1.0 - 2.0 * _CORNER_PAD
@@ -32,7 +33,7 @@ def _marked_ring(locator, main) -> np.ndarray:
     """Mark ``main``'s extent on ``locator`` and return the ring of the box that was drawn.
 
     ``mark_extent`` hands back the map (round 2, L7), so the patch is read off
-    :meth:`~digitalearth.static.scene.Scene.artist` by the id the call was given — which also means a
+    :meth:`~digitalearth.static.core.scene.Scene.artist` by the id the call was given — which also means a
     box that was skipped raises here rather than reading as an empty ring.
 
     Args:
@@ -364,7 +365,7 @@ class TestMarkExtent:
             answers inf rather than raising). There is no outline to draw, and inventing one from the
             finite leftovers would be a wrong picture.
         """
-        from digitalearth.static import projections
+        from digitalearth.static.view import projections
 
         main = framed(projections.orthographic(0, 0), (2.0e7, 2.0e7, 3.0e7, 3.0e7))
         locator = Map(crs=4326)
@@ -384,7 +385,7 @@ class TestMarkExtent:
             The only other symptom of the skip above is a locator with no box on it, which is
             indistinguishable from the call never having been made.
         """
-        from digitalearth.static import projections
+        from digitalearth.static.view import projections
 
         main = framed(projections.orthographic(0, 0), (2.0e7, 2.0e7, 3.0e7, 3.0e7))
         with caplog.at_level("WARNING"):
@@ -997,7 +998,7 @@ class TestAnExplicitRectangleIsAPlacementOrARefusal:
             review found it. So it draws, and says which edges it crosses.
         """
         main = framed(4326)
-        with caplog.at_level("WARNING", logger="digitalearth.static.maps.inset"):
+        with caplog.at_level("WARNING", logger="digitalearth.static.builders.inset"):
             main.inset(position=(0.9, 0.9, 0.5, 0.5), reference=())
         assert "outside" in caplog.text, (
             f"an overhanging rectangle should be reported; log was {caplog.text!r}"
@@ -1036,7 +1037,7 @@ class TestAnExplicitRectangleIsAPlacementOrARefusal:
             used for.
         """
         main = framed(4326)
-        with caplog.at_level("WARNING", logger="digitalearth.static.maps.inset"):
+        with caplog.at_level("WARNING", logger="digitalearth.static.builders.inset"):
             main.inset(position=(0.6, 0.6, 0.3, 0.3), reference=())
         assert caplog.text == "", (
             f"a contained rectangle has nothing to report; log was {caplog.text!r}"
@@ -1054,7 +1055,7 @@ class TestAnExplicitRectangleIsAPlacementOrARefusal:
             overhang and warn about the one placement that fills the map exactly.
         """
         main = framed(4326)
-        with caplog.at_level("WARNING", logger="digitalearth.static.maps.inset"):
+        with caplog.at_level("WARNING", logger="digitalearth.static.builders.inset"):
             main.inset(position=(0.0, 0.0, 1.0, 1.0), reference=())
         assert caplog.text == "", (
             f"the flush rectangle is contained; log was {caplog.text!r}"
@@ -1372,7 +1373,7 @@ class TestAnExtentPROJCannotTransformMarksNothing:
         """
         main = framed(4326)
         mocker.patch(
-            "digitalearth.static.maps.inset.reproject_coordinates",
+            "digitalearth.static.builders.inset.reproject_coordinates",
             side_effect=RuntimeError("PROJ refused the transform"),
         )
         locator = Map(crs=3857)
@@ -1395,7 +1396,7 @@ class TestAnExtentPROJCannotTransformMarksNothing:
         """
         main = framed(4326)
         mocker.patch(
-            "digitalearth.static.maps.inset.reproject_coordinates",
+            "digitalearth.static.builders.inset.reproject_coordinates",
             side_effect=ValueError("unknown CRS"),
         )
         locator = Map(crs=3857)
@@ -1419,7 +1420,7 @@ class TestAnExtentPROJCannotTransformMarksNothing:
         """
         main = framed(4326)
         mocker.patch(
-            "digitalearth.static.maps.inset.reproject_coordinates",
+            "digitalearth.static.builders.inset.reproject_coordinates",
             side_effect=RuntimeError("PROJ refused the transform"),
         )
         locator = Map(crs=3857)

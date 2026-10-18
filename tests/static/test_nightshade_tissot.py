@@ -19,8 +19,9 @@ from matplotlib.collections import PolyCollection
 from pyramids.base.georeference import GeoReference
 from pyramids.dataset import Dataset
 
-from digitalearth.static import Map, projections
-from digitalearth.static.maps import decoration
+from digitalearth.static import Map
+from digitalearth.static.builders import decoration
+from digitalearth.static.view import projections
 
 #: The equinox at noon UTC: the sun stands over (about) lon 0, so lon 180 is at midnight.
 EQUINOX_NOON = datetime(2026, 3, 20, 12, 0, tzinfo=UTC)
@@ -151,7 +152,7 @@ def _shade(canvas: Map, *args, name: str = OVERLAY, **kwargs):
     """Shade one night on ``canvas`` and hand back the artist the layer filed.
 
     ``nightshade`` returns the map since round-1 L6, so what it drew is reached through
-    :meth:`~digitalearth.static.scene.Scene.artist` by the layer's id. Named once here rather than in
+    :meth:`~digitalearth.static.core.scene.Scene.artist` by the layer's id. Named once here rather than in
     every test below, and it reads the artist by **that id** rather than by "the last layer", so a test
     that draws twice still asks for the shade it means.
 

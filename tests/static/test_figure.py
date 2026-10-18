@@ -1,4 +1,4 @@
-"""Tests for digitalearth.static.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
+"""Tests for digitalearth.static.panels.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
 
 import inspect
 from typing import Literal, get_args, get_origin
@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from digitalearth.static import Map, facet, figure, grid, shared_colorbar
+from digitalearth.static import Map, facet, grid, shared_colorbar
+from digitalearth.static.panels import figure
 
 #: The words ``plt.subplots`` reads for ``sharex``/``sharey``, as ``grid``'s docstring enumerates them.
 SHARING_WORDS = {"all", "row", "col", "none"}
@@ -69,7 +70,7 @@ class TestGrid:
 
     def test_globe_panels(self):
         """globe=True makes every panel a globe Map."""
-        from digitalearth.static import projections
+        from digitalearth.static.view import projections
 
         fig, maps = grid(1, 2, crs=projections.orthographic(0, 0), globe=True)
         assert all(m.globe is True for m in maps), "all panels should be globes"
@@ -112,7 +113,7 @@ class TestSharedColorbar:
             hand back None when the data lies outside the display CRS. fig.colorbar(None) raises
             "TypeError: 'NoneType' object is not callable" deep in matplotlib.
         """
-        from digitalearth.static.figure import grid, shared_colorbar
+        from digitalearth.static.panels.figure import grid, shared_colorbar
 
         fig, maps = grid(1, 1, figsize=(4, 4))
         assert shared_colorbar(fig, None, maps) is None, (
@@ -465,7 +466,7 @@ class TestWhatFacetReadsTheSharedMappableThrough:
         """
         source = inspect.getsource(figure)
         assert "_renderer.drawn" not in source, (
-            "digitalearth.static.figure should read a drawn artist through Map.artist()"
+            "digitalearth.static.panels.figure should read a drawn artist through Map.artist()"
         )
 
     def test_the_shared_bar_is_keyed_to_the_first_panel_that_drew(self, dataset):

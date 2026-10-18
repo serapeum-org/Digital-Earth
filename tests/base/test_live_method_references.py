@@ -16,10 +16,10 @@ Three checks, because a reference comes in three shapes and they resolve differe
 2. **A bare** ``:meth:`name` `` has no receiver, so it is resolved against every class in the package. That is
    looser than the 3-D guard's per-tier reading, and deliberately: a name that exists on some class is at least
    a name a reader can look up, and the 3-D guard keeps its tighter per-tier version of the same check.
-3. **A fully-dotted role** — ``:data:`~digitalearth.static.maps.vector._QUADTREE_AGG` `` — names its own import
+3. **A fully-dotted role** — ``:data:`~digitalearth.static.builders.vector._QUADTREE_AGG` `` — names its own import
    path, so it is resolved by importing the longest importable prefix and walking the rest. Neither check above
    could see one: the bare pattern requires a single component, and the dotted one requires the first component
-   to be a class name. Round 2 found a `:data:` role naming ``digitalearth.static.maps.vector.AGG_REDUCERS``
+   to be a class name. Round 2 found a `:data:` role naming ``digitalearth.static.builders.vector.AGG_REDUCERS``
    in ``static/guides.py`` — a constant that has never existed anywhere in the package (R2-M6) — sitting in
    that gap, three commits after ``f1588cbc`` widened check 2 to `:func:` for exactly this class of defect.
    The dead name is spelled without its role here so this module's own prose cannot read as a reference.
@@ -52,7 +52,7 @@ PACKAGE_ROOT = Path(digitalearth.__file__).resolve().parent
 
 #: A cross-reference or a prose mention carrying its receiver. The receiver has to start with a capital, which
 #: keeps ``np.asarray`` and ``self.foo`` out; a dotted path naming modules first
-#: (``digitalearth.three_d.base.Scene3DBase.vertical_exaggeration``) is excluded by the lookbehind, since it
+#: (``digitalearth.three_d.core.base.Scene3DBase.vertical_exaggeration``) is excluded by the lookbehind, since it
 #: resolves through the full path rather than through a bare class name.
 DOTTED_REFERENCE = re.compile(r"`~?([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)`")
 
@@ -375,12 +375,12 @@ class TestTheResolverSeesWhatItClaimsTo:
             class), and a component walked *through* such an attribute, which resolves to nothing.
         """
         assert _dangling_reason("digitalearth.base.arrays.NAN_REDUCERS") == ""
-        assert _dangling_reason("digitalearth.static.scene.Scene.ax") == ""
+        assert _dangling_reason("digitalearth.static.core.scene.Scene.ax") == ""
         assert "has no AGG_REDUCERS" in _dangling_reason(
             "digitalearth.base.arrays.AGG_REDUCERS"
         )
         assert "instance attribute" in _dangling_reason(
-            "digitalearth.static.scene.Scene.ax.nothing_here"
+            "digitalearth.static.core.scene.Scene.ax.nothing_here"
         )
 
     def test_only_the_names_more_than_one_tier_spells_are_skipped(self, resolver):

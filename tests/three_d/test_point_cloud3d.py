@@ -11,7 +11,7 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.point_cloud import SCALAR, _coords_from_array
+from digitalearth.three_d.builders.point_cloud import SCALAR, _coords_from_array
 
 
 @pytest.fixture(autouse=True)
@@ -78,7 +78,7 @@ def test_a_null_geometry_reads_as_nan_rather_than_raising():
     import geopandas as gpd
     from shapely.geometry import Point
 
-    from digitalearth.three_d.point_cloud import _coords_from_geodataframe
+    from digitalearth.three_d.builders.point_cloud import _coords_from_geodataframe
 
     gdf = gpd.GeoDataFrame(geometry=[Point(0, 0), None, Point(2, 2)], crs="EPSG:3857")
     coords, values = _coords_from_geodataframe(gdf, None)
@@ -477,7 +477,7 @@ class TestTheColumnIsClassifiedOnce:
         """
         from dataclasses import replace as with_fields
 
-        from digitalearth.three_d.base import classified_scalars
+        from digitalearth.three_d.core.base import classified_scalars
 
         points = self._table(6)
         column = points[:, 0] if values is None else np.array(values, dtype=object)
@@ -524,7 +524,7 @@ class TestTheColumnIsClassifiedOnce:
         """
         from digitalearth.base.spec import Scale
         from digitalearth.base.symbology import categorical_colors
-        from digitalearth.three_d.base import classified_scalars
+        from digitalearth.three_d.core.base import classified_scalars
 
         column = np.array(["a", "b", "a"], dtype=object)
         asked = categorical_colors(column, cmap="Set1")[1]
@@ -561,10 +561,10 @@ class TestTheColumnIsClassifiedOnce:
 
             The second half pins the boundary: a value that is genuinely **missing** places nowhere either,
             and must not be read as a stale set — it is `NaN` by design, which is the rule
-            :func:`~digitalearth.three_d.base._category_codes` exists to keep.
+            :func:`~digitalearth.three_d.core.base._category_codes` exists to keep.
         """
         from digitalearth.base.spec import Scale
-        from digitalearth.three_d.base import classified_scalars
+        from digitalearth.three_d.core.base import classified_scalars
 
         stale = Scale.categorical(["a", "b"], ["#ff0000", "#0000ff"])
         drawn = classified_scalars(

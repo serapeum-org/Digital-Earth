@@ -11,7 +11,7 @@ somebody has yet to fill. What is simply not built yet is in neither half, becau
 yet" are different answers and only the tier can tell them apart. Text at a coordinate was in neither half and
 is now a declared kind (#203); the scalar bar and the keyed list were in neither either, and order 24 has built
 both — so `colorbar` and `legend` are declared **features** here and are no longer in `contract.PENDING`
-(:mod:`digitalearth.three_d.guides`).
+(:mod:`digitalearth.three_d.legends.legend`).
 """
 
 from digitalearth.base.capabilities import Capabilities
@@ -74,7 +74,7 @@ CAPABILITIES = Capabilities(
             # "a keyed list of classes", which order 24 built: a classified layer's classes are drawn as
             # PyVista's own legend box, derived from the `Scale` the layer was painted with. `colorbar` was
             # already here on the strength of the scalar bar PyVista draws for a scalar layer; the two are
-            # now both real methods as well as declared features (:mod:`digitalearth.three_d.guides`).
+            # now both real methods as well as declared features (:mod:`digitalearth.three_d.legends.legend`).
             "legend",
             "animation",
             "export_image",

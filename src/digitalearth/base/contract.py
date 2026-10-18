@@ -408,13 +408,13 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 ),
                 # `lines` (#201), `points`, `polygons` and `choropleth` were listed here, each as "unscheduled"
                 # or "extruded only / a flat fill is unscheduled". They are built now: `Scene3D.lines` draws
-                # 3-D polylines (`digitalearth.three_d.vector.draw_lines`), and `points`/`polygons`/
-                # `choropleth` draw flat features on the ground plane (`digitalearth.three_d.flat`), each over
+                # 3-D polylines (`digitalearth.three_d.builders.vector.draw_lines`), and `points`/`polygons`/
+                # `choropleth` draw flat features on the ground plane (`digitalearth.three_d.builders.flat`), each over
                 # its own renderer with the Core keywords, so all four are drawn kinds
                 # (`three_d/capabilities.py`) rather than pending ones.
                 # `colorbar` ("the scalar bar is PyVista's, and becomes a guide on the encoding") and
                 # `legend` ("a keyed list beside a scene") were listed here against order 24, which has now
-                # built both: `digitalearth.three_d.guides` records a `Guide` on the layer's own colour
+                # built both: `digitalearth.three_d.legends.legend` records a `Guide` on the layer's own colour
                 # encoding and draws from it — PyVista's scalar bar for a ramp, its keyed legend for classes,
                 # derived from the layer's `Scale` — so the key follows the layer it explains. Both are
                 # declared features of the tier as well (`three_d/capabilities.py`).

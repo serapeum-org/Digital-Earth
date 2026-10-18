@@ -29,9 +29,9 @@ from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
 from digitalearth.web import WebMap
-from digitalearth.web.base import DEFAULT_BIG_DATA_THRESHOLD, DISPLAY_CRS
-from digitalearth.web.decoration import DEFAULT_BASEMAP_PROVIDER
-from digitalearth.web.export import DEFAULT_FPS
+from digitalearth.web.core.base import DEFAULT_BIG_DATA_THRESHOLD, DISPLAY_CRS
+from digitalearth.web.decoration.decoration import DEFAULT_BASEMAP_PROVIDER
+from digitalearth.web.output.export import DEFAULT_FPS
 
 #: The raster the non-finite-keyword checks read, relative to the repo root the suite runs from.
 RASTER_PATH = "examples/data/acc4000.tif"
@@ -252,7 +252,7 @@ class TestC2FrameRateIsFps:
             recorded["duration"] = duration
             pathlib.Path(path).write_bytes(b"GIF89a")
 
-        from digitalearth.web import export as web_export
+        from digitalearth.web.output import export as web_export
 
         monkeypatch.setattr(web_export, "_write_gif", fake_write)
         monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
@@ -278,7 +278,7 @@ class TestC2FrameRateIsFps:
             recorded["duration"] = duration
             pathlib.Path(path).write_bytes(b"GIF89a")
 
-        from digitalearth.web import export as web_export
+        from digitalearth.web.output import export as web_export
 
         monkeypatch.setattr(web_export, "_write_gif", fake_write)
         monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])

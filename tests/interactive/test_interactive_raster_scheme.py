@@ -141,7 +141,7 @@ class TestClassOptions:
             samples, and no ``colorbar_opts`` — the edges are the bar's own ticks.
         """
         from digitalearth.base.raster_classes import classify_band
-        from digitalearth.interactive.raster import _class_options
+        from digitalearth.interactive.builders.raster import _class_options
 
         options = _class_options(
             classify_band(np.arange(10.0), "equal_interval", 3, "viridis")
@@ -162,7 +162,7 @@ class TestClassOptions:
             Codes 1, 2, 5: levels ``0.5, 1.5, 3.5, 5.5`` and ticks ``1, 2, 5``.
         """
         from digitalearth.base.raster_classes import classify_band
-        from digitalearth.interactive.raster import _class_options
+        from digitalearth.interactive.builders.raster import _class_options
 
         options = _class_options(classify_band(CODES, "categorical", None, None))
         assert options["color_levels"] == [0.5, 1.5, 3.5, 5.5], (

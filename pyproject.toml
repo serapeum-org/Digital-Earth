@@ -209,7 +209,7 @@ include = ["digitalearth", "digitalearth.*"]
 [tool.setuptools.package-data]
 "digitalearth.base.autostyle" = ["library/*.yml"]
 # The web tier's own standalone-export runtime (WB-13/17/20): JS/CSS shipped as data and read at
-# save time by `digitalearth.web.htmldoc`, so a built wheel carries the export document's assets.
+# save time by `digitalearth.web.output.htmldoc`, so a built wheel carries the export document's assets.
 "digitalearth.web" = ["srcjs/*.js", "srcjs/*.css"]
 
 # Ruff replaces black + isort + flake8 + pyupgrade (and their nbqa notebook wrappers): one engine and one
@@ -298,52 +298,52 @@ module = "digitalearth.api"  # 19 errors at baseline
 disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.vector"  # 9 errors at baseline
+module = "digitalearth.web.builders.vector"  # 9 errors at baseline
 disable_error_code = ["attr-defined", "list-item", "no-any-return", "no-redef"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.vector"  # 8 errors at baseline
+module = "digitalearth.interactive.builders.vector"  # 8 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.threed"  # 8 errors at baseline
+module = "digitalearth.web.builders.threed"  # 8 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.base"  # 5 errors at baseline
+module = "digitalearth.web.core.base"  # 5 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.animation"  # 4 errors at baseline
+module = "digitalearth.static.builders.animation"  # 4 errors at baseline
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.bigdata"  # 4 errors at baseline
+module = "digitalearth.web.builders.bigdata"  # 4 errors at baseline
 disable_error_code = ["attr-defined", "misc", "type-var"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.base"  # 3 errors at baseline
+module = "digitalearth.interactive.core.base"  # 3 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.bigdata"  # 3 errors at baseline
+module = "digitalearth.interactive.builders.bigdata"  # 3 errors at baseline
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.raster"  # 3 errors at baseline
+module = "digitalearth.interactive.builders.raster"  # 3 errors at baseline
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.decoration"  # 3 errors at baseline
+module = "digitalearth.static.builders.decoration"  # 3 errors at baseline
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.vector"  # 3 errors at baseline
+module = "digitalearth.static.builders.vector"  # 3 errors at baseline
 disable_error_code = ["arg-type", "no-any-return", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.render_compat"  # 3 errors at baseline
+module = "digitalearth.static.render.compat"  # 3 errors at baseline
 disable_error_code = ["arg-type", "attr-defined"]
 
 [[tool.mypy.overrides]]
@@ -356,7 +356,7 @@ disable_error_code = ["arg-type"]
 # without a narrowing guard in two places, and a `str | None` is appended to a `list[str]`. Latent
 # Optional-narrowing gaps in that feature, not this branch's work, so they are recorded rather than
 # fixed here; worth a real fix by whoever owns the time-slider.
-module = "digitalearth.web.temporal"  # 6 errors
+module = "digitalearth.web.temporal.temporal"  # 6 errors
 disable_error_code = ["arg-type", "attr-defined", "union-attr"]
 
 [[tool.mypy.overrides]]
@@ -364,27 +364,35 @@ module = "digitalearth.base.crs"  # 2 errors at baseline
 disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.decoration"  # 2 errors at baseline
+module = "digitalearth.interactive.decoration.decoration"  # 2 errors at baseline
 disable_error_code = ["attr-defined", "no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.interactive.temporal"  # 2 errors at baseline
+module = "digitalearth.interactive.legends.legend"  # guide code moved here from decoration
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.legends.legend"  # guide code moved here from decoration
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.temporal.temporal"  # 2 errors at baseline
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.raster"  # 2 errors at baseline
+module = "digitalearth.static.builders.raster"  # 2 errors at baseline
 disable_error_code = ["dict-item", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.scene"  # 2 errors at baseline
+module = "digitalearth.static.core.scene"  # 2 errors at baseline
 disable_error_code = ["assignment", "exit-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.series"  # 2 errors at baseline
+module = "digitalearth.static.charts.series"  # 2 errors at baseline
 disable_error_code = ["arg-type", "assignment"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.three_d.base"  # 2 errors at baseline
+module = "digitalearth.three_d.core.base"  # 2 errors at baseline
 disable_error_code = ["exit-return", "no-any-return"]
 
 [[tool.mypy.overrides]]
@@ -393,33 +401,33 @@ disable_error_code = ["no-any-return"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.figures"  # 1 error at baseline
+module = "digitalearth.static.charts.figures"  # 1 error at baseline
 disable_error_code = ["return-value"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.projection"  # 1 error at baseline
+module = "digitalearth.static.builders.projection"  # 1 error at baseline
 disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.projections"  # 1 error at baseline
+module = "digitalearth.static.view.projections"  # 1 error at baseline
 disable_error_code = ["assignment"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.textured_globe"  # 1 error at baseline
+module = "digitalearth.static.globe.textured_globe"  # 1 error at baseline
 disable_error_code = ["exit-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.three_d.globe"  # 1 error at baseline
+module = "digitalearth.three_d.builders.globe"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.three_d.terrain"  # 1 error at baseline
+module = "digitalearth.three_d.builders.terrain"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.web.raster"  # 1 error at baseline
+module = "digitalearth.web.builders.raster"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
 [tool.commitizen]
@@ -571,7 +579,7 @@ dev = { features = ["dev"], solve-group = "default" }
 notebook = { features = ["notebook"], solve-group = "default" }
 # The docs env carries **every** rendering tier, not just mkdocs, for two reasons. First, mkdocstrings
 # imports the documented modules at build time, and docs/reference/*.md references three_d.scene3d,
-# three_d.headless, interactive.map and web.map, so VTK, the HoloViz stack and MapLibre must all import or
+# three_d.app.headless, interactive.map and web.map, so VTK, the HoloViz stack and MapLibre must all import or
 # the build fails - this holds even though the pyvista notebooks are excluded from execution. Second, the
 # interactive and web notebooks that DO execute (notebooks-path) need their runtimes. `numba-numpy` rides
 # along because the interactive feature needs numpy <2.5 (see the note on that feature). Its own

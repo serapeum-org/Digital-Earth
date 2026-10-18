@@ -9,7 +9,7 @@ own ``CLAUDE.md`` example — ``m.field(ds).coastlines().colorbar()`` — raised
 These tests pin the two halves of the fix together, because either alone is a regression:
 
 * every decoration method hands back **the composed map**, so the chain runs; and
-* the artist it drew is still reachable, through :meth:`~digitalearth.static.scene.Scene.artist` — the
+* the artist it drew is still reachable, through :meth:`~digitalearth.static.core.scene.Scene.artist` — the
   public route ST-20 added for exactly this — and a layer that drew nothing still registers no id, which
   is what each method's ``None`` used to say.
 
@@ -373,7 +373,8 @@ class TestBasemapChainsWithoutTheNetwork:
             The map, framed on a lon/lat region so the extent the tiles are asked for exists.
         """
         mocker.patch(
-            "digitalearth.static.maps.decoration.add_tiles", return_value=TILE_ARTIST
+            "digitalearth.static.builders.decoration.add_tiles",
+            return_value=TILE_ARTIST,
         )
         scene = Map(domain=(-10.0, 35.0, 5.0, 45.0))
         scene.ax.set_xlim(-10.0, 5.0)

@@ -27,16 +27,16 @@ from shapely.geometry import Polygon
 from digitalearth.base.bigdata import DEFAULT_BIG_DATA_THRESHOLD
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.bigdata import (
+from digitalearth.three_d.builders.bigdata import (
     DEFAULT_CELL_BUDGET,
     REDUCTIONS,
     UNREDUCED,
     reduce_surface,
     reduce_volume,
 )
-from digitalearth.three_d.renderer import DRAWN_KINDS
-from digitalearth.three_d.terrain import ELEVATION
-from digitalearth.three_d.volume import FIELD
+from digitalearth.three_d.builders.terrain import ELEVATION
+from digitalearth.three_d.builders.volume import FIELD
+from digitalearth.three_d.render.renderer import DRAWN_KINDS
 
 #: A budget small enough that the tiny fixtures below cross it, so a test is a second rather than a minute.
 SMALL = 2_000

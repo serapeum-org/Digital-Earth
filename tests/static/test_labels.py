@@ -18,9 +18,10 @@ from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.base.crs import OffLimbError
-from digitalearth.static import Map, projections
+from digitalearth.static import Map
+from digitalearth.static.builders.vector import _LABEL_REFUSED_OPTS
 from digitalearth.static.capabilities import CAPABILITIES
-from digitalearth.static.maps.vector import _LABEL_REFUSED_OPTS
+from digitalearth.static.view import projections
 
 
 @pytest.fixture

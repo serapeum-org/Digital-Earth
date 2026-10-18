@@ -153,7 +153,7 @@ class TestTheBandIsWhatARasterKeyDescribes:
         import numpy as np
 
         from digitalearth.web import WebMap
-        from digitalearth.web.raster import _colour_domain
+        from digitalearth.web.builders.raster import _colour_domain
 
         assert _colour_domain(np.full((3, 3), np.nan), vmin=None, vmax=None) is None, (
             "a band with no finite cell must report no colour domain at all"

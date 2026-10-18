@@ -40,7 +40,7 @@ non-commercial use under NICFI terms. Two things about it are worth knowing befo
     time and embeds only the resulting image.
   - **A failed fetch can log it.** ``cleopatra.basemap.tiles`` logs the built URL at ``DEBUG``, so the
     static backend suppresses that logger for the duration of a keyed fetch (see
-    ``digitalearth.static.maps.decoration``). Do not otherwise run tile fetches at ``DEBUG`` into shared
+    ``digitalearth.static.builders.decoration``). Do not otherwise run tile fetches at ``DEBUG`` into shared
     logs.
   - **A non-``http(s)`` URL is refused here**, before it reaches a tile engine, because cleopatra reports
     that case by raising with the offending URL in the message — which the log suppression does not

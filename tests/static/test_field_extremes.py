@@ -21,9 +21,9 @@ from matplotlib import colormaps
 from matplotlib.colors import to_rgba
 
 from digitalearth.static import Map
-from digitalearth.static.maps.raster import FieldColors
-from digitalearth.static.render_compat import EXTREME_KEYS, STATIC_STYLE_SCHEMA
-from digitalearth.static.renderer import DrawnLayer
+from digitalearth.static.builders.raster import FieldColors
+from digitalearth.static.render.compat import EXTREME_KEYS, STATIC_STYLE_SCHEMA
+from digitalearth.static.render.renderer import DrawnLayer
 
 MISSING = "#cccccc"
 OVER = "#ff0000"
@@ -288,7 +288,7 @@ class TestTheLayerPublishesWhatItWasDrawnWith:
 class _Unscaled:
     """A mappable-looking artist that carries a colormap and no norm, so it publishes no scale.
 
-    The state :func:`~digitalearth.static.guides.drawn_scale` answers ``None`` for: an artist that
+    The state :func:`~digitalearth.static.legends.legend.drawn_scale` answers ``None`` for: an artist that
     colours by nothing. Stood in for rather than drawn, because every field render this tier performs
     ends in an artist that *does* carry a norm — which is exactly why the branch needs a test.
     """

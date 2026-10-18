@@ -26,7 +26,7 @@ import numpy as np
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import Camera, DataRef
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.views import (
+from digitalearth.three_d.view.views import (
     NAMED_VIEWS,
     NamedView,
     forget_view,
@@ -77,7 +77,7 @@ def table_restored():
     Yields:
         None; the table is snapshotted before the test and restored after it.
     """
-    from digitalearth.three_d import views
+    from digitalearth.three_d.view import views
 
     before = dict(views._VIEWS)
     yield

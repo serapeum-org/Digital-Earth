@@ -1,16 +1,16 @@
 """The old import path for the named-domain table still works.
 
-The table moved from `digitalearth.static.domains` to `digitalearth.base.domains` so that `base` could
+The table moved from `digitalearth.static.core.domains` to `digitalearth.base.domains` so that `base` could
 resolve a name without importing a renderer. The old module stays as a re-export, because it is a public
 import path a caller outside this repository may already use, and this is what says so.
 """
 
 from digitalearth.base import domains as base_domains
-from digitalearth.static import domains as static_domains
+from digitalearth.static.core import domains as static_domains
 
 
 class TestTheOldImportPathStillResolves:
-    """`digitalearth.static.domains` re-exports what moved to `base`."""
+    """`digitalearth.static.core.domains` re-exports what moved to `base`."""
 
     def test_the_shim_hands_back_the_same_objects(self):
         """Not equal copies — the same table and the same function, so there is one source of truth."""
@@ -26,7 +26,7 @@ class TestTheOldImportPathStillResolves:
         assert through_the_shim == (-25.0, 34.0, 45.0, 72.0), through_the_shim
 
     def test_the_shim_names_what_it_exports(self):
-        """So `from digitalearth.static.domains import *` keeps working too."""
+        """So `from digitalearth.static.core.domains import *` keeps working too."""
         assert sorted(static_domains.__all__) == [
             "ALIASES",
             "DOMAINS",

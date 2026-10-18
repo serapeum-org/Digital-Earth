@@ -27,7 +27,7 @@ import pytest
 pytest.importorskip("maplibre", reason="the web tier needs the web environment")
 
 from digitalearth.web import WebMap
-from digitalearth.web.base import _Described
+from digitalearth.web.core.base import _Described
 from tests.base.layer_management import (
     BOTTOM,
     TOP,

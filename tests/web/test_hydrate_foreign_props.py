@@ -13,8 +13,12 @@ pytest.importorskip("maplibre")  # the web tier engine; skip in envs without it
 from pyramids.feature import FeatureCollection  # noqa: E402
 
 from digitalearth.static import Map  # noqa: E402
-from digitalearth.web import WebMap, raster, vector  # noqa: E402
-from digitalearth.web.renderer import (  # noqa: E402
+from digitalearth.web import WebMap
+from digitalearth.web.builders import (
+    raster,  # noqa: E402
+    vector,
+)
+from digitalearth.web.render.renderer import (  # noqa: E402
     _FOREIGN_VECTOR_DEFAULTS,
     DRAWN_KINDS,
     drawer_for,

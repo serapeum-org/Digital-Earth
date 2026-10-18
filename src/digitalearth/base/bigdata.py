@@ -6,7 +6,7 @@ that happens is one agreed number and one agreed rule, so both live here: the cu
 no renderer needed to produce it), and the rule that rejects a nonsensical one is a plain guard over that
 ``int``.
 
-Before this, ``50_000`` was written out in :mod:`digitalearth.interactive.base` and :mod:`digitalearth.web.base`
+Before this, ``50_000`` was written out in :mod:`digitalearth.interactive.core.base` and :mod:`digitalearth.web.core.base`
 — two literals free to drift — and only the web tier refused a negative override, so the same bad call was an
 error on one backend and silently routed everything on the other.
 """

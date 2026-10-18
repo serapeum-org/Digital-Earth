@@ -1,8 +1,8 @@
 """The ``basemap()`` / ``tiles()`` split on the interactive tier (#268).
 
 ``tiles()`` once took a provider name, a keyed preset and a raw XYZ URL through one overloaded ``provider=``.
-That is split now: :meth:`~digitalearth.interactive.decoration.DecorationMixin.basemap` takes a provider name or
-keyed preset and :meth:`~digitalearth.interactive.decoration.DecorationMixin.tiles` takes a raw XYZ/WMTS URL
+That is split now: :meth:`~digitalearth.interactive.decoration.decoration.DecorationMixin.basemap` takes a provider name or
+keyed preset and :meth:`~digitalearth.interactive.decoration.decoration.DecorationMixin.tiles` takes a raw XYZ/WMTS URL
 template, each refusing the other's input. These tests pin that both halves draw and that each refuses the other.
 
 Web-Mercator (``crs="EPSG:3857"``) throughout, so the tiles' projection guard does not trip and the only refusal

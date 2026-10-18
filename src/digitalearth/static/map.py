@@ -8,7 +8,7 @@ projection is applied to the *data* upstream, not to the axes.
 This module is a **thin composition and nothing else**: it lists the six capability mixins `Map` is built
 from and adds the two figure-replay entry points, `draw_figure` and `from_figure`. No render method is
 defined here — `field`, `contours`, `pcolormesh` and `block` are all `RasterMixin`
-(`digitalearth.static.maps.raster`), the vector builders are `VectorMixin`, and so on. A new capability
+(`digitalearth.static.builders.raster`), the vector builders are `VectorMixin`, and so on. A new capability
 joins the mixin it belongs to, or arrives as a seventh mixin composed in below; it does not land in this
 file.
 """
@@ -18,13 +18,13 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any, Self
 
-from digitalearth.static.maps.animation import AnimationMixin
-from digitalearth.static.maps.base import GeoLayerBase
-from digitalearth.static.maps.decoration import DecorationMixin
-from digitalearth.static.maps.inset import InsetMixin
-from digitalearth.static.maps.projection import ProjectionMixin
-from digitalearth.static.maps.raster import RasterMixin
-from digitalearth.static.maps.vector import VectorMixin
+from digitalearth.static.builders.animation import AnimationMixin
+from digitalearth.static.builders.base import GeoLayerBase
+from digitalearth.static.builders.decoration import DecorationMixin
+from digitalearth.static.builders.inset import InsetMixin
+from digitalearth.static.builders.projection import ProjectionMixin
+from digitalearth.static.builders.raster import RasterMixin
+from digitalearth.static.builders.vector import VectorMixin
 
 if TYPE_CHECKING:
     from digitalearth.base.spec import FigureSpec
@@ -41,10 +41,10 @@ class Map(
     AnimationMixin,
     GeoLayerBase,
 ):
-    """A geospatial :class:`~digitalearth.static.scene.Scene` that reprojects to a display CRS.
+    """A geospatial :class:`~digitalearth.static.core.scene.Scene` that reprojects to a display CRS.
 
     The tier's workhorse, and a **composition rather than a class with methods of its own**: every
-    capability lives in one of the six mixins under `digitalearth.static.maps` — `RasterMixin` (fields,
+    capability lives in one of the six mixins under `digitalearth.static.builders` — `RasterMixin` (fields,
     composites, spaghetti), `VectorMixin` (points, polygons, unstructured, flow, u/v fields),
     `DecorationMixin` (text, annotate, basemap, Natural-Earth layers), `InsetMixin` (`inset`,
     `mark_extent`), `ProjectionMixin` (extent, domain, globe frame, save/show) and `AnimationMixin`
@@ -52,7 +52,7 @@ class Map(
     MRO, so a seventh mixin fails it until the list is updated.
 
     **Every data builder returns `Self`, so calls chain** (`m.field(ds).coastlines().colorbar()`), and the
-    matplotlib artist a layer drew is reached by name through :meth:`~digitalearth.static.scene.Scene.artist`
+    matplotlib artist a layer drew is reached by name through :meth:`~digitalearth.static.core.scene.Scene.artist`
     — never through the renderer's private record.
 
     Args:
@@ -60,10 +60,10 @@ class Map(
         domain: A registered region name (`"europe"`, `"africa"`, …) or an explicit
             `(west, south, east, north)` bbox in EPSG:4326. **Stored, not applied**: constructing with one
             does not frame the axes, and it is not validated either — it becomes the fallback a bare
-            :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_domain` call resolves, and the
+            :meth:`~digitalearth.static.builders.projection.ProjectionMixin.set_domain` call resolves, and the
             `domain` the panel's `Viewport` carries. `None` (the default) leaves the view to fit the data.
         ax: Existing axes to draw on (a new figure/axes is created when ``None``). One axes holds one map;
-            two maps sharing one is unsupported (see :class:`~digitalearth.static.scene.Scene`).
+            two maps sharing one is unsupported (see :class:`~digitalearth.static.core.scene.Scene`).
         fig: Figure owning ``ax``. Taken from `ax` (its root figure) when only `ax` is given.
         figsize: New-figure size in inches when one is created; `(8, 8)` by default.
         globe: Draw the projection boundary/graticule and clip layers to it (an orthographic globe).
@@ -126,9 +126,9 @@ class Map(
         """Draw a figure into this map, bringing it from whatever it showed before.
 
         The 2-D counterpart of the 3-D tier's ``draw_figure``, with one difference in the plumbing: this
-        tier's :meth:`~digitalearth.static.scene.Scene._change` derives a candidate's sources from
+        tier's :meth:`~digitalearth.static.core.scene.Scene._change` derives a candidate's sources from
         ``self._sources`` (filtered to the tree), not from the incoming figure, so the figure's own sources
-        are installed here first — otherwise :meth:`~digitalearth.static.renderer.Renderer.apply` would have
+        are installed here first — otherwise :meth:`~digitalearth.static.render.renderer.Renderer.apply` would have
         nothing to open. The 3-D tier replays its incoming figure's sources directly and needs no such step.
 
         **The two titles land in their own slots, and the round trip is idempotent.** This tier describes a
@@ -140,7 +140,7 @@ class Map(
         and after is equal, and equal again on a third pass.
 
         **The heading is figure-wide, so it is restored only onto a figure this map owns.** A `grid` panel
-        is built on an axes :func:`~digitalearth.static.figure.grid` laid out, and every panel of that grid
+        is built on an axes :func:`~digitalearth.static.panels.figure.grid` laid out, and every panel of that grid
         shares one figure — so writing the described heading through ``Figure.suptitle`` from one panel
         reaches the whole figure and its siblings, which then describe the incoming heading as their own.
         Measured on a two-panel grid headed `'grid heading'`, drawing a description headed `'INCOMING'`
@@ -152,7 +152,7 @@ class Map(
 
         **A title is written only when the incoming figure carries one**, so drawing an untitled figure does
         not blank a heading the map already had. "Carries one" is decided by
-        :meth:`~digitalearth.static.scene.Scene._recorded_title`, the same normaliser `set_title` and
+        :meth:`~digitalearth.static.core.scene.Scene._recorded_title`, the same normaliser `set_title` and
         `grid(suptitle=)` use: a `FigureSpec` refuses `""` but accepts `"   "`, and a whitespace heading is
         the request "no heading" rather than a heading made of spaces. It used to be painted and then
         described as none, so a figure written down and read back drew a different picture (R2-L5). The layers are reconciled, not merely added — that part
@@ -277,7 +277,7 @@ class Map(
         # Normalise recipe names before drawing, so a figure the web or interactive tier described draws here:
         # a foreign recipe is retargeted to this tier's own, and the field drawer fills the style a portable
         # figure omits from its own defaults. A same-tier figure already knows every recipe, so this is a no-op.
-        from digitalearth.static.renderer import retarget_via
+        from digitalearth.static.render.renderer import retarget_via
 
         figure = retarget_via(figure)
         self._sources = dict(figure.sources)
@@ -327,7 +327,7 @@ class Map(
     def from_figure(cls, figure: FigureSpec, **scene_kwargs: Any) -> Self:
         """Build a map and draw a figure into it — the round trip the description seam exists for.
 
-        A map describes itself with :attr:`~digitalearth.static.scene.Scene.figure_spec`, the description
+        A map describes itself with :attr:`~digitalearth.static.core.scene.Scene.figure_spec`, the description
         survives ``to_dict()``/``from_dict()``, and this draws it again. :func:`digitalearth.api.to_backend`
         dispatches here for ``backend="matplotlib"``.
 

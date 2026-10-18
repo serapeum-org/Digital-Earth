@@ -12,7 +12,7 @@ There are 30 today: `samples` joined them with #302, and the contour hatch encod
 import pytest
 
 from digitalearth.base.spec import Encoding, Symbology
-from digitalearth.static.render_compat import (
+from digitalearth.static.render.compat import (
     CENTER_KEY,
     EXTREME_KEYS,
     FLAT_STYLE_KEYS,

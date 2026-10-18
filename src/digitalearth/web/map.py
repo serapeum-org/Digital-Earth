@@ -2,7 +2,7 @@
 
 A thin composition, mirroring the 2-D ``Map(GeoLayerBase, RasterMixin, …)``, the 3-D
 ``Scene3D(Scene3DBase, …)`` and the interactive ``InteractiveMap(InteractiveMapBase, …)`` patterns: all
-behaviour lives in :class:`~digitalearth.web.base.WebMapBase` and the capability mixins; this module only
+behaviour lives in :class:`~digitalearth.web.core.base.WebMapBase` and the capability mixins; this module only
 assembles them. The mixins are empty skeletons at DW.0 — later tasks (DW.1+) land their builder methods
 without touching this composition. Builder methods return ``self`` so calls chain::
 
@@ -11,14 +11,15 @@ without touching this composition. Builder methods return ``self`` so calls chai
     WebMap().basemap().choropleth(gdf, column="pop").save("map.html")
 """
 
-from digitalearth.web.base import WebMapBase
-from digitalearth.web.bigdata import BigDataMixin
-from digitalearth.web.decoration import DecorationMixin
-from digitalearth.web.export import ExportMixin
-from digitalearth.web.raster import RasterMixin
-from digitalearth.web.temporal import TemporalMixin
-from digitalearth.web.threed import ThreeDMixin
-from digitalearth.web.vector import VectorMixin
+from digitalearth.web.builders.bigdata import BigDataMixin
+from digitalearth.web.builders.raster import RasterMixin
+from digitalearth.web.builders.threed import ThreeDMixin
+from digitalearth.web.builders.vector import VectorMixin
+from digitalearth.web.core.base import WebMapBase
+from digitalearth.web.decoration.decoration import DecorationMixin
+from digitalearth.web.legends.legend import LegendMixin
+from digitalearth.web.output.export import ExportMixin
+from digitalearth.web.temporal.temporal import TemporalMixin
 
 
 class WebMap(
@@ -28,6 +29,7 @@ class WebMap(
     ThreeDMixin,
     TemporalMixin,
     DecorationMixin,
+    LegendMixin,
     ExportMixin,
     WebMapBase,
 ):

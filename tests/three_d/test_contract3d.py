@@ -9,9 +9,9 @@ one is an edit in ``base/`` rather than one per tier (#326). This tier is held t
 C13, and each class below names its clause and adds only what is peculiar to drawing in three dimensions:
 
 * **C1** — the ``np.ndarray`` ``save()`` used to return did not vanish; it moved to
-  :meth:`~digitalearth.three_d.base.Scene3DBase.screenshot`.
-* **C2** — both entry points are covered: :meth:`~digitalearth.three_d.animation.AnimationMixin.orbit` and
-  :meth:`~digitalearth.three_d.animation.AnimationMixin.record`, over one shared default rate.
+  :meth:`~digitalearth.three_d.core.base.Scene3DBase.screenshot`.
+* **C2** — both entry points are covered: :meth:`~digitalearth.three_d.temporal.animation.AnimationMixin.orbit` and
+  :meth:`~digitalearth.three_d.temporal.animation.AnimationMixin.record`, over one shared default rate.
 * **C3** — ``size=`` is what a marker's size is called here, as on every other tier.
 * **C4** — the classes are compared against the 2-D tiers' rather than merely accepted.
 * **C7** — the ways a 3-D layer ends up with nothing to draw: an off-limb raster, an empty point table, an
@@ -35,8 +35,8 @@ pv = pytest.importorskip("pyvista")
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.animation import DEFAULT_FPS
-from digitalearth.three_d.base import Scene3DBase, classified_scalars
+from digitalearth.three_d.core.base import Scene3DBase, classified_scalars
+from digitalearth.three_d.temporal.animation import DEFAULT_FPS
 
 
 @pytest.fixture(autouse=True)

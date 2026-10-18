@@ -13,7 +13,7 @@ import pytest
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources import get_source
 from digitalearth.web import TileRoute, WebMap
-from digitalearth.web.raster import _lonlat_bounds
+from digitalearth.web.builders.raster import _lonlat_bounds
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
@@ -434,7 +434,7 @@ class TestTheInlineCeilingIsARefusal:
             anyway. The refusal names both tiled routes, because a caller who is refused has to be told
             which parameter to reach for.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         m = WebMap()
@@ -459,7 +459,7 @@ class TestTheInlineCeilingIsARefusal:
             Measured against a sibling refusal of the same call rather than against a literal alone, so the
             two are held to each other.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         not_a_number = float("nan")
@@ -492,7 +492,7 @@ class TestTheInlineCeilingIsARefusal:
             tmp_path: pytest's temporary directory, where the pyramid is written.
             monkeypatch: pytest's patcher, used to lower the ceiling.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
         m = WebMap().field(
@@ -629,7 +629,7 @@ class TestTheTiledRasterRoutes:
             of one side alone: the inline path goes through the tier's display choke point — a warp plus a
             read of every cell — and the tiled path must not reach it at all.
         """
-        from digitalearth.web.base import WebMapBase
+        from digitalearth.web.core.base import WebMapBase
 
         visits = []
         original = WebMapBase._display_source_or_skip
@@ -674,7 +674,7 @@ class TestTheTiledRasterRoutes:
         """
         import numpy as np
 
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         monkeypatch.setattr(raster_module, "_LIMIT_SCAN_BUDGET", 16)
         reads = []
@@ -748,7 +748,7 @@ class TestTheTiledRasterRoutes:
             MapLibre reads "no limit", rather than the drawer raising on the absent prop.
         """
         from digitalearth.base.spec import LayerSpec, Symbology
-        from digitalearth.web import raster as web_raster
+        from digitalearth.web.builders import raster as web_raster
 
         described = LayerSpec(
             "acc",
@@ -851,7 +851,7 @@ class TestTheTiledRasterRoutes:
             came after the root had been made. Each tile now makes its own parents, so a pyramid that holds
             nothing writes nothing at all.
         """
-        from digitalearth.web import raster as raster_module
+        from digitalearth.web.builders import raster as raster_module
 
         def _misses(*args, **kwargs):
             """Behave like a window that falls outside the raster.
@@ -962,7 +962,7 @@ class TestTheTiledRasterRoutes:
             declined layer that still became ``_last_layer_id`` would have a later ``colorbar()`` label
             itself from a layer no widget holds.
         """
-        from digitalearth.web import raster as web_raster
+        from digitalearth.web.builders import raster as web_raster
 
         def _declines(web_map, data, layer):
             """Behave like a drawer that found nothing to draw.
@@ -995,7 +995,7 @@ class TestTheTileAddressing:
 
     def test_zoom_zero_is_one_tile_for_the_whole_world(self):
         """At zoom 0 every coordinate is in tile ``(0, 0)``, which is what the level means."""
-        from digitalearth.web.raster import _tile_index
+        from digitalearth.web.builders.raster import _tile_index
 
         assert _tile_index(-179.0, 84.0, 0) == (0, 0)
 
@@ -1006,7 +1006,7 @@ class TestTheTileAddressing:
             Built from both sides rather than asserted of one, so an off-by-one in the scale factor shows up:
             at zoom 1 the world is two columns, and ``-0.001`` and ``0.0`` must not land in the same one.
         """
-        from digitalearth.web.raster import _tile_index
+        from digitalearth.web.builders.raster import _tile_index
 
         west = _tile_index(-0.001, 0.0, 1)[0]
         east = _tile_index(0.0, 0.0, 1)[0]
@@ -1018,7 +1018,7 @@ class TestTheTileAddressing:
         Test scenario:
             Without the clamp ``tan(pi/2)`` overflows and the row indexes off the end of the level.
         """
-        from digitalearth.web.raster import _tile_index
+        from digitalearth.web.builders.raster import _tile_index
 
         assert _tile_index(0.0, 90.0, 3)[1] == 0
 
@@ -1029,7 +1029,7 @@ class TestTheTileAddressing:
             A box spanning two columns at zoom 1 yields both, in west-to-east order.
         """
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _tile_addresses
+        from digitalearth.web.builders.raster import _tile_addresses
 
         box = Bounds(-10.0, -10.0, 10.0, 10.0, crs=4326)
         assert list(_tile_addresses(box, 1)) == [(0, 0), (0, 1), (1, 0), (1, 1)]
@@ -1042,7 +1042,7 @@ class TestTheTileAddressing:
             would look right against any single expected number.
         """
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _native_zoom
+        from digitalearth.web.builders.raster import _native_zoom
 
         box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
         assert _native_zoom(box, 256) < _native_zoom(box, 4096)
@@ -1050,7 +1050,7 @@ class TestTheTileAddressing:
     def test_an_unmeasurable_grid_asks_for_no_zoom_at_all(self):
         """A column count that is not a number has no native zoom to derive, and none is guessed."""
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _native_zoom
+        from digitalearth.web.builders.raster import _native_zoom
 
         assert _native_zoom(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326), "many") == 0
 
@@ -1075,7 +1075,7 @@ class TestTheTileAddressing:
             raising from inside the arithmetic.
         """
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _native_zoom
+        from digitalearth.web.builders.raster import _native_zoom
 
         box = Bounds(west, 0.0, east, 1.0, crs=4326)
         assert _native_zoom(box, 256) == 0, (
@@ -1092,7 +1092,7 @@ class TestTheTileAddressing:
             grid must close later than the coarser one.
         """
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _zoom_range
+        from digitalearth.web.builders.raster import _zoom_range
 
         box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
         coarse = _zoom_range(box, _Grid(256), None, "field()")
@@ -1111,7 +1111,7 @@ class TestTheTileAddressing:
             given: A ``zooms=`` value no pyramid can be written for.
         """
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _zoom_range
+        from digitalearth.web.builders.raster import _zoom_range
 
         box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
         with pytest.raises(ValueError, match="zooms"):
@@ -1130,7 +1130,7 @@ class TestTheSharedTileEncoder:
         """
         import numpy as np
 
-        from digitalearth.web.raster import _coloured_png
+        from digitalearth.web.builders.raster import _coloured_png
 
         cells = np.array([[0.0, 1.0]])
         against_ten = _coloured_png(cells, "viridis", vmin=0.0, vmax=10.0)
@@ -1148,7 +1148,7 @@ class TestTheSharedTileEncoder:
         import numpy as np
         from matplotlib import image as mpimage
 
-        from digitalearth.web.raster import _coloured_png
+        from digitalearth.web.builders.raster import _coloured_png
 
         cells = np.array([[-9999.0, 1.0]])
         payload = _coloured_png(cells, "viridis", vmin=0.0, vmax=1.0, nodata=-9999.0)
@@ -1160,7 +1160,7 @@ class TestTheSharedTileEncoder:
         """An extent's bounding box is not the extent, so a pyramid legitimately has holes."""
         import numpy as np
 
-        from digitalearth.web.raster import _coloured_png
+        from digitalearth.web.builders.raster import _coloured_png
 
         assert _coloured_png(np.full((2, 2), np.nan), "viridis") is None
 
@@ -1176,7 +1176,7 @@ class TestTheColourLimitScan:
             rather than quietly cost a windowed read. What comes back is the caller's own pair, as the
             floats every tile is then normalised on.
         """
-        from digitalearth.web.raster import _scan_limits
+        from digitalearth.web.builders.raster import _scan_limits
 
         measured = _scan_limits(object(), 1, vmin=-2.0, vmax=8.0)
         assert measured == (-2.0, 8.0), measured
@@ -1199,7 +1199,7 @@ class TestTheWrittenPyramid:
             for the other two — a blank tile written for a hole draws an opaque square over the basemap.
         """
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _written_pyramid
+        from digitalearth.web.builders.raster import _written_pyramid
 
         def _western_only(zoom, x, y):
             """Colour the western column of the level and nothing else.
@@ -1238,7 +1238,7 @@ class TestTheWrittenPyramid:
             not, because it has no other symptom than a page that renders blank.
         """
         from digitalearth.base.spec import Bounds
-        from digitalearth.web.raster import _written_pyramid
+        from digitalearth.web.builders.raster import _written_pyramid
 
         def _nothing_anywhere(zoom, x, y):
             """Answer for no tile at all.
@@ -1272,7 +1272,7 @@ class TestTheWindowedTileReads:
             carrying those very words must not read as a missed tile. The two are built from different
             exception types and checked against opposite answers.
         """
-        from digitalearth.web.raster import _off_tile
+        from digitalearth.web.builders.raster import _off_tile
 
         assert _off_tile(_OutOfBoundsReport("tile 3/1/1")) is True, (
             "pyramids' own report must read as a missed tile"
@@ -1283,7 +1283,7 @@ class TestTheWindowedTileReads:
 
     def test_a_band_tile_off_the_raster_answers_none(self):
         """A pyramid legitimately has holes, so a missed window is an answer rather than a failure."""
-        from digitalearth.web.raster import _tile_values
+        from digitalearth.web.builders.raster import _tile_values
 
         reader = _TileReader(_OutOfBoundsReport("no window there"))
         assert _tile_values(reader, 3, 1, 1, band=1) is None, (
@@ -1292,7 +1292,7 @@ class TestTheWindowedTileReads:
 
     def test_a_band_read_that_really_broke_is_raised_unchanged(self):
         """Swallowing a real failure here would turn it into a silently absent tile."""
-        from digitalearth.web.raster import _tile_values
+        from digitalearth.web.builders.raster import _tile_values
 
         reader = _TileReader(MemoryError("the window did not fit"))
         with pytest.raises(MemoryError, match="did not fit"):
@@ -1300,7 +1300,7 @@ class TestTheWindowedTileReads:
 
     def test_a_composite_tile_off_the_raster_answers_none(self):
         """The three-band read answers a missed window the same way the single-band one does."""
-        from digitalearth.web.raster import _tile_stack
+        from digitalearth.web.builders.raster import _tile_stack
 
         reader = _TileReader(_OutOfBoundsReport("no window there"))
         assert _tile_stack(reader, 3, 1, 1, bands=(1, 2, 3)) is None, (
@@ -1309,7 +1309,7 @@ class TestTheWindowedTileReads:
 
     def test_a_composite_read_that_really_broke_is_raised_unchanged(self):
         """And it re-raises a real failure the same way, for the same reason."""
-        from digitalearth.web.raster import _tile_stack
+        from digitalearth.web.builders.raster import _tile_stack
 
         reader = _TileReader(MemoryError("the window did not fit"))
         with pytest.raises(MemoryError, match="did not fit"):
@@ -1326,7 +1326,7 @@ class TestTheWindowedTileReads:
         """
         import numpy as np
 
-        from digitalearth.web.raster import _tile_stack
+        from digitalearth.web.builders.raster import _tile_stack
 
         planes = np.arange(12.0).reshape(3, 2, 2)
         reader = _TileReader(planes, no_data_value=[-9999.0, -9999.0, -9999.0])
@@ -1345,7 +1345,7 @@ class TestTheWindowedTileReads:
         """
         import numpy as np
 
-        from digitalearth.web.raster import _tile_stack
+        from digitalearth.web.builders.raster import _tile_stack
 
         reader = _TileReader(np.array([[-9999.0, 1.0], [2.0, 3.0]]))
         stack = _tile_stack(reader, 0, 0, 0, bands=(1, 1, 1))

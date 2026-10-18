@@ -71,4 +71,4 @@ Which of these a given `vtk` build supports, and what each needs installed, is V
 installation decision rather than something Digital-Earth switches for you; nothing in the `3d` extra pins a
 particular backend.
 
-::: digitalearth.three_d.headless.start_xvfb
+::: digitalearth.three_d.app.headless.start_xvfb

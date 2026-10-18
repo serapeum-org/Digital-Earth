@@ -61,7 +61,7 @@ def test_the_ocean_fill_carves_its_holes_through_the_drawer():
     """
     from cleopatra.basemap.reference import natural_earth_polygons
 
-    from digitalearth.three_d.vector import _cap_with_holes
+    from digitalearth.three_d.builders.vector import _cap_with_holes
 
     scene = Scene3D(off_screen=True)
     scene.ocean()

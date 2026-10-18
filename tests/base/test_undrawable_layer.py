@@ -216,7 +216,7 @@ def _a_builder_that_meets_a_missing_object(tier):
     Returns:
         Whatever the guard answers — the map itself when the layer was skipped.
     """
-    from digitalearth.interactive.base import _skips_off_limb
+    from digitalearth.interactive.core.base import _skips_off_limb
 
     @_skips_off_limb
     def custom(self):

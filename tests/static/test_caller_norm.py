@@ -10,7 +10,7 @@ import pytest
 from matplotlib.colors import BoundaryNorm, LogNorm, Normalize
 
 from digitalearth.static import Map
-from digitalearth.static.render_compat import STATIC_STYLE_SCHEMA, route_flat_style
+from digitalearth.static.render.compat import STATIC_STYLE_SCHEMA, route_flat_style
 
 RASTER = "examples/data/acc4000.tif"
 

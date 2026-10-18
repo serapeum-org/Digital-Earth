@@ -37,7 +37,7 @@ class TestTheTarget:
         """
         import inspect
 
-        from digitalearth.interactive.raster import RasterMixin
+        from digitalearth.interactive.builders.raster import RasterMixin
 
         live_default = (
             inspect.signature(RasterMixin.large_image).parameters["max_pixels"].default

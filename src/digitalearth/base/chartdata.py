@@ -1,7 +1,7 @@
 """Chart data preparation — turning a column name or array-like into plottable values.
 
 Shared by every backend that draws charts. Lifted out of the static backend's ``charts`` module, which is
-where these lived while :mod:`digitalearth.interactive.charts` imported them across the backend boundary —
+where these lived while :mod:`digitalearth.interactive.charts.charts` imported them across the backend boundary —
 the clearest sign they were shared logic in the wrong place. Pure numpy/pandas: no renderer here.
 
 The four helpers split by what the chart needs from the data:
@@ -35,7 +35,7 @@ def column_or_array(data: Any, value: Any) -> np.ndarray | None:
 
     Use this for *paired* inputs that must stay index-aligned and may legitimately contain non-finite values
     (scatter ``x``/``y``/``color_by``/``size_by``). For a *single* field reduced to its finite values (histogram
-    / :func:`digitalearth.static.charts.statistics`), use :func:`field_values` instead.
+    / :func:`digitalearth.static.charts.charts.statistics`), use :func:`field_values` instead.
 
     Args:
         data: A (Geo)DataFrame whose columns ``value`` may name, or ``None``.
@@ -110,7 +110,7 @@ def field_values(data: Any, column: str | None = None) -> np.ndarray:
     (non-``NaN``/non-``inf``) values as ``float64``.
 
     Use this for a *single* field that is summarised or binned on its own (histogram,
-    :func:`digitalearth.static.charts.statistics`). For *paired* inputs that must keep their (possibly
+    :func:`digitalearth.static.charts.charts.statistics`). For *paired* inputs that must keep their (possibly
     non-finite) entries index-aligned, use :func:`column_or_array` instead.
 
     Args:

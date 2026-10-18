@@ -1,0 +1,741 @@
+"""BigDataMixin — web-tier big-data builders (DW.3, recipes W3/W4).
+
+GPU-friendly renderers for large feature sets:
+
+* ``heatmap`` — a MapLibre ``heatmap`` layer (optionally weighted by a column);
+* ``cluster`` — a MapLibre clustered GeoJSON source with cluster bubbles, count labels and unclustered points;
+* ``deck_scatter`` / ``deck_polygons`` — deck.gl ``GeoJsonLayer`` layers driven through the maplibre widget's
+  ``add_deck_layers`` (deck.gl JSON), so millions of features render on the GPU instead of one DOM glyph each.
+  Each owns a ``LayerSpec`` and a queue slot (#396), so it is in ``layer_ids`` and is removable, hideable and
+  reorderable by id — :func:`draw_deck_geojson` rebuilds it from the recorded template, the same way
+  ``point_cloud``/``gltf`` are rebuilt.
+
+Recipe W3 named ``lonboard`` for its zero-copy GeoArrow path, but py-maplibregl's deck integration consumes
+deck.gl **JSON / pydeck** layers, not lonboard widget objects — they cannot be composited into the same
+``maplibre`` widget. We therefore drive deck.gl through ``add_deck_layers`` here, and lonboard is no longer a
+dependency of the ``[web]`` extra: it was installed and never imported. A lonboard-native renderer would be a
+separate widget, and would re-declare it.
+
+Builders that colour by value reuse the base ``_color_expr`` helpers; numpy/maplibre are imported lazily.
+"""
+
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Self
+
+from loguru import logger
+
+from digitalearth.base.ask import UNSET, Ask, Maybe
+from digitalearth.base.bigdata import validate_big_data_threshold
+from digitalearth.base.spec import LayerSpec, Scale, Symbology
+from digitalearth.web.core.base import _require_layer_api, as_finite, placed_features
+
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.core.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+#: deck.gl's JSON layer protocol names the layer class under this key. The ``@@`` prefix is the
+#: converter's marker for "interpret this value, do not pass it through", so it is protocol rather
+#: than a label — worth naming once so a typo cannot silently produce a layer deck.gl ignores.
+#: What an unstyled heatmap is drawn at. The value left the signature with #334; this is where it lives
+#: now, cited by name from the docstring that used to show it.
+HEATMAP_OPACITY = 0.8
+
+DECK_TYPE_KEY = "@@type"
+
+#: The cluster aggregates ``cluster(color_by=...)`` offers, mapped to the MapLibre ``clusterProperties``
+#: operator that accumulates them in the browser (``["+", map]`` sums, ``["max", map]`` takes the maximum).
+#: A name outside this table is refused rather than accepted and left building nothing — the inertness
+#: #242/#244 removed from the controls.
+CLUSTER_AGGREGATES = {"sum": "+", "max": "max"}
+
+
+def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre heatmap layer over a point collection.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the points are placed in.
+        data: The layer's source — the point frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the description records no `paint` for the heatmap, naming the layer, its kind
+            and what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
+    """
+    from digitalearth.web.render.renderer import DrawnLayer, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    paint = required_props(layer, "paint")["paint"]
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=placed_features(web_map, data, layer),
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.HEATMAP,
+            source=source_id,
+            paint=dict(paint),
+        ),
+    )
+
+
+def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the clustered source and its three layers: bubbles, counts and loose points.
+
+    One description carries all three because they are one thing to a viewer — removing the layer takes
+    the counts and the loose points with it.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the points are placed in.
+        data: The layer's source — the point frame the builder already placed, or whatever the figure's
+            reference opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` whose `extra_layers` hold the counts and the
+        unclustered points, drawn under the layer's own id suffixed ``-count`` and ``-unclustered``.
+
+    Raises:
+        ValueError: when the description records none of the values the clustering is built from —
+            its colours, its radius or the zoom it stops clustering at — naming the layer, its kind and
+            what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp
+            places none of its geometry and the map is `strict` — both from :func:`placed_features`,
+            which places the data when the drawer is handed nothing already placed.
+    """
+    from maplibre.sources import GeoJSONSource, geopandas_to_geojson
+
+    from digitalearth.web.render.renderer import DrawnLayer, derived_ids, required_props
+
+    layer_cls, layer_types = _require_layer_api()
+    props = required_props(layer, "color", "text_color", "radius", "max_zoom")
+    count_id, loose_id = derived_ids("clusters", layer.id)
+    source_id = f"{layer.id}-src"
+    color, text_color = props["color"], props["text_color"]
+    # The value-styling half (WB-22), both optional: `cluster_properties` is the browser accumulator the
+    # source needs, and `cluster_color` is the classified expression that reads its result. Absent — a plain
+    # cluster — the source clusters without aggregating and the bubbles keep the flat colour, exactly as before.
+    cluster_properties = layer.symbology.props.get("cluster_properties")
+    bubble_color = layer.symbology.props.get("cluster_color", color)
+    source_options: dict = {
+        "cluster": True,
+        "cluster_radius": int(props["radius"]),
+        "cluster_max_zoom": int(props["max_zoom"]),
+    }
+    if cluster_properties:
+        source_options["cluster_properties"] = dict(cluster_properties)
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=GeoJSONSource(
+            data=geopandas_to_geojson(placed_features(web_map, data, layer)),
+            **source_options,
+        ),
+        layer=layer_cls(
+            id=layer.id,
+            type=layer_types.CIRCLE,
+            source=source_id,
+            filter=["has", "point_count"],
+            paint={
+                "circle-color": bubble_color,
+                "circle-radius": ["step", ["get", "point_count"], 15, 50, 20, 200, 25],
+            },
+        ),
+        extra_layers=(
+            layer_cls(
+                id=count_id,
+                type=layer_types.SYMBOL,
+                source=source_id,
+                filter=["has", "point_count"],
+                layout={
+                    "text-field": ["get", "point_count_abbreviated"],
+                    "text-size": 12,
+                },
+                paint={"text-color": text_color},
+            ),
+            layer_cls(
+                id=loose_id,
+                type=layer_types.CIRCLE,
+                source=source_id,
+                filter=["!", ["has", "point_count"]],
+                paint={"circle-color": color, "circle-radius": 5},
+            ),
+        ),
+    )
+
+
+def draw_deck_geojson(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the deck.gl ``GeoJsonLayer`` a `deck_scatter` or `deck_polygons` layer describes.
+
+    The big-data counterpart of :func:`~digitalearth.web.builders.threed.draw_point_cloud` and
+    :func:`~digitalearth.web.builders.threed.draw_model`: it rebuilds the deck.gl JSON layer from the template the
+    builder recorded, serialising the layer's own feature collection into its ``data`` field. Because the
+    layer owns a description and a queue slot (#396), it joins the page's one deck overlay from that slot —
+    so it carries the style layer it draws beneath as ``beforeId`` and is addressable by id like every other
+    layer, which is what the single shared :class:`~digitalearth.web.core.base._DeckOverlay` slot could not give
+    the undescribed routes.
+
+    Args:
+        web_map: The map being drawn, whose display CRS the geometry is placed in.
+        data: The layer's source — the frame the builder already placed, or whatever the figure's reference
+            opened to when the layer is drawn back from a description.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.render.renderer.DrawnLayer` on the deck route, carrying the deck.gl JSON layer
+        the page composes into its one overlay.
+
+    Raises:
+        ValueError: when the description records no ``deck`` template — the deck.gl layer dict the builder
+            recorded — naming the layer, its kind and what is missing.
+        TypeError: when the figure's source is not a vector layer, and OffLimbError when the warp places
+            none of its geometry and the map is `strict` — both from :func:`placed_features`.
+    """
+    from maplibre.sources import geopandas_to_geojson
+
+    from digitalearth.web.render.renderer import DECK_ROUTE, DrawnLayer, required_props
+
+    _require_layer_api()
+    template = required_props(layer, "deck")["deck"]
+    placed = placed_features(web_map, data, layer)
+    return DrawnLayer(
+        source_id=None,
+        source_spec=None,
+        layer={
+            **template,
+            "id": layer.id,
+            "data": geopandas_to_geojson(placed),
+        },
+        route=DECK_ROUTE,
+    )
+
+
+class BigDataMixin(_MixinBase):
+    """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.core.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.core.base.WebMapBase: the typing-only base declared above the class.
+    """
+
+    @staticmethod
+    def _require_points(gdf: Any, method: str) -> None:
+        """Raise ``TypeError`` unless every geometry in ``gdf`` is a point (the only kind these layers map).
+
+        Args:
+            gdf: The display-CRS GeoDataFrame about to be drawn.
+            method: The calling builder name (quoted in the error).
+
+        Raises:
+            TypeError: when ``gdf`` holds any non-point geometry (MapLibre heatmap/clustering are point-only,
+                so polygons/lines would render nothing).
+        """
+        kinds = set(gdf.geometry.geom_type.unique())
+        if not kinds <= {"Point", "MultiPoint"}:
+            raise TypeError(
+                f"{method}() needs point geometries; got {sorted(kinds)}. Use choropleth/polygons for areas."
+            )
+
+    def heatmap(
+        self,
+        features: Any,
+        *,
+        weight: str | None = None,
+        radius: float = 30.0,
+        intensity: float = 1.0,
+        opacity: Maybe[float] = UNSET,
+    ) -> Self:
+        """Render a point ``FeatureCollection`` as a MapLibre heatmap (recipe W4).
+
+        Args:
+            features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
+            weight: Optional value column; cells are weighted by it (normalised to ``[0, 1]``). ``None``
+                weights every point equally.
+            radius: Heat kernel radius in pixels.
+            intensity: Global intensity multiplier.
+            opacity: Heatmap layer opacity in ``[0, 1]``.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``radius``, ``intensity`` or ``opacity`` is not a finite number — refused at
+                this call, because a figure holding NaN or infinity could not be written down.
+            TypeError: when ``features`` is not a point layer.
+            KeyError: when ``weight`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            FileNotFoundError: when ``features`` is a path that names nothing.
+        """
+        #: This builder's own name, for the refusals below to quote back at the caller.
+        call = "WebMap.heatmap()"
+        import numpy as np
+
+        _require_layer_api()
+        ask = Ask()
+        paint: dict = {
+            "heatmap-radius": as_finite(radius, "radius", call),
+            "heatmap-intensity": as_finite(intensity, "intensity", call),
+            "heatmap-opacity": as_finite(
+                ask("heatmap-opacity", opacity, HEATMAP_OPACITY), "opacity", call
+            ),
+        }
+        gdf = self._display_gdf(features, method="heatmap")
+        self._require_points(gdf, "heatmap")
+        if weight is not None:
+            values = np.asarray(self._require_column(gdf, weight), dtype=float)
+            finite = values[np.isfinite(values)]
+            lo, hi = Scale.from_finite(finite).as_limits()
+
+            paint["heatmap-weight"] = [
+                "interpolate",
+                ["linear"],
+                ["get", weight],
+                lo,
+                0.0,
+                hi,
+                1.0,
+            ]
+
+        layer_id = self._uid("heatmap")
+        self._index_layer(
+            layer_id,
+            None,
+            kind="heatmap",
+            # The caller's own reference is what a figure can be written down with; the warped frame is
+            # handed to the first draw so nothing is warped twice (review H1).
+            source=features,
+            placed=gdf,
+            symbology=Symbology(props={"paint": dict(paint), **ask.record}),
+        )
+        self._last_layer_id = layer_id
+        return self
+
+    def cluster(
+        self,
+        features: Any,
+        *,
+        radius: int = 50,
+        max_zoom: int = 14,
+        color: str = "#51bbd6",
+        text_color: str = "#ffffff",
+        color_by: str | None = None,
+        aggregate: str = "sum",
+        scheme: Any | None = None,
+        k: int = 5,
+        cmap: str = "viridis",
+    ) -> Self:
+        """Render a point ``FeatureCollection`` as MapLibre clustered circles + count labels (recipe W4).
+
+        Builds a clustered GeoJSON source and three layers: cluster bubbles (sized by point count), the count
+        label, and the unclustered points. All three are **one description** under one id — the bubbles'
+        — so a layer switcher lists them once and :meth:`~digitalearth.web.core.base.WebMapBase.remove_layer`
+        takes all three off together. The count and the loose points are drawn beside it, under that id
+        suffixed ``-count`` and ``-unclustered``.
+
+        **Styling by value and a key (WB-22).** With ``color_by=`` the bubbles are coloured by an aggregate
+        of a feature property rather than one flat colour: MapLibre ``clusterProperties`` accumulate the
+        property per cluster (``aggregate="sum"`` or ``"max"``) in the browser, and the bubble is painted by
+        that aggregate with the same classified ``step``/``interpolate`` expression ``choropleth`` builds —
+        reused through :meth:`~digitalearth.web.builders.vector.VectorMixin._color_expr`, not re-implemented here. A
+        classified cluster is then **keyable** exactly as a choropleth is, so
+        :meth:`~digitalearth.web.legends.legend.LegendMixin.legend` /
+        :meth:`~digitalearth.web.core.base.WebMapBase.colorbar` draw its key from the colours it rendered. The
+        aggregate is computed per cluster in the browser, while the class breaks are derived from the
+        **single-feature** column's own spread, so the key shows the breaks the paint was compiled from. That
+        is **exact only for** ``aggregate="max"`` — a cluster's max lies within the feature range, so a
+        bubble's colour and its legend label agree. For ``aggregate="sum"`` the legend breaks describe
+        **single-feature values, not cluster sums**: a cluster's sum can run past the top break, so a dense
+        cluster clamps to the top colour while its legend label reads lower than the quantity the colour
+        encodes. Without ``color_by`` the bubbles stay the flat ``color`` and the cluster carries no key,
+        which is an honest refusal rather than an empty box.
+
+        Args:
+            features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
+            radius: Cluster radius in pixels (MapLibre ``clusterRadius``).
+            max_zoom: Zoom at/after which points stop clustering (``clusterMaxZoom``).
+            color: Fill colour for cluster bubbles and unclustered points. Still the loose points' colour
+                when ``color_by`` recolours the bubbles, since a single point carries its own value rather
+                than an aggregate.
+            text_color: Colour of the cluster count label.
+            color_by: A feature attribute to colour the bubbles by, aggregated per cluster. ``None`` keeps
+                the flat ``color`` and files no key.
+            aggregate: How to accumulate ``color_by`` across a cluster — ``"sum"`` or ``"max"`` (the
+                :data:`CLUSTER_AGGREGATES` MapLibre has). Ignored without ``color_by``.
+            scheme: The classification of the aggregate's colours, as
+                :meth:`~digitalearth.web.builders.vector.VectorMixin.choropleth` takes it — a cleopatra scheme or an
+                explicit edge sequence for a graduated ``step``, or ``None`` (the default) for a continuous
+                ramp. Ignored without ``color_by``.
+            k: Number of classes for a graduated ``scheme``. Ignored without ``color_by``.
+            cmap: matplotlib colormap sampled for the class / ramp colours. Ignored without ``color_by``.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is not a point layer.
+            KeyError: when ``color_by`` names no feature attribute, or when ``features`` is a URL with no
+                resolver registered for its scheme.
+            ValueError: when ``aggregate`` is not one of :data:`CLUSTER_AGGREGATES`, or propagated from the
+                classifier (unknown scheme, constant column, …).
+            FileNotFoundError: when ``features`` is a path that names nothing.
+        """
+
+        _require_layer_api()
+        gdf = self._display_gdf(features, method="cluster")
+        self._require_points(gdf, "cluster")
+        from digitalearth.web.render.renderer import derived_ids
+
+        props: dict = {
+            "color": color,
+            "text_color": text_color,
+            "radius": int(radius),
+            "max_zoom": int(max_zoom),
+        }
+        # The classification, when asked for, is built before the id is allocated, so a bad aggregate or an
+        # unknown column raises with nothing reserved. `_color_expr` records `last_legend`/`last_breaks`, which
+        # `_index_layer` then files under this layer — the same path a classified `choropleth` takes, so the
+        # cluster's key is drawn by exactly the machinery the choropleth's is (reuse, not a second copy).
+        encodings: dict = {}
+        if color_by is not None:
+            operator = CLUSTER_AGGREGATES.get(aggregate)
+            if operator is None:
+                raise ValueError(
+                    f"WebMap.cluster(aggregate={aggregate!r}) must be one of "
+                    f"{sorted(CLUSTER_AGGREGATES)}"
+                )
+            values = self._require_column(gdf, color_by)
+            aggregated = f"{color_by}_{aggregate}"
+            color_expr, color_encoding = self._color_expr(
+                values, aggregated, scheme, k, cmap
+            )
+            # The accumulator MapLibre runs per cluster, and the colour expression that reads its result:
+            # the drawer wires the first onto the source and paints the bubbles with the second.
+            props["cluster_properties"] = {aggregated: [operator, ["get", color_by]]}
+            props["cluster_color"] = color_expr
+            encodings = {"color": color_encoding}
+
+        # The counts and the loose points are drawn under ids derived from this one, so the allocation
+        # reserves those too — a caller's `name=` can no longer take one of them (review M5).
+        layer_id = self._uid("clusters", kind="clusters")
+        # One description covers the bubbles, their counts and the loose points, so removing it removes
+        # all three together — they are one thing to a viewer.
+        registered = self._index_layer(
+            layer_id,
+            None,
+            kind="clusters",
+            # As `heatmap` above: the figure records what the caller named, the first draw takes the
+            # frame already warped here (review H1).
+            source=features,
+            placed=gdf,
+            symbology=Symbology(encodings=encodings, props=props),
+        )
+        if registered:
+            # The loose points, which are the layer carrying the caller's own columns: the bubbles are
+            # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
+            # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
+            # description is skipped — which is what the guard in `_record_tooltip` is for.
+            self._last_layer_id = derived_ids("clusters", layer_id)[-1]
+        return self
+
+    def _add_deck_layer(self, layer: dict) -> Self:
+        """Accumulate an **undescribed** deck.gl JSON ``layer`` for the page's one deck overlay.
+
+        The last off-tree deck route: `tiles_3d` alone reaches here. `deck_scatter`, `deck_polygons` and the
+        big-data route of `points`/`polygons` were off-tree too until #396 gave each its own `LayerSpec` and
+        queue slot — they now register through
+        :meth:`~digitalearth.web.core.base.WebMapBase._index_layer` and :func:`draw_deck_geojson`, exactly as
+        `point_cloud`/`model` do, and so are in `layer_ids`, removable and toggleable. `tiles_3d` stays here
+        because its tileset streams from a URL rather than a feature frame this tier can serve.
+
+        All deck layers are applied together — deck.gl owns one overlay, and a second ``add_deck_layers``
+        call replaces the first rather than adding to it — so the first undescribed deck builder queues the
+        marker that says where this list joins the overlay, and later ones append to it. The described deck
+        kinds (`point_cloud`, `model`, `deck_scatter`, `deck_polygons`) join the same overlay from their own
+        queue slots, which is what lets `move_layer` reorder them.
+
+        Args:
+            layer: A deck.gl JSON layer dict (``{"@@type": ..., ...}``).
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Note:
+            One marker for the whole undescribed list is also the limit of what `tiles_3d` can be told: the
+            marker is a single queue slot, so it cannot say where each layer belongs, and these therefore
+            name no ``beforeId`` and draw **above every style layer** whichever order the builders ran in
+            (review R2-H5). A layer that has to sit under a style layer, or be reordered/removed/hidden by id,
+            needs a description to be ordered by — which every deck builder but `tiles_3d` now has.
+        """
+        from digitalearth.web.core.base import _DeckOverlay
+
+        if self._deck_layers is None:
+            self._deck_layers = []
+            self._queue(_DeckOverlay())
+        self._deck_layers.append(layer)
+        return self
+
+    def deck_scatter(
+        self,
+        features: Any,
+        *,
+        fill_color: Sequence[int] = (51, 136, 255, 200),
+        size: float = 5.0,
+        name: str | None = None,
+        visible: bool = True,
+        _placed: Any = None,
+    ) -> Self:
+        """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
+
+        Since #396 the layer owns a :class:`~digitalearth.base.spec.LayerSpec` and a queue slot, just as
+        `point_cloud` and `gltf` do: it appears in :attr:`~digitalearth.web.core.base.WebMapBase.layer_ids`, and
+        :meth:`~digitalearth.web.core.base.WebMapBase.remove_layer`,
+        :meth:`~digitalearth.web.core.base.WebMapBase.set_visible` and
+        :meth:`~digitalearth.web.core.base.WebMapBase.move_layer` address it by id. :func:`draw_deck_geojson`
+        rebuilds the deck.gl layer from the recorded template, so a figure that names a path survives
+        :meth:`~digitalearth.web.core.base.WebMapBase.figure_spec`'s ``to_dict``/``from_dict`` round trip.
+
+        Args:
+            features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
+            fill_color: RGBA fill colour (0-255 per channel).
+            size: Point radius in pixels. The same ``size`` that means marker size on every tier, and
+                the same number
+                :meth:`~digitalearth.web.builders.vector.VectorMixin.points` hands down when it routes a large
+                layer here.
+            name: What the layer is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``deck-scatter-1``, ``deck-scatter-2``, …
+                as every other unnamed layer is numbered.
+            visible: Whether the layer starts drawn. A hidden deck layer carries deck.gl's own
+                ``visible: false`` and draws nothing. This is the *initial* state only: a deck.gl overlay is
+                not a MapLibre style layer, so the live layer-switcher toggle (MapLibre ``setLayoutProperty``)
+                does not reach it — the same limitation the other deck kinds (``point_cloud``/``gltf``) have.
+                Hide or show it after the fact from Python (``set_visible``), not from the saved page's switcher.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is a raster rather than a vector layer.
+            OffLimbError: when the map is ``strict`` and the placed geometry falls off the display
+                (raised as the layer is drawn, through the shared off-limb policy).
+
+        Examples:
+            - Build the layer and read back the spec that will be handed to deck.gl (needs the
+              ``web`` extra, so the block is skipped without it):
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Point               # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> m = WebMap().deck_scatter(gdf, size=7.0, name="obs")  # doctest: +SKIP
+                >>> layer = m.layers[0]                              # doctest: +SKIP
+                >>> layer["@@type"], layer["getPointRadius"]         # doctest: +SKIP
+                ('GeoJsonLayer', 7.0)
+
+                ```
+            - The layer is addressable by the name it was given, like any other:
+                ```python
+                >>> m.layer_ids                                      # doctest: +SKIP
+                ['obs']
+
+                ```
+        See Also:
+            digitalearth.web.builders.vector.VectorMixin.points: the per-feature path, which routes
+                here above ``big_data_threshold``.
+            digitalearth.web.builders.bigdata.BigDataMixin.deck_polygons: the polygon counterpart.
+        """
+        _require_layer_api()
+        # `_placed` is the internal handoff from `points()`: it has already opened and placed the frame, so it
+        # passes it here to avoid a second open (review L1) while `features` stays the caller's own reference
+        # (a path/URL) so the recorded source is portable (review H1). A direct caller leaves it unset.
+        gdf = (
+            _placed
+            if _placed is not None
+            else self._display_gdf(features, method="deck_scatter")
+        )
+        # The deck.gl layer, as a template without its id and data: `draw_deck_geojson` fills those from the
+        # layer's id and the placed frame. Recorded as values on the symbology so the figure carries it.
+        template = {
+            DECK_TYPE_KEY: "GeoJsonLayer",
+            "pointType": "circle",
+            "filled": True,
+            "getFillColor": list(fill_color),
+            "getPointRadius": float(size),
+            "pointRadiusUnits": "pixels",
+            "pointRadiusMinPixels": float(size),
+        }
+        layer_id = self._layer_id("deck-scatter", name)
+        self._index_layer(
+            layer_id,
+            name,
+            kind="deck_scatter",
+            visible=visible,
+            # The caller's own reference is what a figure can be written down with; the placed frame is
+            # handed to the first draw so nothing is warped twice (review H1).
+            source=features,
+            placed=gdf,
+            symbology=Symbology(props={"deck": template}),
+        )
+        # A deck.gl overlay layer is not a MapLibre style layer, so MapLibre's click handler cannot reach it;
+        # leaving it as `_last_layer_id` would make a default popup()/tooltip() bind to a layer that never
+        # fires (review L2). Deck layers are not click targets, so they do not claim the default binding.
+        return self
+
+    def deck_polygons(
+        self,
+        features: Any,
+        *,
+        fill_color: Sequence[int] = (51, 136, 255, 180),
+        line_color: Sequence[int] = (255, 255, 255, 255),
+        name: str | None = None,
+        visible: bool = True,
+        _placed: Any = None,
+    ) -> Self:
+        """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
+
+        Since #396 the layer owns a :class:`~digitalearth.base.spec.LayerSpec` and a queue slot, so it is in
+        :attr:`~digitalearth.web.core.base.WebMapBase.layer_ids` and is removable, hideable and reorderable by id
+        — the polygon counterpart of :meth:`deck_scatter`.
+
+        Args:
+            features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
+                A path or URL to one is taken too, and is the only input this layer can be
+                written down with — a pyramids object does not know where it came from. The reference
+                is opened at the display choke point
+                (:meth:`~digitalearth.web.core.base.WebMapBase._opened`) and the caller's own path is what
+                the figure records.
+            fill_color: RGBA fill colour (0-255 per channel).
+            line_color: RGBA outline colour (0-255 per channel).
+            name: What the layer is addressed by — ``set_visible``, ``move_layer``, ``replace_layer`` and
+                ``remove_layer`` all take it. ``None`` generates ``deck-polygons-1``, ``deck-polygons-2``, …
+                as every other unnamed layer is numbered.
+            visible: Whether the layer starts drawn (the initial state only). As for :meth:`deck_scatter`,
+                the live layer-switcher toggle does not reach a deck.gl overlay; use ``set_visible`` from
+                Python to change it afterwards.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is a raster rather than a vector layer.
+            OffLimbError: when the map is ``strict`` and the placed geometry falls off the display
+                (raised as the layer is drawn, through the shared off-limb policy).
+
+        See Also:
+            digitalearth.web.builders.vector.VectorMixin.polygons: the per-feature path, which routes
+                here above ``big_data_threshold``.
+            digitalearth.web.builders.bigdata.BigDataMixin.deck_scatter: the point counterpart.
+        """
+        _require_layer_api()
+        # `_placed` is the internal handoff from `polygons()` (see deck_scatter): the placed frame, so the
+        # frame is not opened twice, while `features` stays the caller's portable reference.
+        gdf = (
+            _placed
+            if _placed is not None
+            else self._display_gdf(features, method="deck_polygons")
+        )
+        template = {
+            DECK_TYPE_KEY: "GeoJsonLayer",
+            "filled": True,
+            "stroked": True,
+            "getFillColor": list(fill_color),
+            "getLineColor": list(line_color),
+            "lineWidthMinPixels": 1,
+        }
+        layer_id = self._layer_id("deck-polygons", name)
+        self._index_layer(
+            layer_id,
+            name,
+            kind="deck_polygons",
+            visible=visible,
+            source=features,
+            placed=gdf,
+            symbology=Symbology(props={"deck": template}),
+        )
+        # Not a MapLibre style layer, so it does not claim the default popup()/tooltip() binding (review L2).
+        return self
+
+    def _threshold(
+        self, big_data_threshold: int | None = None, *, caller: str = "WebMap"
+    ) -> int:
+        """Resolve the feature count that routes a layer to the GPU: the call's, else the map's.
+
+        The two ways of setting it are deliberately the same name: assigning
+        :attr:`~digitalearth.web.core.base.WebMapBase.big_data_threshold` on the map moves the cutoff for
+        every layer that follows, while passing ``big_data_threshold=`` to one builder moves it for that
+        call alone and leaves the map's setting untouched.
+
+        A per-call cutoff is checked by :func:`~digitalearth.base.bigdata.validate_big_data_threshold`, the
+        shared guard the interactive tier applies too — so a negative cutoff is refused identically on both
+        rather than raising here and routing every layer, empty ones included, there.
+
+        Args:
+            big_data_threshold: The per-call override, or ``None`` to use the map's attribute.
+            caller: The builder the keyword was written on, named in the error so the message points at the
+                call rather than at this helper.
+
+        Returns:
+            The feature count above which a builder auto-routes to a deck.gl layer.
+
+        Raises:
+            ValueError: when the override is negative — a cutoff below zero routes everything, including
+                an empty layer, which is never what the caller meant.
+        """
+        if big_data_threshold is None:
+            return int(self.big_data_threshold)
+        return validate_big_data_threshold(big_data_threshold, caller=caller)
+
+    def _route_big(self, gdf: Any, kind: str, *, threshold: int | None = None) -> bool:
+        """Whether ``gdf`` exceeds the big-data threshold — and log the routing decision when it does.
+
+        Args:
+            gdf: The display-CRS GeoDataFrame about to be drawn.
+            kind: The builder name (for the log message).
+            threshold: The caller's per-call ``big_data_threshold``; ``None`` uses the map's attribute.
+
+        Returns:
+            ``True`` when the feature count exceeds the resolved ``big_data_threshold`` (the caller should
+            route to a GPU layer); ``False`` otherwise. The decision is logged when it fires (the M2
+            "never silent" rule).
+        """
+        limit = self._threshold(threshold, caller=f"WebMap.{kind}()")
+        n = len(gdf)
+        if n > limit:
+            logger.info(
+                f"{kind}: {n} features exceed big_data_threshold={limit}; "
+                "routing to a GPU deck.gl layer (pass big=False to keep per-feature rendering)"
+            )
+            return True
+        return False

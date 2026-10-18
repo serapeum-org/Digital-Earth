@@ -11,7 +11,7 @@ Gated on the optional ``3d`` extra (pyvista), as every module in this directory 
 
 import pytest
 
-from digitalearth.three_d.base import Scene3DBase
+from digitalearth.three_d.core.base import Scene3DBase
 
 pv = pytest.importorskip("pyvista")
 

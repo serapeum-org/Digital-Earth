@@ -6,9 +6,9 @@ unless it is told to compose, so a map that described two field layers kept only
 description said two, the axes held one, and nothing in the suite compared them.
 
 That comparison is the property here. A scene's description and its artists are deliberately separate
-structures (see :mod:`digitalearth.static.scene`), so they can only be held together by a test that reads
-both: for each combination below, every layer :attr:`~digitalearth.static.scene.Scene.figure_spec` names
-must still have its artists attached to :attr:`~digitalearth.static.scene.Scene.ax`.
+structures (see :mod:`digitalearth.static.core.scene`), so they can only be held together by a test that reads
+both: for each combination below, every layer :attr:`~digitalearth.static.core.scene.Scene.figure_spec` names
+must still have its artists attached to :attr:`~digitalearth.static.core.scene.Scene.ax`.
 
 The redraw half matters just as much and pulls the other way. ``Renderer`` rebuilds a layer by drawing it
 again, so composing must not turn a rebuild into a second copy stacked on the first — the very thing the

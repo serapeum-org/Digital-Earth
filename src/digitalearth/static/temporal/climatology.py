@@ -9,7 +9,7 @@ from matplotlib.axes import Axes
 
 from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.temporal import group_by_label
-from digitalearth.static import series
+from digitalearth.static.charts import series
 from digitalearth.static.temporal.timeseries import TimeSeries
 
 

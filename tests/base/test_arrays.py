@@ -247,7 +247,7 @@ class TestNanReducers:
         Test scenario:
             Every NAN_REDUCERS entry appears (same object) in _QUADTREE_AGG, which adds only 'count'=len.
         """
-        from digitalearth.static.maps.vector import _QUADTREE_AGG
+        from digitalearth.static.builders.vector import _QUADTREE_AGG
 
         for name, func in NAN_REDUCERS.items():
             assert _QUADTREE_AGG[name] is func, (

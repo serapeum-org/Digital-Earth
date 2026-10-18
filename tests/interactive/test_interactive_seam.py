@@ -20,7 +20,7 @@ from digitalearth.base.registry import band_of, kinds
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.interactive import InteractiveMap
 from digitalearth.interactive.capabilities import CAPABILITIES
-from digitalearth.interactive.renderer import DRAWN_KINDS, drawer_for
+from digitalearth.interactive.render.renderer import DRAWN_KINDS, drawer_for
 
 pytest.importorskip(
     "geoviews", reason="the interactive tier needs the interactive environment"
@@ -328,7 +328,7 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
             that declines leaves `figure_spec` naming a layer the map cannot draw, and — worse — leaves
             the caller's data in the process-global object registry under that layer's id.
         """
-        from digitalearth.interactive import vector
+        from digitalearth.interactive.builders import vector
 
         monkeypatch.setattr(vector, "draw_vector", lambda *args, **kwargs: None)
         interactive_map = new_map().points(point_fc)
@@ -352,7 +352,7 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
             The declined layer's id stayed in the map's set of issued ids, so the retry was suffixed —
             `grid-1` for a layer the caller called `grid`, naming a layer that never existed.
         """
-        from digitalearth.interactive import projection
+        from digitalearth.interactive.view import projection
 
         interactive_map = new_map()
         monkeypatch.setattr(projection, "draw_graticule", lambda *args, **kwargs: None)
@@ -374,7 +374,7 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
             new_map: The map factory.
             monkeypatch: Used to make the tile drawer decline.
         """
-        from digitalearth.interactive import decoration
+        from digitalearth.interactive.decoration import decoration
 
         monkeypatch.setattr(decoration, "draw_tiles", lambda *args, **kwargs: None)
         interactive_map = new_map().basemap(
@@ -392,7 +392,7 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
             point_fc: The collection the builder is given.
             monkeypatch: Used to make the drawer decline.
         """
-        from digitalearth.interactive import vector
+        from digitalearth.interactive.builders import vector
 
         monkeypatch.setattr(vector, "draw_vector", lambda *args, **kwargs: None)
         interactive_map = new_map()
@@ -448,7 +448,7 @@ class TestADrawerThatRaisesLeavesNothingBehind:
             monkeypatch: Used to make the raster drawer land nowhere.
         """
         from digitalearth.base.crs import OffLimbError
-        from digitalearth.interactive import raster
+        from digitalearth.interactive.builders import raster
 
         monkeypatch.setattr(raster, "draw_image", _off_limb)
         interactive_map = new_map(strict=True)
@@ -472,7 +472,7 @@ class TestADrawerThatRaisesLeavesNothingBehind:
             the tree gave them — one past the ghost — and the points at the ghost's side, so the drawing
             came out coastlines-then-points: the coastlines under the data the figure said they sat over.
         """
-        from digitalearth.interactive import raster
+        from digitalearth.interactive.builders import raster
 
         monkeypatch.setattr(raster, "draw_image", _off_limb)
         interactive_map = new_map().field(dataset).coastlines().points(point_fc)

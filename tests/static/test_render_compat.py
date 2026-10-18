@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`digitalearth.static.render_compat` — the flat-kwarg -> cleopatra group-object translation."""
+"""Unit tests for :mod:`digitalearth.static.render.compat` — the flat-kwarg -> cleopatra group-object translation."""
 
 import numpy as np
 import pytest
@@ -7,7 +7,7 @@ from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
 from cleopatra.styling.scaling import ColorScale, ColorScaling
 
-from digitalearth.static.render_compat import (
+from digitalearth.static.render.compat import (
     FLAT_STYLE_KEYS,
     group_render_kwargs,
     prepare_plot_kwargs,

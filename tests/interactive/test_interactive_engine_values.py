@@ -797,7 +797,7 @@ def _drawn_elsewhere(built, fresh, data):
     Returns:
         The `DrawnLayer` the fresh map produced.
     """
-    from digitalearth.interactive.renderer import drawer_for
+    from digitalearth.interactive.render.renderer import drawer_for
 
     layer_id = built.layer_ids[-1]
     layer = _reloaded(built).get(layer_id)

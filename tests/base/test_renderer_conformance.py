@@ -941,7 +941,7 @@ class ThreeDContract(RendererContract):
         Returns:
             The drawable kinds.
         """
-        from digitalearth.three_d.renderer import DRAWN_KINDS
+        from digitalearth.three_d.render.renderer import DRAWN_KINDS
 
         return DRAWN_KINDS
 
@@ -954,7 +954,7 @@ class ThreeDContract(RendererContract):
         Returns:
             The drawer.
         """
-        from digitalearth.three_d.renderer import drawer_for
+        from digitalearth.three_d.render.renderer import drawer_for
 
         return drawer_for(kind)
 
@@ -1127,7 +1127,7 @@ class InteractiveContract(RendererContract):
         Returns:
             The drawable kinds.
         """
-        from digitalearth.interactive.renderer import DRAWN_KINDS
+        from digitalearth.interactive.render.renderer import DRAWN_KINDS
 
         return DRAWN_KINDS
 
@@ -1140,7 +1140,7 @@ class InteractiveContract(RendererContract):
         Returns:
             The drawer.
         """
-        from digitalearth.interactive.renderer import drawer_for
+        from digitalearth.interactive.render.renderer import drawer_for
 
         return drawer_for(kind)
 
@@ -1322,7 +1322,7 @@ class StaticContract(RendererContract):
         Returns:
             The drawable kinds.
         """
-        from digitalearth.static.renderer import DRAWN_KINDS
+        from digitalearth.static.render.renderer import DRAWN_KINDS
 
         return DRAWN_KINDS
 
@@ -1335,7 +1335,7 @@ class StaticContract(RendererContract):
         Returns:
             The drawer.
         """
-        from digitalearth.static.renderer import drawer_for
+        from digitalearth.static.render.renderer import drawer_for
 
         return drawer_for(kind)
 
@@ -1354,9 +1354,9 @@ class TestStaticRendererConformance(RendererConformance):
 #: deliberately absent: its rollback is the scene's `_change` (`three_d/base.py`), which re-applies the
 #: figure the scene still shows, so its `apply` has no handler of its own to agree with.
 _RENDERERS_THAT_ROLL_BACK = (
-    "digitalearth.static.renderer",
-    "digitalearth.web.renderer",
-    "digitalearth.interactive.renderer",
+    "digitalearth.static.render.renderer",
+    "digitalearth.web.render.renderer",
+    "digitalearth.interactive.render.renderer",
 )
 
 
@@ -1418,7 +1418,9 @@ class TestTheTiersAgreeOnWhatARefusalIs:
         import importlib
 
         static = _caught_by(
-            importlib.import_module("digitalearth.static.renderer").Renderer.apply
+            importlib.import_module(
+                "digitalearth.static.render.renderer"
+            ).Renderer.apply
         )
         assert static == ("BaseException",), (
             f"a rollback has to survive an interruption, not only an error; static catches {static}"

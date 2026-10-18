@@ -28,7 +28,7 @@ from digitalearth.base.autostyle import auto_style
 from digitalearth.base.sources import DimensionInfo, Source
 from digitalearth.base.spec import FigureSpec
 from digitalearth.static import Map, Scene
-from digitalearth.static.figure import grid
+from digitalearth.static.panels.figure import grid
 
 #: A 2x2 lat/lon geo-reference, so a field can be drawn on a `Map(crs=4326)` without reading a file.
 GEO = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)

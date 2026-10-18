@@ -28,7 +28,7 @@ pytest.importorskip(
 
 from digitalearth.base.spec import Symbology  # noqa: E402
 from digitalearth.interactive import InteractiveMap  # noqa: E402
-from digitalearth.interactive.style_fold import (  # noqa: E402
+from digitalearth.interactive.render.style_fold import (  # noqa: E402
     ASKED_BUCKET,
     TIER_BUCKET,
     portable_encodings,
@@ -339,7 +339,7 @@ class TestAnUnstyledLayerPublishesNothing:
             there was written by the caller. `spaghetti` broke that promise — it passed its per-member
             colour cycle through `**opts`, so three unstyled members published three different colours as
             three caller intents (review R2-H3). A derived value now goes to
-            :data:`~digitalearth.interactive.style_fold.TIER_BUCKET`, and this is what stops the next
+            :data:`~digitalearth.interactive.render.style_fold.TIER_BUCKET`, and this is what stops the next
             builder reopening it.
         """
         written = [
@@ -357,7 +357,7 @@ class TestAnUnstyledLayerPublishesNothing:
 #: A field binding is not style — it is what the layer *is*. `field(dem)` colours by the band it draws and
 #: `choropleth(gdf, "pop")` by the column, whether or not anybody styled either, which is why these are
 #: published for an unstyled layer while the constants beside them are not. They are also what a colour key
-#: hangs on: :meth:`~digitalearth.interactive.decoration.DecorationMixin.colorbar` attaches a
+#: hangs on: :meth:`~digitalearth.interactive.legends.legend.LegendMixin.colorbar` attaches a
 #: :class:`~digitalearth.base.spec.encoding.Guide` to this encoding, so a builder that publishes none refuses
 #: a key — which makes this table the list of builders whose layers can carry one.
 #:
@@ -367,7 +367,7 @@ class TestAnUnstyledLayerPublishesNothing:
 #:
 #: `'Band_1'` is what `examples/data/acc4000.tif` calls its only band — measured, and the same name the drawn
 #: `hv.Image`'s value dimension carries, which is the agreement
-#: :func:`~digitalearth.interactive.raster.coloured_by` exists to keep.
+#: :func:`~digitalearth.interactive.builders.raster.coloured_by` exists to keep.
 BOUND_FIELDS: dict[str, dict[str, str]] = {
     "points": {},
     "lines": {},

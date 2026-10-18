@@ -15,7 +15,7 @@ from matplotlib.path import Path
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.static import Map
-from digitalearth.static.guides import GuidePlan, _marked_bands, paint_guide
+from digitalearth.static.legends.legend import GuidePlan, _marked_bands, paint_guide
 
 #: The p-value bands of a significance overlay: significant below 0.05, not above it.
 P_LEVELS = [0.0, 0.05, 1.0]
@@ -416,7 +416,7 @@ class TestTheHatchLegend:
             fill=False,
             name="none",
         )
-        with caplog.at_level("WARNING", logger="digitalearth.static.guides"):
+        with caplog.at_level("WARNING", logger="digitalearth.static.legends.legend"):
             canvas.legend("none", title="Significance")
         assert canvas.ax.get_legend() is None, (
             "a layer that marks no band must get no legend box, got "

@@ -92,7 +92,7 @@ class TestLayersShareOneCrs:
         Test scenario:
             The display CRS must not cost anything in the common case, or move a pixel of an existing render.
         """
-        warp = mocker.patch("digitalearth.three_d.base.reproject")
+        warp = mocker.patch("digitalearth.three_d.core.base.reproject")
         scene.terrain(dem)
         scene.point_cloud(_centre_point(dem, dem.epsg), value_column="v")
         assert warp.call_count == 0, f"reproject was called {warp.call_count} time(s)"

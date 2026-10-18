@@ -2,7 +2,7 @@
 
 `CLAUDE.md` states the position plainly: most styling kwargs *"are passed straight through ``**kwargs``"* and
 are not handled in this repo. The static tier alone has **26** such keys — the flat members
-:mod:`digitalearth.static.render_compat` folds into cleopatra's typed groups — and not one of them appears in
+:mod:`digitalearth.static.render.compat` folds into cleopatra's typed groups — and not one of them appears in
 any signature. Three things follow, and all three are why this module exists:
 
 * **Nothing can be discovered.** A caller cannot ask what a builder accepts, and neither can tooling.
@@ -16,7 +16,7 @@ it is a static property — and :class:`Symbology` is what a declared style reso
 layer, plus the static properties that are not channels.
 
 :meth:`StyleSchema.route` is the half that did not exist before. Today
-:func:`digitalearth.static.render_compat.prepare_plot_kwargs` can only *reject* a keyword it has no home for;
+:func:`digitalearth.static.render.compat.prepare_plot_kwargs` can only *reject* a keyword it has no home for;
 routing means a flat public kwarg **finds** the channel that owns it, and only a genuinely homeless key is
 reported back — with :meth:`StyleSchema.suggest` naming the nearest declared key, which is what turns a
 silently-ignored typo into an answerable error.

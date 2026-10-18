@@ -9,8 +9,9 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.sources import get_stack
 from digitalearth.base.stretch import channel_limits, stretch_to_unit
-from digitalearth.static import Map, projections
-from digitalearth.static.maps import animation
+from digitalearth.static import Map
+from digitalearth.static.builders import animation
+from digitalearth.static.view import projections
 
 
 def _field(offset: float) -> Dataset:
@@ -349,7 +350,7 @@ class TestAnimate:
 
     def test_resolve_clim_caps_scan(self, mocker):
         """_resolve_animation_clim scans at most _CLIM_SCAN_CAP frames of a large stack (L2)."""
-        from digitalearth.static.maps import animation as anim_mod
+        from digitalearth.static.builders import animation as anim_mod
 
         spy = mocker.spy(anim_mod.AnimationMixin, "_stack_clim")
         m = Map(crs=4326)
@@ -1219,7 +1220,7 @@ class TestAnimateComposites:
             both read in full while the docstring promised 24. Only an exact multiple of the cap (72) hid
             it, which is what the original test used.
         """
-        from digitalearth.static.maps import animation as anim_mod
+        from digitalearth.static.builders import animation as anim_mod
 
         spy = mocker.spy(anim_mod, "channel_limits")
         big = [_rgb_field(shift=float(s), ny=12, nx=24) for s in range(frames)]
@@ -1288,7 +1289,7 @@ class TestAnimateComposites:
             real data on the rest. Answering that with a fixed (0, 1) span would push every real value
             through clip((500 - 0) / 1) = 1.0 and blow the channel out in every frame that has data.
         """
-        from digitalearth.static.maps import animation as anim_mod
+        from digitalearth.static.builders import animation as anim_mod
 
         count = 50
         scanned_indices = set(anim_mod._scan_subset(list(range(count))))

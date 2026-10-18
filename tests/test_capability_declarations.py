@@ -111,7 +111,7 @@ class TestTheStaticTierDeclaresWhatItDraws:
             declaration while its drawer stays lands on the other. The symmetric difference names which.
         """
         from digitalearth.static.capabilities import CAPABILITIES
-        from digitalearth.static.renderer import DRAWN_KINDS
+        from digitalearth.static.render.renderer import DRAWN_KINDS
 
         difference = sorted(CAPABILITIES.kinds.symmetric_difference(DRAWN_KINDS))
         assert difference == [], f"{difference} is in one list and not the other"
@@ -119,7 +119,7 @@ class TestTheStaticTierDeclaresWhatItDraws:
     def test_every_declared_kind_resolves_to_a_drawer(self):
         """A declared kind the renderer could not draw would raise where a message belongs."""
         from digitalearth.static.capabilities import CAPABILITIES
-        from digitalearth.static.renderer import drawer_for
+        from digitalearth.static.render.renderer import drawer_for
 
         unresolved = []
         for kind in sorted(CAPABILITIES.kinds):

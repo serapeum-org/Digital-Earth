@@ -16,8 +16,9 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 
-from digitalearth.three_d import Scene3D, base
-from digitalearth.three_d.base import (
+from digitalearth.three_d import Scene3D
+from digitalearth.three_d.core import base
+from digitalearth.three_d.core.base import (
     IMAGE_SUFFIXES,
     SCENE_EXPORTERS,
     Scene3DBase,

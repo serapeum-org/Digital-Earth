@@ -17,7 +17,8 @@ import numpy as np
 import pytest
 
 from digitalearth.base.crs import OffLimbError
-from digitalearth.static import Map, projections
+from digitalearth.static import Map
+from digitalearth.static.view import projections
 
 #: The grid every test draws: three rows of four, with the row written into the tens digit so a value names
 #: the row it came from. A square grid could not tell a transpose from a mirror.
@@ -110,7 +111,7 @@ class TestABareArrayIsDrawnAtItsOwnIndices:
             warp with a call that raises proves the array path never reaches it — a weaker assertion on
             ``Source.crs`` would pass even if the tier warped and then forgot to record the result.
         """
-        from digitalearth.static.maps import base
+        from digitalearth.static.builders import base
 
         def refuse(data, crs):
             """Args:

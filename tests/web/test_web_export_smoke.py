@@ -426,7 +426,7 @@ class TestDeckAndGeocoderInABrowser:
             layer prop must raise in the runtime (a page error), not pass through — the recursive
             refusal (M1), which the old top-level-only scan missed.
         """
-        from digitalearth.web.htmldoc import HtmlDocument
+        from digitalearth.web.output.htmldoc import HtmlDocument
 
         base = WebMap().basemap()._build_map_widget().to_dict()
         spec = {
@@ -482,7 +482,7 @@ class TestRuntimeSafety:
             The runtime's posture is refuse-don't-drop; a ``setDeckLayers`` with no overlay to update
             must raise (a page error), matching the unknown-call and marker refusals.
         """
-        from digitalearth.web.htmldoc import HtmlDocument
+        from digitalearth.web.output.htmldoc import HtmlDocument
 
         base = WebMap().basemap()._build_map_widget().to_dict()
         data = {**base, "calls": [*base["calls"], ["setDeckLayers", [[]]]]}

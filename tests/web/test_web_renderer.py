@@ -11,7 +11,7 @@ from dataclasses import replace as with_fields
 import pytest
 
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.web.renderer import (
+from digitalearth.web.render.renderer import (
     DECK_ROUTE,
     DRAWN_KINDS,
     PAINT_CHANNELS,
@@ -108,7 +108,7 @@ class TestAKindThisTierDoesNotDraw:
             A kind in the table and not in `DRAWN_KINDS` would be refused with a message that is false; one
             in `DRAWN_KINDS` with no drawer would raise a bare `KeyError` where the message belongs.
         """
-        from digitalearth.web import renderer
+        from digitalearth.web.render import renderer
 
         monkeypatch.setattr(renderer, "DRAWN_KINDS", ("points", "nonesuch"))
         with pytest.raises(KeyError, match="drawer table and DRAWN_KINDS disagree"):
@@ -228,7 +228,7 @@ class TestReconcilingTwoFigures:
         Args:
             drawn_map: A map with one drawn layer.
         """
-        from digitalearth.web.renderer import DrawnLayer
+        from digitalearth.web.render.renderer import DrawnLayer
 
         drawn_map._renderer._drawn["headless"] = DrawnLayer(
             source_id=None, source_spec=None, layer=None
@@ -660,10 +660,10 @@ class TestThePaintIsReadBackAsChannels:
     """What the tier already records, read back in the portable vocabulary (#328).
 
     Every vector builder funnels through `_vector_layer`, which records MapLibre's own `paint` dict because
-    that is what :func:`~digitalearth.web.vector.draw_vector` rebuilds the layer from. That dict is
+    that is what :func:`~digitalearth.web.builders.vector.draw_vector` rebuilds the layer from. That dict is
     unreadable anywhere else, so a layer this tier drew described its style in a form only this tier could
     use, and `Symbology.encodings` came back empty however the layer was styled.
-    :func:`~digitalearth.web.renderer.portable_encodings` is the read-back, and it changes nothing a drawer
+    :func:`~digitalearth.web.render.renderer.portable_encodings` is the read-back, and it changes nothing a drawer
     sees: `paint` stays exactly as the builder wrote it.
 
     Every probe below records an ``asked`` list beside the paint it hands over, because that is what the lift

@@ -35,7 +35,7 @@ pytest.importorskip("maplibre", reason="the web tier needs the web environment")
 
 from digitalearth.web import VectorTileSource, WebMap  # noqa: E402
 from digitalearth.web.capabilities import CAPABILITIES  # noqa: E402
-from digitalearth.web.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
+from digitalearth.web.render.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
 
 #: The raster every field builder here is given. Read from the repo root, as the rest of the suite does.
 DEM_PATH = "examples/data/acc4000.tif"

@@ -750,7 +750,7 @@ class TestWhatQuickmapLeavesOnThisTier:
             asked Bokeh for furniture it does not build here.
         """
         from digitalearth import quickmap
-        from digitalearth.interactive.style_fold import GUIDE_KIND_KEY
+        from digitalearth.interactive.render.style_fold import GUIDE_KIND_KEY
 
         built = quickmap(
             _zoned_polygons(),
@@ -781,7 +781,7 @@ class TestWhichKeyAGuideWithoutARecordedKindAsksFor:
     def test_a_categorical_scale_asks_for_the_swatch_key(self):
         """No recorded kind, a categorical scale: a legend."""
         from digitalearth.base.spec import Encoding, Scale, Symbology
-        from digitalearth.interactive.style_fold import fold_guide
+        from digitalearth.interactive.render.style_fold import fold_guide
 
         scale = Scale.categorical(["a", "b"], ["#f00", "#00f"])
         symbology = Symbology(
@@ -795,7 +795,7 @@ class TestWhichKeyAGuideWithoutARecordedKindAsksFor:
     def test_a_continuous_scale_still_asks_for_the_bar(self):
         """And the other arm, so the fallback cannot swallow every guide."""
         from digitalearth.base.spec import Encoding, Scale, Symbology
-        from digitalearth.interactive.style_fold import fold_guide
+        from digitalearth.interactive.render.style_fold import fold_guide
 
         scale = Scale.from_limits(0.0, 1.0)
         symbology = Symbology(

@@ -40,7 +40,8 @@ import pytest
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 
-from digitalearth.static import Map, grid, projections, shared_colorbar
+from digitalearth.static import Map, grid, shared_colorbar
+from digitalearth.static.view import projections
 
 #: Every test in this module is an image test, selected with ``-m mpl`` and compared with ``--mpl``.
 pytestmark = pytest.mark.mpl

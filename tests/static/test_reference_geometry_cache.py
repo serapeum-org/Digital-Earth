@@ -34,8 +34,9 @@ import pytest
 from cleopatra.basemap.reference import natural_earth
 from pyramids.base.crs import reproject_coordinates
 
-from digitalearth.static import Map, projections
-from digitalearth.static.maps import decoration
+from digitalearth.static import Map
+from digitalearth.static.builders import decoration
+from digitalearth.static.view import projections
 
 #: The layer every test here draws. 110m is the coarsest Natural-Earth resolution and still 134 parts, which
 #: is the point: the cost measured above is per part, not per vertex.

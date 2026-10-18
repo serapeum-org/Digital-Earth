@@ -21,7 +21,7 @@ from digitalearth.base.contract_clauses import clause
 # The 3-D tier's own cutoff, read here rather than restated: `three_d.bigdata` is numpy and `logging` only, so
 # naming it costs the lean `dev` environment no engine import (`tests/three_d/test_lazy_engine.py` holds that
 # for the tier). Reading it is what ties C8's wording to the constant instead of to a copy of it (R2-M1).
-from digitalearth.three_d.bigdata import DEFAULT_CELL_BUDGET
+from digitalearth.three_d.builders.bigdata import DEFAULT_CELL_BUDGET
 
 CALLER = "InteractiveMap.points()"
 

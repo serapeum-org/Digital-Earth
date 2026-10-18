@@ -13,13 +13,14 @@ pytest.importorskip(
 
 from pyramids.feature import FeatureCollection  # noqa: E402
 
-from digitalearth.interactive import InteractiveMap, vector  # noqa: E402
-from digitalearth.interactive.renderer import (  # noqa: E402
+from digitalearth.interactive import InteractiveMap
+from digitalearth.interactive.builders import vector  # noqa: E402
+from digitalearth.interactive.builders.vector import _HV_TYPE_FOR_KIND  # noqa: E402
+from digitalearth.interactive.render.renderer import (  # noqa: E402
     _CANONICAL_VIA,
     _recipes,
     retarget_via,
 )
-from digitalearth.interactive.vector import _HV_TYPE_FOR_KIND  # noqa: E402
 from tests.base._retarget_checks import (  # noqa: E402
     assert_canonical_entries_are_recipes,
     assert_every_multi_recipe_kind_is_covered,

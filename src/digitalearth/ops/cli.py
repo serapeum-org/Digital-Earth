@@ -48,7 +48,7 @@ _NATIVE_EXT: dict = {
 #: The CRS forwarded to ``quickmap`` when the caller passes no ``--crs``, per backend (M2, L4). Two tiers need
 #: a default that differs from the shared 3857 (:data:`_FALLBACK_CRS`):
 #:
-#: * ``web`` -> ``4326``. The web tier renders in EPSG:4326 only (``digitalearth.web.base.DISPLAY_CRS``), so the
+#: * ``web`` -> ``4326``. The web tier renders in EPSG:4326 only (``digitalearth.web.core.base.DISPLAY_CRS``), so the
 #:   shared 3857 default made a bare ``digitalearth plot IN --backend web`` always raise a ``ValueError`` out of
 #:   the box. A sensible per-backend default just works, which is less surprising than an error the user must
 #:   decode.

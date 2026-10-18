@@ -30,8 +30,8 @@ from cleopatra.styling.perceptual import srgb_to_lab
 from matplotlib import colormaps
 
 from digitalearth.static import Map
-from digitalearth.static.maps.raster import FieldColors
-from digitalearth.static.render_compat import (
+from digitalearth.static.builders.raster import FieldColors
+from digitalearth.static.render.compat import (
     CENTER_KEY,
     ROBUST_KEY,
     STATIC_STYLE_SCHEMA,

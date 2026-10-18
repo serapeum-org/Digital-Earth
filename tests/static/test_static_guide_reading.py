@@ -5,7 +5,7 @@ away with it. This covers the layer underneath: the two readings the tier takes 
 decide whether a colour key is possible at all, and the three paths a key takes once it is.
 
 The readings matter because they are the only thing standing between "this layer can be keyed" and a bar
-labelled with numbers the picture never drew. :func:`~digitalearth.static.guides.drawn_scale` has **four**
+labelled with numbers the picture never drew. :func:`~digitalearth.static.legends.legend.drawn_scale` has **four**
 separate ways to answer "no scale", and a wrong `None` from any of them silently downgrades a keyable layer
 to an unkeyable one, while a wrong `Scale` labels the key with invented limits. Neither shows up as an
 exception — both draw a picture.
@@ -24,7 +24,7 @@ from matplotlib.colors import BoundaryNorm, Normalize
 
 from digitalearth.base.spec import Encoding, Scale, Symbology
 from digitalearth.static import Map
-from digitalearth.static.guides import (
+from digitalearth.static.legends.legend import (
     GUIDE_KIND_KEY,
     _swatches,
     drawn_scale,
@@ -52,7 +52,7 @@ class _Handle:
 
 
 class _Legend:
-    """The two accessors :func:`~digitalearth.static.guides._swatches` reads a drawn legend through.
+    """The two accessors :func:`~digitalearth.static.legends.legend._swatches` reads a drawn legend through.
 
     Args:
         texts: The label strings the legend holds.
@@ -332,7 +332,7 @@ class TestAnAnchorArrivingFromAnotherFigure:
             all four anchors to `"left"`, so it restated the constant it imports and could not tell a
             correct table from a broken one (review N2).
         """
-        from digitalearth.static.guides import _COLORBAR_SIDES
+        from digitalearth.static.legends.legend import _COLORBAR_SIDES
 
         assert anchor in _COLORBAR_SIDES, (
             f"{anchor!r} is one of Guide's four corners and has no colorbar side, so a figure carrying it "
@@ -358,7 +358,7 @@ class TestAnAnchorArrivingFromAnotherFigure:
             axes and has no corners to keep it in.
         """
         from digitalearth.base.registry import FURNITURE_ANCHORS
-        from digitalearth.static.guides import _COLORBAR_SIDES
+        from digitalearth.static.legends.legend import _COLORBAR_SIDES
 
         assert _COLORBAR_SIDES == {
             anchor: anchor.split("-")[1] for anchor in FURNITURE_ANCHORS
@@ -383,7 +383,7 @@ class TestAnAnchorArrivingFromAnotherFigure:
             The legend half of the same mapping. A legend *does* have corners, so this one is lossless and
             the corner must survive rather than collapsing to a side.
         """
-        from digitalearth.static.guides import _LEGEND_LOCATIONS
+        from digitalearth.static.legends.legend import _LEGEND_LOCATIONS
 
         assert anchor in _LEGEND_LOCATIONS, (
             f"{anchor!r} has no legend location, so a figure carrying it would lose its placement; the "
@@ -428,7 +428,7 @@ class TestAnAnchoredGuideIsActuallyDrawnThere:
         from dataclasses import replace as with_fields
 
         from digitalearth.base.spec import Guide
-        from digitalearth.static.guides import GUIDE_KIND_KEY
+        from digitalearth.static.legends.legend import GUIDE_KIND_KEY
 
         layer = canvas.get_layer(layer_id)
         props = dict(layer.symbology.props)

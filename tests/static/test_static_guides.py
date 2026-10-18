@@ -20,8 +20,8 @@ import pytest
 
 from digitalearth.base.spec import Symbology
 from digitalearth.static import Map
-from digitalearth.static.guides import color_encoding, source_field
-from digitalearth.static.renderer import DrawnLayer
+from digitalearth.static.legends.legend import color_encoding, source_field
+from digitalearth.static.render.renderer import DrawnLayer
 
 
 @pytest.fixture
@@ -804,7 +804,7 @@ class TestAGraduatedFillIsKeyedByItsClasses:
             classes by *index* could not say that, which is why the 3-D tier answers with the list instead:
             its scalar bar would read `0, 1, 2` over the class indices.
         """
-        from digitalearth.static.guides import guide_kind
+        from digitalearth.static.legends.legend import guide_kind
 
         layer = graduated.get_layer("grad")
         scale = layer.symbology.encoding("color").scale
@@ -849,7 +849,7 @@ class TestARefusedKeyTakesTheRebuildWithIt:
         """
         from dataclasses import replace as with_fields
 
-        from digitalearth.static.guides import GUIDE_LABELS_KEY
+        from digitalearth.static.legends.legend import GUIDE_LABELS_KEY
 
         polygons["zone"] = ["urban", "rural"] * (len(polygons) // 2) + ["urban"] * (
             len(polygons) % 2
@@ -943,7 +943,7 @@ class TestARefusedKeyTakesTheRebuildWithIt:
         from dataclasses import replace as with_fields
 
         from digitalearth.base.spec import Encoding, Guide, Scale
-        from digitalearth.static.guides import GUIDE_KIND_KEY
+        from digitalearth.static.legends.legend import GUIDE_KIND_KEY
 
         with Map(crs=4326) as canvas:
             canvas.graticule(30, 30, name="grid")
@@ -1010,7 +1010,7 @@ class TestARefusedKeyTakesTheRebuildWithIt:
         from dataclasses import replace as with_fields
 
         from digitalearth.base.spec import Encoding, Guide, Scale
-        from digitalearth.static.guides import GUIDE_KIND_KEY
+        from digitalearth.static.legends.legend import GUIDE_KIND_KEY
 
         epsg = dataset.epsg
         with Map(crs=epsg) as canvas:
@@ -1230,7 +1230,7 @@ class TestOneAxesHoldsOneSwatchLegend:
         from dataclasses import replace as with_fields
 
         from digitalearth.base.spec import Guide
-        from digitalearth.static.guides import GUIDE_KIND_KEY
+        from digitalearth.static.legends.legend import GUIDE_KIND_KEY
 
         for layer_id in ("a", "b"):
             layer = two_fills.get_layer(layer_id)
@@ -1264,7 +1264,7 @@ class TestOneAxesHoldsOneSwatchLegend:
         from dataclasses import replace as with_fields
 
         from digitalearth.base.spec import Guide
-        from digitalearth.static.guides import GUIDE_KIND_KEY
+        from digitalearth.static.legends.legend import GUIDE_KIND_KEY
 
         arriving = canvas.figure_spec
         for layer_id in ("a", "b"):
@@ -1290,7 +1290,7 @@ class TestOneAxesHoldsOneSwatchLegend:
         Returns:
             One id per layer carrying a shown legend guide.
         """
-        from digitalearth.static.guides import guide_kind
+        from digitalearth.static.legends.legend import guide_kind
 
         shown = []
         for layer_id in canvas.layer_ids:
@@ -1380,7 +1380,7 @@ class TestOneAxesHoldsOneSwatchLegend:
             either the prose or this test has to change if the call ever learns to reuse a switched-off
             guide's own description.
         """
-        from digitalearth.static.guides import GUIDE_LABELS_KEY
+        from digitalearth.static.legends.legend import GUIDE_LABELS_KEY
 
         two_fills.legend("a", title="Alpha", labels=["x", "y"])
         two_fills.legend("b", title="Beta")

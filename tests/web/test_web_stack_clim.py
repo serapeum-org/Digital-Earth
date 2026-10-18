@@ -10,7 +10,7 @@ import pytest
 
 from digitalearth.base.clim import DEFAULT_CLIM_SCAN_CAP
 from digitalearth.web import WebMap
-from digitalearth.web.temporal import _CLIM_SCAN_CAP
+from digitalearth.web.temporal.temporal import _CLIM_SCAN_CAP
 
 
 @pytest.fixture(autouse=True)

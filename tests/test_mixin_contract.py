@@ -4,7 +4,7 @@ Every capability mixin in ``static/``, ``interactive/``, ``three_d/`` and ``web/
 class as its own base **under ``TYPE_CHECKING`` only**::
 
     if TYPE_CHECKING:
-        from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+        from digitalearth.static.builders.base import GeoLayerBase as _MixinBase
     else:
         _MixinBase = object
 
@@ -55,10 +55,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 #: `<backend package> -> (module holding its base class, base class name)`. The mixins in each package must
 #: declare that base under TYPE_CHECKING; the composed class in the same package inherits it for real.
 BACKENDS = {
-    "digitalearth.static.maps": ("digitalearth.static.maps.base", "GeoLayerBase"),
-    "digitalearth.interactive": ("digitalearth.interactive.base", "InteractiveMapBase"),
-    "digitalearth.three_d": ("digitalearth.three_d.base", "Scene3DBase"),
-    "digitalearth.web": ("digitalearth.web.base", "WebMapBase"),
+    "digitalearth.static": (
+        "digitalearth.static.builders.base",
+        "GeoLayerBase",
+    ),
+    "digitalearth.interactive": (
+        "digitalearth.interactive.core.base",
+        "InteractiveMapBase",
+    ),
+    "digitalearth.three_d": ("digitalearth.three_d.core.base", "Scene3DBase"),
+    "digitalearth.web": ("digitalearth.web.core.base", "WebMapBase"),
 }
 
 #: How many mixins the four backends held when this guard was written. A floor, not an equality: adding a
@@ -96,11 +102,15 @@ def _mixins() -> tuple:
     """
     found = []
     for backend in BACKENDS:
-        for path in sorted(_module_path(backend).glob("*.py")):
+        # rglob, not glob: the mixins now live in per-concern subpackages (builders/, decoration/,
+        # legends/, view/, temporal/, app/), not flat under the backend, so recurse to find them all.
+        for path in sorted(_module_path(backend).rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in tree.body:
                 if isinstance(node, ast.ClassDef) and node.name.endswith("Mixin"):
-                    module = f"{backend}.{path.stem}"
+                    module = ".".join(
+                        path.relative_to(ROOT / "src").with_suffix("").parts
+                    )
                     found.append((backend, module, node.name, node, tree))
     return tuple(found)
 
@@ -279,7 +289,7 @@ class TestComposedClassMro:
     """Tests for the exact method-resolution order of the composed backend classes.
 
     All four backends list their capability mixins first and their backend base last. That order is load
-    bearing rather than stylistic: with the mixins typed against that base (see :mod:`digitalearth.web.base`
+    bearing rather than stylistic: with the mixins typed against that base (see :mod:`digitalearth.web.core.base`
     and friends), listing the base *first* puts it both before and after its own subclasses, and the MRO
     algorithm cannot linearize it — mypy then falls back to ``[cls, object]`` and every attribute silently
     becomes ``Any``. ``static.Map`` always had the working order; the other three were corrected to match.
@@ -298,6 +308,7 @@ class TestComposedClassMro:
                     "BigDataMixin",
                     "TemporalMixin",
                     "DecorationMixin",
+                    "LegendMixin",
                     "InteractionMixin",
                     "LiveMixin",
                     "ProjectionMixin",
@@ -318,6 +329,7 @@ class TestComposedClassMro:
                     "ThreeDMixin",
                     "TemporalMixin",
                     "DecorationMixin",
+                    "LegendMixin",
                     "ExportMixin",
                     "WebMapBase",
                     "object",
@@ -375,7 +387,7 @@ class TestComposedClassMro:
             ),
             ("digitalearth.web.map", "WebMap", "digitalearth.web"),
             ("digitalearth.three_d.scene3d", "Scene3D", "digitalearth.three_d"),
-            ("digitalearth.static.map", "Map", "digitalearth.static.maps"),
+            ("digitalearth.static.map", "Map", "digitalearth.static"),
         ],
         ids=["interactive", "web", "three_d", "static"],
     )
@@ -507,7 +519,7 @@ class TestSelfReturningBuilders:
             nothing but this catches that, because the wrong annotation still runs perfectly.
         """
         offenders = []
-        for path in sorted(_module_path(backend).glob("*.py")):
+        for path in sorted(_module_path(backend).rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 is_function = isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -550,15 +562,15 @@ REGISTRARS = frozenset(
 #: `WebMapBase`, `Scene3DBase` and `WebMapBase`'s composed `WebMap` own more. Round 2's M7 measured the
 #: previous scan at 3 methods on `*Mixin` classes only, which left every one of these unopened.
 COMPOSED_CLASSES = {
-    "digitalearth.static.scene": ("Scene",),
+    "digitalearth.static.core.scene": ("Scene",),
     "digitalearth.static.map": ("Map",),
-    "digitalearth.static.textured_globe": ("TexturedGlobe",),
-    "digitalearth.static.maps.base": ("GeoLayerBase",),
-    "digitalearth.interactive.base": ("InteractiveMapBase",),
+    "digitalearth.static.globe.textured_globe": ("TexturedGlobe",),
+    "digitalearth.static.builders.base": ("GeoLayerBase",),
+    "digitalearth.interactive.core.base": ("InteractiveMapBase",),
     "digitalearth.interactive.map": ("InteractiveMap",),
-    "digitalearth.three_d.base": ("Scene3DBase",),
+    "digitalearth.three_d.core.base": ("Scene3DBase",),
     "digitalearth.three_d.scene3d": ("Scene3D",),
-    "digitalearth.web.base": ("WebMapBase",),
+    "digitalearth.web.core.base": ("WebMapBase",),
     "digitalearth.web.map": ("WebMap",),
 }
 
@@ -584,29 +596,29 @@ _THREE_D_ACTOR = (
 #: rather than escaping the scan silently. (N1's third shape, a description *reader*, is no longer flagged
 #: at all: see :data:`REGISTRARS`.)
 CONTRACT_CARVE_OUTS = {
-    "digitalearth.static.maps.decoration:DecorationMixin.stock_img": (
+    "digitalearth.static.builders.decoration:DecorationMixin.stock_img": (
         "hands back the backdrop artist a caller restyles; pinned by "
         "tests/static/test_decoration_chaining.py"
     ),
-    "digitalearth.three_d.base:Scene3DBase.add_mesh": _THREE_D_ACTOR,
-    "digitalearth.three_d.base:Scene3DBase.add_volume": _THREE_D_ACTOR,
-    "digitalearth.three_d.globe:GlobeMixin.globe": _THREE_D_ACTOR,
-    "digitalearth.three_d.point_cloud:PointCloudMixin.point_cloud": _THREE_D_ACTOR,
-    "digitalearth.three_d.terrain:TerrainMixin.terrain": _THREE_D_ACTOR,
-    "digitalearth.three_d.vector:VectorMixin.extruded_polygons": _THREE_D_ACTOR,
-    "digitalearth.three_d.vector:VectorMixin.vectors": _THREE_D_ACTOR,
-    "digitalearth.three_d.vector:VectorMixin.lines": _THREE_D_ACTOR,
-    "digitalearth.three_d.vector:VectorMixin.streamlines": _THREE_D_ACTOR,
-    "digitalearth.three_d.volume:VolumeMixin.isosurface": _THREE_D_ACTOR,
-    "digitalearth.three_d.volume:VolumeMixin.volume": _THREE_D_ACTOR,
-    "digitalearth.three_d.flat:FlatMixin.points": _THREE_D_ACTOR,
-    "digitalearth.three_d.flat:FlatMixin.polygons": _THREE_D_ACTOR,
-    "digitalearth.three_d.flat:FlatMixin.choropleth": _THREE_D_ACTOR,
-    "digitalearth.three_d.decoration:DecorationMixin.coastlines": _THREE_D_ACTOR,
-    "digitalearth.three_d.decoration:DecorationMixin.borders": _THREE_D_ACTOR,
-    "digitalearth.three_d.decoration:DecorationMixin.land": _THREE_D_ACTOR,
-    "digitalearth.three_d.decoration:DecorationMixin.ocean": _THREE_D_ACTOR,
-    "digitalearth.three_d.decoration:DecorationMixin.lakes": _THREE_D_ACTOR,
+    "digitalearth.three_d.core.base:Scene3DBase.add_mesh": _THREE_D_ACTOR,
+    "digitalearth.three_d.core.base:Scene3DBase.add_volume": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.globe:GlobeMixin.globe": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.point_cloud:PointCloudMixin.point_cloud": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.terrain:TerrainMixin.terrain": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.vector:VectorMixin.extruded_polygons": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.vector:VectorMixin.vectors": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.vector:VectorMixin.lines": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.vector:VectorMixin.streamlines": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.volume:VolumeMixin.isosurface": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.volume:VolumeMixin.volume": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.flat:FlatMixin.points": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.flat:FlatMixin.polygons": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.flat:FlatMixin.choropleth": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration.decoration:DecorationMixin.coastlines": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration.decoration:DecorationMixin.borders": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration.decoration:DecorationMixin.land": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration.decoration:DecorationMixin.ocean": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration.decoration:DecorationMixin.lakes": _THREE_D_ACTOR,
 }
 
 
@@ -699,11 +711,14 @@ def _contract_classes() -> tuple:
     """
     found = []
     for backend in BACKENDS:
-        for path in sorted(_module_path(backend).glob("*.py")):
+        for path in sorted(_module_path(backend).rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for klass in tree.body:
                 if isinstance(klass, ast.ClassDef) and klass.name.endswith("Mixin"):
-                    found.append((f"{backend}.{path.stem}", klass))
+                    module = ".".join(
+                        path.relative_to(ROOT / "src").with_suffix("").parts
+                    )
+                    found.append((module, klass))
     for module, names in COMPOSED_CLASSES.items():
         path = _module_path(module).with_suffix(".py")
         tree = ast.parse(path.read_text(encoding="utf-8"))

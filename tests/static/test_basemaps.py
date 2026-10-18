@@ -438,7 +438,7 @@ class TestStaticTierDetails:
             monkeypatch: pytest's patcher.
         """
         pytest.importorskip("matplotlib")
-        from digitalearth.static.maps import decoration as static_decoration
+        from digitalearth.static.builders import decoration as static_decoration
 
         self.calls = []
 
@@ -656,7 +656,7 @@ class TestStaticCoverageGuardSources:
             monkeypatch: pytest's patcher.
         """
         pytest.importorskip("matplotlib")
-        from digitalearth.static.maps import decoration as static_decoration
+        from digitalearth.static.builders import decoration as static_decoration
 
         self.calls = []
         monkeypatch.setattr(
@@ -843,7 +843,7 @@ class TestWhereTheStaticExtentComesFrom:
             monkeypatch: pytest's patcher.
         """
         pytest.importorskip("matplotlib")
-        from digitalearth.static.maps import decoration as static_decoration
+        from digitalearth.static.builders import decoration as static_decoration
 
         self.calls = []
         monkeypatch.setattr(
@@ -897,7 +897,7 @@ class TestWhereTheStaticExtentComesFrom:
             so the request goes ahead and the service answers it.
         """
         from digitalearth import Map
-        from digitalearth.static.maps import decoration as static_decoration
+        from digitalearth.static.builders import decoration as static_decoration
 
         def _refuse(*args, **kwargs):
             """Stand in for a CRS pyproj cannot resolve."""
@@ -1135,7 +1135,7 @@ class TestThePresetKeywordSetIsDerived:
             interactive tiers take the preset as an explicit dict and need no such test.
         """
         from digitalearth.base.basemaps import PRESET_KEYWORDS
-        from digitalearth.static.maps import decoration as static_decoration
+        from digitalearth.static.builders import decoration as static_decoration
 
         assert static_decoration.PRESET_KEYWORDS is PRESET_KEYWORDS
 
@@ -1219,7 +1219,7 @@ class TestTheEnvelopeIsReprojectedAsAShape:
 
         crs = "epsg:4326" if spelling == "epsg:4326" else CRS.from_epsg(4326)
         transform = mocker.patch(
-            "digitalearth.static.maps.decoration.reproject_coordinates"
+            "digitalearth.static.builders.decoration.reproject_coordinates"
         )
         m = Map(crs=crs)
         m.ax.set_xlim(5.0, 6.0)
@@ -1240,7 +1240,7 @@ class TestACredentialWithNothingToAuthenticate:
             monkeypatch: pytest's patcher.
         """
         pytest.importorskip("matplotlib")
-        from digitalearth.static.maps import decoration as static_decoration
+        from digitalearth.static.builders import decoration as static_decoration
 
         monkeypatch.setattr(
             static_decoration,

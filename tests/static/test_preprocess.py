@@ -4,7 +4,7 @@ import numpy as np
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.static import Map
-from digitalearth.static.preprocess import add_cyclic_column, wrap_longitude
+from digitalearth.static.builders.preprocess import add_cyclic_column, wrap_longitude
 
 
 class TestAddCyclicColumn:

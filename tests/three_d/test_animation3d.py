@@ -11,8 +11,9 @@ pv = pytest.importorskip("pyvista")
 pytest.importorskip("imageio")
 
 from digitalearth.base.sources import get_source
-from digitalearth.three_d import Scene3D, animation
-from digitalearth.three_d.animation import (
+from digitalearth.three_d import Scene3D
+from digitalearth.three_d.temporal import animation
+from digitalearth.three_d.temporal.animation import (
     _checked_clim,
     _finite_number,
     _freeze_colour_range,
@@ -84,7 +85,7 @@ def test_jupyter_switches_backend(monkeypatch):
 
 def test_finalize_frames_noop_without_writer():
     """_finalize_frames is a safe no-op when no GIF/MP4 writer was opened (defensive path)."""
-    from digitalearth.three_d.animation import _finalize_frames
+    from digitalearth.three_d.temporal.animation import _finalize_frames
 
     scene = Scene3D(off_screen=True)  # never opened a writer -> plotter has no mwriter
     _finalize_frames(scene.plotter)  # must not raise

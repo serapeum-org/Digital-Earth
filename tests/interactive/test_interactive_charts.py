@@ -1,4 +1,4 @@
-"""Tests for digitalearth.interactive.charts — HoloViz/Bokeh charts (DC.6).
+"""Tests for digitalearth.interactive.charts.charts — HoloViz/Bokeh charts (DC.6).
 
 The lazy-import contract runs without the engine; the chart builders ``importorskip`` holoviews and run in the
 ``interactive`` pixi env.
@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import pytest
 
-from digitalearth.interactive import charts as icharts
+from digitalearth.interactive.charts import charts as icharts
 
 
 class TestLazyImport:

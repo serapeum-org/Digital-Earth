@@ -1,6 +1,6 @@
 """Which spelling of a declared style keyword a saved figure carries (review R2-M13).
 
-A keyword this tier **declares** — :data:`~digitalearth.interactive.style_fold.INTERACTIVE_STYLE_SCHEMA`
+A keyword this tier **declares** — :data:`~digitalearth.interactive.render.style_fold.INTERACTIVE_STYLE_SCHEMA`
 names `clim` "Colour limits, as (low, high)" — has to survive being written down, in the spelling its own
 documentation gives. A tuple is exactly what
 :func:`~digitalearth.base.spec._serial.travels_in_a_figure` refuses, so the documented form was held beside
@@ -245,7 +245,7 @@ class TestAPairPassedThroughOptsAlsoTravels:
             guard the opts-level fix must not undo. Checked on `describe_opts` directly, since the builders'
             opts validation would reject an element-inappropriate keyword before the travel split is reached.
         """
-        from digitalearth.interactive.base import OPTS_KEY, describe_opts
+        from digitalearth.interactive.core.base import OPTS_KEY, describe_opts
 
         held: dict = {}
         described = describe_opts(held, {"clim": (0.0, 50.0), "line_dash": (0, (5, 5))})

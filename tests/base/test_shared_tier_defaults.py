@@ -140,7 +140,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             this table does not must reach the tier unchanged — otherwise adding the shared default would
             have quietly narrowed what ``basemap()`` accepts.
         """
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         sentinel = object()
         assert _resolve_tile_source(sentinel) is sentinel, (
@@ -158,7 +158,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             default. Resolving ``None`` here is what makes the omitted argument mean the same thing on this
             tier as the keyword default does on the other two.
         """
-        from digitalearth.static.maps.decoration import (
+        from digitalearth.static.builders.decoration import (
             _SHARED_PROVIDERS,
             _resolve_tile_source,
         )
@@ -178,7 +178,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
         """
         from cleopatra.basemap.tiles import get_provider
 
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         cleopatras_own = get_provider(None)
         assert cleopatras_own.name == "OpenStreetMap.Mapnik", (
@@ -196,8 +196,8 @@ class TestM4TheBasemapDefaultReachesEveryTier:
         """
         from cleopatra.basemap.tiles import get_provider
 
-        from digitalearth.static.maps.decoration import _resolve_tile_source
-        from digitalearth.web.decoration import _BASEMAP_PROVIDERS
+        from digitalearth.static.builders.decoration import _resolve_tile_source
+        from digitalearth.web.decoration.decoration import _BASEMAP_PROVIDERS
 
         static_url = get_provider(_resolve_tile_source(None)).build_url()
         web_url = _BASEMAP_PROVIDERS[DEFAULT_BASEMAP_PROVIDER.lower()][0]
@@ -212,7 +212,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             ``xyzservices`` as an unknown provider, so the same argument worked on two tiers and raised on the
             third — the same divergence as the default, one step along.
         """
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         assert _resolve_tile_source("cartodark") == "CartoDB.DarkMatter"
         assert _resolve_tile_source("OSM") == "OpenStreetMap.Mapnik"
@@ -224,7 +224,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             The translation must be additive: an ``xyzservices`` path, a ``TileProvider`` or a URL was always
             legal here and still is.
         """
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         url = "https://a.tile.example/{z}/{x}/{y}.png"
         assert _resolve_tile_source("Esri.WorldImagery") == "Esri.WorldImagery"
@@ -241,10 +241,10 @@ class TestM8TheBigDataCutoffIsOneNumberAndOneRule:
             Two literals meant either tier could be retuned alone, silently moving the size at which a layer
             changes rendering strategy on one backend only.
         """
-        from digitalearth.interactive.base import (
+        from digitalearth.interactive.core.base import (
             DEFAULT_BIG_DATA_THRESHOLD as interactive_default,
         )
-        from digitalearth.web.base import DEFAULT_BIG_DATA_THRESHOLD as web_default
+        from digitalearth.web.core.base import DEFAULT_BIG_DATA_THRESHOLD as web_default
 
         assert interactive_default is DEFAULT_BIG_DATA_THRESHOLD
         assert web_default == DEFAULT_BIG_DATA_THRESHOLD
@@ -256,7 +256,7 @@ class TestM8TheBigDataCutoffIsOneNumberAndOneRule:
             Reading the value alone cannot tell a shared constant from a literal that happens to match, which
             is exactly the state the finding described. Parsing the module is what distinguishes them.
         """
-        tree = _tree("interactive/base.py")
+        tree = _tree("interactive/core/base.py")
         assert "DEFAULT_BIG_DATA_THRESHOLD" not in _assigned_names(tree)
         assert "DEFAULT_BIG_DATA_THRESHOLD" in _imports_from(
             tree, "digitalearth.base.bigdata"
@@ -307,9 +307,9 @@ class TestM9TheAnimationRateIsOneConstant:
     @pytest.mark.parametrize(
         ("module", "attribute"),
         [
-            ("digitalearth.static.maps.animation", "DEFAULT_FPS"),
-            ("digitalearth.interactive.animation", "DEFAULT_FPS"),
-            ("digitalearth.web.export", "DEFAULT_FPS"),
+            ("digitalearth.static.builders.animation", "DEFAULT_FPS"),
+            ("digitalearth.interactive.temporal.animation", "DEFAULT_FPS"),
+            ("digitalearth.web.output.export", "DEFAULT_FPS"),
         ],
         ids=["static", "interactive", "web"],
     )
@@ -365,17 +365,17 @@ class TestM9TheAnimationRateIsOneConstant:
             ``three_d/animation.py`` held its own ``DEFAULT_FPS: float = 3.0``, the third declaration of one
             agreed number. Its module cannot be imported in this environment, so the source is parsed instead.
         """
-        tree = _tree("three_d/animation.py")
+        tree = _tree("three_d/temporal/animation.py")
         assert "DEFAULT_FPS" not in _assigned_names(tree)
         assert "DEFAULT_FPS" in _imports_from(tree, "digitalearth.base.animation")
 
     @pytest.mark.parametrize(
         "module",
         [
-            "static/maps/animation.py",
-            "interactive/animation.py",
-            "three_d/animation.py",
-            "web/export.py",
+            "static/builders/animation.py",
+            "interactive/temporal/animation.py",
+            "three_d/temporal/animation.py",
+            "web/output/export.py",
         ],
     )
     def test_no_tier_declares_a_rate_of_its_own(self, module):
@@ -398,7 +398,7 @@ class TestM9TheAnimationRateIsOneConstant:
             rate is unknown — and it was also called ``DEFAULT_FPS``, at a different value. Two names now, so
             neither reads as a copy of the other.
         """
-        from digitalearth.static import animation
+        from digitalearth.static.render import animation
 
         assert not hasattr(animation, "DEFAULT_FPS"), (
             "the save-time fallback must not share the entry points' constant name"
@@ -417,7 +417,7 @@ class TestL11TheColormapSamplerIsShared:
             Its ``_cmap_hex`` was a stop-for-stop copy of the web tier's, with a docstring promising they
             matched — a promise nothing enforced.
         """
-        tree = _tree("interactive/vector.py")
+        tree = _tree("interactive/builders/vector.py")
         assert "sample_cmap" in _imports_from(tree, "digitalearth.base.symbology")
         assert "_cmap_hex" not in _function_names(tree)
 
@@ -428,7 +428,7 @@ class TestL11TheColormapSamplerIsShared:
             Its copy was spelled ``_sample_cmap`` and accepted an already-built colour sequence as well as a
             name — the superset the shared helper now offers every tier.
         """
-        tree = _tree("three_d/base.py")
+        tree = _tree("three_d/core/base.py")
         assert "sample_cmap" in _imports_from(tree, "digitalearth.base.symbology")
         assert "_sample_cmap" not in _function_names(tree)
 
@@ -441,7 +441,7 @@ class TestL11TheColormapSamplerIsShared:
             three copies were supposed to have: a mismatch means a ``column``/``scheme``/``k`` triple colours
             differently on the web tier than on the other two.
         """
-        from digitalearth.web.base import WebMapBase
+        from digitalearth.web.core.base import WebMapBase
 
         for n in (1, 2, 5):
             assert WebMapBase._cmap_hex("viridis", n) == sample_cmap("viridis", n)
@@ -512,7 +512,7 @@ class TestALabelsDefaultsAreDeclaredOnce:
         Args:
             keyword: The label keyword under test.
         """
-        written = self._labels_defaults("static/maps/vector.py")[keyword]
+        written = self._labels_defaults("static/builders/vector.py")[keyword]
         assert written == self.LABEL_DEFAULTS[keyword], (
             f"labels({keyword}=) should default to {self.LABEL_DEFAULTS[keyword]}; it is written {written!r}"
         )
@@ -534,7 +534,7 @@ class TestALabelsDefaultsAreDeclaredOnce:
         """
         node = next(
             found
-            for found in ast.walk(_tree("web/vector.py"))
+            for found in ast.walk(_tree("web/builders/vector.py"))
             if isinstance(found, ast.FunctionDef) and found.name == "labels"
         )
         written = dict(

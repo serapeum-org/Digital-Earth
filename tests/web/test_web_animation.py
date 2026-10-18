@@ -14,7 +14,7 @@ import pytest
 from PIL import Image
 
 from digitalearth.web import WebMap
-from digitalearth.web.export import _write_gif, _write_mp4
+from digitalearth.web.output.export import _write_gif, _write_mp4
 
 
 @pytest.fixture(autouse=True)

@@ -2,7 +2,7 @@
 
 The graticule is the one static layer whose artists are not made by its own drawer. ``draw_graticule``
 computes the polylines and hands them to the map; the line artists themselves appear later, when
-:meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame` puts the globe frame on. The
+:meth:`~digitalearth.static.builders.projection.ProjectionMixin._apply_frame` puts the globe frame on. The
 funnel that applies a layer's ``visible`` flag — ``Renderer.draw_layer`` — has therefore already run and
 found nothing on the axes to toggle, so the flag reached no artist and the grid was drawn over a figure that
 described it as hidden.

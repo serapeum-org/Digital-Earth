@@ -1,10 +1,10 @@
 """Shared array helpers — the small numpy chores duplicated across the wiring modules.
 
 These operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`,
-:mod:`digitalearth.static.charts`, :mod:`digitalearth.static.temporal` and
-:mod:`digitalearth.static.textured_globe`, with subtly different nodata-masking rules. They live here once so
+:mod:`digitalearth.static.charts.charts`, :mod:`digitalearth.static.temporal` and
+:mod:`digitalearth.static.globe.textured_globe`, with subtly different nodata-masking rules. They live here once so
 every caller masks the same way. (``static.map`` and ``static.series`` were consumers before the backend
-restructure split ``fig_of`` out into :mod:`digitalearth.static.figures`; they no longer import from here.)
+restructure split ``fig_of`` out into :mod:`digitalearth.static.charts.figures`; they no longer import from here.)
 
 :func:`read_masked_band` is how a raster's nodata is masked — the one way, for every caller. It asks pyramids
 for the mask instead of rebuilding it: ``read_array(band=..., masked=True)``, then the mask filled with
@@ -22,12 +22,12 @@ through pyramids left both without a caller, so they were removed rather than ke
 mask.
 
 :func:`ring_runs` is here for the same reason: both globe tiers — the 2-D projected disc in
-:mod:`digitalearth.static.projections` and the 3-D sphere in :mod:`digitalearth.static.textured_globe` — clip a
+:mod:`digitalearth.static.view.projections` and the 3-D sphere in :mod:`digitalearth.static.globe.textured_globe` — clip a
 closed ring to what the camera sees, and both split it into visible runs first. Doing that on a boolean mask
 keeps it engine-neutral, and doing it once keeps the seam handling the same in both.
 
 The one matplotlib chore that used to sit alongside these (``fig_of``) is not here: when the old flat
-``digitalearth._arrays`` was split it went to :mod:`digitalearth.static.figures`, since a figure lookup belongs to
+``digitalearth._arrays`` was split it went to :mod:`digitalearth.static.charts.figures`, since a figure lookup belongs to
 the matplotlib backend rather than to the engine-neutral shared layer.
 """
 

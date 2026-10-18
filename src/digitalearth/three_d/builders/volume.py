@@ -1,0 +1,412 @@
+"""VolumeMixin — ray-cast a 3-D scalar cube (NetCDF / datacube) and extract isosurfaces.
+
+Turns a 3-D numpy field into a PyVista ``ImageData`` for either **volume rendering** (``add_volume``, a depth-cued
+ray-cast of the whole field) or **isosurfaces** (``contour``, shells of constant value). The cube comes from
+pyramids — a ``DatasetCollection`` (its ``.values`` stack) or a 3-D array read via the pyramids ``NetCDF`` reader —
+**never** xarray (the HARD RULE / ``test_no_competitor_imports`` guard); a ``DatasetCollection`` is duck-typed via
+``hasattr(data, "values")`` so nothing GIS is imported.
+
+**Axis convention.** A cube indexed ``(nz, ny, nx)`` — i.e. ``(level/time, lat/y, lon/x)`` — is laid out so that
+**lon → world X, lat → world Y, level → world Z**. This requires reversing the dimensions for VTK (which orders
+``dimensions`` as ``(X, Y, Z)``) and transposing the cube to match: the grid is sized ``shape[::-1]`` (``+1`` for
+the cell-data volume grid) and the scalar attaches as ``cube.transpose(2, 1, 0).ravel(order="F")`` (VTK fills a
+uniform grid in Fortran order). Without this, the first cube axis would land on X and lon would render vertically.
+Volume rendering uses ``cell_data`` on a grid sized ``shape[::-1] + 1`` (one more point than cells per axis);
+isosurfacing uses ``point_data`` on a grid sized ``shape[::-1]``.
+"""
+
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
+
+from digitalearth.base.spec import Encoding
+from digitalearth.three_d.builders.bigdata import (
+    DEFAULT_CELL_BUDGET,
+    reduce_surface,
+    reduce_volume,
+)
+
+#: Attribute name the field scalar is stored under on the generated grids.
+FIELD = "field"
+
+#: The blending modes :meth:`pyvista.Plotter.add_volume` accepts — how samples along a ray are combined.
+#: ``"composite"`` is front-to-back alpha compositing (the default); ``"maximum"``/``"minimum"`` are
+#: maximum/minimum-intensity projection; ``"average"`` and ``"additive"`` sum. Validated here so an unknown
+#: mode is a clear error naming the choices rather than a VTK failure deep in the renderer.
+VOLUME_BLENDING: frozenset[str] = frozenset(
+    {"composite", "maximum", "minimum", "average", "additive"}
+)
+
+
+def _cube(data: Any) -> np.ndarray:
+    """Coerce ``data`` to a 3-D float numpy cube (reading ``DatasetCollection.values`` when present).
+
+    Args:
+        data: A 3-D array-like, or a pyramids ``DatasetCollection`` exposing a 3-D ``.values`` stack.
+
+    Returns:
+        numpy.ndarray: the ``(nz, ny, nx)`` float cube.
+
+    Raises:
+        ValueError: if the resolved array is not 3-dimensional.
+    """
+    arr = data.values if hasattr(data, "values") else data
+    arr = np.asarray(arr, dtype="float64")
+    if arr.ndim != 3:
+        raise ValueError(f"volume expects a 3-D cube, got shape {arr.shape}")
+    return arr
+
+
+def _to_vtk_axes(cube: np.ndarray) -> np.ndarray:
+    """Reorder a ``(nz, ny, nx)`` cube to VTK's Fortran-ravelled ``(nx, ny, nz)`` scalar.
+
+    Returns:
+        The ravelled scalars, with lon on X, lat on Y and level on Z.
+    """
+    return cube.transpose(2, 1, 0).ravel(order="F")
+
+
+#: The identity placement — origin at the world origin, one unit per cell — a cube with no georeferencing
+#: (and no explicit ``origin``/``spacing``) is drawn at. Named so the default reads as a decision rather than
+#: three magic triples.
+_UNIT_ORIGIN: tuple[float, float, float] = (0.0, 0.0, 0.0)
+_UNIT_SPACING: tuple[float, float, float] = (1.0, 1.0, 1.0)
+
+
+def _grid_geo(
+    data: Any,
+    cube: np.ndarray,
+    origin: Any,
+    spacing: Any,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Resolve the ``(origin, spacing)`` an ``ImageData`` is placed at (#198).
+
+    A volume used to be built with neither, so it always sat at ``(0, 0, 0)`` with unit spacing and could not
+    share a scene with a terrain in real-world coordinates. Now the placement is resolved, in order:
+
+    1. explicit ``origin`` / ``spacing`` the caller passed (each side independent);
+    2. otherwise, derived from a pyramids ``geotransform`` on ``data`` when it carries one — the horizontal
+       cell size and the lower-left corner, so the cube's footprint lands where the raster's does (the z axis
+       keeps unit spacing, since a GDAL geotransform describes only x/y);
+    3. otherwise the identity placement (:data:`_UNIT_ORIGIN` / :data:`_UNIT_SPACING`), so a bare numpy cube
+       renders exactly as it always did.
+
+    Args:
+        data: The layer's source object, read (duck-typed) for a 6-tuple ``geotransform``; never required to
+            have one.
+        cube: The ``(nz, ny, nx)`` cube, whose ``ny`` sets where the lower-left corner falls.
+        origin: The caller's explicit ``(x, y, z)`` origin, or ``None``.
+        spacing: The caller's explicit ``(dx, dy, dz)`` spacing, or ``None``.
+
+    Returns:
+        The ``(origin, spacing)`` to build the grid with, each a float triple in VTK's ``(x, y, z)`` order.
+    """
+    resolved_origin = (
+        _UNIT_ORIGIN if origin is None else tuple(float(v) for v in origin)
+    )
+    resolved_spacing = (
+        _UNIT_SPACING if spacing is None else tuple(float(v) for v in spacing)
+    )
+    geotransform = getattr(data, "geotransform", None)
+    if (
+        geotransform is not None
+        and len(tuple(geotransform)) == 6
+        and (origin is None or spacing is None)
+    ):
+        x0, dx, _, y0, _, dy = (float(v) for v in geotransform)
+        rows = int(cube.shape[1])
+        if origin is None:
+            # GDAL's y0 is the top edge and dy is negative for a north-up raster, so the lower-left corner
+            # VTK wants is y0 + dy * rows. z stays at 0 — the geotransform says nothing about level.
+            resolved_origin = (x0, y0 + dy * rows, 0.0)
+        if spacing is None:
+            resolved_spacing = (abs(dx), abs(dy), 1.0)
+    return resolved_origin, resolved_spacing  # type: ignore[return-value]
+
+
+def _volume_grid(
+    cube: np.ndarray,
+    origin: tuple[float, float, float] = _UNIT_ORIGIN,
+    spacing: tuple[float, float, float] = _UNIT_SPACING,
+) -> "pv.ImageData":
+    """Build a cell-data ``ImageData`` (dimensions ``shape[::-1] + 1``) for ray-cast volume rendering.
+
+    The cube ``(nz, ny, nx)`` maps to world ``(x=lon, y=lat, z=level)`` — see the module docstring's axis note.
+    ``origin`` and ``spacing`` place that grid in real-world coordinates (#198); the defaults are the identity
+    placement a bare numpy cube keeps.
+    """
+    import pyvista as pv
+
+    grid = pv.ImageData(
+        dimensions=np.array(cube.shape[::-1]) + 1, origin=origin, spacing=spacing
+    )
+    grid.cell_data[FIELD] = _to_vtk_axes(cube)
+    return grid
+
+
+def _point_grid(
+    cube: np.ndarray,
+    origin: tuple[float, float, float] = _UNIT_ORIGIN,
+    spacing: tuple[float, float, float] = _UNIT_SPACING,
+) -> "pv.ImageData":
+    """Build a point-data ``ImageData`` (dimensions ``shape[::-1]``) for isosurface extraction (lon→X, lat→Y).
+
+    ``origin`` and ``spacing`` place the grid in real-world coordinates (#198); the defaults are the identity
+    placement.
+    """
+    import pyvista as pv
+
+    grid = pv.ImageData(dimensions=cube.shape[::-1], origin=origin, spacing=spacing)
+    grid.point_data[FIELD] = _to_vtk_axes(cube)
+    return grid
+
+
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    import pyvista as pv
+
+    from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+from digitalearth.base.spec import LayerSpec
+from digitalearth.three_d.core.layer import drawing_props
+
+
+class VolumeMixin(_MixinBase):
+    """Adds :meth:`volume` and :meth:`isosurface` — render a 3-D scalar field — to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.core.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.core.base.Scene3DBase: the typing-only base declared above the class.
+    """
+
+    def volume(
+        self,
+        data: Any,
+        *,
+        name: Any = None,
+        cmap: str = "viridis",
+        opacity: Any = "sigmoid",
+        blending: str = "composite",
+        clim: tuple[float, float] | None = None,
+        shade: bool = False,
+        origin: tuple[float, float, float] | None = None,
+        spacing: tuple[float, float, float] | None = None,
+        big_data_threshold: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Ray-cast a 3-D scalar field as a volume and register it as a layer.
+
+        Args:
+            data: A 3-D numpy cube, or a pyramids ``DatasetCollection`` whose ``.values`` is a 3-D stack.
+            cmap: Colormap for the field.
+            opacity: Opacity transfer function — a named ramp (``"sigmoid"``, ``"linear"``, ``"geom"`` …), a
+                scalar, or an array. Controls how much of the field is see-through. A ray-cast volume with the
+                wrong ramp shows a fog bank or nothing, so this is the control that most decides whether the
+                render reads at all.
+            blending: How samples along each ray are combined — one of :data:`VOLUME_BLENDING`:
+                ``"composite"`` (front-to-back alpha, the default), ``"maximum"``/``"minimum"`` (intensity
+                projection), ``"average"`` or ``"additive"``.
+            clim: Fixed ``(low, high)`` colour range for the field. ``None`` lets the lookup table span the
+                data's own range; pinning it is what keeps the colours steady across the frames of an
+                :meth:`~digitalearth.three_d.temporal.animation.AnimationMixin.record` so a time stack does not flicker.
+            shade: Whether the volume is lit (gradient shading). Off by default — shading a smooth field can
+                read as noise — but on it gives solid-looking structure a surface-like relief.
+            origin: World ``(x, y, z)`` of the cube's lower-left-bottom corner (#198). ``None`` derives it
+                from the data's pyramids ``geotransform`` when it has one, else places the cube at the world
+                origin — so a volume given a georeferenced cube shares a scene with a terrain in the same CRS
+                instead of sitting at ``(0, 0, 0)``.
+            spacing: World cell size ``(dx, dy, dz)``. ``None`` derives the horizontal size from the data's
+                ``geotransform`` when it has one (the vertical stays one unit per level), else unit spacing.
+            big_data_threshold: Voxels above which the cube is resampled to fewer per axis before it is
+                ray-cast (#207). ``None`` (the default) uses the scene's
+                :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`; a cube at or under the budget
+                is drawn at full resolution. Resampling is output-driven, so it costs the same fraction of a
+                second whatever it is given — see :mod:`digitalearth.three_d.builders.bigdata`.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_volume`.
+
+        Returns:
+            The registered volume actor.
+
+        Raises:
+            ValueError: if ``blending`` is not one of :data:`VOLUME_BLENDING`, or if ``big_data_threshold``
+                is negative or not a whole number of cells.
+
+        Examples:
+            - Volume-render a synthetic 3-D Gaussian blob:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.three_d import Scene3D
+                >>> ax = np.linspace(-2, 2, 12)
+                >>> xx, yy, zz = np.meshgrid(ax, ax, ax, indexing="ij")
+                >>> cube = np.exp(-(xx**2 + yy**2 + zz**2))
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.volume(cube, blending="maximum", clim=(0.0, 1.0))
+                >>> len(scene.layers)
+                1
+                >>> scene.close()
+
+                ```
+        """
+        if blending not in VOLUME_BLENDING:
+            raise ValueError(
+                f"volume() got blending={blending!r}; choose one of {sorted(VOLUME_BLENDING)}"
+            )
+        return self._add_described_layer(
+            kind="volume",
+            data=data,
+            name=name,
+            # The cube's colour is driven by the array :data:`FIELD` the grid carries it under, so a key
+            # over this layer explains that field and is titled after it (order 24). No scale: VTK maps
+            # the array's own range through its lookup table, which is what `scale=None` means.
+            encodings={"color": Encoding.by_field("color", FIELD)},
+            cmap=cmap,
+            opacity=opacity,
+            blending=blending,
+            clim=clim,
+            shade=shade,
+            origin=origin,
+            spacing=spacing,
+            big_data_threshold=self._resolve_big_data_threshold(
+                big_data_threshold, caller="Scene3D.volume()"
+            ),
+            **kwargs,
+        )
+
+    def isosurface(
+        self,
+        data: Any,
+        *,
+        name: Any = None,
+        isosurfaces: Sequence[float] | None = None,
+        cmap: str = "viridis",
+        origin: tuple[float, float, float] | None = None,
+        spacing: tuple[float, float, float] | None = None,
+        big_data_threshold: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Extract and render isosurfaces (shells of constant value) from a 3-D field as a layer.
+
+        Args:
+            data: A 3-D numpy cube, or a pyramids ``DatasetCollection`` whose ``.values`` is a 3-D stack.
+            isosurfaces: Iso-values to extract; ``None`` lets PyVista pick 10 levels across the data range.
+            cmap: Colormap for the extracted surfaces.
+            origin: World ``(x, y, z)`` of the cube's lower-left-bottom corner (#198); ``None`` derives it
+                from the data's pyramids ``geotransform`` when it has one, else the world origin.
+            spacing: World cell size ``(dx, dy, dz)``; ``None`` derives the horizontal size from the data's
+                ``geotransform`` when it has one, else unit spacing.
+            big_data_threshold: Cells above which the extracted shells are simplified with ``decimate_pro``
+                before they are drawn (#207). ``None`` (the default) uses the scene's
+                :attr:`~digitalearth.three_d.core.base.Scene3DBase.big_data_threshold`. The budget applies to the
+                **shells**, which is what reaches the plotter; the contour is still extracted from the full
+                cube, so this bounds what is carried rather than what the extraction costs.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
+
+        Returns:
+            The registered :class:`pyvista.Actor` for the isosurface mesh.
+
+        Raises:
+            ValueError: if ``big_data_threshold`` is negative or not a whole number of cells.
+
+        Examples:
+            - Two iso-shells of a Gaussian blob:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.three_d import Scene3D
+                >>> ax = np.linspace(-2, 2, 16)
+                >>> xx, yy, zz = np.meshgrid(ax, ax, ax, indexing="ij")
+                >>> cube = np.exp(-(xx**2 + yy**2 + zz**2))
+                >>> scene = Scene3D(off_screen=True)
+                >>> actor = scene.isosurface(cube, isosurfaces=[0.3, 0.6])
+                >>> scene.layers[0][0].n_points > 0
+                True
+                >>> scene.close()
+
+                ```
+        """
+        return self._add_described_layer(
+            kind="isosurface",
+            data=data,
+            name=name,
+            # The cube's colour is driven by the array :data:`FIELD` the grid carries it under, so a key
+            # over this layer explains that field and is titled after it (order 24). No scale: VTK maps
+            # the array's own range through its lookup table, which is what `scale=None` means.
+            encodings={"color": Encoding.by_field("color", FIELD)},
+            isosurfaces=isosurfaces,
+            cmap=cmap,
+            origin=origin,
+            spacing=spacing,
+            big_data_threshold=self._resolve_big_data_threshold(
+                big_data_threshold, caller="Scene3D.isosurface()"
+            ),
+            **kwargs,
+        )
+
+
+def draw_volume(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Ray-cast the cube a `volume` layer describes.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: a 3-D cube, or a pyramids collection holding one.
+        layer: The layer's description, whose props carry the colormap and the opacity ramp.
+
+    Returns:
+        The `(grid, actor)` pair.
+    """
+    props = drawing_props(layer.symbology.props)
+    budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
+    origin = props.pop("origin", None)
+    spacing = props.pop("spacing", None)
+    # SSAA (the house theme's anti-aliasing) supersamples the frame, which washes a ray-cast volume out to
+    # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
+    # on other scenes — this only affects a plotter that's actually showing a volume).
+    scene.plotter.disable_anti_aliasing()
+    cube = _cube(data)
+    placed_origin, placed_spacing = _grid_geo(data, cube, origin, spacing)
+    grid = reduce_volume(
+        _volume_grid(cube, placed_origin, placed_spacing),
+        budget,
+        kind="volume",
+        scalars=FIELD,
+        preference="cell",
+    )
+    return grid, scene.plotter.add_volume(grid, **props)
+
+
+def draw_isosurface(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Extract and draw the surfaces an `isosurface` layer describes.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: a 3-D cube, or a pyramids collection holding one.
+        layer: The layer's description, whose props carry the iso-values and the colormap.
+
+    Returns:
+        The `(mesh, actor)` pair.
+    """
+    props = drawing_props(layer.symbology.props)
+    isosurfaces = props.pop("isosurfaces", None)
+    budget = int(props.pop("big_data_threshold", DEFAULT_CELL_BUDGET))
+    origin = props.pop("origin", None)
+    spacing = props.pop("spacing", None)
+    cube = _cube(data)
+    placed_origin, placed_spacing = _grid_geo(data, cube, origin, spacing)
+    grid = _point_grid(cube, placed_origin, placed_spacing)
+    contour_kwargs = {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
+    mesh = reduce_surface(
+        grid.contour(scalars=FIELD, **contour_kwargs), budget, kind="isosurface"
+    )
+    return mesh, scene.plotter.add_mesh(mesh, scalars=FIELD, **props)

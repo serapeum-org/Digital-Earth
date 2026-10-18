@@ -22,9 +22,9 @@ from pyramids.feature import FeatureCollection
 from digitalearth.base.custom import MissingObject
 from digitalearth.base.registry import _OBJECTS, band_of
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.static import Map, Scene, projections
+from digitalearth.static import Map, Scene
 from digitalearth.static.capabilities import CAPABILITIES
-from digitalearth.static.renderer import (
+from digitalearth.static.render.renderer import (
     DRAWN_KINDS,
     DrawnLayer,
     Renderer,
@@ -33,6 +33,7 @@ from digitalearth.static.renderer import (
     drawer_for,
     drawing_opts,
 )
+from digitalearth.static.view import projections
 
 
 @pytest.fixture
@@ -222,7 +223,7 @@ class TestAKindThisTierDoesNotDraw:
             Such a kind would raise a bare `KeyError` on a dict lookup, where the message that names the
             tier and its kinds belongs.
         """
-        from digitalearth.static import renderer
+        from digitalearth.static.render import renderer
 
         monkeypatch.setattr(renderer, "DRAWN_KINDS", DRAWN_KINDS + ("nonesuch",))
         with pytest.raises(KeyError, match="drawer table and DRAWN_KINDS disagree"):
@@ -238,7 +239,7 @@ class TestAKindThisTierDoesNotDraw:
             A kind in the table but not in `DRAWN_KINDS` is refused with a message that is simply false —
             the tier says it cannot draw something it has a drawer for.
         """
-        from digitalearth.static import renderer
+        from digitalearth.static.render import renderer
 
         monkeypatch.setattr(renderer, "DRAWN_KINDS", ("raster",))
         with pytest.raises(KeyError, match="drawer table and DRAWN_KINDS disagree"):
@@ -667,7 +668,7 @@ class TestARefusalLeavesTheAxesAsItFoundThem:
             dataset: The raster the builder draws.
             monkeypatch: Used to make the drawer fail the way a broken description would.
         """
-        from digitalearth.static.maps import raster
+        from digitalearth.static.builders import raster
 
         def refuse(_scene, _data, _layer):
             """Refuse to draw, whatever it is handed.
@@ -741,7 +742,7 @@ class TestADrawerThatFailsPartWay:
             dataset: The raster drawn twice.
             monkeypatch: Used to make the field drawer fail once it has drawn.
         """
-        from digitalearth.static.maps import raster
+        from digitalearth.static.builders import raster
 
         draw_field = raster.draw_field
 
@@ -1366,7 +1367,9 @@ class TestTheGuardsARollbackLeansOn:
             order to restore into. Carrying on regardless iterates `None` and turns a rollback that
             otherwise succeeded into a `TypeError` that masks the refusal it was rolling back.
         """
-        monkeypatch.setattr("digitalearth.static.renderer._painted", lambda axes: None)
+        monkeypatch.setattr(
+            "digitalearth.static.render.renderer._painted", lambda axes: None
+        )
         figure = drawn_map.figure_spec
         refused = _refused_removal(figure, "raster-1")
         with pytest.raises(KeyError):

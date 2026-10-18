@@ -13,7 +13,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.static import Map
-from digitalearth.static.maps import animation
+from digitalearth.static.builders import animation
 
 
 def _frame(value: float) -> Dataset:

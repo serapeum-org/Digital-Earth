@@ -5,7 +5,7 @@ that are this tier's own — chiefly what happens to a **custom** layer, the one
 its renderer and so cannot draw again from a description.
 
 **Why the engine reading is the overlay list.** `render()` composes
-:attr:`~digitalearth.interactive.base.InteractiveMapBase.layers` with `*`, bottom first, so that list is what
+:attr:`~digitalearth.interactive.core.base.InteractiveMapBase.layers` with `*`, bottom first, so that list is what
 a viewer sees. Until order 23 only the builders wrote it and `Renderer.apply` reconciled the renderer's own
 record beside it — so a change reached a record and never the picture (review M1). The probes read the list.
 """
@@ -162,7 +162,7 @@ def _bokeh_visible(element):
         The applied option, or `None` when none was applied. Read out of the engine's store — the same
         place a Bokeh render reads it — rather than out of this package's record, which is the whole
         question review H8 asks. `hv.renderer` registers the store without making Bokeh current, the
-        idiom :func:`~digitalearth.interactive.style_fold.allowed_options` uses for the same read.
+        idiom :func:`~digitalearth.interactive.render.style_fold.allowed_options` uses for the same read.
     """
     hv.renderer("bokeh")
     return hv.Store.lookup_options("bokeh", element, "style").kwargs.get("visible")

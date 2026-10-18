@@ -1,0 +1,2319 @@
+"""VectorMixin — vector builders for :class:`~digitalearth.interactive.map.InteractiveMap`.
+
+Owns ``points`` / ``lines`` / ``polygons`` / ``choropleth`` (DI.1b) and the u/v vector fields
+``vectorfield`` / ``streamlines`` / ``barbs`` (DI.5, recipe I6); meshes/density (DI.6) and graphs
+(DI.15) land later.
+
+Vector layers come straight from the GeoDataFrame pyramids hands over (``FeatureCollection`` *is a*
+GeoDataFrame) — GeoViews reads the geometry column natively, so **no shapely/geopandas import** is ever
+needed here. The data CRS is declared via ``gv.util.process_crs(self.crs)``: GeoViews builds the cartopy
+CRS object *internally* (the hvPlot pattern), keeping cartopy out of this package (DX.3). Reprojection to
+the display CRS happens upstream in pyramids (``FeatureCollection.to_crs``) before the element is built.
+
+**Barbs are matplotlib-only** — Bokeh has no wind-barb glyph, so ``barbs`` renders through HoloViews'
+matplotlib backend (a static PNG via ``save``); it logs that it is not interactive rather than silently
+producing an empty Bokeh layer.
+"""
+
+import os
+import warnings
+from typing import TYPE_CHECKING, Any, Self
+
+from digitalearth.base.ask import UNSET, Ask, Maybe, asked_record
+from digitalearth.base.crs import reproject
+from digitalearth.base.guards import reject_raster, require_vector
+from digitalearth.base.points import PointArrays
+from digitalearth.base.spec import (
+    DEFAULT_BAND,
+    DataRef,
+    Encoding,
+    LayerSpec,
+    Scale,
+    Symbology,
+)
+from digitalearth.base.symbology import sample_cmap
+from digitalearth.interactive.core.base import (
+    _masked_to_nan,
+    _require_holoviz,
+    _skips_off_limb,
+    cmap_name,
+    describe,
+    describe_opts,
+    describe_style,
+    held_props,
+    style_value,
+)
+from digitalearth.interactive.render.style_fold import limits_scale
+
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.core.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+def _classifiable(features: Any) -> Any:
+    """Return the frame a column is classified from, opening a path the way the drawer opens one.
+
+    Every builder on this tier takes a path as well as an opened object, and a path is the only input a
+    figure can be *written* with: `DataRef.of` records a path as a path and anything else as an `object:`
+    reference, which `FigureSpec.to_dict` refuses. The unclassified branches never had to read the data
+    themselves — they hand the caller's argument to `add_layer` and the renderer opens it at draw time —
+    but classifying is different: the class edges or the distinct values have to be known before the layer
+    is described, because they are part of the description. Indexing the argument itself answered
+    `TypeError: string indices must be integers` for the one input that yields a storable figure
+    (review M8).
+
+    Opened through the same reference the layer is registered under, so a path is read by exactly the
+    resolver that will read it again at draw time. Only the classification reads this frame; the caller's
+    own argument stays the layer's source, so the figure still records the path rather than an object.
+
+    Args:
+        features: The caller's argument — a `FeatureCollection`, a GeoDataFrame, or a path or URL to one.
+
+    Returns:
+        A frame whose columns can be read. An object is handed back untouched, so the common case opens
+        nothing.
+    """
+    if isinstance(features, (str, os.PathLike)):
+        return DataRef.of(features).open()
+    return features
+
+
+def _as_labels(gdf: Any, column: str, missing: str) -> Any:
+    """Return a copy of `gdf` with one column read as discrete labels.
+
+    Bokeh colours a numeric column by interpolating the palette; a categorical layer wants one colour per
+    value, which it gets by the column arriving as strings. Missing rows take a label of their own so the
+    palette can give them the neutral colour rather than a category's.
+
+    Args:
+        gdf: The frame to relabel.
+        column: The column drawn as categories.
+        missing: The label missing rows take.
+
+    Returns:
+        A copy of the frame with `column` as strings.
+    """
+    gdf = gdf.copy()
+    absent = gdf[column].isna()
+    gdf[column] = gdf[column].astype(str).mask(absent, missing)
+    return gdf
+
+
+#: How a point layer names itself in a refusal. The big-data threshold's resolution and the refusal of an
+#: unclassifiable `scheme=` speak for the same public call, so they share the one spelling — as
+#: `Map.points()` does on the static tier.
+#: What an unstyled marker is drawn at on this tier. The value left `points`' signature with #334 — a style
+#: keyword's default is now :data:`~digitalearth.base.ask.UNSET`, so the builder can tell an ask from its own
+#: default — and this is where it lives instead, cited by name from the docstring that used to show it.
+POINT_SIZE = 6.0
+
+_POINTS_CALLER = "InteractiveMap.points()"
+
+_LINES_CALLER = "InteractiveMap.lines()"
+
+
+def apply_opacity(opacity: float | None, opts: dict) -> None:
+    """Write the Core ``opacity`` into ``opts`` under the spelling the engine reads.
+
+    ``opacity`` is what :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract call it, and
+    what the web and 3-D tiers take; HoloViews reads ``alpha`` (#332). One place decides that mapping, so no
+    builder holds it.
+
+    Args:
+        opacity: What the caller passed; ``None`` means "not passed", which is **not** the same as ``1.0``:
+            it leaves the engine's own default in force, and leaves a colormap's alpha channel alone.
+        opts: The caller's remaining engine keywords, mutated in place.
+    """
+    if opacity is not None:
+        opts["alpha"] = opacity
+
+
+def _categorical_scale(styling: dict, categories: list, labels: dict) -> Scale:
+    """Return the categorical :class:`~digitalearth.base.spec.scale.Scale` a distinct-value fill was drawn with.
+
+    Built from the very options the element is styled with rather than from a second pass over the column, so
+    a swatch cannot disagree with the polygon beside it — which is the guarantee
+    :mod:`digitalearth.base.spec.legend` exists for and the one ``last_breaks`` could only maintain by hand.
+
+    The categories are the **string** form of the caller's values, because that is what this tier colours by:
+    :meth:`VectorMixin._categorical_style` relabels the column to `str(value)` and hands HoloViews a
+    ``{label: colour}`` map, so the strings are the categories the picture actually has. It is also what lets
+    the scale be written into a figure at all — a value with no JSON form (a timestamp, a tuple) would make
+    `Symbology.to_dict` refuse a layer that draws perfectly well. ``last_breaks`` keeps the caller's own
+    values, which is the one thing it still says that the scale does not.
+
+    Args:
+        styling: What :meth:`VectorMixin._categorical_style` returned as the element's options; its ``cmap``
+            is the ``{label: colour}`` map.
+        categories: The caller's distinct values, in classifier order.
+        labels: The relabelling that method returned, whose ``missing`` is the sentinel label the neutral
+            fallback colour is filed under.
+
+    Returns:
+        The scale, one colour per category, carrying the missing colour when the column had gaps.
+    """
+    palette = dict(styling["cmap"])
+    return Scale.categorical(
+        [str(category) for category in categories],
+        [palette[str(category)] for category in categories],
+        missing=palette.get(labels["missing"]),
+    )
+
+
+def _graduated_scale(classified: dict, scheme: Any) -> Scale:
+    """Return the classified :class:`~digitalearth.base.spec.scale.Scale` a graduated fill was drawn with.
+
+    The same derivation as :func:`_categorical_scale`, for the other classified shape: the class edges the
+    element's ``color_levels`` carry *are* the scale's breaks, so the key and the fill cut at one set of
+    numbers rather than two that agree while nobody edits either.
+
+    Args:
+        classified: What :meth:`VectorMixin._graduated_style` returned, whose ``color_levels`` are the edges.
+        scheme: The scheme the caller asked for — a name, or an explicit sequence of edges. Taken as an
+            argument because the options dict does not carry it and the call site does.
+
+    Returns:
+        The scale: the edges' own ends as the domain, the scheme, and the edges as its breaks.
+    """
+    edges = [float(edge) for edge in classified["color_levels"]]
+    # Through `from_limits`, so the one degenerate case a classifier can still hand over — every edge equal —
+    # is widened by the shared rule rather than raising out of a builder that has already styled its element.
+    domain = Scale.from_limits(edges[0], edges[-1])
+    return Scale(domain.vmin, domain.vmax, scheme=scheme, breaks=tuple(edges))
+
+
+def _vector_symbology(
+    hv_type: str,
+    vdims: Any,
+    common: dict,
+    labels: dict | None = None,
+    opts: dict | None = None,
+    asked: tuple[str, ...] = (),
+    color: Encoding | None = None,
+) -> Symbology:
+    """Return the description a vector layer is drawn from.
+
+    Args:
+        hv_type: The HoloViews element type the layer is built as — `"Points"`, `"Path"`, `"Polygons"`.
+            Recorded under `via` as `"geometry"`: these five draw a frame of geometry, which is what tells
+            them apart from the aggregating builders that draw the same kinds.
+        vdims: The value dimensions the element carries, or `None`.
+        common: The resolved style options, as values — the builder's own half, already described.
+        labels: For a layer coloured by category, the column drawn as labels and the label missing rows
+            take — what :func:`_as_labels` needs. `None` for every other layer, which draws its column as
+            it is.
+        opts: The caller's own keywords, already through :func:`describe_opts` — the half a figure can
+            carry. The drawer merges these over `common`, which is the precedence the builder applied.
+        asked: The style keywords this layer's caller actually named among the builder's *own* parameters,
+            in this tier's spelling. A keyword the caller wrote in `**opts` needs no record — that bucket is
+            the caller's by construction — but a parameter resolves its default before anything is recorded,
+            so the ask has to be recorded to survive (#334). Empty records no key at all, so an unstyled
+            layer's description is exactly what it was.
+        color: What the layer's colour varies with, as an
+            :class:`~digitalearth.base.spec.encoding.Encoding` bound to the column — with the `Scale` it was
+            classified through, where there was one. `None` for a layer drawn in one flat colour, which
+            publishes no colour encoding at all and so refuses a colour key rather than drawing an empty box
+            (order 24). This is a *binding*, not style the builder resolved: it says what the layer **is**,
+            which is why an unstyled classified layer still carries it while publishing no constant.
+
+    Returns:
+        The symbology. Written by a helper rather than inline at five call sites, so the five kinds cannot
+        drift in what they record.
+    """
+    return Symbology(
+        encodings={} if color is None else {"color": color},
+        props={
+            "via": "geometry",
+            "hv_type": hv_type,
+            "vdims": list(vdims) if vdims else None,
+            "common": dict(common),
+            "labels": dict(labels) if labels else None,
+            "opts": dict(opts or {}),
+            **asked_record(asked),
+        },
+    )
+
+
+#: The HoloViews element each vector kind is built as, so a figure another tier described — which carries the
+#: kind but not this tier's ``hv_type`` — can be drawn here. The builders record ``hv_type`` directly; this is
+#: the inverse, keyed by the shared kind vocabulary, used only when the prop is absent (cross-tier replay).
+_HV_TYPE_FOR_KIND = {
+    "points": "Points",
+    "lines": "Path",
+    "polygons": "Polygons",
+    "choropleth": "Polygons",
+}
+
+
+def draw_vector(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the HoloViews element for any of the kinds that share the vector shape.
+
+    Points, lines, polygons and both choropleth paths are one GeoDataFrame turned into one typed element
+    and styled, differing only in the type, the value dimensions and the resolved style — which is why they
+    share a drawer as well as a registration funnel.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the feature collection it draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.render.renderer import DrawnLayer
+
+    props = held_props(interactive_map, layer)
+    gdf = interactive_map._display_gdf(data, method=layer.kind)
+    labels = props.get("labels")
+    if labels:
+        gdf = _as_labels(gdf, labels["column"], labels["missing"])
+    # A same-tier figure carries `hv_type`; a figure another tier described carries only the kind, so the
+    # element type is derived from it (:data:`_HV_TYPE_FOR_KIND`). The builder's resolved style is likewise
+    # absent and falls back to the tier defaults below (`common`/`opts` are `.get`).
+    hv_type = props.get("hv_type") or _HV_TYPE_FOR_KIND[layer.kind]
+    element = interactive_map._vector_element(
+        hv_type,
+        gdf,
+        # Already a list: `held_props` thaws the described half once, for every key, so this drawer no
+        # longer names the ones HoloViews refuses as a tuple (`vdims`, `cmap`, `color_levels`).
+        vdims=props.get("vdims"),
+    )
+    # The builder's own resolved style, then the caller's raw keywords over it — the precedence the
+    # builder applied before the two were split (the description carries the first, the map the second).
+    common = dict(props.get("common") or {})
+    common.update(dict(props.get("opts") or {}))
+    element = interactive_map._styled(
+        element, common=common or None, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Bin a layer's points into hexagons and colour them by the described reduction.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the points to bin.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
+
+    Raises:
+        KeyError: when the recorded ``column`` is absent from the reprojected frame — the value column a
+            hex is coloured by is only read here, so a name that matches nothing is refused here.
+    """
+    import numpy as np
+
+    from digitalearth.interactive.render.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    gdf = interactive_map._display_gdf(data, method="hexbin")
+    # Build from explicit display-CRS x/y(/value) arrays, not the geometry GeoDataFrame: GeoViews
+    # mis-projects a GeoDataFrame's point geometry at bokeh render time. HoloViews' hex aggregation
+    # also needs the reducer as a numpy callable (np.size = count), not a string.
+    x = gdf.geometry.x.to_numpy()
+    y = gdf.geometry.y.to_numpy()
+    reducers = {
+        "count": np.size,
+        "mean": np.mean,
+        "sum": np.sum,
+        "min": np.min,
+        "max": np.max,
+        "std": np.std,
+    }
+    crs = gv.util.process_crs(interactive_map.crs)
+    column = props.get("column")
+    if column:
+        reducer = reducers.get(props.get("aggregator", "mean"), np.mean)
+        element = gv.HexTiles(
+            (x, y, gdf[column].to_numpy()),
+            kdims=["x", "y"],
+            vdims=[column],
+            crs=crs,
+        )
+    else:  # no value column -> count points per hex (np.size), no value dimension
+        reducer = np.size
+        element = gv.HexTiles((x, y), kdims=["x", "y"], crs=crs)
+    common = {
+        "cmap": props.get("cmap"),
+        "colorbar": True,
+        **dict(props.get("opts") or {}),
+    }
+    element = interactive_map._styled(
+        element,
+        common=common,
+        bokeh={
+            "gridsize": props.get("gridsize"),
+            "aggregator": reducer,
+            "tools": ["hover"],
+        },
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_kde(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Estimate the density of a layer's points as a bivariate surface.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the points whose density is drawn.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.render.renderer import DrawnLayer
+
+    _, hv = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    gdf = interactive_map._display_gdf(data, method="kde")
+    element = hv.Bivariate((gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy()))
+    common = {"cmap": props.get("cmap"), **dict(props.get("opts") or {})}
+    element = interactive_map._styled(
+        element,
+        common=common,
+        bokeh={"filled": props.get("filled"), "colorbar": True},
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_uv_field(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the arrow, barb or streamline field a described u/v layer asks for.
+
+    The three share this drawer because they share their data: one decimated u/v grid, differing only in
+    the glyph GeoViews draws it with and in which backend renders it.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the ``(u, v)`` pair it draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded ``density`` is not in ``(0, 1]`` — the field is decimated by
+            ``round(1 / density)``, which nothing outside that range names.
+    """
+    from digitalearth.interactive.render.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    via = props.get("via")
+    u, v = data
+    arrays = interactive_map._uv_arrays(
+        u, v, band=props.get("band"), density=props.get("density")
+    )
+    crs = gv.util.process_crs(interactive_map.crs)
+    opts = dict(props.get("opts") or {})
+    if via == "barbs":
+        element = gv.WindBarbs.from_uv(arrays, crs=crs)
+    else:
+        # Streamlines carry the same data as an arrow field; the matplotlib backend is what draws them
+        # as streamlines rather than as arrows.
+        element = gv.VectorField.from_uv(arrays, crs=crs)
+    if via == "vectorfield":
+        common: dict = dict(opts)
+        if props.get("color_by") == "magnitude":
+            common.update(
+                {"color": "Magnitude", "cmap": props.get("cmap"), "colorbar": True}
+            )
+        element = interactive_map._styled(
+            element, common=common, bokeh={"tools": ["hover"]}
+        )
+        return DrawnLayer(element=element, style=common)
+    element = element.opts(backend="matplotlib", **opts) if opts else element
+    return DrawnLayer(element=element, style=opts)
+
+
+def _graph_element(interactive_map: Any, nodes: Any, edges: Any, props: dict) -> Any:
+    """Build the GeoViews graph a described graph layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        nodes: The node table — point geometries carrying the ids the edges name.
+        edges: The edge table, or an iterable of ``(source, target[, weight])`` rows.
+        props: The layer's recorded properties.
+
+    Returns:
+        The ``gv.Graph``.
+    """
+    import numpy as np
+    import pandas as pd
+
+    gv, _ = _require_holoviz()
+    weight = props.get("weight")
+    node_id = props.get("node_id")
+    gdf = interactive_map._display_gdf(nodes, method="graph")
+    crs = gv.util.process_crs(interactive_map.crs)
+    ids = (
+        gdf[node_id].to_numpy()
+        if node_id in getattr(gdf, "columns", [])
+        else np.arange(len(gdf))
+    )
+    gv_nodes = gv.Nodes(
+        (gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy(), ids), crs=crs
+    )
+    # Normalise edges to a DataFrame with named columns - a 3-tuple (src, dst, weight) list with
+    # vdims trips gv.Graph's source/target merge, so build the frame explicitly.
+    edge_df = edges if isinstance(edges, pd.DataFrame) else pd.DataFrame(list(edges))
+    ncols = edge_df.shape[1]
+    names = ["source", "target"] + ([weight] if weight and ncols > 2 else [])
+    edge_df = edge_df.iloc[:, : len(names)]
+    edge_df.columns = names
+    vdims = [weight] if (weight and weight in edge_df.columns) else []
+    if (
+        weight and not vdims
+    ):  # weight requested but the edges carry no weight column - say so
+        from loguru import logger
+
+        logger.info(
+            f"graph: weight={weight!r} requested but the edges have no weight column "
+            "(2-tuple edges) - drawing unweighted; pass (src, dst, weight) tuples to weight them"
+        )
+    return gv.Graph((edge_df, gv_nodes), vdims=vdims, crs=crs)
+
+
+def draw_graph(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the graph layer a description asks for, bundled or as drawn edges.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the ``(nodes, edges)`` pair it draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.render.renderer import DrawnLayer
+
+    props = held_props(interactive_map, layer)
+    nodes, edges = data
+    graph = _graph_element(interactive_map, nodes, edges, props)
+    opts = dict(props.get("opts") or {})
+    if props.get("bundle"):
+        # Datashade the straight edge paths into a density image (the cheap path; the heavy
+        # hammer_bundle is intentionally avoided - see the plan's DI.15 note).
+        from holoviews.operation.datashader import datashade
+
+        return DrawnLayer(
+            element=interactive_map._styled(
+                datashade(graph.edgepaths), common=opts or None
+            ),
+            style=opts,
+        )
+    weight = props.get("weight")
+    common: dict = dict(opts)
+    if weight:
+        common.update(
+            {"edge_color": weight, "edge_cmap": props.get("cmap"), "colorbar": True}
+        )
+    element = interactive_map._styled(
+        graph, common=common or None, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_trimesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the triangular mesh a described mesh layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — a UGRID mesh, or the points to triangulate.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.render.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.render.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = held_props(interactive_map, layer)
+    value_column = props.get("value_column")
+    # The builder had to build this mesh to count its faces, and hands it over while its own call is still
+    # running. Taken only when it was built from this very object and column, so a figure drawn from its
+    # description alone — by the renderer, or on another map — builds its own.
+    handed = getattr(interactive_map, "_built_mesh", None)
+    if handed is not None and handed[0] is data and handed[1] == value_column:
+        nodes, simplices, vdims = handed[2]
+    else:
+        nodes, simplices, vdims = interactive_map._mesh_inputs(data, value_column)
+    trimesh = gv.TriMesh(
+        (simplices, nodes), crs=gv.util.process_crs(interactive_map.crs)
+    )
+    opts = dict(props.get("opts") or {})
+    # The colormap is only meaningful when the mesh carries a value to colour by; an unvalued mesh draws
+    # its wireframe, and a `cmap` on it would be a style nothing reads.
+    common = {"cmap": props.get("cmap"), **opts} if vdims else opts
+    element = interactive_map._styled(
+        trimesh, common=common or None, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+class VectorMixin(_MixinBase):
+    """Vector builders (DI.1b): point, line and polygon layers with hover tooltips.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.core.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.core.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
+
+    @staticmethod
+    def _require_vector(features: Any, method: str) -> None:
+        """Reject non-vector input before a builder touches it — this tier's share of the #175 guard.
+
+        Delegates to the engine-neutral :func:`~digitalearth.base.guards.require_vector`, naming this tier's
+        own raster entry points (``field`` for a single raster, ``timecube`` for a stack) so a ``Dataset``
+        handed to a vector builder is turned away with that route rather than failing obscurely downstream
+        (``object of type 'Dataset' has no len()`` and the like, #152). A path/URL is *not* rejected here: it
+        is opened and validated when the drawer reads it, so the path a figure records stays a legal input.
+
+        Args:
+            features: The caller's input, expected to be a vector layer (or a path/URL to one).
+            method: The calling builder's name, quoted in the error.
+
+        Raises:
+            TypeError: when ``features`` is a loaded raster, or a table whose geometry was never activated.
+        """
+        if isinstance(features, (str, os.PathLike)):
+            return
+        require_vector(features, method, single="field", stack="timecube")
+
+    @staticmethod
+    def _reject_raster(data: Any, method: str) -> None:
+        """Reject a raster while allowing the non-vector inputs a builder legitimately takes.
+
+        The narrower half of the #175 guard, for :meth:`trimesh` — which accepts a point collection *or* a
+        UGRID mesh that exposes ``node_x``/``node_y`` rather than ``geometry``, so :meth:`_require_vector`
+        would be too strict. Delegates to :func:`~digitalearth.base.guards.reject_raster` with this tier's
+        raster entry points. A path/URL is left for the drawer to open, as in :meth:`_require_vector`.
+
+        Args:
+            data: The caller's input.
+            method: The calling builder's name, quoted in the error.
+
+        Raises:
+            TypeError: when ``data`` is a loaded raster.
+        """
+        if isinstance(data, (str, os.PathLike)):
+            return
+        reject_raster(data, method, single="field", stack="timecube")
+
+    def _display_gdf(self, features: Any, *, method: str) -> Any:
+        """Reproject ``features`` to the display CRS through pyramids and return the GeoDataFrame.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` (or any GeoDataFrame-like with
+                ``epsg``/``to_crs``); plain GeoDataFrames already in the display CRS pass through.
+            method: The calling builder's name, quoted in :meth:`_require_vector`'s error. The drawers that
+                reach this choke point pass the layer's kind, so a raster that was never build-guarded
+                (``lines``/``hexbin``/``kde``/``graph`` record their source and open it here) is still turned
+                away naming the builder that was called.
+
+        Reprojection goes through the shared :func:`~digitalearth.base.crs.reproject` helper rather than
+        calling ``to_crs`` directly, so a warp that places none of the geometry is reported as an
+        ``OffLimbError`` here exactly as it is for a raster — which is what lets one skip-and-warn policy
+        (#257) cover both halves of the tier.
+
+        Returns:
+            The display-CRS GeoDataFrame (read-only from here on — geometry is never rebuilt).
+
+        Raises:
+            TypeError: when ``features`` is a raster (or a geometry-less table) — the #175 guard, applied
+                before the reprojection so a raster cannot reach ``to_crs``.
+        """
+        self._require_vector(features, method)
+        if (
+            hasattr(features, "epsg")
+            and hasattr(features, "to_crs")
+            and self._needs_reproject(features)
+        ):
+            features = reproject(features, self.crs)
+        return features
+
+    def _vector_element(self, kind: str, gdf: Any, vdims: list | None = None) -> Any:
+        """Build a GeoViews element of ``kind`` from a display-CRS GeoDataFrame.
+
+        The element declares its (already display) CRS via ``gv.util.process_crs`` — GeoViews builds
+        the cartopy CRS internally, so this package never imports cartopy (DX.3). The ``datatype`` is
+        pinned to the geodataframe interface: pyramids' ``FeatureCollection`` is a GeoDataFrame
+        *subclass*, which HoloViews' narwhals interface otherwise claims first and mis-reads the
+        attribute columns as key dimensions.
+
+        Args:
+            kind: One of ``"Points"`` / ``"Path"`` / ``"Polygons"``.
+            gdf: The display-CRS GeoDataFrame.
+            vdims: Optional value dimensions (attribute columns) carried for colour/hover; ``None``
+                lets GeoViews infer them from the non-geometry columns.
+
+        Returns:
+            The GeoViews element.
+        """
+        gv, _ = _require_holoviz()
+        crs = gv.util.process_crs(self.crs)
+        factory = getattr(gv, kind)
+        # geodataframe first so the GeoPandas interface wins at construction; the rest keep
+        # render-time clones (projection produces dict/array data) dispatchable.
+        datatype = ["geodataframe", "multitabular", "dictionary", "dataframe", "array"]
+        kwargs: dict = {"crs": crs, "datatype": datatype}
+        if vdims:
+            kwargs["vdims"] = vdims
+        return factory(gdf, **kwargs)
+
+    @_skips_off_limb
+    def points(
+        self,
+        features: Any,
+        *,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
+        size: Maybe[float] = UNSET,
+        cmap: str = "viridis",
+        opacity: float | None = None,
+        rasterize: Any = "auto",
+        big_data_threshold: int | None = None,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a point layer, optionally coloured by an attribute column.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of point geometries; reprojected to the
+                display CRS through pyramids when needed. A path or URL naming one is taken too, and is
+                the only input a figure carrying this layer can be written down with.
+            column: The column colouring the points (also shown on hover). The Core spelling, and the one
+                ``polygons`` and ``choropleth`` on this tier already used; ``value_column`` was a second
+                name for one concept (#332) and is gone.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
+                ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
+                colormap's own alpha channel in force.
+            scheme: Optional classification scheme for ``column`` — ``None`` (the default) is a
+                continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts it into ``k``
+                classes, and ``"categorical"`` gives every distinct value its own colour (the same
+                unordered-attribute colouring :meth:`choropleth` does, so a point layer and a polygon
+                layer key one column the same way). Spelled and computed the same way on every tier that
+                classifies. It styles ``column``, so naming a scheme without one is refused rather
+                than ignored.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``.
+            size: Marker size in screen pixels — the one thing ``size`` ever means on any tier (#251).
+            cmap: Colormap used when ``column`` is given.
+            rasterize: ``"auto"`` (default) routes through Datashader above
+                ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
+            big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
+                (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
+                as given, so a path is measured as a string rather than as rows — see the note below.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element. Anything written here **wins**
+                over the option a ``scheme`` derived — the same precedence :meth:`choropleth` applies — so
+                ``colorbar=False`` drops the colorbar on a classified point layer just as it does on a
+                classified polygon one.
+
+        Note:
+            ``rasterize="auto"`` counts the **rows**, whether ``features`` is a loaded collection or a path.
+            A path used to be measured as a string — a layer named by a 25-character path was reported as
+            *25* features when the file held 10, so a ten-row layer routed through Datashader on the strength
+            of its filename (#316). pyramids now answers the count without reading the geometry
+            (``FeatureCollection.feature_count``, serapeum-org/pyramids#1200, shipped in 0.65.0), so naming a
+            file still costs no open and the two spellings of one input agree. The routing log line names the
+            number the decision used, so a surprising one is visible rather than silent.
+
+        Examples:
+            - Colour gauging stations by an attribute column:
+                ```python
+                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> m = InteractiveMap().points(fc, column="fid")         # doctest: +SKIP
+                >>> [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP
+                ['fid']
+
+                ```
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: if ``scheme`` is given without a ``column`` to classify, or when the
+                column cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit
+                colour list shorter than the class count).
+        """
+        from digitalearth.interactive.builders.bigdata import (
+            _feature_count,
+            _route_through_rasterize,
+        )
+
+        self._require_vector(features, "points")
+        apply_opacity(opacity, opts)
+        if scheme is not None and not column:
+            # A scheme with nothing to classify used to draw plain points and say nothing — a dropped
+            # styling request, which is exactly what this tier stopped doing elsewhere (review M2).
+            raise ValueError(
+                f"{_POINTS_CALLER}: scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        threshold = self._resolve_big_data_threshold(
+            big_data_threshold, caller=_POINTS_CALLER
+        )
+        # Nothing here is reprojected: the drawer warps what it draws, and what the description needs — the
+        # row count and a column's values — is the same before a warp as after it. Warping here as well did
+        # the work twice and threw one result away (review M8). A frame the display CRS cannot place is
+        # still refused, by the drawer, and `_skips_off_limb` answers it as before.
+        # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
+        # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
+        # the count without the geometry, so naming a file still costs no open.
+        # Clear any breaks a prior categorical call recorded, as `choropleth` does — above the rasterize
+        # early-return as well, so a density layer (which records no class edges) does not keep reporting a
+        # prior categorical call's breaks on the legacy `last_breaks` accessor (#332 L3, round-2 M2). Only the
+        # categorical and graduated branches below record one; every other path leaves it cleared.
+        self.last_breaks = None
+        if rasterize is True or (
+            rasterize == "auto"
+            and _route_through_rasterize("points", _feature_count(features), threshold)
+        ):
+            aggregator = "mean" if column else "count"
+            return self.rasterize(
+                features, aggregator=aggregator, column=column, cmap=cmap, **opts
+            )
+        styling: dict = {}
+        labels: dict | None = None
+        # What the layer's colour varies with, published beside the engine's own spelling of it so a colour
+        # key can hang on the layer rather than on the tier's most recent classification (order 24). `None`
+        # while no `column` was given: those points are one flat colour, and a key over them would label
+        # nothing.
+        colour: Encoding | None = None
+        if column and isinstance(scheme, str) and scheme.lower() == "categorical":
+            # Categorical colouring works off the string form of the value, so it has to relabel the frame
+            # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
+            # a point layer and a polygon layer key an unordered column identically (review M3).
+            styling, categories, labels = self._categorical_style(
+                features, column, cmap=cmap
+            )
+            self.last_breaks = categories
+            colour = Encoding.by_field(
+                "color", column, scale=_categorical_scale(styling, categories, labels)
+            )
+        elif column and scheme is not None:
+            styling = self._graduated_style(
+                features, column, scheme=scheme, k=k, cmap=cmap
+            )
+            self.last_breaks = list(styling["color_levels"])
+            colour = Encoding.by_field(
+                "color", column, scale=_graduated_scale(styling, scheme)
+            )
+        elif column:
+            styling = {"color": column, "cmap": cmap, "colorbar": True}
+            # A continuous ramp over the column, with no limits the builder holds: HoloViews measures them
+            # from the data at render time unless the caller wrote a `clim` of their own.
+            colour = Encoding.by_field(
+                "color", column, scale=limits_scale(opts.get("clim"))
+            )
+        # The caller's `**opts` are split per value: `describe_opts` writes the JSON-safe half into the
+        # description and puts the rest in `held` (review M3). Either way the drawer merges them over
+        # this, which keeps the precedence: an explicit style the caller wrote outranks the one
+        # classification derived, so one scheme cannot mean two things (review M4).
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        # Resolved here rather than at the top of the method, so the aggregating route above — which forwards
+        # `**opts` to `rasterize` and never draws a marker — is reached with the keyword untouched.
+        ask = Ask()
+        common: dict = {"size": ask("size", size, POINT_SIZE), **styling}
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="points",
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Points",
+                [column] if column else None,
+                describe_style(held, common),
+                labels,
+                described_opts,
+                tuple(ask.named),
+                colour,
+            ),
+        )
+
+    @_skips_off_limb
+    def lines(
+        self,
+        features: Any,
+        *,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
+        cmap: str = "viridis",
+        width: float | None = None,
+        opacity: float | None = None,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a line layer (LineString / MultiLineString features), optionally coloured by a column.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of line geometries; reprojected through
+                pyramids when needed.
+            column: The column colouring the lines (also shown on hover); ``None`` (default) draws one
+                flat colour. The Core spelling, the same one :meth:`points` and :meth:`polygons` use on
+                this tier (#332).
+            scheme: Optional classification of ``column`` — ``None`` (the default) is a continuous ramp, a
+                named ``cleopatra.styling.styles.classify`` scheme (``"quantiles"``, ``"equal_interval"``,
+                ``"fisher_jenks"``, …) cuts it into ``k`` classes, and ``"categorical"`` gives every
+                distinct value its own colour. It styles ``column``, so naming a scheme without one is
+                refused rather than ignored.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``.
+            cmap: Colormap used when ``column`` is given.
+            width: Line width in screen pixels; ``None`` (default) leaves HoloViews' own. HoloViews reads
+                it as ``line_width``, so a bare number is the line's thickness rather than the plot's.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use (#332);
+                HoloViews reads it as ``alpha`` through :func:`apply_opacity`. ``None`` (default) hands the
+                engine no opacity at all.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element. Anything written here **wins**
+                over the option a ``scheme`` derived, the same precedence :meth:`points` applies. A
+                continuous ramp (a ``column`` with no ``scheme``) reads ``clim=(lo, hi)`` from here to pin
+                its colour range — the spelling :meth:`choropleth` forwards it under on this tier; without
+                one HoloViews measures the range from the data.
+
+        Examples:
+            - Draw river reaches as an interactive line layer:
+                ```python
+                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> reaches = FeatureCollection.read_file("reaches.geojson")    # doctest: +SKIP
+                >>> InteractiveMap().lines(reaches).save("reaches.html").name    # doctest: +SKIP
+                'reaches.html'
+
+                ```
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: if ``scheme`` is given without a ``column`` to classify, or when the column
+                cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit colour list
+                shorter than the class count).
+        """
+        apply_opacity(opacity, opts)
+        if width is not None:
+            # HoloViews reads a line's thickness as `line_width`; a bare `width=` is the plot's width.
+            opts["line_width"] = width
+        if scheme is not None and not column:
+            raise ValueError(
+                f"{_LINES_CALLER}: scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        styling: dict = {}
+        labels: dict | None = None
+        # What the layer's colour varies with, published beside the engine's own spelling of it so a colour
+        # key can hang on the layer (order 24). `None` while no `column` was given: those lines are one flat
+        # colour, and a key over them would label nothing.
+        colour: Encoding | None = None
+        # Clear any breaks a prior categorical call recorded, as `choropleth` does: only the categorical and
+        # graduated branches below record class edges, so a flat or continuous layer must not keep reporting
+        # stale ones on the legacy `last_breaks` accessor (#332 L3).
+        self.last_breaks = None
+        if column and isinstance(scheme, str) and scheme.lower() == "categorical":
+            styling, categories, labels = self._categorical_style(
+                features, column, cmap=cmap
+            )
+            self.last_breaks = categories
+            colour = Encoding.by_field(
+                "color", column, scale=_categorical_scale(styling, categories, labels)
+            )
+        elif column and scheme is not None:
+            styling = self._graduated_style(
+                features, column, scheme=scheme, k=k, cmap=cmap
+            )
+            self.last_breaks = list(styling["color_levels"])
+            colour = Encoding.by_field(
+                "color", column, scale=_graduated_scale(styling, scheme)
+            )
+        elif column:
+            styling = {"color": column, "cmap": cmap, "colorbar": True}
+            colour = Encoding.by_field(
+                "color", column, scale=limits_scale(opts.get("clim"))
+            )
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        common: dict = {**styling}
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="lines",
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Path",
+                [column] if column else None,
+                describe_style(held, common),
+                labels,
+                described_opts,
+                (),
+                colour,
+            ),
+        )
+
+    @_skips_off_limb
+    def polygons(
+        self,
+        features: Any,
+        *,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
+        cmap: str = "viridis",
+        opacity: float | None = None,
+        rasterize: Any = "auto",
+        big_data_threshold: int | None = None,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a polygon layer — outlines, a continuous fill, or classified by an attribute column.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
+                pyramids when needed. A path or URL naming one is taken too, and is the only input a
+                figure carrying this layer can be written down with.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
+                ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
+                colormap's own alpha channel in force.
+            column: Optional column filling the polygons (also shown on hover); ``None`` draws unfilled
+                outlines.
+            scheme: Optional classification of ``column``, spelled and computed the way :meth:`choropleth`
+                and the web tier's ``polygons`` do, so the three answer the same call the same way (#331).
+                ``None`` (default) is a continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts ``column`` into ``k``
+                classes, and ``"categorical"`` gives every distinct value its own colour. It styles
+                ``column``, so naming a scheme without one is refused rather than ignored. A classified
+                polygon layer is described as a ``choropleth`` on this tier, the same as calling
+                :meth:`choropleth` — the class edges land on ``last_breaks`` and the layer's colour scale.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``. ``5`` is the shared cross-tier default (#246).
+            cmap: Colormap used when ``column`` is given (a qualitative map is used for ``"categorical"``
+                when left at the default; sampled once per class for a graduated scheme).
+            rasterize: ``"auto"`` (default) routes through Datashader above
+                ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
+                Polygon datashading needs the optional ``spatialpandas`` package. Not applied to a classified
+                layer (``scheme`` set), which draws raw glyphs so each class keeps its colour — so
+                ``rasterize=True`` (force datashade) or an explicit ``big_data_threshold`` alongside
+                ``scheme`` **warns**, because that request is dropped. ``rasterize=False`` asks for the same
+                raw glyphs and ``"auto"`` names no request, so both are silent.
+            big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
+                (default) uses the map's ``big_data_threshold`` attribute (#250). Counted off ``features``
+                as given, so a path is measured as a string rather than as rows — see the note below.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Note:
+            ``rasterize="auto"`` counts the **rows**, whether ``features`` is a loaded collection or a path.
+            A path used to be measured as a string — a layer named by a 25-character path was reported as
+            *25* features when the file held 10, so a ten-row layer routed through Datashader on the strength
+            of its filename (#316). pyramids now answers the count without reading the geometry
+            (``FeatureCollection.feature_count``, serapeum-org/pyramids#1200, shipped in 0.65.0), so naming a
+            file still costs no open and the two spellings of one input agree. The routing log line names the
+            number the decision used, so a surprising one is visible rather than silent.
+
+        Examples:
+            - Outline catchment polygons over a basemap:
+                ```python
+                >>> from pyramids.feature import FeatureCollection                # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> basins = FeatureCollection.read_file("basins.geojson")        # doctest: +SKIP
+                >>> InteractiveMap().polygons(basins).basemap().save("m.html").name  # doctest: +SKIP
+                'm.html'
+
+                ```
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: if ``scheme`` is given without a ``column`` to classify, or when the column
+                cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit colour list
+                shorter than the class count).
+            KeyError: when ``scheme`` is given and ``column`` is not one of ``features``' columns — named
+                the way :meth:`choropleth` names it, rather than a bare pandas ``KeyError`` from the
+                classifier.
+            ImportError: when the layer routes through Datashader (``rasterize=True``, or
+                ``"auto"`` above the threshold) and ``spatialpandas`` is not installed. It is
+                datashader's own polygon backend, not a Digital-Earth dependency, so the tier says
+                which package to install — or to pass ``rasterize=False`` and draw raw glyphs —
+                rather than failing deeper inside datashader.
+
+        Warns:
+            UserWarning: when a classified call (``scheme`` set) is also given ``rasterize=True`` or an
+                explicit ``big_data_threshold=``, which a classified layer cannot honour (it draws raw
+                glyphs), so the request is dropped rather than silently ignored. ``rasterize=False`` is
+                consistent with raw glyphs and does not warn.
+        """
+        self._require_vector(features, "polygons")
+        apply_opacity(opacity, opts)
+        # A classified polygon layer is a choropleth, cut by the very classifier `choropleth` uses (#331).
+        # The whole scheme path lives in its own method so this builder stays a thin dispatch.
+        if scheme is not None:
+            return self._classified_polygons(
+                features,
+                column=column,
+                scheme=scheme,
+                k=k,
+                cmap=cmap,
+                rasterize=rasterize,
+                big_data_threshold=big_data_threshold,
+                name=name,
+                visible=visible,
+                **opts,
+            )
+        threshold = self._resolve_big_data_threshold(
+            big_data_threshold, caller="InteractiveMap.polygons()"
+        )
+        return self._polygon_layer(
+            features,
+            "polygons",
+            column=column,
+            cmap=cmap,
+            rasterize=rasterize,
+            threshold=threshold,
+            name=name,
+            visible=visible,
+            **opts,
+        )
+
+    def _classified_polygons(
+        self,
+        features: Any,
+        *,
+        column: str | None,
+        scheme: Any,
+        k: int,
+        cmap: str,
+        rasterize: Any,
+        big_data_threshold: int | None,
+        name: str | None,
+        visible: bool,
+        **opts: Any,
+    ) -> Self:
+        """Classify a polygon layer — the body :meth:`polygons` runs when a ``scheme`` is given.
+
+        Split out of :meth:`polygons` so that builder stays a thin dispatch (its cognitive complexity was
+        past the gate otherwise). It validates the request, warns about datashading keywords a classified
+        layer cannot honour, and hands off to the very categorical/graduated helpers :meth:`choropleth`
+        uses, so a classified ``polygons`` call and the matching ``choropleth`` call cut identical breaks
+        (#331).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries, or a path/URL to one.
+            column: The column to classify; required, since a scheme styles a column.
+            scheme: ``"categorical"`` for distinct-value colouring, or a graduated scheme name / explicit
+                sequence of class edges.
+            k: Number of classes for a graduated scheme.
+            cmap: Colormap name.
+            rasterize: As :meth:`polygons` takes it; ``True`` or an explicit ``big_data_threshold`` warns.
+            big_data_threshold: As :meth:`polygons` takes it.
+            name: The caller's own name for the layer, or ``None`` to generate one.
+            visible: Whether the layer is drawn.
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: if ``column`` was not given, or the column cannot be classified (unknown scheme,
+                no spread, ``k < 1``, or a short colour list).
+            KeyError: if ``column`` is not one of ``features``' columns — named as :meth:`choropleth`
+                names it, rather than a bare pandas ``KeyError`` from the classifier.
+
+        Warns:
+            UserWarning: when ``rasterize=True`` or an explicit ``big_data_threshold`` is given, which a
+                classified layer (raw glyphs, never datashaded) cannot honour. ``rasterize=False`` asks for
+                the same raw glyphs, so it is silent.
+        """
+        if not column:
+            # A scheme with nothing to classify is a dropped styling request, refused as `points` and
+            # `choropleth` refuse it rather than drawing plain polygons and saying nothing (#331).
+            raise ValueError(
+                "InteractiveMap.polygons(): scheme= classifies column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
+        if column not in getattr(features, "columns", [column]):
+            # Named as choropleth names it, rather than letting the classifier reach into the frame and
+            # surface a bare pandas KeyError for a column that is simply absent. A path/URL has no
+            # `columns`, so it falls through and is read when the drawer opens it, exactly as choropleth.
+            raise KeyError(
+                f"polygons column {column!r} not found in the feature attributes"
+            )
+        # A classified layer draws raw glyphs so each class keeps its colour, and is never datashaded.
+        # `rasterize=False` asks for those same raw glyphs (consistent, silent); only `rasterize=True` or an
+        # explicit `big_data_threshold` is dropped, and is named rather than discarded (as graticule() warns).
+        dropped = []
+        if rasterize is True:
+            dropped.append(f"rasterize={rasterize!r}")
+        if big_data_threshold is not None:
+            dropped.append(f"big_data_threshold={big_data_threshold!r}")
+        if dropped:
+            # stacklevel=4: warn -> this method -> polygons() -> the @_skips_off_limb wrapper -> the caller.
+            warnings.warn(
+                f"InteractiveMap.polygons(): a classified layer (scheme={scheme!r}) draws raw glyphs "
+                f"and is not datashaded, so {' and '.join(dropped)} "
+                f"{'is' if len(dropped) == 1 else 'are'} ignored; drop scheme= to datashade instead.",
+                UserWarning,
+                stacklevel=4,
+            )
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            return self._categorical_polygons(
+                features, column, cmap=cmap, name=name, visible=visible, **opts
+            )
+        return self._graduated_polygons(
+            features,
+            column,
+            scheme=scheme,
+            k=k,
+            cmap=cmap,
+            name=name,
+            visible=visible,
+            **opts,
+        )
+
+    def _polygon_layer(
+        self,
+        features: Any,
+        kind: str,
+        *,
+        column: str | None,
+        cmap: str,
+        rasterize: Any,
+        threshold: int,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Draw polygons outlined or filled by a column, described under the kind the caller asked for.
+
+        The body `polygons()` and the continuous `choropleth()` share. It takes the kind as an argument
+        because the two draw the same element yet are different layers to a reader of the figure: the
+        continuous ramp used to reach here through `polygons()` and so was described as `polygons`, while
+        the categorical and graduated schemes said `choropleth` (review L6). The big-data cutoff arrives
+        resolved, because the public builders take it and this body does not.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries.
+            kind: The registered kind to describe the layer as — ``"polygons"`` or ``"choropleth"``.
+            column: Optional numeric column filling the polygons; ``None`` draws outlines.
+            cmap: Colormap used when ``column`` is given.
+            rasterize: ``"auto"``, ``True`` or ``False``, as the public builders take it.
+            threshold: The resolved row count above which ``"auto"`` routes through Datashader.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ImportError: when the layer routes through Datashader and ``spatialpandas`` is not installed.
+        """
+        from digitalearth.interactive.builders.bigdata import (
+            _feature_count,
+            _route_through_rasterize,
+        )
+
+        # Counted on the caller's frame, not a warped copy: the drawer warps what it draws, and a warp keeps
+        # every row (review M8). Only the datashaded path below builds its element here, so only it warps.
+        # Counted through `_feature_count`, not `len()`: `features` may be a path, and `len()` of a path is
+        # its character count, so the threshold used to be compared against the filename (#316). pyramids reads
+        # the count without the geometry, so naming a file still costs no open.
+        if rasterize is True or (
+            rasterize == "auto"
+            and _route_through_rasterize(kind, _feature_count(features), threshold)
+        ):
+            from importlib.util import find_spec
+
+            if (
+                find_spec("spatialpandas") is None
+            ):  # datashader's polygon backend (its dep, not ours)
+                raise ImportError(
+                    "polygon datashading needs the optional spatialpandas package "
+                    "(pip install spatialpandas) — or pass rasterize=False to draw raw glyphs"
+                )
+            element = (
+                self._vector_element(  # pragma: no cover - needs optional spatialpandas
+                    "Polygons",
+                    self._display_gdf(features, method=kind),
+                    vdims=[column] if column else None,
+                )
+            )
+            return self.rasterize(  # pragma: no cover - needs optional spatialpandas
+                element,
+                aggregator="mean" if column else "count",
+                column=column,
+                cmap=cmap,
+                name=name,
+                visible=visible,
+                **opts,
+            )
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        common: dict = {}
+        if column:
+            common.update(
+                {
+                    "color": column,
+                    "cmap": style_value(held, "cmap", cmap, cmap_name(cmap)),
+                    "colorbar": True,
+                }
+            )
+        elif "fill_alpha" not in opts:
+            common["fill_alpha"] = 0.0
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind=kind,
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Polygons",
+                [column] if column else None,
+                common,
+                None,
+                described_opts,
+                (),
+                # Filled by the column when there is one, and drawn as outlines when there is not — which is
+                # why the key is refused on an unfilled `polygons()` layer. The limits are the caller's
+                # `clim`, which `choropleth` forwards through `**opts`; without one the engine measures them.
+                None
+                if not column
+                else Encoding.by_field(
+                    "color", column, scale=limits_scale(opts.get("clim"))
+                ),
+            ),
+        )
+
+    def _categorical_polygons(
+        self,
+        features: Any,
+        column: str,
+        *,
+        cmap: str = "viridis",
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
+
+        The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
+        gets a colour from :func:`digitalearth.base.symbology.categorical_colors`. The colour column is cast to
+        **string** and the colours are handed to GeoViews as a ``{label: colour}`` dict ``cmap`` — a numeric
+        column would otherwise be treated as a continuous dimension and the palette interpolated, so this is
+        what guarantees one discrete colour per distinct value (no continuous colorbar). Missing values
+        (``NaN``/``None``) are drawn with a neutral ``"#cccccc"`` fallback, matching the web tier's default.
+        The categories (original values, in classifier order) are recorded on ``last_breaks``, which stays the
+        raw-values accessor the web tier publishes too.
+
+        Because the fill is keyed on the **string** form of each value, this assumes a single-dtype attribute
+        column: two categories that stringify identically (e.g. the integer ``1`` and the string ``"1"``, or
+        ``1`` and ``1.0``) collapse to one colour. Realistic categorical columns are single-dtype; the web tier
+        keeps such mixed values distinct via its native ``match``.
+
+        The layer also publishes a **categorical** :class:`~digitalearth.base.spec.scale.Scale` on its colour
+        encoding, carrying the very colours the fill was drawn with, so a key derived from it
+        (:meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale`) cannot disagree with the polygons —
+        which is what order 24 puts in place of the hand-maintained ``last_breaks`` parallel.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
+            column: The attribute to colour by (any hashable value; assumed single-dtype — see above).
+            cmap: A qualitative colormap name (defaults to ``"tab10"`` when left at the continuous default).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            The same map instance, so builder calls chain.
+        """
+        styling, categories, labels = self._categorical_style(
+            features, column, cmap=cmap
+        )
+        self.last_breaks = categories
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="choropleth",
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Polygons",
+                [column],
+                describe_style(held, styling),
+                labels,
+                described_opts,
+                (),
+                Encoding.by_field(
+                    "color",
+                    column,
+                    scale=_categorical_scale(styling, categories, labels),
+                ),
+            ),
+        )
+
+    def _categorical_style(self, gdf: Any, column: str, *, cmap: str) -> tuple:
+        """Relabel ``column`` as discrete strings and return the options that colour one per value.
+
+        The one distinct-value colouring path in this tier, shared by :meth:`points` and
+        :meth:`_categorical_polygons`, so an unordered column keys a point layer and a polygon layer
+        identically. Splitting it out is what let ``points(scheme="categorical")`` work at all: it used to
+        fall through to :meth:`_graduated_style`, whose classifier coerces the column to ``float`` and so
+        died with "could not convert string to float" on the very columns categorical colouring is for
+        (review M3).
+
+        Args:
+            gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
+                in any CRS, so the drawer's warp is the only one the layer needs (never mutated — a copy is
+                relabelled and returned). A path or URL is opened first, by :func:`_classifiable`, because
+                a path is the only input a figure can be written with (review M8).
+            column: The attribute to colour by (any hashable value; assumed single-dtype — see
+                :meth:`_categorical_polygons` on the string-keyed collapse).
+            cmap: A qualitative colormap name, already resolved by the caller's default.
+
+        Returns:
+            tuple: ``(options, categories, labels)`` — the ``color``/``cmap``/``colorbar`` options for the
+            element, the original values in classifier order (what ``last_breaks`` records), and the
+            relabelling the drawer applies: the column to read as discrete strings and the sentinel label
+            missing rows take, as :func:`_as_labels` reads them.
+        """
+        from digitalearth.base.symbology import (
+            MISSING_COLOR,
+            categorical_colors,
+            resolve_categorical_cmap,
+        )
+
+        gdf = _classifiable(gdf)
+        categories, colors = categorical_colors(
+            gdf[column], resolve_categorical_cmap(cmap)
+        )
+        cmap_by_label = {
+            str(category): color for category, color in zip(categories, colors)
+        }
+        # The column is drawn as discrete labels, each mapped to its own colour, so Bokeh colours it
+        # categorically (a numeric column would map continuously and interpolate the palette). The
+        # relabelling itself belongs to the drawer — :func:`_as_labels` — because a frame built here would
+        # not survive into the description the layer is rebuilt from.
+        missing = gdf[column].isna()
+        # A sentinel label for missing rows that is guaranteed not to collide with a real category (which
+        # could itself stringify to "n/a"/"nan"), so a genuine category is never overwritten by the fallback.
+        sentinel = "n/a"
+        while sentinel in cmap_by_label:
+            sentinel += "_"
+        if missing.any():
+            # Missing values get an explicit neutral fallback, shared with the web and static tiers.
+            cmap_by_label[sentinel] = MISSING_COLOR
+        options = {"color": column, "cmap": cmap_by_label, "colorbar": False}
+        return options, list(categories), {"column": column, "missing": sentinel}
+
+    def _graduated_style(
+        self, gdf: Any, column: str, *, scheme: Any, k: int, cmap: str
+    ) -> dict:
+        """Classify ``column`` and return the HoloViews options that draw it as flat classes.
+
+        The one classification path in this tier, shared by :meth:`points` and :meth:`choropleth`, so a
+        classified point layer and a classified polygon layer cannot land on different class edges. It is a
+        thin adapter over :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` — the **same** class edges
+        the web and static tiers cut, through the one classifier seam — whose edges become HoloViews
+        ``color_levels`` alongside a per-class ``cmap`` list, which is what makes Bokeh draw flat classes
+        instead of interpolating the ramp.
+
+        Args:
+            gdf: The frame carrying ``column`` — the caller's own, unwarped: a column's values are the same
+                in any CRS, so the drawer's warp is the only one the layer needs. A path or URL is opened
+                first, by :func:`_classifiable`, because a path is the only input a figure can be written
+                with (review M8).
+            column: The numeric attribute to classify and colour by.
+            scheme: A named scheme or an explicit sequence of class edges.
+            k: Number of classes for a named scheme.
+            cmap: Colormap sampled once per class, or an explicit sequence of colours — which is taken as
+                given, so it must carry exactly one colour per class. A shorter list is **refused**, not
+                recycled: the renderer clamps the extra classes onto the last colour it was given, so they
+                would render identically and the classification would silently lose classes (review M5).
+
+        Returns:
+            dict: the ``color`` / ``cmap`` / ``color_levels`` / ``colorbar`` options for the element.
+
+        Raises:
+            ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
+                wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does;
+                and when an explicit ``cmap`` sequence carries a different number of colours than the
+                scheme produced classes — see the note above.
+        """
+        gdf = _classifiable(gdf)
+        try:
+            edges = Scale.breaks_of(gdf[column].to_numpy(), scheme, k)
+        except ValueError as err:  # constant column, unknown scheme, k < 1, …
+            # Scale's own message already names the scheme and `k`; this adds the one fact it cannot
+            # know, the column. Repeating scheme/k here printed both twice in a row.
+            raise ValueError(f"cannot classify column {column!r}: {err}") from err
+        n_classes = len(edges) - 1
+        colours = sample_cmap(cmap, n_classes)
+        if len(colours) != n_classes:
+            # A colormap *name* is sampled to fit; an explicit sequence is taken as given, so a short one
+            # leaves classes sharing the last colour and a long one leaves colours unused — either way the
+            # picture no longer shows the classification it claims (review M5).
+            raise ValueError(
+                f"cannot classify column {column!r}: cmap has "
+                f"{len(colours)} colours for {n_classes} classes; pass one colour per class, or a "
+                "colormap name to sample"
+            )
+        return {
+            "color": column,
+            "cmap": colours,
+            "color_levels": [float(edge) for edge in edges],
+            "colorbar": True,
+        }
+
+    def _graduated_polygons(
+        self,
+        features: Any,
+        column: str,
+        *,
+        scheme: Any,
+        k: int,
+        cmap: str,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Fill polygons by classified value — one flat colour per class (the graduated scheme).
+
+        A thin adapter over :class:`~digitalearth.base.spec.scale.Scale`, which every tier now cuts its
+        class edges through, so ``scheme``/``k`` mean one thing across the four. The edges it returns are
+        handed to HoloViews as ``color_levels`` alongside a per-class ``cmap`` list, which is what makes
+        Bokeh draw discrete classes instead of interpolating the ramp. The classification itself is never
+        reimplemented here.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
+            column: The numeric attribute to classify and colour by.
+            scheme: A cleopatra classification scheme (``"quantiles"``/``"equal_interval"``/
+                ``"fisher_jenks"``/… or an explicit edge sequence).
+            k: Number of classes.
+            cmap: Colormap name sampled once per class.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
+                wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does.
+        """
+        classified = self._graduated_style(
+            features, column, scheme=scheme, k=k, cmap=cmap
+        )
+        self.last_breaks = list(classified["color_levels"])
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="choropleth",
+            source=features,
+            held=held,
+            symbology=_vector_symbology(
+                "Polygons",
+                [column],
+                describe_style(held, classified),
+                None,
+                described_opts,
+                (),
+                Encoding.by_field(
+                    "color", column, scale=_graduated_scale(classified, scheme)
+                ),
+            ),
+        )
+
+    @_skips_off_limb
+    def choropleth(
+        self,
+        features: Any,
+        column: str,
+        *,
+        scheme: str | None = None,
+        k: int = 5,
+        cmap: str = "viridis",
+        opacity: float | None = None,
+        clim: tuple[float, float] | None = None,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a choropleth — polygons filled and coloured by ``column`` (hover shows the value).
+
+        A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``. Pass
+        ``scheme="categorical"`` to colour an unordered attribute by distinct value instead of a continuous
+        ramp (DC.8), or a **graduated** scheme (``"quantiles"``/``"equal_interval"``/``"fisher_jenks"``/…)
+        to classify a numeric column into ``k`` flat classes. Either way the categories or class edges are
+        published on the layer's own colour encoding, as the :class:`~digitalearth.base.spec.scale.Scale` it
+        was classified through — which is what :meth:`colorbar` and :meth:`legend` hang their key on (order
+        24) and what :meth:`~digitalearth.base.spec.legend.LegendSpec.from_scale` derives a swatch list from.
+        They are recorded on ``last_breaks`` as well, which keeps the caller's own category values (the scale
+        colours by their string form) and stays the raw-numbers accessor the web tier also publishes.
+
+        Graduated classification goes through :class:`~digitalearth.base.spec.scale.Scale` — the one place
+        every tier reaches the classifier — so the same ``column``/``scheme``/``k`` yields the same breaks on
+        every tier. Note the *default* ``scheme`` still differs: this interactive tier (like the static
+        ``Map.choropleth``) defaults to a **continuous** ramp, whereas the **web** ``choropleth`` is
+        graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
+                pyramids when needed. A path or URL naming one is taken too, and is the only input a
+                figure carrying this layer can be written down with.
+            column: The column driving the fill colour (required); numeric for the continuous ramp, or any
+                hashable value for ``scheme="categorical"``.
+            scheme: ``"categorical"`` for distinct-value colouring; a graduated scheme name (or an explicit
+                sequence of class edges) for classified colouring; ``None`` (default) for a continuous ramp.
+            k: Number of classes for a graduated ``scheme`` (ignored by ``"categorical"``/``None``);
+                ``5`` is the shared cross-tier default (#246).
+            cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
+                left at the default); sampled once per class for a graduated scheme.
+            opacity: How opaque the layer is, in ``[0, 1]``. The spelling
+                :data:`~digitalearth.base.spec.encoding.CHANNELS` and the Core contract use, and the one the
+                web and 3-D tiers take, so the same channel is written the same way on every tier (#332).
+                HoloViews reads it as ``alpha``, which :func:`apply_opacity` is the one place to know.
+                ``None`` (default) hands the engine no opacity at all, which is not ``1.0``: it leaves a
+                colormap's own alpha channel in force.
+            clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Examples:
+            - Fill polygons by a population column with fixed colour limits:
+                ```python
+                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> admin = FeatureCollection.read_file("admin.geojson")        # doctest: +SKIP
+                >>> m = InteractiveMap().choropleth(admin, "pop", clim=(0, 1e6))  # doctest: +SKIP
+                >>> [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP
+                ['pop']
+
+                ```
+
+        Raises:
+            KeyError: when ``column`` is not a column of ``features``.
+            ValueError: when a graduated ``scheme`` cannot classify ``column`` (unknown scheme name, a
+                constant column, ``k < 1``, …).
+        """
+        self._require_vector(features, "choropleth")
+        if column not in getattr(features, "columns", [column]):
+            raise KeyError(
+                f"choropleth column {column!r} not found in the feature attributes"
+            )
+        apply_opacity(opacity, opts)
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            return self._categorical_polygons(
+                features, column, cmap=cmap, name=name, visible=visible, **opts
+            )
+        if scheme is not None:
+            if clim is not None:
+                opts = {"clim": clim, **opts}
+            return self._graduated_polygons(
+                features,
+                column,
+                scheme=scheme,
+                k=k,
+                cmap=cmap,
+                name=name,
+                visible=visible,
+                **opts,
+            )
+        # Continuous ramp: no discrete breaks — clear any recorded from a prior categorical call.
+        self.last_breaks = None
+        if clim is not None:
+            opts = {"clim": clim, **opts}
+        # Resolved here rather than by `polygons()`, which never sees the keyword: `choropleth` takes it
+        # through `**opts`.
+        threshold = self._resolve_big_data_threshold(
+            opts.pop("big_data_threshold", None),
+            caller="InteractiveMap.choropleth()",
+        )
+        return self._polygon_layer(
+            features,
+            "choropleth",
+            column=column,
+            cmap=cmap,
+            rasterize=opts.pop("rasterize", "auto"),
+            threshold=threshold,
+            name=name,
+            visible=visible,
+            **opts,
+        )
+
+    def _uv_arrays(self, u: Any, v: Any, *, band: int, density: float) -> tuple:
+        """Extract subsampled ``(x, y, u, v)`` display-CRS arrays from two pyramids bands.
+
+        Args:
+            u: The eastward-component ``Dataset`` / ``Source`` (reprojected through pyramids).
+            v: The northward-component ``Dataset`` / ``Source`` (same grid as ``u``).
+            band: 1-based band read from each.
+            density: Keep-fraction in ``(0, 1]`` — the grid is strided by ``round(1/density)`` so the
+                field stays legible at web resolution (``1.0`` keeps every cell).
+
+        Returns:
+            ``(x, y, u, v)`` — 1-D ``x``/``y`` cell-centre coords and 2-D ``u``/``v`` arrays, strided.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
+        """
+        if not 0.0 < density <= 1.0:
+            raise ValueError(f"density must be in (0, 1], got {density!r}")
+        su = self._to_display_source(u, band=band)
+        sv = self._to_display_source(v, band=band)
+        step = max(1, round(1.0 / density))
+        x = su.x.values[::step]
+        y = su.y.values[::step]
+        u_arr = _masked_to_nan(su.z.values)[::step, ::step]
+        v_arr = _masked_to_nan(sv.z.values)[::step, ::step]
+        return x, y, u_arr, v_arr
+
+    @_skips_off_limb
+    def vectorfield(
+        self,
+        u: Any,
+        v: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        density: float = 1.0,
+        color_by: str | None = "magnitude",
+        cmap: str = "viridis",
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a u/v vector field as interactive arrows (parity with ``Map.quiver``, recipe I6).
+
+        Args:
+            u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
+            v: Northward-component ``Dataset`` / ``Source`` on the same grid.
+            band: 1-based band read from each component.
+            density: Keep-fraction in ``(0, 1]`` controlling arrow density (``1.0`` = every cell).
+            color_by: ``"magnitude"`` colours arrows by speed; ``None`` draws uniform arrows.
+            cmap: Colormap used when ``color_by="magnitude"``.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
+        """
+        _require_holoviz()
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="vectors",
+            # The pair is the source: a field is not drawable from either component alone.
+            source=(u, v),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "vectorfield",
+                    "band": band,
+                    "density": density,
+                    "color_by": color_by,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
+        )
+
+    @_skips_off_limb
+    def streamlines(
+        self,
+        u: Any,
+        v: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        density: float = 1.0,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add streamlines of a u/v field via the matplotlib backend (parity with ``Map.streamplot``).
+
+        Bokeh has no streamline integrator, so streamlines render through HoloViews' matplotlib
+        backend (a static layer in the saved PNG). The element is built so ``save("x.png")`` works;
+        it is logged as non-interactive rather than emitting an empty Bokeh layer.
+
+        Args:
+            u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
+            v: Northward-component ``Dataset`` / ``Source`` on the same grid.
+            band: 1-based band read from each component.
+            density: Keep-fraction in ``(0, 1]`` subsampling the field before streamline
+                integration (same meaning as :meth:`vectorfield`'s ``density``).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
+        """
+        from loguru import logger
+
+        _require_holoviz()
+        logger.info(
+            "streamlines render through the matplotlib backend (Bokeh has no streamline glyph); "
+            "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
+        )
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="streamlines",
+            source=(u, v),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "streamlines",
+                    "band": band,
+                    "density": density,
+                    "opts": described_opts,
+                }
+            ),
+        )
+
+    def barbs(
+        self,
+        u: Any,
+        v: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        density: float = 1.0,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add wind barbs of a u/v field — **matplotlib backend only** (parity with ``Map.barbs``).
+
+        ``gv.WindBarbs`` has no Bokeh renderer, so barbs are a static matplotlib layer; this logs
+        that they are non-interactive rather than silently producing an empty Bokeh layer.
+
+        Args:
+            u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
+            v: Northward-component ``Dataset`` / ``Source`` on the same grid.
+            band: 1-based band read from each component.
+            density: Keep-fraction in ``(0, 1]`` subsampling the field before drawing barbs (same
+                meaning as :meth:`vectorfield`'s ``density``; ``1.0`` keeps every cell).
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ImportError: when the installed GeoViews has no ``WindBarbs`` element.
+            ValueError: when ``density`` is not in ``(0, 1]``.
+        """
+        from loguru import logger
+
+        gv, _ = _require_holoviz()
+        # Refused here, because the message answers the builder the caller called.
+        if not hasattr(gv, "WindBarbs"):
+            raise ImportError(
+                "barbs need gv.WindBarbs (GeoViews ≥1.11 with the matplotlib backend); it is "
+                "absent in this GeoViews build"
+            )
+        logger.info(
+            "barbs render through the matplotlib backend only (Bokeh has no wind-barb glyph); "
+            "save to a .png, not interactive .html — a vector file is the static tier's (Map)"
+        )
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="vectors",
+            source=(u, v),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "barbs",
+                    "band": band,
+                    "density": density,
+                    "opts": described_opts,
+                }
+            ),
+        )
+
+    @_skips_off_limb
+    def trimesh(
+        self,
+        data: Any,
+        *,
+        value_column: str | None = None,
+        rasterize: Any = "auto",
+        big_data_threshold: int | None = None,
+        cmap: str = "viridis",
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add an unstructured triangular mesh (parity with ``Map.tricontour``/``tripcolor``, recipe I7).
+
+        Connectivity comes from one of two sources, both pyramids-fed:
+
+        - a **true UGRID mesh** (``pyramids.netcdf.ugrid.Mesh2d`` — anything exposing ``node_x`` /
+          ``node_y`` / ``fan_triangles``): nodes + triangles are taken straight off it, no
+          triangulation needed;
+        - a **point** ``FeatureCollection``: Delaunay-triangulated locally with ``matplotlib.tri``
+          (matplotlib is not a forbidden GIS engine), mirroring the static ``tri*`` path.
+
+        Above ``big_data_threshold`` faces the mesh auto-``rasterize``s to a density image (logged).
+
+        Args:
+            data: A UGRID-mesh object or a point ``FeatureCollection`` (reprojected via pyramids).
+            value_column: Node-value column (for the FeatureCollection path) driving the colour.
+            rasterize: ``"auto"`` (default) rasterizes above the threshold; ``True``/``False`` force it.
+            big_data_threshold: Face count above which ``"auto"`` rasterizes; ``None`` (default) uses
+                the map's ``big_data_threshold`` attribute (#250).
+            cmap: Colormap name.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``data`` is a pyramids raster. ``trimesh`` takes a UGRID mesh or a point
+                collection, so it uses the raster-only guard (:meth:`_reject_raster`) — a mesh exposing
+                ``node_x``/``node_y`` rather than ``geometry`` passes, a raster is turned away naming the
+                builder and the raster entry points (#175).
+
+        Examples:
+            - Delaunay-triangulate scattered points; the nodes carry the value column:
+                ```python
+                >>> from pyramids.feature import FeatureCollection                # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> m = InteractiveMap().trimesh(fc, value_column="fid")          # doctest: +SKIP
+                >>> len(m.layers[0].nodes) == len(fc)                             # doctest: +SKIP
+                True
+                >>> [d.name for d in m.layers[0].nodes.vdims]                     # doctest: +SKIP
+                ['fid']
+
+                ```
+            - A UGRID mesh brings its own connectivity, so nothing is triangulated locally — its
+              four nodes and two faces come through as they are:
+                ```python
+                >>> import numpy as np                                            # doctest: +SKIP
+                >>> from pyramids.netcdf.ugrid import Connectivity, Mesh2d        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> mesh = Mesh2d(                                                # doctest: +SKIP
+                ...     node_x=np.array([0.0, 1.0, 0.5, 1.5]),
+                ...     node_y=np.array([0.0, 0.0, 1.0, 1.0]),
+                ...     face_node_connectivity=Connectivity(
+                ...         data=np.array([[0, 1, 2], [1, 3, 2]]),
+                ...         fill_value=-1,
+                ...         cf_role="face_node_connectivity",
+                ...         original_start_index=0,
+                ...     ),
+                ... )
+                >>> len(InteractiveMap().trimesh(mesh).layers[0].nodes)           # doctest: +SKIP
+                4
+
+                ```
+            - Lowering the cutoff routes the same mesh through Datashader instead, and the
+              density image is styled (and recorded) with the ``cmap`` that was asked for:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> m = InteractiveMap()                                          # doctest: +SKIP
+                >>> m = m.trimesh(fc, big_data_threshold=1, cmap="magma")         # doctest: +SKIP
+                >>> m.layer_styles[0]["common"]["cmap"]                           # doctest: +SKIP
+                'magma'
+                >>> m.layer_styles[0]["common"]["colorbar"]                       # doctest: +SKIP
+                True
+
+                ```
+        """
+        self._reject_raster(data, "trimesh")
+        gv, _ = _require_holoviz()
+        threshold = self._resolve_big_data_threshold(
+            big_data_threshold, caller="InteractiveMap.trimesh()"
+        )
+        # The mesh is built here because the routing decision below is made on the face count, which only the
+        # built connectivity knows. The drawer would build the same one again from the same data, so the one
+        # built here is handed to it for the length of this call (review M8).
+        built = self._mesh_inputs(data, value_column)
+        nodes, simplices, _ = built
+        n_faces = len(simplices)
+        if rasterize is True or (rasterize == "auto" and n_faces > threshold):
+            from loguru import logger
+
+            if rasterize == "auto":
+                logger.info(
+                    f"trimesh: {n_faces:,} faces exceed big_data_threshold={threshold:,}"
+                    " — rasterizing the mesh to a density image"
+                )
+            trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))
+            return self.rasterize(
+                trimesh, dynamic=True, cmap=cmap, name=name, visible=visible, **opts
+            )
+        self._built_mesh = (data, value_column, built)
+        try:
+            held: dict[str, Any] = {}
+            described_opts = describe_opts(held, opts)
+            return self.add_layer(
+                None,
+                name=name,
+                visible=visible,
+                kind="unstructured",
+                source=data,
+                held=held,
+                symbology=Symbology(
+                    props={
+                        "via": "trimesh",
+                        "value_column": value_column,
+                        "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                        "opts": described_opts,
+                    }
+                ),
+            )
+        finally:
+            # Released as soon as the layer is drawn: holding it would keep the mesh alive for as long as the
+            # map, and a later draw from the description must build its own.
+            self._built_mesh = None
+
+    def _mesh_inputs(self, data: Any, value_column: str | None) -> tuple:
+        """Return ``(nodes_points, simplices, vdims)`` for :meth:`trimesh`.
+
+        Args:
+            data: A UGRID-mesh object (``node_x``/``node_y``/``fan_triangles``) or a point
+                ``FeatureCollection``.
+            value_column: Node-value column for the FeatureCollection path.
+
+        Returns:
+            ``(gv.Points nodes, (n_faces, 3) simplices, vdims list)``.
+        """
+        import numpy as np
+
+        gv, _ = _require_holoviz()
+        crs = gv.util.process_crs(self.crs)
+        if all(hasattr(data, attr) for attr in ("node_x", "node_y", "fan_triangles")):
+            x = np.asarray(data.node_x)
+            y = np.asarray(data.node_y)
+            simplices = np.asarray(data.fan_triangles)
+            nodes = gv.Points((x, y), crs=crs)
+            return nodes, simplices, []
+        from matplotlib.tri import (
+            Triangulation,
+        )  # matplotlib, not a forbidden GIS engine
+
+        gdf = self._display_gdf(data, method="trimesh")
+        # The extraction and the non-finite drop are PointArrays' — and it keeps the value column in step
+        # with the points it removes, which this site was doing with a second application of the mask.
+        column = gdf[value_column].to_numpy() if value_column else None
+        # centroids=False preserves the error this site raised before: a Delaunay mesh over polygon
+        # centroids is exactly the caller whose maths is only meaningful on real points.
+        points, (column,) = PointArrays.from_features(gdf, centroids=False).finite(
+            column
+        )
+        x, y = points.x, points.y
+        simplices = Triangulation(x, y).triangles
+        if value_column:
+            z = column
+            nodes = gv.Points((x, y, z), vdims=[value_column], crs=crs)
+            return nodes, simplices, [value_column]
+        return gv.Points((x, y), crs=crs), simplices, []
+
+    @_skips_off_limb
+    def hexbin(
+        self,
+        features: Any,
+        *,
+        gridsize: int = 30,
+        aggregator: str = "mean",
+        column: str | None = None,
+        cmap: str = "viridis",
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add an equal-area hex-bin density layer (honest no-overplot density, recipe I7).
+
+        Args:
+            features: A point ``FeatureCollection``; reprojected through pyramids.
+            gridsize: Number of hexagons across — higher is finer.
+            aggregator: Per-bin reducer (``"count"``/``"mean"``/``"sum"``/…); ``"count"`` ignores
+                ``column``.
+            column: Value column aggregated per bin (required for non-``count`` aggregators).
+            cmap: Colormap name.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+        """
+        _require_holoviz()
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="heatmap",
+            source=features,
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "hexbin",
+                    "gridsize": gridsize,
+                    "aggregator": aggregator,
+                    "column": column,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
+        )
+
+    @_skips_off_limb
+    def kde(
+        self,
+        features: Any,
+        *,
+        filled: bool = True,
+        cmap: str = "viridis",
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a 2-D kernel-density layer of point positions (parity with ``Map.kde``, recipe I7).
+
+        Args:
+            features: A point ``FeatureCollection``; reprojected through pyramids.
+            filled: Fill the density bands (``True``) or draw contour lines (``False``).
+            cmap: Colormap name.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+        """
+        _require_holoviz()
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="heatmap",
+            source=features,
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "kde",
+                    "filled": filled,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
+        )
+
+    @_skips_off_limb
+    def graph(
+        self,
+        nodes: Any,
+        edges: Any,
+        *,
+        weight: str | None = None,
+        bundle: bool = False,
+        node_id: str = "id",
+        cmap: str = "viridis",
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Add a network / origin-destination flow map (parity-plus for ``Map.sankey``, recipe I9).
+
+        Args:
+            nodes: A point ``FeatureCollection``/GeoDataFrame of network nodes; reprojected through
+                pyramids. Each node's ``node_id`` column is the index the edges reference.
+            edges: An iterable of ``(src_id, dst_id[, weight])`` tuples, or a DataFrame with those
+                columns.
+            weight: Optional edge-weight column driving line width/colour.
+            bundle: Bundle edges (``holoviews.operation.connect_edges``) then datashade them — for
+                dense networks. Note ``hammer_bundle`` (the heavy variant) is not used; this is the
+                cheap ``connect_edges``.
+            node_id: The node-id column name on ``nodes``.
+            cmap: Colormap used when ``weight`` is given.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the map is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden — before, the flag fell through ``**opts`` to HoloViews, which hid the
+                element while the figure went on calling it visible (#327).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+        """
+        _require_holoviz()
+        held: dict[str, Any] = {}
+        described_opts = describe_opts(held, opts)
+        return self.add_layer(
+            None,
+            name=name,
+            visible=visible,
+            kind="flow",
+            # One source, because the layer draws the join of the two: neither the node table nor the
+            # edge table describes it on its own.
+            source=(nodes, edges),
+            held=held,
+            symbology=Symbology(
+                props={
+                    "via": "graph",
+                    "weight": weight,
+                    "bundle": bundle,
+                    "node_id": node_id,
+                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "opts": described_opts,
+                }
+            ),
+        )
+
+    def flow(
+        self,
+        nodes: Any,
+        edges: Any,
+        *,
+        weight: str | None = None,
+        name: str | None = None,
+        visible: bool = True,
+        **opts: Any,
+    ) -> Self:
+        """Spatial-flow alias of :meth:`graph` mirroring ``Map.sankey``'s framing (DI.15).
+
+        Args:
+            nodes: A point ``FeatureCollection`` of flow endpoints.
+            edges: ``(src_id, dst_id[, weight])`` tuples.
+            weight: Optional flow-magnitude column.
+            name: The caller's own name for the layer, used as its id and its label; ``None``
+                (default) generates one from the kind, and a name already on the figure is suffixed
+                ``-2``, ``-3``, … (#321).
+            visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it
+                hidden, so a switcher reading the figure agrees with the drawing (#327).
+            **opts: Forwarded to :meth:`graph`.
+
+        Returns:
+            The same map instance, so builder calls chain.
+        """
+        return self.graph(
+            nodes, edges, weight=weight, name=name, visible=visible, **opts
+        )

@@ -17,7 +17,7 @@ def test_needs_reproject(dataset):
 
 def test_render_without_auto_cmap(dataset, mocker):
     """When auto_style supplies no cmap, _render leaves cmap unset (no opts['cmap']) and still draws."""
-    mocker.patch("digitalearth.static.maps.raster.auto_style", return_value={})
+    mocker.patch("digitalearth.static.builders.raster.auto_style", return_value={})
     m = Map(crs=dataset.epsg)
     m.field(dataset)  # cmap stays None -> the `opts['cmap'] = cmap` line is skipped
     assert len(m.layers) == 1
@@ -40,7 +40,7 @@ def test_prepare_skips_when_already_in_crs(dataset):
 
 def test_reproject_skips_a_string_spelling_of_the_dataset_crs(dataset, mocker):
     """A display CRS written ``"EPSG:<code>"`` is the dataset's own CRS, so no warp runs."""
-    warp = mocker.patch("digitalearth.static.maps.base.reproject")
+    warp = mocker.patch("digitalearth.static.builders.base.reproject")
     placed = Map(crs=f"EPSG:{dataset.epsg}")._reproject(dataset)
     assert warp.call_count == 0, f"reproject was called {warp.call_count} time(s)"
     assert placed is dataset, "the dataset should come back unchanged"
@@ -171,7 +171,7 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
         return ax
 
     mocker.patch(
-        "digitalearth.static.maps.decoration.add_features",
+        "digitalearth.static.builders.decoration.add_features",
         side_effect=fake_add_features,
     )
 
@@ -207,7 +207,7 @@ def test_coastlines_preserve_extent_of_plain_line(mocker):
         return ax
 
     mocker.patch(
-        "digitalearth.static.maps.decoration.add_features",
+        "digitalearth.static.builders.decoration.add_features",
         side_effect=fake_add_features,
     )
 
@@ -222,7 +222,7 @@ def test_coastlines_preserve_extent_of_plain_line(mocker):
 
 def test_to_feature_style_routes_color_and_drops_line_fill():
     """_to_feature_style maps singular keys to plural collection keys and ignores fill/edge on line layers."""
-    from digitalearth.static.maps.decoration import _to_feature_style
+    from digitalearth.static.builders.decoration import _to_feature_style
 
     poly = _to_feature_style(
         "polygon", {"color": "red", "edgecolor": "k", "linewidth": 2, "alpha": 0.5}
@@ -264,7 +264,7 @@ def test_basemap_tiles(dataset, mocker):
         return ax.imshow(np.zeros((2, 2, 3)))
 
     spy = mocker.patch(
-        "digitalearth.static.maps.decoration.add_tiles", side_effect=fake_add_tiles
+        "digitalearth.static.builders.decoration.add_tiles", side_effect=fake_add_tiles
     )
 
     m = Map(crs=3857)
@@ -292,7 +292,7 @@ def test_text_at_lonlat(dataset):
 
 def test_text_far_side_globe_skipped():
     """A lon/lat on the far side of a globe reprojects to non-finite and is skipped (no layer)."""
-    from digitalearth.static import projections
+    from digitalearth.static.view import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
     # (180, 0) is the antipode of the ortho centre -> off the visible disc
@@ -323,7 +323,7 @@ def test_annotate_with_arrow(dataset):
 
 def test_annotate_far_side_globe_skipped():
     """annotate() also skips an off-globe point, registering no layer."""
-    from digitalearth.static import projections
+    from digitalearth.static.view import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
     m.annotate(180.0, 0.0, "hidden", name="far")
@@ -360,7 +360,9 @@ def test_stock_img_tiles_graceful_offline(mocker, caplog):
 
     mocker.patch.object(Map, "basemap", side_effect=RuntimeError("no tiles"))
     m = Map(crs=3857)
-    with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.decoration"):
+    with caplog.at_level(
+        logging.DEBUG, logger="digitalearth.static.builders.decoration"
+    ):
         assert m.stock_img() is None
     assert any("tile basemap unavailable" in r.message for r in caplog.records), (
         "the swallowed exception should be logged at DEBUG so failures are diagnosable"
@@ -385,7 +387,9 @@ def test_stock_img_tiles_path(mocker):
         mocker: Stubs cleopatra's tile fetch.
     """
     tiles = object()
-    mocker.patch("digitalearth.static.maps.decoration.add_tiles", return_value=tiles)
+    mocker.patch(
+        "digitalearth.static.builders.decoration.add_tiles", return_value=tiles
+    )
     m = Map(domain=(-10.0, 35.0, 5.0, 45.0))
     m.ax.set_xlim(-10.0, 5.0)
     m.ax.set_ylim(35.0, 45.0)

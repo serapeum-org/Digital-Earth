@@ -498,7 +498,7 @@ class TestWarpingOnlyTheWindow:
 
         dataset = Dataset.read_file(RASTER)
         warped = mocker.spy(Dataset, "warped_view")
-        whole = mocker.patch("digitalearth.interactive.raster.reproject")
+        whole = mocker.patch("digitalearth.interactive.builders.raster.reproject")
         InteractiveMap(crs=3857).large_image(dataset, dynamic=False, max_pixels=64 * 64)
         assert warped.call_count == 1, "the read must go through a lazily warped view"
         assert not whole.called, "the whole raster must not be warped up front"

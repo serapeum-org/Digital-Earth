@@ -26,8 +26,8 @@ from pyramids.dataset import Dataset, GeoReference
 from shapely.geometry import Point
 
 from digitalearth.static import Map
-from digitalearth.static.renderer import Renderer
-from digitalearth.static.scene import Pick
+from digitalearth.static.core.scene import Pick
+from digitalearth.static.render.renderer import Renderer
 
 #: A 2x2 lat/lon geo-reference, so a field can be drawn without reading a file.
 GEO = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
