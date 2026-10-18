@@ -1,4 +1,4 @@
-"""Tests for digitalearth.static.textured_globe — the pyramids/cleopatra 3-D globe seam.
+"""Tests for digitalearth.static.globe.textured_globe — the pyramids/cleopatra 3-D globe seam.
 
 The cleopatra glyph is already tested upstream, so these cover the half Digital-Earth owns: turning geodata
 into an equirectangular texture at the right lon/lat, and mapping lon/lat back onto the drawn sphere.
@@ -21,8 +21,9 @@ from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
-from digitalearth.static import TexturedGlobe, textured_globe
-from digitalearth.static.textured_globe import (
+from digitalearth.static import TexturedGlobe
+from digitalearth.static.globe import textured_globe
+from digitalearth.static.globe.textured_globe import (
     _clip_ring,
     _interior_is_left,
     _limb_arc,
@@ -560,7 +561,9 @@ class TestFromProvider:
             seen["provider"], seen["kwargs"] = provider, kwargs
             return np.zeros((16, 32, 3), dtype=np.uint8)
 
-        monkeypatch.setattr("digitalearth.static.textured_globe.world_texture", _fake)
+        monkeypatch.setattr(
+            "digitalearth.static.globe.textured_globe.world_texture", _fake
+        )
         return seen
 
     def test_defaults_to_a_bulk_permitting_provider(self, fetched):
@@ -1508,7 +1511,7 @@ class TestReferenceGeography:
             parts: The lon/lat arrays natural_earth should return.
         """
         mocker.patch(
-            "digitalearth.static.textured_globe.natural_earth", return_value=parts
+            "digitalearth.static.globe.textured_globe.natural_earth", return_value=parts
         )
 
     def test_the_globe_offers_the_layers_the_flat_map_does(self):
@@ -2401,10 +2404,10 @@ class TestRenderLifecycle:
             globe.save_animation(destination)
 
     def test_save_animation_forwards_to_the_shared_saver(self, globe, monkeypatch):
-        """The globe delegates to digitalearth.static.animation rather than reimplementing the encode."""
+        """The globe delegates to digitalearth.static.render.animation rather than reimplementing the encode."""
         seen = {}
         monkeypatch.setattr(
-            "digitalearth.static.textured_globe.save_animation",
+            "digitalearth.static.globe.textured_globe.save_animation",
             lambda anim, path, **kw: seen.update(anim=anim, path=path, **kw) or path,
         )
         globe.spin(n_frames=2, interval=125)
@@ -2421,7 +2424,7 @@ class TestRenderLifecycle:
         """interval=125 ms is 8 fps; the saved clip should match what spin() was built for."""
         seen = {}
         monkeypatch.setattr(
-            "digitalearth.static.textured_globe.save_animation",
+            "digitalearth.static.globe.textured_globe.save_animation",
             lambda anim, path, **kw: seen.update(kw) or path,
         )
         globe.spin(n_frames=2, interval=125)
@@ -2433,7 +2436,7 @@ class TestRenderLifecycle:
     def test_an_explicit_rate_overrides_the_animations(self, globe, monkeypatch):
         seen = {}
         monkeypatch.setattr(
-            "digitalearth.static.textured_globe.save_animation",
+            "digitalearth.static.globe.textured_globe.save_animation",
             lambda anim, path, **kw: seen.update(kw) or path,
         )
         globe.spin(n_frames=2, interval=125)

@@ -6,7 +6,7 @@ One ``FigureSpec``, drawn on a different backend from the one that described it.
 
 Every layer carries a kind, a source and the portable half of its style; a tier's drawer fills the rest from
 its own defaults, and the foreign recipe name (``via``) is retargeted to the drawing tier's own (see
-:func:`digitalearth.static.renderer.retarget_via`). So a figure one 2-D tier described draws on any other 2-D
+:func:`digitalearth.static.render.renderer.retarget_via`). So a figure one 2-D tier described draws on any other 2-D
 tier. The 3-D tier is not part of this matrix — it draws terrain/volumes, not the flat fields and vectors these
 carry — and is covered same-tier by ``tests/three_d``.
 """

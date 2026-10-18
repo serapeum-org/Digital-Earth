@@ -10,16 +10,16 @@ layers stack (e.g. a filled field + line contours + points). ``Map`` (see :mod:`
 adds geospatial behaviour (display CRS, reprojection, basemap/coastlines). ``Pick`` is the value a
 ``Scene.on_pick`` callback is handed — exported because a caller annotating that callback needs the type,
 and the module path it lives in is the one this ``__init__`` exists to hide. ``TexturedGlobe`` (see
-:mod:`digitalearth.static.textured_globe`) is the 3-D outlier: a pyramids raster or tile basemap draped over
+:mod:`digitalearth.static.globe.textured_globe`) is the 3-D outlier: a pyramids raster or tile basemap draped over
 cleopatra's textured sphere on a matplotlib ``Axes3D``.
 
-Several hosts at once are laid out by :mod:`~digitalearth.static.figure`: ``grid`` builds the figure and
+Several hosts at once are laid out by :mod:`~digitalearth.static.panels.figure`: ``grid`` builds the figure and
 axes grid and binds a ``Map`` to each axes, ``shared_colorbar`` puts one bar across the panels, and ``facet``
 draws a raster stack as small multiples resolving the colour scale once over the whole stack.
 
-Alongside the scene hosts this backend owns its charts (:mod:`~digitalearth.static.charts`), statistical
-series (:mod:`~digitalearth.static.series`), time-series products (:mod:`~digitalearth.static.temporal`) and
-animation (:mod:`~digitalearth.static.animation`) — the matplotlib-rendering counterparts of what the other
+Alongside the scene hosts this backend owns its charts (:mod:`~digitalearth.static.charts.charts`), statistical
+series (:mod:`~digitalearth.static.charts.series`), time-series products (:mod:`~digitalearth.static.temporal`) and
+animation (:mod:`~digitalearth.static.render.animation`) — the matplotlib-rendering counterparts of what the other
 backends provide for themselves.
 
 Everything this backend exports is eager: the names below are the whole surface, and each is also a
@@ -27,16 +27,15 @@ package-root export (``from digitalearth import Map``). There is no lazily-resol
 has no PEP 562 ``__getattr__`` — an unknown attribute fails with Python's own message.
 """
 
-from digitalearth.static.figure import facet, grid, quickpanels, shared_colorbar
-from digitalearth.static.map import Map
-
 # Importable as ``from digitalearth.static import OffLimbError`` so a caller can catch it, but kept
 # out of ``__all__``: it is a signal the layer methods already answer, not part of the backend's
 # advertised surface, and the guard on that list expects every name it carries to be a package-root
 # export too.
-from digitalearth.static.maps.base import OffLimbError  # noqa: F401
-from digitalearth.static.scene import Pick, Scene
-from digitalearth.static.textured_globe import TexturedGlobe
+from digitalearth.static.builders.base import OffLimbError  # noqa: F401
+from digitalearth.static.core.scene import Pick, Scene
+from digitalearth.static.globe.textured_globe import TexturedGlobe
+from digitalearth.static.map import Map
+from digitalearth.static.panels.figure import facet, grid, quickpanels, shared_colorbar
 
 __all__ = [
     "Scene",

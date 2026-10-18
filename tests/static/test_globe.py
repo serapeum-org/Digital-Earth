@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.static import Map, projections
+from digitalearth.static import Map
+from digitalearth.static.view import projections
 
 
 def test_globe_frame_applied_on_render(dataset):
@@ -240,7 +241,7 @@ def _add_features_drawing(*verts):
 def test_natural_earth_flat_without_data_autoscales_to_layer(mocker):
     """On a flat map with nothing drawn yet, a Natural Earth layer autoscales the view to itself."""
     mocker.patch(
-        "digitalearth.static.maps.decoration.add_features",
+        "digitalearth.static.builders.decoration.add_features",
         side_effect=_add_features_drawing([(-50, -20), (50, 20)]),
     )
     m = Map(crs=4326)  # flat, no field -> had_data is False
@@ -306,7 +307,7 @@ def test_project_polygon_features_handles_multiple_parts():
 def test_land_fill_finite_on_globe(land_fc, mocker):
     """land() on a globe draws a finite, closed PolyCollection (Natural Earth mocked, no network)."""
     mocker.patch(
-        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+        "digitalearth.static.builders.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     m.land(name="fill")
@@ -319,7 +320,7 @@ def test_land_fill_finite_on_globe(land_fc, mocker):
 def test_land_fill_preserves_extent_and_zorder(land_fc, dataset, mocker):
     """land() keeps the axes limits and sits below the data raster (background z-order)."""
     mocker.patch(
-        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+        "digitalearth.static.builders.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(-75, 42), globe=True)
     m.field(dataset)
@@ -345,7 +346,7 @@ def test_ocean_below_land_zorder():
 def test_ocean_flat_uses_add_features(mocker):
     """On a flat map, ocean() draws the Natural-Earth ocean layer via add_features (not the disc shortcut)."""
     spy = mocker.patch(
-        "digitalearth.static.maps.decoration.add_features",
+        "digitalearth.static.builders.decoration.add_features",
         side_effect=_add_features_drawing([(-10, -10), (10, -10), (10, 10), (-10, 10)]),
     )
     m = Map(crs=4326)  # flat
@@ -364,7 +365,7 @@ def test_fill_globe_polygons_empty_returns_none():
 def test_lakes_fill_on_globe_above_land(land_fc, mocker):
     """lakes() fills polygons on a globe and sits just above land (so lakes show on the land)."""
     mocker.patch(
-        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+        "digitalearth.static.builders.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     m.lakes(name="water")
@@ -377,7 +378,9 @@ def test_lakes_fill_on_globe_above_land(land_fc, mocker):
 def test_rivers_drawn_as_lines_on_globe(mocker):
     """rivers() draws projected line segments (split at the limb) on a globe."""
     rv = [np.array([(-9, 39), (-8, 40), (-7, 41)], float)]
-    mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=rv)
+    mocker.patch(
+        "digitalearth.static.builders.decoration.natural_earth", return_value=rv
+    )
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
     m.rivers(name="rv")
     artists = m.artist("rv")
@@ -388,7 +391,7 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
 def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
     """land() fills finite rings on a cylindrical (rectangular-boundary) framed map, not just a disc."""
     mocker.patch(
-        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+        "digitalearth.static.builders.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=3857, globe=True)  # Web-Mercator boundary is a rectangle, not a circle
     m.land(name="fill")
@@ -400,7 +403,7 @@ def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
 def test_land_flat_uses_add_features(mocker):
     """On a flat map, land() draws the Natural-Earth polygons via add_features (not the globe path)."""
     spy = mocker.patch(
-        "digitalearth.static.maps.decoration.add_features",
+        "digitalearth.static.builders.decoration.add_features",
         side_effect=_add_features_drawing([(-10, -10), (10, -10), (10, 10), (-10, 10)]),
     )
     m = Map(crs=4326)  # flat -> _natural_earth flat branch even with polygon=True
@@ -425,7 +428,7 @@ def test_project_polygon_features_single_exterior_ring(mocker):
 def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
     """A globe base map (ocean + land + coastlines + data) frames and saves a non-empty PNG."""
     mocker.patch(
-        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+        "digitalearth.static.builders.decoration.natural_earth", return_value=land_fc
     )
     m = Map(crs=projections.orthographic(-30, 20), globe=True)
     m.ocean()
@@ -526,7 +529,7 @@ class TestOffLimbDraw:
             The guard keys on GDAL's specific "too few points survived" message. Anything else — a bad
             datum, an unparseable CRS — is a genuine error the caller needs to see, not a blank map.
         """
-        from digitalearth.static.maps.base import OffLimbError
+        from digitalearth.static.builders.base import OffLimbError
 
         def _broken(*_args, **_kwargs):
             raise RuntimeError("PROJ: proj_create: unrecognized format / unknown name")
@@ -546,7 +549,7 @@ class TestOffLimbDraw:
 
     def test_the_off_limb_error_names_the_cause(self, regional):
         """The typed error explains itself, rather than surfacing GDAL's wording."""
-        from digitalearth.static.maps.base import OffLimbError
+        from digitalearth.static.builders.base import OffLimbError
 
         m = Map(
             crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
@@ -708,7 +711,7 @@ class TestOffLimbEveryLayerKind:
         """
         import logging
 
-        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.builders.base"):
             hidden.field(regional)
         assert any("nothing drawn" in record.message for record in caplog.records), (
             f"the skip should be logged, got {[r.message for r in caplog.records]}"
@@ -757,7 +760,7 @@ class TestOffLimbEveryLayerKind:
             ),
             no_data_value=-9999.0,
         )
-        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.builders.base"):
             assert Map(crs=3857, figsize=(4, 4)).field(mislabelled).layer_ids == []
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert warnings, (
@@ -771,7 +774,7 @@ class TestOffLimbEveryLayerKind:
         """A rotation passes the far side every run, so those skips must stay at debug."""
         import logging
 
-        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.builders.base"):
             hidden.field(regional)
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING], (
             "a hidden hemisphere is expected on a globe and must not warn"
@@ -1052,7 +1055,9 @@ class TestOffLimbVectorLayers:
         import logging
 
         m = Map(crs=projections.orthographic(lon=-175, lat=15), figsize=(4, 4))
-        with caplog.at_level(logging.WARNING, logger="digitalearth.static.maps.base"):
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.builders.base"
+        ):
             m.points(points)
             assert m.layer_ids == []
         assert any("points" in record.getMessage() for record in caplog.records), (

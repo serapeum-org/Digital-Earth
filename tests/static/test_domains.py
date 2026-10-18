@@ -1,7 +1,7 @@
 """Tests for T5.1 — named domains and Map.set_domain extent setting.
 
 The table itself moved to `digitalearth.base.domains`, so every tier resolves a name to the same box; these
-read it through the static tier, which is what `Map.set_domain` uses. `digitalearth.static.domains` stays as
+read it through the static tier, which is what `Map.set_domain` uses. `digitalearth.static.core.domains` stays as
 a re-export and is covered by `tests/base/test_domains_shim.py`.
 """
 

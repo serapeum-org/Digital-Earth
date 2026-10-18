@@ -5,7 +5,7 @@ cleopatra glyph with ``ax=self.ax``/``fig=self.fig``, calls its ``plot(...)``, a
 mappable via :meth:`_add_layer`. A **colour key** — :meth:`colorbar` or :meth:`legend` — is not figure
 decoration but part of the layer it explains: both record a
 :class:`~digitalearth.base.spec.encoding.Guide` on that layer's colour encoding and then draw from the
-record, so the key moves, hides and disappears with the layer (:mod:`digitalearth.static.guides`).
+record, so the key moves, hides and disappears with the layer (:mod:`digitalearth.static.legends.legend`).
 
 Because every cleopatra 0.10.0 glyph accepts a shared ``ax``/``fig`` and can suppress its own colorbar
 (``add_colorbar=False`` on ``ArrayGlyph``), the Scene can stack any number of layers on one axes and draw a
@@ -21,7 +21,7 @@ in ``layers``, which is why the description is not simply read off that list.
 
 The description is what the drawing is *made from*, not a note beside it. Every builder ends at
 :meth:`Scene._draw`, which records the layer and then asks
-:class:`~digitalearth.static.renderer.Renderer` to draw it — so the layer is built once, by the drawer that
+:class:`~digitalearth.static.render.renderer.Renderer` to draw it — so the layer is built once, by the drawer that
 replays its recipe. A layer whose drawer declined it (data outside the display CRS, a label on the far side
 of a globe) is dropped from the description again, so a figure never names something that was not drawn.
 """
@@ -67,21 +67,21 @@ from digitalearth.base.spec import (
 from digitalearth.base.spec._serial import thawed_value, travels_in_a_figure
 from digitalearth.base.spec.layer import layer_name
 from digitalearth.static.capabilities import CAPABILITIES
-from digitalearth.static.guides import (
+from digitalearth.static.legends.legend import (
     GUIDE_KIND_KEY,
     GUIDE_LABELS_KEY,
     bar_refusal,
     color_encoding,
     guide_kind,
 )
-from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
-from digitalearth.static.renderer import (
+from digitalearth.static.render.compat import plot_takes, prepare_plot_kwargs
+from digitalearth.static.render.renderer import (
     DrawnLayer,
     Renderer,
     drawing_opts,
 )
-from digitalearth.static.renderer import _detach_guide as detach_guide
-from digitalearth.static.renderer import _is_visible as artist_is_visible
+from digitalearth.static.render.renderer import _detach_guide as detach_guide
+from digitalearth.static.render.renderer import _is_visible as artist_is_visible
 
 #: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
 #: the constant is named — and spelled the same as every other tier's — so a reader of :attr:`Scene.figure_spec`
@@ -128,7 +128,7 @@ def placement_of(record: "LayerRecord") -> str | None:
         - An array is placed at its indices; a raster read from a file is placed in the display CRS:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.scene import LayerRecord, placement_of
+            >>> from digitalearth.static.core.scene import LayerRecord, placement_of
             >>> placement_of(LayerRecord("raster", source=np.zeros((2, 2))))
             'at array indices'
             >>> placement_of(LayerRecord("raster", source="dem.tif"))
@@ -137,7 +137,7 @@ def placement_of(record: "LayerRecord") -> str | None:
             ```
         - A caller's own artist is in the caller's own coordinates, so the figure makes no claim about it:
             ```python
-            >>> from digitalearth.static.scene import LayerRecord, placement_of
+            >>> from digitalearth.static.core.scene import LayerRecord, placement_of
             >>> print(placement_of(LayerRecord("custom:matplotlib", held=(None, None, None))))
             None
 
@@ -188,7 +188,7 @@ def _with_described_opts(
 def drawing_style(scene: Any, layer: LayerSpec) -> dict[str, Any]:
     """Return every engine keyword a layer is drawn with: the described half under the held half.
 
-    The pair :func:`~digitalearth.static.renderer.drawing_opts` alone used to be. A description carries the
+    The pair :func:`~digitalearth.static.render.renderer.drawing_opts` alone used to be. A description carries the
     plain keywords (see :func:`~digitalearth.base.spec._serial.travels_in_a_figure`) so a figure read back on
     another scene still draws the caller's ``vmin``, ``alpha``, ``color`` and ``title`` rather than the
     engine's defaults; the scene that built the layer holds all of them, as the very objects passed, and
@@ -216,7 +216,7 @@ def drawing_style(scene: Any, layer: LayerSpec) -> dict[str, Any]:
             >>> matplotlib.use("Agg")
             >>> from digitalearth.base.spec import LayerSpec, Symbology
             >>> from digitalearth.static import Scene
-            >>> from digitalearth.static.scene import drawing_style
+            >>> from digitalearth.static.core.scene import drawing_style
             >>> layer = LayerSpec("a", "raster", symbology=Symbology(props={"opts": {"vmin": 1.0}}))
             >>> scene = Scene()
             >>> drawing_style(scene, layer)
@@ -238,7 +238,7 @@ class Pick:
     every other call on this tier takes: :meth:`Scene.get_layer` describes it, :meth:`Scene.set_visible`
     hides it, :meth:`Scene.remove_layer` takes it off. An artist is the engine's object and says nothing
     about which layer put it there — which is the lookup
-    :meth:`~digitalearth.static.renderer.Renderer.layer_of` exists to do.
+    :meth:`~digitalearth.static.render.renderer.Renderer.layer_of` exists to do.
 
     Attributes:
         layer_id: The layer the pick reports: the **topmost** of the layers under the pointer, which is
@@ -342,7 +342,7 @@ class LayerRecord:
         - The record a raster builder writes, beside the drawing it made:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.static.scene import LayerRecord
+            >>> from digitalearth.static.core.scene import LayerRecord
             >>> record = LayerRecord("raster", source="dem.tif", symbology=Symbology.of(opacity=0.5))
             >>> record.kind, record.source, record.band, record.visible
             ('raster', 'dem.tif', None, True)
@@ -350,7 +350,7 @@ class LayerRecord:
             ```
         - A backdrop is the same kind drawn somewhere else, which is what ``band`` is for:
             ```python
-            >>> from digitalearth.static.scene import LayerRecord
+            >>> from digitalearth.static.core.scene import LayerRecord
             >>> LayerRecord("raster", source="relief.tif", band="underlay").band
             'underlay'
 
@@ -380,7 +380,7 @@ class Scene(WatermarkMixin):
     record of what it has drawn and its own "have I drawn here yet" flag, and a cleopatra glyph clears the
     axes on a scene's first render: so the second scene wipes the first one's drawing while the first goes
     on describing it, and the figure it reports names a layer whose artist is gone. Lay several maps out as
-    several axes (:func:`~digitalearth.static.figure.grid` does), and give each its own.
+    several axes (:func:`~digitalearth.static.panels.figure.grid` does), and give each its own.
 
     Args:
         ax: An existing axes to draw on. When ``None`` a new figure/axes is created. One axes, one scene —
@@ -466,7 +466,7 @@ class Scene(WatermarkMixin):
                 handler it connected. This is #371, **resolved** (R2-L12): the old code stored the `None` it
                 was passed and reached ``pyplot.close(None)``, closing whichever figure was *current*, so a
                 borrowed figure was spared or closed only by luck; now it is spared on purpose, the way
-                :meth:`~digitalearth.static.textured_globe.TexturedGlobe.close` always has. Give each scene
+                :meth:`~digitalearth.static.globe.textured_globe.TexturedGlobe.close` always has. Give each scene
                 an axes of its own all the same: a second scene on the same axes clears what the first drew
                 on its opening render, and the first still describes it (see the class docstring).
             fig: The figure `ax` belongs to; taken from `ax` when omitted — its **root** figure, for an
@@ -841,7 +841,7 @@ class Scene(WatermarkMixin):
 
         The description's half of what :meth:`_record_class_edges` publishes on :attr:`last_breaks`, and read
         the same way — off the artist that was drawn (see
-        :func:`~digitalearth.static.guides.color_encoding`). Without it no layer on this tier published a
+        :func:`~digitalearth.static.legends.legend.color_encoding`). Without it no layer on this tier published a
         colour :class:`~digitalearth.base.spec.encoding.Encoding` at all, and a
         :class:`~digitalearth.base.spec.encoding.Guide` has nothing to hang on: `Encoding.__post_init__`
         takes exactly one of a constant or a field, so an unbound colour is no binding at all (#261, order
@@ -850,7 +850,7 @@ class Scene(WatermarkMixin):
         Done here rather than in the builder because the builder never opens the source: it records a band
         **number**, and the band's name — and the limits the render settled on — exist only once the glyph
         has drawn. Done here rather than in the renderer because
-        :meth:`~digitalearth.static.renderer.Renderer.apply` deliberately does not touch the description, so
+        :meth:`~digitalearth.static.render.renderer.Renderer.apply` deliberately does not touch the description, so
         a layer drawn again keeps the encoding it published the first time.
 
         Args:
@@ -881,7 +881,7 @@ class Scene(WatermarkMixin):
         ``BoundaryNorm`` it leaves on the mappable is what matplotlib actually colours through — so a record
         taken from anywhere else could disagree with the picture, which is the failure mode this tier has had
         before. Done here, in the one funnel every drawn layer passes through, because ``scheme=`` is a
-        declared parameter of :meth:`~digitalearth.static.maps.vector.VectorMixin.choropleth` and travels in
+        declared parameter of :meth:`~digitalearth.static.builders.vector.VectorMixin.choropleth` and travels in
         ``**opts`` on every other classifying builder; a record written into one of them would have left the
         rest silent.
 
@@ -991,7 +991,7 @@ class Scene(WatermarkMixin):
         keep the panel — and the panel's title, which rides on it (:meth:`set_title`) — in step with it.
 
         The **figure's** heading is read off the figure itself rather than remembered, because this tier's
-        figure is not always this scene's alone: :func:`~digitalearth.static.figure.grid` titles a figure
+        figure is not always this scene's alone: :func:`~digitalearth.static.panels.figure.grid` titles a figure
         several panels share, and tells a caller who wants to style that heading to call ``fig.suptitle``
         on the returned figure. One derivation covers both, and covers a scene whose figure was handed in
         (``Map(fig=...)``). It is normalised by the same :meth:`_recorded_title` the panel's title goes
@@ -1035,7 +1035,7 @@ class Scene(WatermarkMixin):
         raised, so `layer_ids`, `figure_spec` and `to_dict` all advertised a layer that was never drawn and
         could not be (review H7).
 
-        There is no rollback written here, and that is deliberate: :meth:`~digitalearth.static.renderer.Renderer.apply`
+        There is no rollback written here, and that is deliberate: :meth:`~digitalearth.static.render.renderer.Renderer.apply`
         is atomic on this tier. It snapshots what the axes, this record and the colorbar registry held, and
         puts all three back before it re-raises — so by the time a refusal reaches this method the axes is
         already as it was, and the only thing left to do is not install the description. The 3-D scene
@@ -1111,7 +1111,7 @@ class Scene(WatermarkMixin):
             Whatever that layer's drawer produced, which is exactly what its builder used to return: the
             mappable of a field render, the `PolyCollection` of a fill, the `LineCollection` of a line
             layer, the **list** of `Annotation` of a
-            :meth:`~digitalearth.static.maps.vector.VectorMixin.labels` layer.
+            :meth:`~digitalearth.static.builders.vector.VectorMixin.labels` layer.
 
             So it is not always a matplotlib artist, because not every drawer produces one object on the
             axes. A **graticule** is the case to know: its drawer's value is the list of projected
@@ -1424,9 +1424,9 @@ class Scene(WatermarkMixin):
         Note:
             This reaches the picture and not only the description. matplotlib paints the artists of one
             z-order in the order they were added, so the renderer re-arranges the layers it holds
-            (:meth:`~digitalearth.static.renderer.Renderer._repaint`) — and because that stops at a z-order
+            (:meth:`~digitalearth.static.render.renderer.Renderer._repaint`) — and because that stops at a z-order
             boundary, it also deals the layers' own z-orders back out along the new order
-            (:func:`~digitalearth.static.renderer._rank_zorders`), which is what moves a point layer under a
+            (:func:`~digitalearth.static.render.renderer._rank_zorders`), which is what moves a point layer under a
             raster rather than only saying so. The layers keep the z-orders they held between them, so the
             move stays inside their slice of the stack and nothing outside it shifts; a ``zorder=`` a caller
             gave one of the moved layers is superseded, the move being the later word on where it is painted.
@@ -1536,7 +1536,7 @@ class Scene(WatermarkMixin):
         """Where the scene is looking, as a value.
 
         A bare :class:`Scene` is a figure host rather than a map — it has no display CRS to place anything in
-        — so the view is the default one. :class:`~digitalearth.static.maps.base.GeoLayerBase` overrides this
+        — so the view is the default one. :class:`~digitalearth.static.builders.base.GeoLayerBase` overrides this
         with the CRS, domain and globe flag it was built with.
 
         Returns:
@@ -1745,7 +1745,7 @@ class Scene(WatermarkMixin):
         narrows that clear to the glyph's own artists. Only after the first: the opening render still
         replaces, so a scene handed an axes something else was drawn on supersedes it rather than stacking
         on it. A rebuilt layer composes too and still leaves one copy of itself, because
-        :meth:`~digitalearth.static.renderer.Renderer.remove` has already taken the previous artists off.
+        :meth:`~digitalearth.static.render.renderer.Renderer.remove` has already taken the previous artists off.
 
         Args:
             glyph: An already-constructed cleopatra glyph bound to this Scene's ``ax``/``fig``.
@@ -1756,7 +1756,7 @@ class Scene(WatermarkMixin):
             **plot_kwargs: Keyword arguments forwarded to ``glyph.plot`` (e.g. ``kind``, ``outline_only``).
 
         Returns:
-            A :class:`~digitalearth.static.renderer.DrawnLayer` holding the mappable, the glyph that made it
+            A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the mappable, the glyph that made it
             and the artists the layer owns — what the renderer records so the layer can later be hidden or
             taken off the axes.
         """
@@ -1929,7 +1929,7 @@ class Scene(WatermarkMixin):
 
         The order is the whole of order 24: the guide is part of the layer's description, so the key moves
         with the layer, hides with it, goes away with it, and survives ``to_dict()`` → ``from_dict()``. The
-        drawing is then :meth:`~digitalearth.static.renderer.Renderer.draw_guide`'s, which is the one place
+        drawing is then :meth:`~digitalearth.static.render.renderer.Renderer.draw_guide`'s, which is the one place
         a key is put on this figure.
 
         The tree is written **directly** rather than through :meth:`_change`: a guide is a change to the
@@ -1939,7 +1939,7 @@ class Scene(WatermarkMixin):
         Args:
             layer: The layer being keyed.
             kind: ``"colorbar"`` or ``"legend"`` — which furniture the guide asks for
-                (:data:`~digitalearth.static.guides.GUIDE_KINDS`).
+                (:data:`~digitalearth.static.legends.legend.GUIDE_KINDS`).
             title: What the key is called, already resolved (see :meth:`_title_for`).
             visible: Whether the key is drawn. Recorded either way, so switching it back on needs no second
                 description.
@@ -1948,7 +1948,7 @@ class Scene(WatermarkMixin):
             **kwargs: Styling forwarded to the matplotlib colorbar or legend.
 
         Raises:
-            ValueError: from :func:`~digitalearth.static.guides.draw_guide`, for a key this layer's scale
+            ValueError: from :func:`~digitalearth.static.legends.legend.draw_guide`, for a key this layer's scale
                 cannot be drawn as — after the description has been put back, so a refused call leaves the
                 figure describing the key it had rather than one it could not draw.
         """
@@ -1997,7 +1997,7 @@ class Scene(WatermarkMixin):
 
         :meth:`_record_key` keeps the rule on the calling path — one `legend()` displaces the last — so two
         shown swatch guides can only reach this scene on a figure built where the rule does not exist and
-        read back onto it. :meth:`~digitalearth.static.renderer.Renderer.apply` then draws each layer in
+        read back onto it. :meth:`~digitalearth.static.render.renderer.Renderer.apply` then draws each layer in
         turn, one legend wins the axes' single slot, and until this ran the *descriptions* both went on
         saying ``show=True``. That is the worse half to leave wrong: a description is what travels to
         another tier and what a reader trusts when the figure is not in front of them, and order 24 exists
@@ -2019,7 +2019,7 @@ class Scene(WatermarkMixin):
         restyled and added layers in that order, so the last legend drawn is not reliably the topmost. The
         keeper's key is therefore **drawn again** rather than assumed, which both puts the axes on the
         stated layer and — through
-        :meth:`~digitalearth.static.renderer.Renderer._displaced` — takes every other layer's orphaned
+        :meth:`~digitalearth.static.render.renderer.Renderer._displaced` — takes every other layer's orphaned
         legend out of the drawn record.
 
         The losers are switched **off**, not cleared, so ``legend(layer_id)`` on any of them takes the key
@@ -2027,7 +2027,7 @@ class Scene(WatermarkMixin):
 
         Called from :meth:`_change`, which is the one path a description is installed by — rather than from
         the renderer, which draws the picture and must not write descriptions
-        (:meth:`~digitalearth.static.renderer.Renderer.apply`).
+        (:meth:`~digitalearth.static.render.renderer.Renderer.apply`).
         """
         claimed = [
             layer_id
@@ -2047,7 +2047,7 @@ class Scene(WatermarkMixin):
     def _displace_other_legends(self, keeper: str) -> None:
         """Switch off every other layer's swatch key, because the axes holds one legend.
 
-        The description half of what :meth:`~digitalearth.static.renderer.Renderer._displaced` does to the
+        The description half of what :meth:`~digitalearth.static.render.renderer.Renderer._displaced` does to the
         drawing. matplotlib keeps a single legend per axes, so keying a second layer takes the first
         layer's swatches off the figure — :meth:`legend` has always documented that — and the first layer
         went on carrying ``Guide(show=True)`` on its encoding. A figure written out then claimed two swatch
@@ -2575,7 +2575,7 @@ class Scene(WatermarkMixin):
         different thing: a notebook's ``%matplotlib widget``, a Qt or Tk window, or a test driving the
         canvas directly. There the canvas does report clicks, and the only piece missing was the one this
         repo owns — turning the artist matplotlib hands over back into the **layer id** the caller named
-        the layer by (:meth:`~digitalearth.static.renderer.Renderer.layer_of`).
+        the layer by (:meth:`~digitalearth.static.render.renderer.Renderer.layer_of`).
 
         It is a click rather than matplotlib's own ``pick_event``: that one fires only for artists whose
         ``set_picker`` was set, and the artists here are built by cleopatra's glyphs and by this tier's
@@ -2780,7 +2780,7 @@ class Scene(WatermarkMixin):
 
         The scene's half of the gesture: it is what knows which axes is its own, and what builds the
         public value out of the renderer's answer. The hit test itself is
-        :meth:`~digitalearth.static.renderer.Renderer.hits`, which holds the artist-to-layer mapping.
+        :meth:`~digitalearth.static.render.renderer.Renderer.hits`, which holds the artist-to-layer mapping.
 
         Args:
             event: The matplotlib ``MouseEvent`` the canvas delivered.
@@ -2840,14 +2840,14 @@ class Scene(WatermarkMixin):
         scene — a :class:`~digitalearth.static.map.Map`, a chart, or a bare :class:`Scene`.
 
         **Figure furniture, not a layer, and a deliberate ``-> Any`` carve-out.** Like
-        :meth:`~digitalearth.static.maps.vector.VectorMixin.quiverkey` and :meth:`save`, the return *is* the
+        :meth:`~digitalearth.static.builders.vector.VectorMixin.quiverkey` and :meth:`save`, the return *is* the
         point of the call — the inset ``Axes`` comes back so the mark can be repositioned or restyled — so it
         is annotated ``-> Any`` rather than the ``-> Self`` the chaining contract makes the default for a
         builder it only resembles. It registers **no layer**: it adds no entry to :attr:`layer_ids`, writes
         nothing to the figure's description, and so is **not** reachable through :meth:`artist`
         (``scene.artist("stamp")`` raises `KeyError`). It is figure furniture rather than a data builder,
         which is why :meth:`quiverkey`'s furniture note names it — with :meth:`save` — as handing back its own
-        object yet sitting *beside* :meth:`~digitalearth.static.maps.raster.RasterMixin.field`'s Returns census
+        object yet sitting *beside* :meth:`~digitalearth.static.builders.raster.RasterMixin.field`'s Returns census
         of the builder carve-outs (which enumerates ``quiverkey`` and ``stock_img``) rather than inside it.
         ``tests/static/test_stamp_is_furniture.py`` pins both halves.
 
@@ -2981,14 +2981,14 @@ class Scene(WatermarkMixin):
         bare ``Map()``/``Scene()``, and so every :meth:`from_figure` round trip) is closed here; a figure
         handed in through ``ax=``/``fig=`` is **spared**, because it belongs to whoever laid it out. This is
         #371, resolved: a borrowed figure is spared (R2-L12), which brings this into line with
-        :meth:`~digitalearth.static.textured_globe.TexturedGlobe.close`, always gated the same way. The
+        :meth:`~digitalearth.static.globe.textured_globe.TexturedGlobe.close`, always gated the same way. The
         object table and the pick handler are released on **every** close regardless — see below.
 
         .. warning::
             When the scene owns the figure, this closes the **entire** ``self.fig``. The panels returned by
-            :func:`~digitalearth.static.figure.grid` share **one** figure none of them owns (each is built
+            :func:`~digitalearth.static.panels.figure.grid` share **one** figure none of them owns (each is built
             with ``ax=``/``fig=``), so closing a single panel no longer closes its siblings — and an
-            :meth:`~digitalearth.static.maps.inset.InsetMixin.inset` locator, drawn on the host's own
+            :meth:`~digitalearth.static.builders.inset.InsetMixin.inset` locator, drawn on the host's own
             figure, likewise spares the host when closed. Close the scene that **made** the figure (or call
             :meth:`save` and close it yourself) to take the whole figure down. The pick handler this scene
             connected comes off on close whether the figure is owned or borrowed, so a closed borrowed-axes

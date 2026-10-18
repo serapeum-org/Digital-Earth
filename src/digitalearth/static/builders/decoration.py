@@ -69,9 +69,9 @@ from digitalearth.base.domains import resolve_domain
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.static import projections
-from digitalearth.static.renderer import DrawnLayer, artists_added
-from digitalearth.static.scene import LayerRecord, drawing_style
+from digitalearth.static.core.scene import LayerRecord, drawing_style
+from digitalearth.static.render.renderer import DrawnLayer, artists_added
+from digitalearth.static.view import projections
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ def _a_font_is_already_chosen(opts: dict[str, Any]) -> bool:
     Examples:
         - Each spelling of a family is recognised as one, including the one a list of spellings missed:
             ```python
-            >>> from digitalearth.static.maps.decoration import _a_font_is_already_chosen
+            >>> from digitalearth.static.builders.decoration import _a_font_is_already_chosen
             >>> [
             ...     _a_font_is_already_chosen({key: "DejaVu Sans"})
             ...     for key in ("font", "font_properties", "fontproperties", "family", "fontname")
@@ -129,7 +129,7 @@ def _a_font_is_already_chosen(opts: dict[str, Any]) -> bool:
             ```
         - A call that styles the label some other way has chosen no font:
             ```python
-            >>> from digitalearth.static.maps.decoration import _a_font_is_already_chosen
+            >>> from digitalearth.static.builders.decoration import _a_font_is_already_chosen
             >>> _a_font_is_already_chosen({"fontsize": 12, "color": "red"})
             False
 
@@ -188,7 +188,7 @@ def _names_a_font_family(name: str) -> bool:
     Examples:
         - A family matplotlib ships, whatever case it is written in, and a generic alias:
             ```python
-            >>> from digitalearth.static.maps.decoration import _names_a_font_family
+            >>> from digitalearth.static.builders.decoration import _names_a_font_family
             >>> (_names_a_font_family("DejaVu Serif"), _names_a_font_family("dejavu serif"))
             (True, True)
             >>> (_names_a_font_family("sans-serif"), _names_a_font_family("monospace"))
@@ -197,7 +197,7 @@ def _names_a_font_family(name: str) -> bool:
             ```
         - A layer name, and a string that is only a *pattern* for a family:
             ```python
-            >>> from digitalearth.static.maps.decoration import _names_a_font_family
+            >>> from digitalearth.static.builders.decoration import _names_a_font_family
             >>> (_names_a_font_family("wells"), _names_a_font_family("DejaVu Serif-2"))
             (False, False)
 
@@ -250,14 +250,14 @@ def _font_family_a_name_still_stands_for(
     Examples:
         - A family matplotlib ships is read as the font as well as the layer's name:
             ```python
-            >>> from digitalearth.static.maps.decoration import _font_family_a_name_still_stands_for
+            >>> from digitalearth.static.builders.decoration import _font_family_a_name_still_stands_for
             >>> _font_family_a_name_still_stands_for("DejaVu Serif", {})
             {'fontname': 'DejaVu Serif'}
 
             ```
         - An ordinary layer name is not a font, and a call that already chose one is left alone:
             ```python
-            >>> from digitalearth.static.maps.decoration import _font_family_a_name_still_stands_for
+            >>> from digitalearth.static.builders.decoration import _font_family_a_name_still_stands_for
             >>> _font_family_a_name_still_stands_for("wells", {})
             {}
             >>> _font_family_a_name_still_stands_for("DejaVu Serif", {"fontname": "DejaVu Sans"})
@@ -269,7 +269,7 @@ def _font_family_a_name_still_stands_for(
         - A name that is only a fontconfig *pattern* for a family is not that family, which matters
           because ``-2`` is what a duplicate name is suffixed with:
             ```python
-            >>> from digitalearth.static.maps.decoration import _font_family_a_name_still_stands_for
+            >>> from digitalearth.static.builders.decoration import _font_family_a_name_still_stands_for
             >>> _font_family_a_name_still_stands_for("DejaVu Serif-2", {})
             {}
 
@@ -362,7 +362,7 @@ def _to_feature_style(kind: str, style: dict) -> dict:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+    from digitalearth.static.builders.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -506,7 +506,7 @@ def _service_base_url(url: Any) -> str:
     Examples:
         - A plain service URL is handed back as it was given, with no warning to ignore:
             ```python
-            >>> from digitalearth.static.maps.decoration import _service_base_url
+            >>> from digitalearth.static.builders.decoration import _service_base_url
             >>> _service_base_url("https://example.org/geoserver/wms")
             'https://example.org/geoserver/wms'
 
@@ -514,7 +514,7 @@ def _service_base_url(url: Any) -> str:
         - One carrying a token keeps only its base, and the warning names every parameter it lost:
             ```python
             >>> import warnings
-            >>> from digitalearth.static.maps.decoration import _service_base_url
+            >>> from digitalearth.static.builders.decoration import _service_base_url
             >>> with warnings.catch_warnings(record=True) as caught:
             ...     warnings.simplefilter("always")
             ...     _service_base_url("https://example.org/wms?token=s3cret&SERVICE=WMS")
@@ -569,7 +569,7 @@ def _describe_ogc_provider(source: Any) -> dict[str, Any] | None:
         - A WMS service is described by its own fields, and the token it carries stays on the object:
             ```python
             >>> from cleopatra.basemap.ogc import WMSProvider
-            >>> from digitalearth.static.maps.decoration import _describe_ogc_provider
+            >>> from digitalearth.static.builders.decoration import _describe_ogc_provider
             >>> service = WMSProvider(
             ...     "https://example.org/geoserver/wms", "topp:states", extra_params={"token": "s3cret"}
             ... )
@@ -584,7 +584,7 @@ def _describe_ogc_provider(source: Any) -> dict[str, Any] | None:
             ```python
             >>> import warnings
             >>> from cleopatra.basemap.ogc import WMSProvider
-            >>> from digitalearth.static.maps.decoration import _describe_ogc_provider
+            >>> from digitalearth.static.builders.decoration import _describe_ogc_provider
             >>> service = WMSProvider("https://example.org/wms?token=s3cret", "topp:states")
             >>> with warnings.catch_warnings(record=True) as caught:
             ...     warnings.simplefilter("always")
@@ -597,7 +597,7 @@ def _describe_ogc_provider(source: Any) -> dict[str, Any] | None:
             ```
         - Anything that is not an OGC provider is not this function's business, and says so:
             ```python
-            >>> from digitalearth.static.maps.decoration import _describe_ogc_provider
+            >>> from digitalearth.static.builders.decoration import _describe_ogc_provider
             >>> print(_describe_ogc_provider("CartoLight"))
             None
 
@@ -658,7 +658,7 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
           empty because the description never carried it:
             ```python
             >>> from cleopatra.basemap.ogc import WMSProvider
-            >>> from digitalearth.static.maps.decoration import (
+            >>> from digitalearth.static.builders.decoration import (
             ...     _describe_ogc_provider, _ogc_provider_from_description,
             ... )
             >>> described = _describe_ogc_provider(
@@ -672,7 +672,7 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
         - A field this release does not take, and one it requires but the figure omits, are both named
           rather than left to the constructor:
             ```python
-            >>> from digitalearth.static.maps.decoration import _ogc_provider_from_description
+            >>> from digitalearth.static.builders.decoration import _ogc_provider_from_description
             >>> base = {"ogc": "wms", "url": "https://example.org/wms", "layers": "topp:states"}
             >>> try:  # doctest: +NORMALIZE_WHITESPACE
             ...     _ogc_provider_from_description({**base, "newthing": 1})
@@ -689,7 +689,7 @@ def _ogc_provider_from_description(described: Mapping[str, Any]) -> Any:
             ```
         - A kind this version has never heard of is named too, with the kinds it does know:
             ```python
-            >>> from digitalearth.static.maps.decoration import _ogc_provider_from_description
+            >>> from digitalearth.static.builders.decoration import _ogc_provider_from_description
             >>> try:  # doctest: +NORMALIZE_WHITESPACE
             ...     _ogc_provider_from_description({"ogc": "wcs", "url": "https://example.org/wcs"})
             ... except ValueError as error:
@@ -782,21 +782,21 @@ def _resolve_tile_source(source: Any) -> Any:
     Examples:
         - No source at all resolves to the shared default, in this engine's spelling:
             ```python
-            >>> from digitalearth.static.maps.decoration import _resolve_tile_source
+            >>> from digitalearth.static.builders.decoration import _resolve_tile_source
             >>> _resolve_tile_source(None)
             'CartoDB.Positron'
 
             ```
         - A shared name is translated case-insensitively, and anything else passes through:
             ```python
-            >>> from digitalearth.static.maps.decoration import _resolve_tile_source
+            >>> from digitalearth.static.builders.decoration import _resolve_tile_source
             >>> (_resolve_tile_source("cartodark"), _resolve_tile_source("Esri.WorldImagery"))
             ('CartoDB.DarkMatter', 'Esri.WorldImagery')
 
             ```
         - A figure's record of a WMS service is rebuilt into the provider that tiles it:
             ```python
-            >>> from digitalearth.static.maps.decoration import _resolve_tile_source
+            >>> from digitalearth.static.builders.decoration import _resolve_tile_source
             >>> stored = {"ogc": "wms", "url": "https://example.test/wms", "layers": "topp:states"}
             >>> _resolve_tile_source(stored).layers
             'topp:states'
@@ -826,7 +826,7 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``Text``, or ``None`` when the point
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``Text``, or ``None`` when the point
         is on the far side of a globe and reprojects to nothing: a layer that was not drawn rather than an
         empty one.
     """
@@ -852,7 +852,7 @@ def draw_annotate(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``Annotation``, or ``None`` when the
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``Annotation``, or ``None`` when the
         annotated point is on the far side of a globe.
     """
     props = dict(layer.symbology.props)
@@ -889,7 +889,7 @@ class _BatchedLonLat:
           and a part with no vertices is dropped rather than carried as an empty one:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.maps.decoration import _BatchedLonLat
+            >>> from digitalearth.static.builders.decoration import _BatchedLonLat
             >>> parts = [
             ...     np.array([[0.0, 0.0], [10.0, 0.0], [20.0, 0.0]]),
             ...     np.empty((0, 2)),
@@ -906,7 +906,7 @@ class _BatchedLonLat:
           bend with the projection — the geometry the fill path needs:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.maps.decoration import _BatchedLonLat
+            >>> from digitalearth.static.builders.decoration import _BatchedLonLat
             >>> edge = [np.array([[0.0, 0.0], [20.0, 0.0]])]
             >>> [len(part) for part in _BatchedLonLat(3857, edge).kept]
             [2]
@@ -1050,8 +1050,8 @@ class _ProjectedReference:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.static import Map, projections
-            >>> from digitalearth.static.maps.decoration import _ProjectedReference
+            >>> from digitalearth.static import Map; from digitalearth.static.view import projections
+            >>> from digitalearth.static.builders.decoration import _ProjectedReference
             >>> cache = _ProjectedReference()
             >>> m = Map(crs=projections.orthographic(0, 0), globe=True)
             >>> first = cache.projected(m, "coastline", "110m")
@@ -1074,8 +1074,8 @@ class _ProjectedReference:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import numpy as np
-            >>> from digitalearth.static import Map, projections
-            >>> from digitalearth.static.maps.decoration import _ProjectedReference
+            >>> from digitalearth.static import Map; from digitalearth.static.view import projections
+            >>> from digitalearth.static.builders.decoration import _ProjectedReference
             >>> cache = _ProjectedReference()
             >>> m = Map(crs=projections.orthographic(0, 0), globe=True)
             >>> kept = cache.projected(m, "coastline", "110m")
@@ -1094,8 +1094,8 @@ class _ProjectedReference:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.static import Map, projections
-            >>> from digitalearth.static.maps.decoration import _ProjectedReference
+            >>> from digitalearth.static import Map; from digitalearth.static.view import projections
+            >>> from digitalearth.static.builders.decoration import _ProjectedReference
             >>> cache = _ProjectedReference()
             >>> m = Map(crs=projections.orthographic(0, 0), globe=True)
             >>> lines = cache.projected(m, "land", "110m")
@@ -1262,7 +1262,7 @@ def draw_natural_earth(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer |
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding whatever that path produced — the
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding whatever that path produced — the
         ``PolyCollection`` of a globe fill, the polylines of a globe line layer, the axes on a flat map — or
         ``None`` when the whole layer is on the far side of the globe, which is a layer that was not drawn.
     """
@@ -1331,7 +1331,7 @@ def _axes_extent(axes: Any) -> tuple[float, float, float, float] | None:
     """Return what an axes is looking at as ``(xmin, xmax, ymin, ymax)``, or ``None`` when it is unframed.
 
     The ordering is matplotlib's own, because the axes are what it is read off and written back to; it is
-    **not** what :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` takes, which reads
+    **not** what :meth:`~digitalearth.static.builders.projection.ProjectionMixin.set_bounds` takes, which reads
     ``(west, south, east, north)`` like every other tier. The values are in the display CRS, so the frame is
     read and written back without a reprojection.
 
@@ -1372,7 +1372,7 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
     """Fetch and draw the XYZ tiles a described basemap asks for.
 
     Drawn from the description rather than described after the draw, which is the same guarantee said the
-    other way round: tiles come off the network, and :meth:`~digitalearth.static.scene.Scene._draw` drops
+    other way round: tiles come off the network, and :meth:`~digitalearth.static.core.scene.Scene._draw` drops
     the description again when this raises, so a figure never names a basemap the tier could not fetch.
 
     **The axes is framed from the description when nothing else has framed it.** A basemap is an underlay,
@@ -1393,7 +1393,7 @@ def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
             figure.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` whose ``artist`` is whatever ``add_tiles``
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` whose ``artist`` is whatever ``add_tiles``
         returned — the axes, which is this builder's public return — and whose ``artists`` are the tile
         images it actually added, which is what hiding and removing the layer reach.
 
@@ -1551,7 +1551,7 @@ def _crs_display_extent(crs: Any) -> tuple[float, float, float, float] | None:
           own map occupies — 1/4223 of the ``1.4e10`` m out where it places latitude
           :data:`_NIGHT_POLE_LATITUDE`, which is what makes this bound worth applying:
             ```python
-            >>> from digitalearth.static.maps.decoration import _crs_display_extent
+            >>> from digitalearth.static.builders.decoration import _crs_display_extent
             >>> [round(value) for value in _crs_display_extent(3031)]
             [-3333134, -3333134, 3333134, 3333134]
 
@@ -1559,7 +1559,7 @@ def _crs_display_extent(crs: Any) -> tuple[float, float, float, float] | None:
         - A bare PROJ string declares no area of use, so there is no bound to apply and the answer is
           ``None`` rather than a guess:
             ```python
-            >>> from digitalearth.static.maps.decoration import _crs_display_extent
+            >>> from digitalearth.static.builders.decoration import _crs_display_extent
             >>> print(_crs_display_extent("+proj=robin"))
             None
 
@@ -1706,7 +1706,7 @@ def _whole_samples(samples: Any, caller: str) -> int:
     Examples:
         - A usable count comes back as an ``int``; a count too small to form a ring is refused by name:
             ```python
-            >>> from digitalearth.static.maps.decoration import _whole_samples
+            >>> from digitalearth.static.builders.decoration import _whole_samples
             >>> _whole_samples(180, "nightshade()")
             180
             >>> _whole_samples(3, "nightshade()")
@@ -1757,7 +1757,7 @@ def _terminator_altitude(refraction: Any, caller: str) -> float:
         - The twilight lines pass, and the geometric terminator at the closed end of the range with them;
           an altitude above the horizon is refused by name:
             ```python
-            >>> from digitalearth.static.maps.decoration import _terminator_altitude
+            >>> from digitalearth.static.builders.decoration import _terminator_altitude
             >>> (_terminator_altitude(0, "nightshade()"), _terminator_altitude(-18.0, "nightshade()"))
             (0.0, -18.0)
             >>> _terminator_altitude(10.0, "nightshade()")  # doctest: +NORMALIZE_WHITESPACE
@@ -1811,7 +1811,7 @@ def _globe_night_grid(samples: int) -> int:
         - The default ``n`` keeps the grid the globe has always used, and a quarter of it quarters the side:
             ```python
             >>> from cleopatra.basemap.solar import DEFAULT_TERMINATOR_SAMPLES
-            >>> from digitalearth.static.maps.decoration import _globe_night_grid
+            >>> from digitalearth.static.builders.decoration import _globe_night_grid
             >>> (_globe_night_grid(DEFAULT_TERMINATOR_SAMPLES), _globe_night_grid(180))
             (400, 100)
 
@@ -1819,7 +1819,7 @@ def _globe_night_grid(samples: int) -> int:
         - A count the public API refuses — reachable here only from a stored figure — stops at the floor
           rather than degenerating into the grid itself:
             ```python
-            >>> from digitalearth.static.maps.decoration import _globe_night_grid
+            >>> from digitalearth.static.builders.decoration import _globe_night_grid
             >>> (_globe_night_grid(4), _globe_night_grid(0), _globe_night_grid(-5))
             (16, 16, 16)
 
@@ -1857,7 +1857,7 @@ def _globe_nightshade(
             invalid one raises here, as it does on a flat map, instead of being swallowed with the keyword.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the filled contour set, or ``None`` when
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the filled contour set, or ``None`` when
         no visible point is at night.
     """
     _, (xmin, xmax), (ymin, ymax) = scene._frame()
@@ -1926,7 +1926,7 @@ def draw_nightshade(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | No
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``, or ``None`` on a
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``, or ``None`` on a
         globe whose visible hemisphere holds no night — a layer that was not drawn rather than an empty one.
     """
     props = dict(layer.symbology.props)
@@ -2004,7 +2004,7 @@ def _wrapped_longitude(lon: float) -> float:
     Examples:
         - The ends of the range are kept apart, and a longitude past either end comes back inside it:
             ```python
-            >>> from digitalearth.static.maps.decoration import _wrapped_longitude
+            >>> from digitalearth.static.builders.decoration import _wrapped_longitude
             >>> [_wrapped_longitude(value) for value in (0.0, 180.0, -180.0, 270.0, -190.0)]
             [0.0, 180.0, 180.0, -90.0, 170.0]
 
@@ -2030,7 +2030,7 @@ def _crs_seam_longitude(crs: Any) -> float:
     Examples:
         - Web Mercator cuts the antimeridian; EPSG:3832, the same projection about lon 150, cuts at -30:
             ```python
-            >>> from digitalearth.static.maps.decoration import _crs_seam_longitude
+            >>> from digitalearth.static.builders.decoration import _crs_seam_longitude
             >>> (_crs_seam_longitude(3857), _crs_seam_longitude(3832))
             (180.0, -30.0)
 
@@ -2038,7 +2038,7 @@ def _crs_seam_longitude(crs: Any) -> float:
         - A geographic CRS declares no projection to read a central meridian off, so the seam is lon 180 —
           which is where a lon/lat axes does wrap:
             ```python
-            >>> from digitalearth.static.maps.decoration import _crs_seam_longitude
+            >>> from digitalearth.static.builders.decoration import _crs_seam_longitude
             >>> _crs_seam_longitude(4326)
             180.0
 
@@ -2096,7 +2096,7 @@ def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth import Map
-            >>> from digitalearth.static.maps.decoration import _antimeridian_periods
+            >>> from digitalearth.static.builders.decoration import _antimeridian_periods
             >>> with Map(crs=3857) as flat:
             ...     [round(float(width)) for width in _antimeridian_periods(flat, [0.0, 60.0])]
             [40075017, 40075017]
@@ -2111,7 +2111,7 @@ def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth import Map
-            >>> from digitalearth.static.maps.decoration import _antimeridian_periods
+            >>> from digitalearth.static.builders.decoration import _antimeridian_periods
             >>> with Map(crs=3832) as pacific:
             ...     [round(float(width)) for width in _antimeridian_periods(pacific, [0.0, 60.0])]
             [40075017, 40075017]
@@ -2123,7 +2123,7 @@ def _antimeridian_periods(scene: Any, lats: Sequence[float]) -> np.ndarray:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth import Map
-            >>> from digitalearth.static.maps.decoration import _antimeridian_periods
+            >>> from digitalearth.static.builders.decoration import _antimeridian_periods
             >>> with Map(crs=3031) as polar:
             ...     [round(float(width)) for width in _antimeridian_periods(polar, [-70.0, -80.0])]
             [0, 0]
@@ -2183,7 +2183,7 @@ def _continuous_display_ring(
           the *western* edge is carried a world width east, so the ring runs continuously past the seam:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.maps.decoration import _continuous_display_ring
+            >>> from digitalearth.static.builders.decoration import _continuous_display_ring
             >>> ring = np.array([[1.9e7, 0.0], [-1.9e7, 1.0], [2.0e7, 2.0]])
             >>> whole = _continuous_display_ring(ring, 1.95e7, 4.0075e7)
             >>> [round(float(x)) for x in whole[:, 0]]
@@ -2193,7 +2193,7 @@ def _continuous_display_ring(
         - A CRS with no usable seam reports a period of ``0``, and the ring is handed back as it was:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.maps.decoration import _continuous_display_ring
+            >>> from digitalearth.static.builders.decoration import _continuous_display_ring
             >>> ring = np.array([[1.9e7, 0.0], [-1.9e7, 1.0], [2.0e7, 2.0]])
             >>> _continuous_display_ring(ring, 1.95e7, 0.0) is ring
             True
@@ -2260,7 +2260,7 @@ def draw_tissot(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer | None:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``, or ``None`` when
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``, or ``None`` when
         no ring could be placed — a layer that was not drawn rather than an empty one.
     """
     props = dict(layer.symbology.props)
@@ -2290,13 +2290,13 @@ class DecorationMixin(_MixinBase):
     display CRS — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.static.maps.base.GeoLayerBase`, the state ``Map``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.static.builders.base.GeoLayerBase`, the state ``Map``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
     it was before the annotation.
 
     See Also:
         digitalearth.static.map.Map: the composition that supplies the state these methods use.
-        digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
+        digitalearth.static.builders.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
     def _reproject_point(
@@ -2359,7 +2359,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The :class:`matplotlib.text.Text` is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id — a label is one artist a
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id — a label is one artist a
             caller restyles afterwards, and that is where ST-20 moved every such artist to (round-1 L6). A
             point off the visible globe registers no layer, which is what the `None` this used to answer
             with said; `artist()` then refuses that id by name rather than answering `None`, with
@@ -2464,7 +2464,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The :class:`matplotlib.text.Annotation` is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id, exactly as :meth:`text`'s
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id, exactly as :meth:`text`'s
             is (round-1 L6). A point off the visible globe registers no layer, and `artist()` then refuses
             that id with `KeyError`, as it does for :meth:`text`.
 
@@ -2568,8 +2568,8 @@ class DecorationMixin(_MixinBase):
             every other decoration method returns ``Self`` now, and this does not: a backdrop is one
             artist a caller styles afterwards — a uniform fill, an alpha, a zorder — and handing that
             artist back is the whole point of the method. It is read off the layer the call below drew
-            (:meth:`~digitalearth.static.maps.raster.RasterMixin.field` for a raster, :meth:`basemap`
-            for tiles), through :meth:`~digitalearth.static.scene.Scene.artist`, rather than off that
+            (:meth:`~digitalearth.static.builders.raster.RasterMixin.field` for a raster, :meth:`basemap`
+            for tiles), through :meth:`~digitalearth.static.core.scene.Scene.artist`, rather than off that
             call's return value — which is now the map, on both paths.
 
         Examples:
@@ -2604,7 +2604,7 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.static.maps.raster.RasterMixin.field: what the raster path draws through.
+            digitalearth.static.builders.raster.RasterMixin.field: what the raster path draws through.
             basemap: what the no-argument path draws through.
         """
         if dataset is None:
@@ -2646,7 +2646,7 @@ class DecorationMixin(_MixinBase):
             before: The layer ids the figure held before the delegated call.
 
         Returns:
-            The drawn artist, through :meth:`~digitalearth.static.scene.Scene.artist`; ``None`` when no id
+            The drawn artist, through :meth:`~digitalearth.static.core.scene.Scene.artist`; ``None`` when no id
             appeared, which is a backdrop the display CRS could not place — the answer this method has
             always given for that case.
         """
@@ -2727,7 +2727,7 @@ class DecorationMixin(_MixinBase):
                 ``edgecolor`` and then drew neither, because only the fill colour reached here.
 
         Returns:
-            What the fill produced, as a :class:`~digitalearth.static.renderer.DrawnLayer` holding the
+            What the fill produced, as a :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the
             ``PolyCollection``, or ``None`` when ``rings`` is empty — nothing on the near side is a layer
             that was not drawn.
         """
@@ -2776,12 +2776,12 @@ class DecorationMixin(_MixinBase):
             **kwargs: Style overrides, laid over the layer's defaults (:data:`_NATURAL_EARTH_STYLE`) when it
                 is drawn. Held beside the layer exactly as passed, and the plain ones described as well, so
                 a figure read back elsewhere still draws them (see
-                :func:`~digitalearth.static.scene.described_opts`).
+                :func:`~digitalearth.static.core.scene.described_opts`).
 
         Returns:
             This map (chainable). Whichever matplotlib objects the drawing path left behind — the
             ``PolyCollection`` of a globe fill, the polyline artists of a globe line layer, the axes on a
-            flat map — are reached through :meth:`~digitalearth.static.scene.Scene.artist`, because the
+            flat map — are reached through :meth:`~digitalearth.static.core.scene.Scene.artist`, because the
             three are one layer of the reference geography's own kind and a caller should not have to know
             which frame drew it. Nothing on the near side draws nothing and registers no layer id, which
             is what the ``None`` this used to answer with said (round-1 L6).
@@ -2831,7 +2831,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The coastline is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
             **list** of `Line2D`, one per run the limb split the layer into (measured: 57 at 110m through
             an orthographic projection); on a flat map **the axes**, because cleopatra's `add_features`
             draws onto them and hands them back rather than naming what it drew (see
@@ -2900,7 +2900,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The borders are reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
             **list** of `Line2D`, one per run the limb split the layer into; on a flat map **the axes**,
             because cleopatra's `add_features` draws onto them and hands them back rather than naming what
             it drew (see :func:`draw_natural_earth`).
@@ -2968,7 +2968,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The land fill is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): a
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id (round-1 L6): a
             `PolyCollection` on a globe; on a flat map **the axes**, because cleopatra's `add_features`
             draws onto them and hands them back rather than naming the `PathCollection` it added (see
             :func:`draw_natural_earth`).
@@ -3042,7 +3042,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The ocean fill is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): a
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id (round-1 L6): a
             `PolyCollection` disc on a globe; on a flat map **the axes**, because cleopatra's
             `add_features` draws onto them and hands them back rather than naming what it added (see
             :func:`draw_natural_earth`).
@@ -3123,7 +3123,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The lake fill is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): a
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id (round-1 L6): a
             `PolyCollection` on a globe; on a flat map **the axes**, because cleopatra's `add_features`
             draws onto them and hands them back rather than naming what it added (see
             :func:`draw_natural_earth`).
@@ -3191,7 +3191,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The rivers are reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id (round-1 L6): on a globe a
             **list** of `Line2D`, one per run the limb split the layer into; on a flat map **the axes**,
             because cleopatra's `add_features` draws onto them and hands them back rather than naming what
             it drew (see :func:`draw_natural_earth`).
@@ -3279,7 +3279,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The shade's ``PolyCollection`` — on a globe, the filled ``ContourSet`` it
-            is drawn as there — is reached through :meth:`~digitalearth.static.scene.Scene.artist`, by this
+            is drawn as there — is reached through :meth:`~digitalearth.static.core.scene.Scene.artist`, by this
             layer's id (round-1 L6). A globe whose visible side holds no night draws nothing and registers
             no layer, which is what the ``None`` this used to answer with said.
 
@@ -3428,7 +3428,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             This map (chainable). The circles' ``PolyCollection`` is reached through
-            :meth:`~digitalearth.static.scene.Scene.artist`, by this layer's id (round-1 L6). No circle the
+            :meth:`~digitalearth.static.core.scene.Scene.artist`, by this layer's id (round-1 L6). No circle the
             projection could place draws nothing and registers no layer, which is what the ``None`` this
             used to answer with said.
 
@@ -3637,13 +3637,13 @@ class DecorationMixin(_MixinBase):
             **kwargs: Forwarded to ``add_tiles``.
 
         Returns:
-            This map (chainable). What :meth:`~digitalearth.static.scene.Scene.artist` answers for this
+            This map (chainable). What :meth:`~digitalearth.static.core.scene.Scene.artist` answers for this
             layer's id is **the axes**, because cleopatra's ``add_tiles`` draws onto them and hands them
             back rather than naming what it added (its own ``Returns:`` reads *"matplotlib.axes.Axes: The
             same axes, for chaining"*) — the same situation as the Natural-Earth layers on a flat map, and
             the same wording. The tile ``AxesImage`` is the layer's all the same, which is what
-            :meth:`~digitalearth.static.scene.Scene.set_visible` and
-            :meth:`~digitalearth.static.scene.Scene.remove_layer` reach; no public accessor names it
+            :meth:`~digitalearth.static.core.scene.Scene.set_visible` and
+            :meth:`~digitalearth.static.core.scene.Scene.remove_layer` reach; no public accessor names it
             (round 2, M5 — the claim this replaces said ``artist`` did, and
             ``tests/static/test_basemap_tile_artist.py`` is where that is measured against the real
             engine). Tiles that cannot be fetched raise rather than answering ``None``, and the layer is

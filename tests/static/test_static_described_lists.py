@@ -10,9 +10,9 @@ mis-drawing for another.
 This tier has two such points, and each is checked here against what the drawer actually handed over
 rather than against the description:
 
-* :func:`~digitalearth.static.scene.drawing_style` — the caller's own `**opts`, described and then laid
+* :func:`~digitalearth.static.core.scene.drawing_style` — the caller's own `**opts`, described and then laid
   under whatever the scene holds.
-* :func:`~digitalearth.static.maps.raster.draw_field` — the builder's own recorded properties, `levels`
+* :func:`~digitalearth.static.builders.raster.draw_field` — the builder's own recorded properties, `levels`
   among them, which is the key that used to be thawed by name while every other key was not.
 """
 
@@ -22,8 +22,8 @@ import pytest
 
 from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.static import Map, Scene
-from digitalearth.static.maps.raster import draw_field
-from digitalearth.static.scene import drawing_style
+from digitalearth.static.builders.raster import draw_field
+from digitalearth.static.core.scene import drawing_style
 
 #: Contour edges a caller would write by hand — a list, and one the round trip returns unchanged.
 LEVELS = [10.0, 20.0, 30.0]

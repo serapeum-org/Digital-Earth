@@ -45,17 +45,17 @@ from digitalearth.base.symbology import (
     nulls_to_none,
     resolve_categorical_cmap,
 )
+from digitalearth.static.builders.base import OffLimbError
 from digitalearth.static.capabilities import CAPABILITIES
-from digitalearth.static.guides import (
+from digitalearth.static.core.scene import LayerRecord, drawing_style
+from digitalearth.static.legends.legend import (
     COUNT_FIELD,
     DENSITY_FIELD,
     MAGNITUDE_FIELD,
     source_field,
 )
-from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.render_compat import relocate_flat_style
-from digitalearth.static.renderer import DrawnLayer
-from digitalearth.static.scene import LayerRecord, drawing_style
+from digitalearth.static.render.compat import relocate_flat_style
+from digitalearth.static.render.renderer import DrawnLayer
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
@@ -287,7 +287,7 @@ def _require_column(features: Any, column: str, argument: str, caller: str) -> N
             ```python
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
-            >>> from digitalearth.static.maps.vector import _require_column
+            >>> from digitalearth.static.builders.vector import _require_column
             >>> wells = gpd.GeoDataFrame(
             ...     {"depth": [2.0, 4.0], "label": ["a", "b"]},
             ...     geometry=[Point(0, 0), Point(1, 1)],
@@ -307,7 +307,7 @@ def _require_column(features: Any, column: str, argument: str, caller: str) -> N
             ```python
             >>> import geopandas as gpd
             >>> from shapely.geometry import LineString
-            >>> from digitalearth.static.maps.vector import _require_column
+            >>> from digitalearth.static.builders.vector import _require_column
             >>> reaches = gpd.GeoDataFrame(
             ...     {"discharge": [12.0]},
             ...     geometry=[LineString([(0, 0), (1, 1)])],
@@ -450,7 +450,7 @@ def _polygon_kind(fill: Any) -> str:
     Examples:
         - A filled and an outline-only layer are different kinds:
             ```python
-            >>> from digitalearth.static.maps.vector import _polygon_kind
+            >>> from digitalearth.static.builders.vector import _polygon_kind
             >>> _polygon_kind([1.0, 2.0]), _polygon_kind(None)
             ('choropleth', 'polygons')
 
@@ -571,7 +571,7 @@ def _skips_off_limb(builder: Callable) -> Callable:
 
     The builder itself no longer reprojects: it records the layer, and the drawer that replays the record
     does the warp (in :meth:`VectorMixin._vector_input`) and the drawing. So the `OffLimbError` comes up
-    out of the drawer, through :meth:`~digitalearth.static.scene.Scene._draw` — which has already dropped
+    out of the drawer, through :meth:`~digitalearth.static.core.scene.Scene._draw` — which has already dropped
     the layer from the description — and is answered here, one wrapper for the whole call. The raster
     builders answer the same error inline (``except OffLimbError: self._skipped_off_limb(kind)``), because
     each of them reaches its drawer at its own point in its own body.
@@ -628,7 +628,7 @@ def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the scatter ``PathCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the scatter ``PathCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -824,7 +824,7 @@ def _label_offset_points(props: dict) -> tuple[float, float]:
 def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer | None:
     """Draw one text label per feature, from the column a described layer names.
 
-    The third member of this tier's text family: :func:`~digitalearth.static.maps.decoration.draw_text` places
+    The third member of this tier's text family: :func:`~digitalearth.static.builders.decoration.draw_text` places
     one string at one coordinate and ``draw_annotate`` points at one, while this reads a string per feature out
     of an attribute. It draws through ``Axes.annotate`` rather than ``Axes.text`` because the offset is a
     text-relative one, which only ``annotate``'s ``"offset points"`` expresses.
@@ -840,7 +840,7 @@ def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer | None:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``Annotation`` of every label drawn —
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``Annotation`` of every label drawn —
         one layer however many there are, as a limb-split coastline is one layer — or ``None`` when no label
         survived: every feature on the far side of a globe, or every value in the column missing. That is a
         layer that was not drawn rather than an empty one, which is what :meth:`Scene._draw` drops again.
@@ -887,7 +887,7 @@ def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the scatter ``PathCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the scatter ``PathCollection``.
 
     Raises:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
@@ -919,7 +919,7 @@ def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``.
 
     Raises:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
@@ -952,7 +952,7 @@ def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the vector mappable.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the vector mappable.
 
     Raises:
         OffLimbError: when the data lies entirely outside what the display CRS shows.
@@ -990,7 +990,7 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description, whose ``via`` names the triangulated render.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the mappable.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the mappable.
 
     Raises:
         OffLimbError: when the data lies outside the display CRS, or when enough points were supplied but
@@ -1049,7 +1049,7 @@ def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1087,7 +1087,7 @@ def draw_shapes(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1115,7 +1115,7 @@ def draw_voronoi(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
             scene under the layer's id.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1152,7 +1152,7 @@ def draw_cartogram(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1194,7 +1194,7 @@ def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
             are held on the scene under the layer's id.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``PolyCollection``.
 
     Raises:
         KeyError: when the description carries no ``agg`` property — a layer built by hand, or a figure
@@ -1252,7 +1252,7 @@ def draw_hexbin(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
             cannot carry — is held on the scene under the layer's id; a named one is described.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the cells' ``PolyCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the cells' ``PolyCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1315,7 +1315,7 @@ def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
             scene under the layer's id.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the contour set.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the contour set.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1381,7 +1381,7 @@ def draw_lines(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer | None:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``LineCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``LineCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1433,7 +1433,7 @@ def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``LineCollection``.
+        A :class:`~digitalearth.static.render.renderer.DrawnLayer` holding the ``LineCollection``.
 
     Raises:
         OffLimbError: when the warp places none of the geometry in the display CRS.
@@ -1473,7 +1473,7 @@ def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+    from digitalearth.static.builders.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -1513,7 +1513,7 @@ def _opened_component(component: Any) -> Any:
 def _described_agg(agg: Any) -> tuple[Any, Any]:
     """Split a quadtree reducer into the name a description records and the callable held beside the layer.
 
-    The sibling of :func:`~digitalearth.static.maps.raster._described_cmap`, and it exists for the same
+    The sibling of :func:`~digitalearth.static.builders.raster._described_cmap`, and it exists for the same
     reason: ``agg`` decides the **values** a cell carries, so a figure that cannot say which reducer it was
     built with redraws different data rather than the same data styled differently.
 
@@ -1691,13 +1691,13 @@ class VectorMixin(_MixinBase):
     display CRS — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.static.maps.base.GeoLayerBase`, the state ``Map``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.static.builders.base.GeoLayerBase`, the state ``Map``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
     it was before the annotation.
 
     Every builder here takes the caller's styling as ``**opts``/``**kwargs`` and hands it to the cleopatra
     glyph as passed. Those keywords **go two ways**
-    (see :attr:`~digitalearth.static.scene.LayerRecord.opts`). The plain ones — a string, a boolean, a
+    (see :attr:`~digitalearth.static.core.scene.LayerRecord.opts`). The plain ones — a string, a boolean, a
     finite number, ``None`` — are written into the layer's description as well, so the same figure drawn on
     another scene comes back with the ``color``, ``alpha`` or ``linewidth`` the caller asked for.
     Everything else is held on the scene and nowhere else: a ``Normalize``, a per-point ``alpha`` array or
@@ -1707,7 +1707,7 @@ class VectorMixin(_MixinBase):
 
     See Also:
         digitalearth.static.map.Map: the composition that supplies the state these methods use.
-        digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
+        digitalearth.static.builders.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
     def _vector_input(
@@ -1781,9 +1781,9 @@ class VectorMixin(_MixinBase):
         categorical fill feeds the mappable opaque integer class codes, so a colorbar over them would read
         ``0, 1, 2 …`` instead of the category labels. Passing ``add_colorbar=False`` suppresses that swatch
         legend — for a caller keying the map some other way, e.g. drawing one shared legend across several
-        layers via :meth:`~digitalearth.static.scene.Scene.legend`, which derives its rows from the layer's
+        layers via :meth:`~digitalearth.static.core.scene.Scene.legend`, which derives its rows from the layer's
         own :class:`~digitalearth.base.spec.scale.Scale` — the swatches this glyph drew, read back off it by
-        :func:`~digitalearth.static.guides.color_encoding` — rather than being handed colours and labels.
+        :func:`~digitalearth.static.legends.legend.color_encoding` — rather than being handed colours and labels.
 
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
@@ -1791,7 +1791,7 @@ class VectorMixin(_MixinBase):
             **opts: Styling kwargs forwarded to ``PolygonGlyph``.
 
         Returns:
-            What the render produced, as a :class:`~digitalearth.static.renderer.DrawnLayer` — the drawers
+            What the render produced, as a :class:`~digitalearth.static.render.renderer.DrawnLayer` — the drawers
             that call this hand it straight back to the renderer, which is what records the layer.
         """
         # Any scheme — categorical or graduated — puts a missing value outside every class, so it is the
@@ -1865,15 +1865,15 @@ class VectorMixin(_MixinBase):
                 hidden, so a switcher reading the figure agrees with the axes (#327).
             **opts: Further ``ScatterGlyph`` styling kwargs (``size_limits``, ``size_scale``,
                 ``size_legend``, ``size_legend_values``, …).
-                :func:`~digitalearth.static.render_compat._fold_marker_size` is the one place that knows
+                :func:`~digitalearth.static.render.compat._fold_marker_size` is the one place that knows
                 cleopatra's constructor calls the marker size ``point_size``.
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -1943,7 +1943,7 @@ class VectorMixin(_MixinBase):
 
         The static third of order 27's text layers (ST-16, #345). ``WebMap.labels`` shipped first and the
         ``labels`` kind was registered with it, so a caller could label a collection on a web map and not on a
-        static one; :meth:`~digitalearth.static.maps.decoration.DecorationMixin.text` is no substitute, since
+        static one; :meth:`~digitalearth.static.builders.decoration.DecorationMixin.text` is no substitute, since
         it places **one** string at **one** coordinate.
 
         The keywords are ``WebMap.labels``'s wherever the two tiers can mean the same thing, which is the point
@@ -1991,7 +1991,7 @@ class VectorMixin(_MixinBase):
                 ``None`` (default) reads the collection's own.
             name: The caller's own name for the layer, used as its id and its label; ``None`` (default)
                 generates one from the kind, and a name already on the figure is suffixed ``-2``, ``-3``, …
-                (#321). Unlike :meth:`~digitalearth.static.maps.decoration.DecorationMixin.text`, it is
+                (#321). Unlike :meth:`~digitalearth.static.builders.decoration.DecorationMixin.text`, it is
                 **not** also read as a font family — see :func:`draw_labels`.
             visible: Whether the layer is drawn. ``False`` builds it hidden **and** describes it hidden, so a
                 switcher reading the figure agrees with the axes (#327).
@@ -2000,10 +2000,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2030,8 +2030,8 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.static.maps.decoration.DecorationMixin.text: one string at one coordinate.
-            digitalearth.static.maps.decoration.DecorationMixin.annotate: one string, with an arrow to a point.
+            digitalearth.static.builders.decoration.DecorationMixin.text: one string at one coordinate.
+            digitalearth.static.builders.decoration.DecorationMixin.annotate: one string, with an arrow to a point.
         """
         # At the call as well as in the drawer, because the drawer settles the CRS question before it reaches
         # `_vector_input`'s guard — and an array would be refused for declaring no CRS rather than for being
@@ -2106,10 +2106,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Examples:
@@ -2130,7 +2130,7 @@ class VectorMixin(_MixinBase):
 
         Raises:
             TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
-                here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell
+                here where :meth:`~digitalearth.static.builders.raster.RasterMixin.field` takes one: the cell
                 centres come from pyramids' ``to_xyz``, which reads a geo-transform an array does not carry.
         """
         require_drawable(dataset, caller="Map.grid_points()", accepts=("raster",))
@@ -2165,10 +2165,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
         """
         self.grid_points(dataset, name=name, visible=visible, **opts)
@@ -2202,15 +2202,15 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
             TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
-                here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the cell
+                here where :meth:`~digitalearth.static.builders.raster.RasterMixin.field` takes one: the cell
                 polygons come from pyramids' ``get_cell_polygons``, which reads a geo-transform an array does
                 not carry.
             ValueError: from ``PolygonGlyph`` for a keyword in ``**opts`` it does not accept, naming the
@@ -2287,7 +2287,7 @@ class VectorMixin(_MixinBase):
 
         Raises:
             TypeError: when either component is not a raster or a reference to one. A bare numpy array is
-                refused here where :meth:`~digitalearth.static.maps.raster.RasterMixin.field` takes one: the
+                refused here where :meth:`~digitalearth.static.builders.raster.RasterMixin.field` takes one: the
                 two components are read band-by-band through the display-CRS choke point, which places them
                 against each other by their geo-transforms.
             ValueError: from ``VectorGlyph`` for a keyword in ``**opts`` it does not accept, naming the
@@ -2343,10 +2343,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2387,10 +2387,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2431,10 +2431,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2472,15 +2472,15 @@ class VectorMixin(_MixinBase):
         **Furniture, not a layer, and deliberately a carve-out from ST-20.** It is annotated ``-> Any``
         rather than the ``-> Self`` the chaining contract makes the default for a builder it only looks like
         — one of the two entries in :meth:`field`'s Returns census of those builder carve-outs, with
-        :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` the other. (Figure furniture
-        such as :meth:`~digitalearth.static.scene.Scene.stamp` and output calls such as ``save`` likewise
+        :meth:`~digitalearth.static.builders.decoration.DecorationMixin.stock_img` the other. (Figure furniture
+        such as :meth:`~digitalearth.static.core.scene.Scene.stamp` and output calls such as ``save`` likewise
         hand back their own object rather than the map, but are not builders and so are not in that census.)
         So, measured on
         a map carrying one ``quiver`` layer: the call hands back matplotlib's ``QuiverKey`` and **not** the
         map, so it does not chain; it registers **no layer**, leaving ``layer_ids`` at
         ``['vectors-1']`` either side of it; the arrow is nonetheless on the shared axes
         (``key in map.ax.get_children()``); and because there is no layer, the key is not reachable through
-        :meth:`~digitalearth.static.scene.Scene.artist` at all —
+        :meth:`~digitalearth.static.core.scene.Scene.artist` at all —
         ``map.artist("quiverkey")`` raises ``KeyError("no layer 'quiverkey' on this figure; its layers are
         ['vectors-1']")``, while ``map.artist("vectors-1")`` still hands back the ``Quiver`` the key
         describes.
@@ -2522,7 +2522,7 @@ class VectorMixin(_MixinBase):
         Returns:
             Three parallel 1-D arrays — the x coordinates, the y coordinates and the value at each point — in
             the display CRS, and the **name** those values are known by: the raster's band or the
-            collection's numeric column, as :func:`~digitalearth.static.guides.source_field` spells it. The
+            collection's numeric column, as :func:`~digitalearth.static.legends.legend.source_field` spells it. The
             name is returned here rather than resolved again by the drawer because this is where the source is
             opened, and it is what the layer publishes its colour encoding with (#261, order 24).
 
@@ -2616,10 +2616,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2648,10 +2648,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2680,10 +2680,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2834,10 +2834,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -2950,10 +2950,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -3100,10 +3100,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -3199,10 +3199,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -3348,10 +3348,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -3497,10 +3497,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -3666,10 +3666,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -3754,10 +3754,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:
@@ -3936,10 +3936,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             This map (chainable). The drawn artist is reached with
-            :meth:`~digitalearth.static.scene.Scene.artist` — ``map.artist()`` for the layer just
+            :meth:`~digitalearth.static.core.scene.Scene.artist` — ``map.artist()`` for the layer just
             drawn, or ``map.artist(layer_id)`` by name — and a layer the display CRS could not place
             drew nothing, so it is absent from the figure and refused there. See
-            :meth:`~digitalearth.static.maps.raster.RasterMixin.field` for why the return value is the
+            :meth:`~digitalearth.static.builders.raster.RasterMixin.field` for why the return value is the
             map rather than the artist (ST-20).
 
         Raises:

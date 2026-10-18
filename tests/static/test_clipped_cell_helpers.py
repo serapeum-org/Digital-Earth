@@ -12,7 +12,7 @@ value in the array with no polygon beside it, and every later value would be off
 import numpy as np
 from shapely.geometry import MultiPolygon, box
 
-from digitalearth.static.maps.vector import _clipped_cell_boxes, _clipped_cell_rings
+from digitalearth.static.builders.vector import _clipped_cell_boxes, _clipped_cell_rings
 
 
 class TestAQuadtreeCellClippedToNothingDrawable:

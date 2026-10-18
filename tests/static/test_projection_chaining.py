@@ -17,7 +17,7 @@ declared returns: graticule -> None, set_global -> None, set_domain -> None, set
 
 Each claim is read off the returned object's **identity and type** — ``Self`` promises the composed `Map`,
 not the mixin that defines the method — and the layer a converted builder drew is reached through
-:meth:`~digitalearth.static.scene.Scene.artist`, which **raises** ``KeyError`` for a layer that drew
+:meth:`~digitalearth.static.core.scene.Scene.artist`, which **raises** ``KeyError`` for a layer that drew
 nothing, so the replacement for "assert the return value" is not vacuous.
 
 That ``KeyError`` rules out a call that drew nothing; it does **not** rule out one that *computed* nothing,

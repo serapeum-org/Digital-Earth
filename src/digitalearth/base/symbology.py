@@ -259,7 +259,7 @@ def as_colormap(cmap: Any) -> Any:
     Every classifying helper in this module resolves a colormap through here — :func:`categorical_colors`
     and :func:`sample_cmap`, and so the web, interactive and 3-D tiers that call them; the static tier
     takes its own route, resolving a name against ``matplotlib.colormaps`` in
-    :func:`~digitalearth.static.maps.raster._described_cmap` and handing cleopatra the object. A caller may
+    :func:`~digitalearth.static.builders.raster._described_cmap` and handing cleopatra the object. A caller may
     hold one either way: `"magma"` is what a keyword argument usually carries, while `colormaps["magma"]` is
     what code that built or modified a ramp has. Both helpers below used to accept only the name — the
     categorical one looked the argument up as a dict key, which a `Colormap` cannot be (it defines `__eq__`

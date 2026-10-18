@@ -46,7 +46,7 @@ lat_step   tiny (1e-4)   ~1,800,000 parallels, same hang
 ```
 
 So the step now carries a lower bound as well, by the same by-keyword ``ValueError`` — a ceiling on the
-line count (:data:`~digitalearth.static.maps.projection.MAX_GRATICULE_LINES`). The count is ``span / step``:
+line count (:data:`~digitalearth.static.builders.projection.MAX_GRATICULE_LINES`). The count is ``span / step``:
 on an **unframed or global** view the span is the whole world (``360``/``180``), so a step below
 :data:`MERIDIAN_FLOOR` / :data:`PARALLEL_FLOOR` is refused regardless — the cases these tests pin. Since #393
 a **framed** view budgets against the degrees it holds instead, so a fine step a small region can show is
@@ -62,7 +62,7 @@ from collections.abc import Callable
 import pytest
 
 from digitalearth.static import Map
-from digitalearth.static.maps.projection import MAX_GRATICULE_LINES
+from digitalearth.static.builders.projection import MAX_GRATICULE_LINES
 
 #: Every numeric keyword ``graticule()`` takes. There is no third kind — no count, no ``n`` — so these three
 #: are the whole surface a bad number can arrive through.

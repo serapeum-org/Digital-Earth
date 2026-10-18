@@ -12,8 +12,8 @@ and that the filter never drops a hull vertex.
 
 import numpy as np
 
-from digitalearth.static import projections
-from digitalearth.static.projections import _convex_hull, _drop_interior_points
+from digitalearth.static.view import projections
+from digitalearth.static.view.projections import _convex_hull, _drop_interior_points
 
 
 def _clouds():

@@ -21,7 +21,7 @@ at its own spin, and against the camera its axes has *then*. That is what lets i
 with an animation, survive a mouse-drag of the camera, and hand back an artist that stays valid.
 
 Like the cleopatra glyph it wraps (and unlike :class:`~digitalearth.static.map.Map`), this is a standalone
-class rather than a :class:`~digitalearth.static.scene.Scene` subclass: ``Scene`` owns a 2-D axes and the
+class rather than a :class:`~digitalearth.static.core.scene.Scene` subclass: ``Scene`` owns a 2-D axes and the
 layer/colorbar lifecycle, none of which applies to a textured sphere.
 """
 
@@ -55,7 +55,7 @@ from digitalearth.base.arrays import finite, read_masked_band, ring_runs
 from digitalearth.base.clim import DEFAULT_CLIM_SCAN_CAP, sample_evenly, stack_scale
 from digitalearth.base.crs import source_epsg
 from digitalearth.base.spec import DEFAULT_BAND, Scale
-from digitalearth.static.animation import save_animation
+from digitalearth.static.render.animation import save_animation
 
 #: Default shape of the global equirectangular canvas built by :meth:`TexturedGlobe.from_dataset`,
 #: as ``(rows, columns)`` — a 0.125-degree grid, comfortably finer than the glyph's default mesh.
@@ -210,7 +210,7 @@ def _limb_point(
         - A vertex 45 degrees in front of the limb and its neighbour 45 degrees behind it cross on it:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _limb_point
+            >>> from digitalearth.static.globe.textured_globe import _limb_point
             >>> view = np.array([1.0, 0.0, 0.0])
             >>> inside = np.array([np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
             >>> outside = np.array([-np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
@@ -221,7 +221,7 @@ def _limb_point(
         - The crossing stays on the ring's own shell, so a lifted overlay is not pulled onto the sphere:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _limb_point
+            >>> from digitalearth.static.globe.textured_globe import _limb_point
             >>> inside = 1.01 * np.array([0.6, 0.8, 0.0])
             >>> outside = 1.01 * np.array([-0.6, 0.8, 0.0])
             >>> crossing = _limb_point(inside, outside, np.array([1.0, 0.0, 0.0]))
@@ -269,7 +269,7 @@ def _limb_arc(
         - A quarter turn round the limb, sampled between its endpoints, every point on the limb:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _limb_arc
+            >>> from digitalearth.static.globe.textured_globe import _limb_arc
             >>> view = np.array([1.0, 0.0, 0.0])
             >>> arc = _limb_arc(np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]), view)
             >>> arc.shape
@@ -281,7 +281,7 @@ def _limb_arc(
         - A start facing the camera has no direction to walk, so no arc comes back:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _limb_arc
+            >>> from digitalearth.static.globe.textured_globe import _limb_arc
             >>> view = np.array([1.0, 0.0, 0.0])
             >>> _limb_arc(view.copy(), np.array([0.0, 1.0, 0.0]), view).shape
             (0, 3)
@@ -327,7 +327,7 @@ def _overlay_style(defaults: dict, asked: dict, fill: bool) -> dict:
     Examples:
         - The plural and the short spelling of a line width both reach the same name:
             ```python
-            >>> from digitalearth.static.textured_globe import _overlay_style
+            >>> from digitalearth.static.globe.textured_globe import _overlay_style
             >>> _overlay_style({"linewidth": 0.5}, {"linewidths": 2.0}, fill=False)
             {'linewidth': 2.0}
             >>> _overlay_style({"linewidth": 0.5}, {"lw": 2.0}, fill=False)
@@ -336,7 +336,7 @@ def _overlay_style(defaults: dict, asked: dict, fill: bool) -> dict:
             ```
         - A fill takes a collection's own short names:
             ```python
-            >>> from digitalearth.static.textured_globe import _overlay_style
+            >>> from digitalearth.static.globe.textured_globe import _overlay_style
             >>> sorted(_overlay_style({"color": "#efefdb"}, {"fc": "red"}, fill=True).items())
             [('color', '#efefdb'), ('facecolor', 'red')]
 
@@ -410,7 +410,7 @@ def _front_depth(axes: Any, radius: float) -> float:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.textured_globe import _front_depth
+            >>> from digitalearth.static.globe.textured_globe import _front_depth
             >>> ax = plt.figure().add_subplot(projection="3d")
             >>> ax.view_init(elev=0.0, azim=0.0)
             >>> ax.M = ax.get_proj()
@@ -423,7 +423,7 @@ def _front_depth(axes: Any, radius: float) -> float:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.textured_globe import _front_depth
+            >>> from digitalearth.static.globe.textured_globe import _front_depth
             >>> ax = plt.figure().add_subplot(projection="3d")
             >>> ax.view_init(elev=0.0, azim=0.0)
             >>> ax.M = ax.get_proj()
@@ -459,7 +459,7 @@ def _interior_is_left(lonlat: np.ndarray) -> bool:
         - A ring traced anticlockwise — east along the south edge first — holds its region on the left:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _interior_is_left
+            >>> from digitalearth.static.globe.textured_globe import _interior_is_left
             >>> _interior_is_left(np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]))
             True
 
@@ -467,7 +467,7 @@ def _interior_is_left(lonlat: np.ndarray) -> bool:
         - The same ring stored the other way round holds it on the right:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _interior_is_left
+            >>> from digitalearth.static.globe.textured_globe import _interior_is_left
             >>> _interior_is_left(np.array([[0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]))
             False
 
@@ -475,7 +475,7 @@ def _interior_is_left(lonlat: np.ndarray) -> bool:
         - A closing repeat does not change it:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _interior_is_left
+            >>> from digitalearth.static.globe.textured_globe import _interior_is_left
             >>> square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]]
             >>> _interior_is_left(np.array(square))
             True
@@ -516,7 +516,7 @@ def _clip_ring(
         - A ring wholly on the near side comes back whole, without its repeated closing vertex:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _clip_ring
+            >>> from digitalearth.static.globe.textured_globe import _clip_ring
             >>> ring = np.array([[1.0, 0.0, 0.0], [0.9, 0.3, 0.0], [0.9, 0.0, 0.3], [1.0, 0.0, 0.0]])
             >>> [face.shape for face in _clip_ring(ring, np.array([1.0, 0.0, 0.0]))]
             [(3, 3)]
@@ -525,7 +525,7 @@ def _clip_ring(
         - A ring wholly behind the globe clips to nothing:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _clip_ring
+            >>> from digitalearth.static.globe.textured_globe import _clip_ring
             >>> ring = np.array([[-1.0, 0.0, 0.0], [-0.9, 0.3, 0.0], [-0.9, 0.0, 0.3]])
             >>> _clip_ring(ring, np.array([1.0, 0.0, 0.0]))
             []
@@ -2331,7 +2331,7 @@ class TexturedGlobe(WatermarkMixin):
     ) -> FuncAnimation:
         """Step a series of rasters across the globe, returning a matplotlib ``FuncAnimation``.
 
-        The globe counterpart of :meth:`~digitalearth.static.maps.animation.AnimationMixin.animate` on the
+        The globe counterpart of :meth:`~digitalearth.static.builders.animation.AnimationMixin.animate` on the
         2-D tier: the camera holds still and the **data** changes, which is what a time series of a global
         field — sea-surface temperature, sea ice, an anomaly field — wants. To turn the viewpoint around one
         fixed texture instead, use :meth:`spin`.
@@ -2679,7 +2679,7 @@ class TexturedGlobe(WatermarkMixin):
             path: Output path; the extension picks the format.
             fps: Frames per second. Defaults to the animation's own interval.
             gif: Optional second path to derive a GIF at. Requires ``path`` to be a video.
-            **kwargs: Forwarded to :func:`digitalearth.static.animation.save_animation`.
+            **kwargs: Forwarded to :func:`digitalearth.static.render.animation.save_animation`.
 
         Returns:
             The written path, or a ``(video, gif)`` pair when ``gif`` was requested.
@@ -2772,7 +2772,7 @@ class TexturedGlobe(WatermarkMixin):
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
         """Close the figure on exit so a long run of globes stays memory-bounded.
 
-        Mirrors :class:`~digitalearth.static.scene.Scene`: the figure is closed whether or not the body
+        Mirrors :class:`~digitalearth.static.core.scene.Scene`: the figure is closed whether or not the body
         raised, and any exception propagates (``__exit__`` returns ``False``), so ``with`` never swallows an
         error.
 
@@ -2790,7 +2790,7 @@ class TexturedGlobe(WatermarkMixin):
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the globe's figure.
 
-        The same figure-level mark as :meth:`digitalearth.static.scene.Scene.stamp`, and it carries the same
+        The same figure-level mark as :meth:`digitalearth.static.core.scene.Scene.stamp`, and it carries the same
         two caveats: stamp **last**, because the mark is baked from the figure's current size, and note that
         a ``bbox_inches="tight"`` save crops surrounding whitespace and so shifts the mark's margin.
 

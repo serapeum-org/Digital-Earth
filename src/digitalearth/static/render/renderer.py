@@ -34,7 +34,7 @@ HoloViews' option store against the object it was called on.
 
 **:meth:`Renderer.apply` has a caller.** It reaches the axes and this module's record of what is on it,
 and it reached nothing else for a time: no code in ``src/`` called it, so a map's description was written by
-its builders and never by a reconcile. :meth:`~digitalearth.static.scene.Scene._change` is that caller now —
+its builders and never by a reconcile. :meth:`~digitalearth.static.core.scene.Scene._change` is that caller now —
 the path ``add_layer``, ``get_layer``, ``remove_layer``, ``set_visible``, ``move_layer`` and
 ``replace_layer`` take — and it installs the scene's layer tree and its sources once this has returned, so a
 figure this refuses is never one the map describes. ``apply`` itself still writes only the artists, this
@@ -77,7 +77,7 @@ from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec, Scale, retarget_recipes
 from digitalearth.static.capabilities import CAPABILITIES
-from digitalearth.static.guides import paint_guide, plan_guide
+from digitalearth.static.legends.legend import paint_guide, plan_guide
 
 __all__ = [
     "DRAWN_KINDS",
@@ -95,10 +95,10 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> dict[str, Any]:
     """Return the engine keywords a layer's caller passed, exactly as they passed them.
 
     This is the *held* half of the pair: every keyword the scene was given, as the very object it was given
-    (see :attr:`~digitalearth.static.scene.LayerRecord.opts`), so matplotlib gets the caller's own objects
+    (see :attr:`~digitalearth.static.core.scene.LayerRecord.opts`), so matplotlib gets the caller's own objects
     and never a frozen copy. The layer's description carries the plain ones as well
     (:func:`~digitalearth.base.spec._serial.travels_in_a_figure`), and a drawer asks
-    :func:`~digitalearth.static.scene.drawing_style` for the two composed rather than calling this directly.
+    :func:`~digitalearth.static.core.scene.drawing_style` for the two composed rather than calling this directly.
     Round-tripping the rest broke them both ways: a dash pattern came back a list matplotlib refuses, and an
     object with no JSON form — a ``Normalize``, a ``FontProperties``, a per-pixel ``alpha`` array — made the
     figure impossible to save.
@@ -121,7 +121,7 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> dict[str, Any]:
             >>> matplotlib.use("Agg")
             >>> from digitalearth.base.spec import LayerSpec
             >>> from digitalearth.static import Scene
-            >>> from digitalearth.static.renderer import drawing_opts
+            >>> from digitalearth.static.render.renderer import drawing_opts
             >>> scene = Scene()
             >>> drawing_opts(scene, LayerSpec("a", "raster"))
             {}
@@ -136,7 +136,7 @@ def drawing_opts(scene: Any, layer: LayerSpec) -> dict[str, Any]:
             >>> import numpy as np
             >>> from matplotlib.colors import Normalize
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.renderer import drawing_opts
+            >>> from digitalearth.static.render.renderer import drawing_opts
             >>> norm = Normalize(vmin=0.0, vmax=15.0)
             >>> m = Map(globe=False)
             >>> _ = m.field(np.arange(16.0).reshape(4, 4), name="f", norm=norm)
@@ -241,7 +241,7 @@ class DrawnLayer:
         Examples:
             - The drawing is untouched apart from the field name:
                 ```python
-                >>> from digitalearth.static.renderer import DrawnLayer
+                >>> from digitalearth.static.render.renderer import DrawnLayer
                 >>> drawn = DrawnLayer(artist="im", glyph="g", artists=("im",), guides=("bar",))
                 >>> drawn.colored_by("elev")
                 DrawnLayer(artist='im', glyph='g', artists=('im',), color_field='elev', guides=('bar',), scale=None)
@@ -308,7 +308,7 @@ def _recipes() -> dict[str, dict[str, Any]]:
     # Imported here rather than at module level: every builder module imports the scene, and the scene
     # builds a renderer, so a module-level import would close a cycle — and a scene that draws nothing
     # should not pay for loading all of them.
-    from digitalearth.static.maps import decoration, projection, raster, vector
+    from digitalearth.static.builders import decoration, projection, raster, vector
 
     return {
         "raster": {"imshow": raster.draw_field},
@@ -488,14 +488,14 @@ def drawer_for(kind: str) -> Any:
         - Every kind the tier declares has a drawer:
             ```python
             >>> from digitalearth.static.capabilities import CAPABILITIES
-            >>> from digitalearth.static.renderer import drawer_for
+            >>> from digitalearth.static.render.renderer import drawer_for
             >>> sorted(kind for kind in CAPABILITIES.kinds if drawer_for(kind) is None)
             []
 
             ```
         - A kind from another tier is refused by name:
             ```python
-            >>> from digitalearth.static.renderer import drawer_for
+            >>> from digitalearth.static.render.renderer import drawer_for
             >>> drawer_for("terrain")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -948,7 +948,7 @@ class _Held:
     Attributes:
         drawn: Layer id -> what was drawn for it, in draw order.
         registered: The scene's ``(glyph, mappable)`` pairs with their default colorbar labels, in the order
-            they were drawn — which is the order :meth:`~digitalearth.static.scene.Scene._registered_index`
+            they were drawn — which is the order :meth:`~digitalearth.static.core.scene.Scene._registered_index`
             matches a layer against to find the units its key is titled with.
         painted: The axes' artists in the order they were added (see :func:`_painted`).
     """
@@ -966,7 +966,7 @@ class Renderer:
 
     Examples:
         - A map's renderer holds what it drew, keyed by the same ids
-          :attr:`~digitalearth.static.scene.Scene.layer_ids` lists, in the order the layers were drawn:
+          :attr:`~digitalearth.static.core.scene.Scene.layer_ids` lists, in the order the layers were drawn:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -987,7 +987,7 @@ class Renderer:
         """Bind the renderer to the scene whose axes it draws on.
 
         Args:
-            scene: The :class:`~digitalearth.static.scene.Scene` (or subclass) this renderer serves. Held
+            scene: The :class:`~digitalearth.static.core.scene.Scene` (or subclass) this renderer serves. Held
                 rather than passed per call, because a drawer reads the scene's own helpers — the display
                 CRS, the reprojection, the off-limb policy, the artist registry a colorbar is keyed to.
         """
@@ -1096,8 +1096,8 @@ class Renderer:
         """Draw the colour key one layer's guide asks for, replacing whatever it already had.
 
         The one call that puts a key on the figure, whoever asked: :meth:`draw_layer` for a layer whose
-        description already carries a guide, and :meth:`~digitalearth.static.scene.Scene.colorbar` /
-        :meth:`~digitalearth.static.scene.Scene.legend` for a caller who has just recorded one. It takes the
+        description already carries a guide, and :meth:`~digitalearth.static.core.scene.Scene.colorbar` /
+        :meth:`~digitalearth.static.core.scene.Scene.legend` for a caller who has just recorded one. It takes the
         layer's previous key off, which is what makes a second call **replace** rather than stack a second
         bar in the same figure — the same answer the web tier gives for its one legend panel.
 
@@ -1105,7 +1105,7 @@ class Renderer:
         refusal from the derivation left the layer describing a key that was no longer on the figure and
         nothing could put back: a ``Colorbar``'s axes is *removed*, which :meth:`_PartialDraw.undo` does not
         watch — it restores the axes' single legend slot by assignment, and a bar does not use that slot —
-        and a removed axes cannot be re-added (review M4). :func:`~digitalearth.static.guides.plan_guide`
+        and a removed axes cannot be re-added (review M4). :func:`~digitalearth.static.legends.legend.plan_guide`
         answers every refusal a description can earn, so nothing between the removal and the draw can fail
         except the engine itself.
 
@@ -1116,7 +1116,7 @@ class Renderer:
 
         Args:
             layer: The layer's description, which carries the guide (see
-                :func:`~digitalearth.static.guides.plan_guide`).
+                :func:`~digitalearth.static.legends.legend.plan_guide`).
             **kwargs: Styling forwarded to the matplotlib colorbar or legend.
 
         Returns:
@@ -1124,7 +1124,7 @@ class Renderer:
             layer this renderer has drawn nothing for.
 
         Raises:
-            ValueError: from :func:`~digitalearth.static.guides.plan_guide`, for a key the layer's scale
+            ValueError: from :func:`~digitalearth.static.legends.legend.plan_guide`, for a key the layer's scale
                 cannot be drawn as — raised before the layer's previous key is taken off, so a refusal
                 leaves the figure exactly as it was.
         """
@@ -1145,7 +1145,7 @@ class Renderer:
             # *found*, so hiding a layer and then keying it used to give a different figure from keying it
             # and then hiding it — a bar labelling a picture the reader cannot see, which is the symptom
             # order 24 names as its motivation. Applied here rather than in
-            # :func:`~digitalearth.static.guides.draw_guide` because visibility is the renderer's reading:
+            # :func:`~digitalearth.static.legends.legend.draw_guide` because visibility is the renderer's reading:
             # it lives on the artists, not in the description, and `is_visible` is what knows that a layer
             # owning no artist carries it here instead.
             _set_visible(_guide_artist(made), False)
@@ -1273,7 +1273,7 @@ class Renderer:
         **This is the picture, not the description.** It reconciles the artists on the axes and this
         renderer's own record of them: the scene's layer tree and its sources are untouched, so a caller who
         applies a figure through *this* method still has a map describing the one its builders made.
-        :meth:`~digitalearth.static.scene.Scene._change` is what pairs the two — it calls this and then
+        :meth:`~digitalearth.static.core.scene.Scene._change` is what pairs the two — it calls this and then
         installs the description, so the figure the map reports is only ever one the axes was brought to.
 
         **A restyle expressed only in a value the description does not carry is invisible to this path.**
@@ -1644,7 +1644,7 @@ class Renderer:
             **A layer that owns no artist answers what was last asked of it**, and ``True`` when nothing has
             been. A graticule is the one that gets there: its lines reach the axes with the globe frame, so it
             owns none until
-            :meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame` has run, and none at all
+            :meth:`~digitalearth.static.builders.projection.ProjectionMixin._apply_frame` has run, and none at all
             on a flat map. The answer used to be ``all(())`` — unconditionally ``True`` — so a flat graticule
             described ``visible=False`` read back as drawn, and ``set_visible(id, False)`` followed by this
             could answer ``True`` for the layer it had just hidden. Nothing was drawn either way, so no pixel
@@ -1693,8 +1693,8 @@ class Renderer:
 
         The lookup a pick needs (ST-25). matplotlib hands a canvas event an *artist*, and a caller asked
         "what did I click on?" wants the **layer id** they named the thing by — the id
-        :attr:`~digitalearth.static.scene.Scene.layer_ids` lists, :meth:`get_layer` describes and
-        :meth:`~digitalearth.static.scene.Scene.remove_layer` takes off. This is the only place that
+        :attr:`~digitalearth.static.core.scene.Scene.layer_ids` lists, :meth:`get_layer` describes and
+        :meth:`~digitalearth.static.core.scene.Scene.remove_layer` takes off. This is the only place that
         mapping exists, because this is the only record of which artists a layer put on the axes.
 
         **One layer can own several artists** — :attr:`DrawnLayer.artists` is a tuple, and a limb-split
@@ -1706,7 +1706,7 @@ class Renderer:
 
         Returns:
             The layer's id, or ``None`` for an artist no layer owns: one a caller drew straight onto
-            :attr:`~digitalearth.static.scene.Scene.ax` (the escape hatch, which is outside the description
+            :attr:`~digitalearth.static.core.scene.Scene.ax` (the escape hatch, which is outside the description
             by design), one left by a layer that has since been removed, or a figure-level artist such as
             the axes' spines.
 
@@ -1762,7 +1762,7 @@ class Renderer:
 
         Args:
             event: A matplotlib mouse event, already known to be over the scene's axes — the caller
-                (:meth:`~digitalearth.static.scene.Scene._deliver_pick`) is what checks ``inaxes``, because
+                (:meth:`~digitalearth.static.core.scene.Scene._deliver_pick`) is what checks ``inaxes``, because
                 only the scene knows which axes is its own.
 
         Returns:

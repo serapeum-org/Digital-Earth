@@ -8,7 +8,7 @@ pyramids, through :meth:`digitalearth.base.spec.Bounds.to_crs` or the static tie
 ``base`` could not read it without importing a backend — so ``RenderTarget.view_request`` refused a named
 domain outright and a view framed by ``domain="europe"`` read its whole source instead of that region. The
 table has no matplotlib in it and no reason to belong to one tier; every tier resolves the same name to the
-same box from here. ``digitalearth.static.domains`` re-exports it, so the old import path still works.
+same box from here. ``digitalearth.static.core.domains`` re-exports it, so the old import path still works.
 
 Three ways to name a region:
 

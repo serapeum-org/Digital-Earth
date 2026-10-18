@@ -7,7 +7,7 @@ The shared logic lives in :mod:`tests.base._retarget_checks`; this passes the st
 from pyramids.feature import FeatureCollection
 
 from digitalearth.static import Map
-from digitalearth.static.renderer import _CANONICAL_VIA, _recipes, retarget_via
+from digitalearth.static.render.renderer import _CANONICAL_VIA, _recipes, retarget_via
 from tests.base._retarget_checks import (
     assert_canonical_entries_are_recipes,
     assert_every_multi_recipe_kind_is_covered,

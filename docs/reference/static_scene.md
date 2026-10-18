@@ -46,7 +46,7 @@ single `grid` panel in `with`; save the figure and close it once.
 band with no finite values — and logs a warning naming it, so one bad frame does not abort a batch.
 `strict=True` raises instead, for a pipeline that must not publish a figure with a layer missing.
 
-::: digitalearth.static.scene.Scene
+::: digitalearth.static.core.scene.Scene
     options:
       docstring_options:
         warn_missing_types: false
@@ -69,12 +69,12 @@ band with no finite values — and logs a warning naming it, so one bad frame do
         - show
         - close
 
-::: digitalearth.static.figure.grid
+::: digitalearth.static.panels.figure.grid
     options:
       docstring_options:
         warn_missing_types: false
 
-::: digitalearth.static.figure.shared_colorbar
+::: digitalearth.static.panels.figure.shared_colorbar
     options:
       docstring_options:
         warn_missing_types: false

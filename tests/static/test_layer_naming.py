@@ -23,7 +23,7 @@ from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.static import Map
-from digitalearth.static.maps.decoration import (
+from digitalearth.static.builders.decoration import (
     _font_family_a_name_still_stands_for,
 )
 

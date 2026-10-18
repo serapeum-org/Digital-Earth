@@ -27,7 +27,7 @@ from pyramids.feature import FeatureCollection
 
 from digitalearth.base.capabilities import CapabilityError
 from digitalearth.static import Map
-from digitalearth.static.renderer import _painted
+from digitalearth.static.render.renderer import _painted
 from tests.base.layer_management import (
     BOTTOM,
     TOP,

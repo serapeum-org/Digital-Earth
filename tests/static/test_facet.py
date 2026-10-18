@@ -14,7 +14,9 @@ import pytest
 from matplotlib.colors import BoundaryNorm, to_hex
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.static import Map, facet, figure, projections
+from digitalearth.static import Map, facet
+from digitalearth.static.panels import figure
+from digitalearth.static.view import projections
 
 #: Four 4 x 4 frames whose values climb frame by frame, so a per-panel scale would differ on every panel.
 FRAMES = [np.arange(16, dtype="float64").reshape(4, 4) + 10.0 * i for i in range(4)]

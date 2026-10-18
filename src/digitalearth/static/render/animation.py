@@ -5,8 +5,8 @@ and seconds to encode. cleopatra 0.33 added ``gif_from_video``, which reads fram
 video instead of re-rendering them, so a clip can be rendered **once** and delivered as both a video and a GIF.
 
 :func:`save_animation` is the Digital-Earth wrapper over that pair. It is shared by
-:class:`~digitalearth.static.maps.animation.AnimationMixin` (``Map.animate`` / ``Map.rotate``) and
-:class:`~digitalearth.static.textured_globe.TexturedGlobe`, so every animated scene saves the same way.
+:class:`~digitalearth.static.builders.animation.AnimationMixin` (``Map.animate`` / ``Map.rotate``) and
+:class:`~digitalearth.static.globe.textured_globe.TexturedGlobe`, so every animated scene saves the same way.
 
 The one piece of real judgement here is the intermediate's pixel format. cleopatra's ``save_animation``
 defaults to ``pix_fmt="yuv420p"`` for universal playback, but that halves the colour resolution before the GIF
@@ -128,7 +128,7 @@ def save_animation(
     Examples:
         - Rendering once and delivering two formats, without drawing the frames twice:
             ```python
-            >>> from digitalearth.static.animation import save_animation
+            >>> from digitalearth.static.render.animation import save_animation
             >>> video, gif = save_animation(anim, "clip.mp4", fps=12, gif="clip.gif")  # doctest: +SKIP
 
             ```

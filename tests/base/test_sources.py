@@ -447,7 +447,7 @@ def test_reproject_reports_an_empty_view_as_off_limb():
     from pyramids.dataset import Dataset, GeoReference
 
     from digitalearth.base.crs import OffLimbError, reproject
-    from digitalearth.static import projections
+    from digitalearth.static.view import projections
 
     ds = Dataset.from_array(
         np.ones((20, 20), "float32"),

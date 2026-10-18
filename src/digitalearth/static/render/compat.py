@@ -26,11 +26,11 @@ the kind of claim that survives unchecked into the work that was supposed to bui
 - :func:`group_render_kwargs` — the glyph-agnostic fold into group objects (idempotent; an already-built
   group object, or an unrelated kwarg, passes through untouched). Every group but one is folded by mapping
   keys onto fields here, because no other group has a builder upstream; the colour group is built by
-  :func:`digitalearth.static.style_fold.fold_color_scaling`, which calls cleopatra's own
+  :func:`digitalearth.static.render.style_fold.fold_color_scaling`, which calls cleopatra's own
   ``ColorScaling.from_options``.
 - :func:`prepare_plot_kwargs` — fold the flat members a *given glyph* supports into their group objects, and
   hand back any ``alpha`` the glyph cannot take for the caller to apply to the artist. Applied centrally in
-  :meth:`~digitalearth.static.scene.Scene._render_glyph`.
+  :meth:`~digitalearth.static.core.scene.Scene._render_glyph`.
 
 What *is* true today: no builder holds a style-mapping decision of its own — every cleopatra spelling,
 including the ``size`` -> ``point_size`` fold, is decided here.
@@ -45,7 +45,7 @@ from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
 
 from digitalearth.base.spec import StyleKey, StyleSchema, Symbology
-from digitalearth.static.style_fold import (
+from digitalearth.static.render.style_fold import (
     COLOR_GROUP_MEMBERS,
     COLOR_GROUP_PARAM,
     COLOR_SCALE_ALIASES,
@@ -127,7 +127,7 @@ _GROUP_SPECS = (
 #: The typed group parameters themselves (``color``/``contour``/``data_style``/``classify``/``cells``/``points``)
 #: — the constructors reject these too, so a caller passing a group object directly must also route to ``plot``.
 #: ``color`` is not in :data:`_GROUP_SPECS`: its members fold through
-#: :func:`~digitalearth.static.style_fold.fold_color_scaling` rather than through a field map here.
+#: :func:`~digitalearth.static.render.style_fold.fold_color_scaling` rather than through a field map here.
 _GROUP_PARAMS = frozenset(
     {param for param, _, _ in _GROUP_SPECS} | {"points", COLOR_GROUP_PARAM}
 )
@@ -163,7 +163,7 @@ NORM_KEY = "norm"
 #: The colours a field gives the values its ramp cannot place: a nodata cell (`missing`), a value below
 #: `vmin` (`under`) and one above `vmax` (`over`). They are **this tier's own** keywords rather than
 #: cleopatra's — the glyphs take their extremes on the colormap, not as keywords — so they are popped out of
-#: the drawing options by `digitalearth.static.maps.raster.FieldColors`, which owns the decision and spends
+#: the drawing options by `digitalearth.static.builders.raster.FieldColors`, which owns the decision and spends
 #: them twice: `FieldColors.applied_to` folds them onto the drawn colormap through matplotlib's
 #: `Colormap.with_extremes(bad=..., over=..., under=...)`, and restates them on the `Scale` the layer
 #: publishes through `Scale.with_extremes`, so the picture and its description agree. The spellings are
@@ -187,7 +187,7 @@ ROBUST_KEY = "robust"
 #: band with ``center=0, vmax=2`` draws through ``(-3.0, 3.0)`` and with ``center=0, vmin=-1, vmax=2``
 #: through ``(-2.0, 2.0)``. ``FieldColors._center_on`` in the raster mixin states the same rule.
 #: Declared here beside ``robust`` for the same reason, and honoured one
-#: step further — :class:`~digitalearth.static.maps.raster.FieldColors` supplies the diverging *ramp*
+#: step further — :class:`~digitalearth.static.builders.raster.FieldColors` supplies the diverging *ramp*
 #: cleopatra would have defaulted to, which this tier's own colormap resolution suppresses. The two halves
 #: are honoured on different conditions: the symmetrisation above happens whenever a centre is stated, while
 #: the ramp is supplied only when the caller named no colormap **and** the band straddles the centre. So a
@@ -330,7 +330,7 @@ def route_flat_style(flat: Mapping[str, Any]) -> tuple[Symbology, dict[str, Any]
     Examples:
         - A channel keyword, a static property and a constructor option travel in one dict and are separated:
             ```python
-            >>> from digitalearth.static.render_compat import route_flat_style
+            >>> from digitalearth.static.render.compat import route_flat_style
             >>> sym, rest = route_flat_style({"alpha": 0.4, "hillshade": True, "cmap": "viridis"})
             >>> sym.encoding("opacity").resolve()
             0.4
@@ -340,7 +340,7 @@ def route_flat_style(flat: Mapping[str, Any]) -> tuple[Symbology, dict[str, Any]
             ```
         - A misspelt key reaches nothing, and the schema names what it was probably meant to be:
             ```python
-            >>> from digitalearth.static.render_compat import STATIC_STYLE_SCHEMA, route_flat_style
+            >>> from digitalearth.static.render.compat import STATIC_STYLE_SCHEMA, route_flat_style
             >>> _, rest = route_flat_style({"hillshde": True})
             >>> list(rest)
             ['hillshde']
@@ -373,7 +373,7 @@ def fold_symbology(symbology: Symbology) -> tuple[dict[str, Any], dict[str, str]
         - Constants fold onto their keywords; the properties pass through:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.static.render_compat import fold_symbology
+            >>> from digitalearth.static.render.compat import fold_symbology
             >>> flat, unsupported = fold_symbology(Symbology.of(opacity=0.4).with_props(hillshade=True))
             >>> flat == {"alpha": 0.4, "hillshade": True}, unsupported
             (True, {})
@@ -382,7 +382,7 @@ def fold_symbology(symbology: Symbology) -> tuple[dict[str, Any], dict[str, str]
         - A channel this surface has no keyword for is reported rather than dropped:
             ```python
             >>> from digitalearth.base.spec import Symbology
-            >>> from digitalearth.static.render_compat import fold_symbology
+            >>> from digitalearth.static.render.compat import fold_symbology
             >>> _, unsupported = fold_symbology(Symbology.of(height=30.0))
             >>> sorted(unsupported)
             ['height']
@@ -453,7 +453,7 @@ def relocate_flat_style(
     Examples:
         - The styling keys move out, and the constructor keeps what it still accepts:
             ```python
-            >>> from digitalearth.static.render_compat import relocate_flat_style
+            >>> from digitalearth.static.render.compat import relocate_flat_style
             >>> opts = {"scheme": "quantiles", "k": 4, "cmap": "viridis"}
             >>> moved = relocate_flat_style(opts)
             >>> sorted(moved), opts
@@ -462,7 +462,7 @@ def relocate_flat_style(
             ```
         - For a point glyph, the `size` channel folds onto the constructor spelling cleopatra wants:
             ```python
-            >>> from digitalearth.static.render_compat import relocate_flat_style
+            >>> from digitalearth.static.render.compat import relocate_flat_style
             >>> opts = {"size": 12, "cmap": "viridis"}
             >>> relocate_flat_style(opts, folds_marker_size=True)
             {}
@@ -568,7 +568,7 @@ def _fold_group(
     Note:
         A caller who passed a built group under ``param`` keeps it, and their flat members are left in place
         for :func:`prepare_plot_kwargs` to refuse by name. The colour group does not come through here — it
-        is built by :func:`~digitalearth.static.style_fold.fold_color_scaling`, which refuses that pair
+        is built by :func:`~digitalearth.static.render.style_fold.fold_color_scaling`, which refuses that pair
         rather than forwarding it.
     """
     if out.get(param) is not None:
@@ -590,7 +590,7 @@ def group_render_kwargs(
     to apply once, centrally, and idempotent on its own output.
 
     The colour group is the one built upstream, by ``ColorScaling.from_options`` — see
-    :func:`~digitalearth.static.style_fold.fold_color_scaling`, which also refuses a built ``color=`` passed
+    :func:`~digitalearth.static.render.style_fold.fold_color_scaling`, which also refuses a built ``color=`` passed
     beside a flat colour keyword instead of forwarding both.
 
     Args:
@@ -655,7 +655,7 @@ def plot_takes(glyph: Any, param: str) -> bool:
             >>> import numpy as np
             >>> from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
             >>> from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
-            >>> from digitalearth.static.render_compat import plot_takes
+            >>> from digitalearth.static.render.compat import plot_takes
             >>> plot_takes(ArrayGlyph(np.zeros((2, 2))), "compose")
             True
             >>> plot_takes(ScatterGlyph(np.zeros(2), np.zeros(2)), "compose")

@@ -2,7 +2,7 @@
 
 A locator map answers one question — *where on the wider area is this?* — and it is geospatial composition
 rather than rendering, so it belongs here: ``ax.inset_axes()`` is matplotlib's own, a borrowed axes is
-already what :class:`~digitalearth.static.scene.Scene` draws into, and the only part neither of them
+already what :class:`~digitalearth.static.core.scene.Scene` draws into, and the only part neither of them
 answers is placing one map's extent in another map's CRS. cleopatra and pyramids need nothing for it.
 
 Two value objects carry the work, so neither the arithmetic nor the refusals live in the method:
@@ -32,15 +32,15 @@ from digitalearth.base.crs import is_geographic
 from digitalearth.base.spec.bounds import same_crs
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.builders.base import GeoLayerBase as _MixinBase
     from digitalearth.static.map import Map
-    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
 logger = logging.getLogger(__name__)
 
 #: Samples per edge of an extent box. 21 is the count
-#: :func:`~digitalearth.static.maps.decoration._edge_samples` uses for the neighbouring job (bounding a
+#: :func:`~digitalearth.static.builders.decoration._edge_samples` uses for the neighbouring job (bounding a
 #: reprojected box), so an outline drawn here and an envelope measured there agree about the same rectangle.
 _EDGE_SAMPLES = 21
 
@@ -148,7 +148,7 @@ class _ExtentBox:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.maps.inset import _ExtentBox
+            >>> from digitalearth.static.builders.inset import _ExtentBox
             >>> m = Map(crs=4326)
             >>> _ = m.set_bounds([2.0, 3.0, 8.0, 9.0])
             >>> box = _ExtentBox.of(m)
@@ -166,7 +166,7 @@ class _ExtentBox:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.maps.inset import _ExtentBox
+            >>> from digitalearth.static.builders.inset import _ExtentBox
             >>> m = Map(crs=4326)
             >>> try:
             ...     _ExtentBox.of(m)
@@ -257,7 +257,7 @@ class _ExtentBox:
         The samples run anticlockwise from the south-west corner — south edge west to east, east edge
         south to north, north edge east to west, west edge north to south — so the points are in *ring*
         order and can be drawn as a polygon. That ordering is the difference from
-        :func:`~digitalearth.static.maps.decoration._edge_samples`, which samples the same four edges for
+        :func:`~digitalearth.static.builders.decoration._edge_samples`, which samples the same four edges for
         an envelope and so interleaves them.
 
         Returns:
@@ -332,7 +332,7 @@ class _InsetFrame:
     Examples:
         - A corner and a size become the rectangle, padded off the map's edge:
             ```python
-            >>> from digitalearth.static.maps.inset import _InsetFrame
+            >>> from digitalearth.static.builders.inset import _InsetFrame
             >>> _InsetFrame.resolve("upper right", 0.3).as_bounds()
             (0.67, 0.67, 0.3, 0.3)
             >>> _InsetFrame.resolve("lower left", 0.3).as_bounds()
@@ -341,7 +341,7 @@ class _InsetFrame:
             ```
         - Four fractions are taken as given, and a word that is not a corner is refused by name:
             ```python
-            >>> from digitalearth.static.maps.inset import _InsetFrame
+            >>> from digitalearth.static.builders.inset import _InsetFrame
             >>> _InsetFrame.resolve((0.1, 0.2, 0.3, 0.4), 0.28).as_bounds()
             (0.1, 0.2, 0.3, 0.4)
             >>> try:
@@ -354,7 +354,7 @@ class _InsetFrame:
         - The largest corner inset is the axes less its two pads, and a size that cannot keep them is
           refused rather than hung off the edge:
             ```python
-            >>> from digitalearth.static.maps.inset import _InsetFrame
+            >>> from digitalearth.static.builders.inset import _InsetFrame
             >>> _InsetFrame.resolve("upper right", 0.94).as_bounds()
             (0.03, 0.03, 0.94, 0.94)
             >>> try:
@@ -485,7 +485,7 @@ class _InsetFrame:
             - A contained rectangle is taken as given, and each impossible one is refused naming the
               call and the keyword:
                 ```python
-                >>> from digitalearth.static.maps.inset import _InsetFrame
+                >>> from digitalearth.static.builders.inset import _InsetFrame
                 >>> _InsetFrame.resolve((0.1, 0.2, 0.3, 0.4), 0.28).as_bounds()
                 (0.1, 0.2, 0.3, 0.4)
                 >>> for bad in ((0.6, 0.6, 0.0, 0.3), (float("nan"), 0.0, 0.3, 0.3),
@@ -562,11 +562,11 @@ class InsetMixin(_MixinBase):
 
     **Both methods return `self`**, like every other builder on the tier, and what each one built is read
     back off an accessor rather than off the call: the locator from :attr:`locator`, the extent box from
-    :meth:`~digitalearth.static.scene.Scene.artist` by its layer id. The alternative — handing the thing
+    :meth:`~digitalearth.static.core.scene.Scene.artist` by its layer id. The alternative — handing the thing
     back directly — reads well for one call but breaks the chain every other method keeps, and
     `tests/test_mixin_contract.py` holds the tier to it. Neither is a carve-out, which is what keeps the
     tier's censuses true:
-    :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is still the only one
+    :meth:`~digitalearth.static.builders.decoration.DecorationMixin.stock_img` is still the only one
     (round 2, L7).
     """
 
@@ -699,7 +699,7 @@ class InsetMixin(_MixinBase):
         :meth:`inset` defaults to; under a reprojection it is the extent's projected outline.
 
         Useful on its own as well as through :meth:`inset` — two panels of a
-        :func:`~digitalearth.static.figure.grid` can mark each other's extents, with no inset involved.
+        :func:`~digitalearth.static.panels.figure.grid` can mark each other's extents, with no inset involved.
 
         Args:
             other: The map whose extent is to be marked — the detail map, when this one is the locator.
@@ -711,24 +711,24 @@ class InsetMixin(_MixinBase):
         Returns:
             This map, so the call chains like every other builder on the tier — including
             :meth:`inset`, the sibling on this mixin. The box itself is read back by id through
-            :meth:`~digitalearth.static.scene.Scene.artist`: `custom-1` by default, or whatever
-            ``name=`` asked for. :meth:`~digitalearth.static.scene.Scene.set_visible`,
-            :meth:`~digitalearth.static.scene.Scene.get_layer` and
-            :meth:`~digitalearth.static.scene.Scene.remove_layer` reach it by the same id.
+            :meth:`~digitalearth.static.core.scene.Scene.artist`: `custom-1` by default, or whatever
+            ``name=`` asked for. :meth:`~digitalearth.static.core.scene.Scene.set_visible`,
+            :meth:`~digitalearth.static.core.scene.Scene.get_layer` and
+            :meth:`~digitalearth.static.core.scene.Scene.remove_layer` reach it by the same id.
 
             It returned the ``Polygon`` until round 2's L7, which made this a **second** carve-out handing
             back a *registered layer's* artist — the kind
-            :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` is singled out as in
+            :meth:`~digitalearth.static.builders.decoration.DecorationMixin.stock_img` is singled out as in
             ``tests/static/test_decoration_chaining.py`` ("the one decoration method that keeps its artist
             return"), and which ``raster.py``'s canonical chaining note names beside
-            :meth:`~digitalearth.static.maps.vector.VectorMixin.quiverkey` — the second entry in that
+            :meth:`~digitalearth.static.builders.vector.VectorMixin.quiverkey` — the second entry in that
             census, whose ``QuiverKey`` is furniture registering no layer rather than a layer's artist. The
             rationale it carried ("one patch a caller restyles afterwards") is the reasoning this package
             rejected for ``text``/``annotate``, and it bought nothing, since the patch was already
             registered and already reachable by id.
 
             A box this map's CRS has no finite image of **registers no layer**, so there is no id to read
-            and :meth:`~digitalearth.static.scene.Scene.artist` refuses the name — the signal the old
+            and :meth:`~digitalearth.static.core.scene.Scene.artist` refuses the name — the signal the old
             ``None`` return carried, in the tier's own words. The skip is logged at ``WARNING`` as well,
             because a locator with no box on it looks exactly like a call that never happened.
 
@@ -762,7 +762,7 @@ class InsetMixin(_MixinBase):
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
-                >>> from digitalearth.static import Map, projections
+                >>> from digitalearth.static import Map; from digitalearth.static.view import projections
                 >>> main = Map(crs=projections.orthographic(0, 0))
                 >>> _ = main.set_bounds([2.0e7, 2.0e7, 3.0e7, 3.0e7])   # far off the limb
                 >>> locator = Map(crs=4326)
@@ -802,7 +802,7 @@ class InsetMixin(_MixinBase):
         map's own business: the inset axes is a *child* of this map's axes, so it moves and scales with it,
         and the extent being marked is this map's extent in this map's CRS. A figure-level function would
         have to be handed both anyway, and would have no way to place the inset inside one panel of a
-        :func:`~digitalearth.static.figure.grid`.
+        :func:`~digitalearth.static.panels.figure.grid`.
 
         Note:
             **A globe locator is framed as it is built**, not at render time. Nothing else ever renders
@@ -815,8 +815,8 @@ class InsetMixin(_MixinBase):
         Warning:
             **The locator shares this map's figure, but closing the locator no longer closes the map.**
             The locator is built on an inset axes of this map's figure, so it does not own that figure
-            (:attr:`~digitalearth.static.scene.Scene._owns_fig` is `False`):
-            :meth:`~digitalearth.static.scene.Scene.close` spares a borrowed figure, so after
+            (:attr:`~digitalearth.static.core.scene.Scene._owns_fig` is `False`):
+            :meth:`~digitalearth.static.core.scene.Scene.close` spares a borrowed figure, so after
             `m.inset(); m.locator.close()`, `m.fig.number` is still in `pyplot.get_fignums()` — the
             locator's own state is released and the map's figure is left open (#371, resolved). Close the
             *map* when you are done, which closes the figure both sit on.
@@ -985,7 +985,7 @@ class InsetMixin(_MixinBase):
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from matplotlib.patches import PathPatch
-                >>> from digitalearth.static import Map, projections
+                >>> from digitalearth.static import Map; from digitalearth.static.view import projections
                 >>> m = Map(crs=projections.orthographic(10, 20), globe=True)
                 >>> _ = m.set_bounds([-1.0e6, -1.0e6, 1.0e6, 1.0e6])
                 >>> locator = m.inset(reference=("land",)).locator
@@ -1056,7 +1056,7 @@ class InsetMixin(_MixinBase):
     ) -> tuple[list[float], Any | None]:
         """Read a locator extent into four display-CRS numbers, recentring one that crosses the dateline.
 
-        :meth:`~digitalearth.static.maps.projection.ProjectionMixin.set_bounds` honours a flipped pair as an
+        :meth:`~digitalearth.static.builders.projection.ProjectionMixin.set_bounds` honours a flipped pair as an
         inverted axis — a deliberate 2-D-tier contract — but a locator's `extent` is the wider rectangle the
         inset shows, not an axis to invert, so a ``west > east`` pair is read here in front of the method,
         with the method's other refusals, so a bad extent leaves nothing half-built.

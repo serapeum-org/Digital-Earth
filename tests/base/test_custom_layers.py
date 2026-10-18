@@ -200,7 +200,7 @@ class TestWhatC7DoesNotCover:
     #: without its engine: `drawer_for` refuses a kind before it imports any builder behind one, which is
     #: what lets all four tiers be asked from the engine-free base env.
     UNDRAWN_PER_TIER = [
-        ("static", "digitalearth.static.renderer", "terrain"),
+        ("static", "digitalearth.static.render.renderer", "terrain"),
         ("interactive", "digitalearth.interactive.renderer", "terrain"),
         ("3d", "digitalearth.three_d.renderer", "hexbin"),
         ("web", "digitalearth.web.renderer", "mesh"),

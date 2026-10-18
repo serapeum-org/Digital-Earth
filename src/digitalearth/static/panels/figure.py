@@ -36,8 +36,8 @@ from digitalearth.base.raster_classes import (
 )
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DEFAULT_BAND, Scale
+from digitalearth.static.core.scene import Scene
 from digitalearth.static.map import Map
-from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ def grid(
             heading and one caption per panel coexist. Style it by calling ``fig.suptitle`` yourself on
             the returned figure — which each panel describes as its figure's heading either way, since
             every panel reads the heading off the figure it shares
-            (:attr:`~digitalearth.static.scene.Scene.figure_spec`).
+            (:attr:`~digitalearth.static.core.scene.Scene.figure_spec`).
         **kwargs: Forwarded to each ``Map`` (e.g. ``domain``).
 
     Returns:
@@ -128,7 +128,7 @@ def grid(
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.figure import grid
+            >>> from digitalearth.static.panels.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326)
             >>> len(maps)
             4
@@ -142,7 +142,7 @@ def grid(
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.figure import grid
+            >>> from digitalearth.static.panels.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326)
             >>> _ = maps[0].set_title("left")
             >>> _ = maps[1].set_title("right")
@@ -157,7 +157,7 @@ def grid(
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.figure import grid
+            >>> from digitalearth.static.panels.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326, sharex="all", sharey="all")
             >>> _ = maps[0].set_bounds([2.0, 3.0, 8.0, 9.0])
             >>> [float(v) for v in maps[3].ax.get_xlim()]
@@ -175,7 +175,7 @@ def grid(
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.figure import grid
+            >>> from digitalearth.static.panels.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326, sharex="row", sharey="col")
             >>> [m.ax.xaxis.get_tick_params(which="major")["labelbottom"] for m in maps]
             [True, True, True, True]
@@ -189,7 +189,7 @@ def grid(
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.static.figure import grid
+            >>> from digitalearth.static.panels.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326, sharex="col")
             >>> group = maps[0].ax.get_shared_x_axes().get_siblings(maps[0].ax)
             >>> sorted(id(ax) for ax in group) == sorted(id(m.ax) for m in (maps[0], maps[2]))
@@ -209,7 +209,7 @@ def grid(
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.figure import grid
+            >>> from digitalearth.static.panels.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
             >>> _ = maps[0].set_title("January")
             >>> [t.get_text() for t in fig.texts], maps[0].ax.get_title()
@@ -222,7 +222,7 @@ def grid(
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.figure import grid
+            >>> from digitalearth.static.panels.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326, suptitle="rainfall, 2020")
             >>> _ = maps[0].set_title("January")
             >>> spec = maps[0].figure_spec
@@ -413,7 +413,7 @@ class _PanelPlan:
             ```python
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
-            >>> from digitalearth.static.figure import _PanelPlan
+            >>> from digitalearth.static.panels.figure import _PanelPlan
             >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
             >>> frames = [
             ...     Dataset.from_array(arr=np.full((2, 2), float(i)), geo_ref=geo, no_data_value=-9999.0)
@@ -430,7 +430,7 @@ class _PanelPlan:
             ```python
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
-            >>> from digitalearth.static.figure import _PanelPlan
+            >>> from digitalearth.static.panels.figure import _PanelPlan
             >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
             >>> frames = [
             ...     Dataset.from_array(arr=np.full((2, 2), float(i)), geo_ref=geo, no_data_value=-9999.0)
@@ -497,7 +497,7 @@ class _PanelPlan:
                 ```python
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
-                >>> from digitalearth.static.figure import _PanelPlan
+                >>> from digitalearth.static.panels.figure import _PanelPlan
                 >>> cube = Dataset.from_array(
                 ...     arr=np.arange(12.0).reshape(3, 2, 2),
                 ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
@@ -515,7 +515,7 @@ class _PanelPlan:
                 ```python
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
-                >>> from digitalearth.static.figure import _PanelPlan
+                >>> from digitalearth.static.panels.figure import _PanelPlan
                 >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
                 >>> frames = [
                 ...     Dataset.from_array(arr=np.full((2, 2), 1.0), geo_ref=geo, no_data_value=-9999.0)
@@ -533,7 +533,7 @@ class _PanelPlan:
                 ```python
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
-                >>> from digitalearth.static.figure import _PanelPlan
+                >>> from digitalearth.static.panels.figure import _PanelPlan
                 >>> geo = GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
                 >>> one = Dataset.from_array(arr=np.full((2, 2), 1.0), geo_ref=geo, no_data_value=-9999.0)
                 >>> for stack, wrap in (([], None), ([one], 0)):
@@ -594,7 +594,7 @@ class _PanelPlan:
                 ```python
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
-                >>> from digitalearth.static.figure import _PanelPlan
+                >>> from digitalearth.static.panels.figure import _PanelPlan
                 >>> cube = Dataset.from_array(
                 ...     arr=np.arange(8.0).reshape(2, 2, 2),
                 ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
@@ -688,7 +688,7 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> dict[str, Any]:
         - Three codes pool into the categories every panel keys on, with the caller's cmap carried through:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.figure import _pooled_codes
+            >>> from digitalearth.static.panels.figure import _pooled_codes
             >>> shared = _pooled_codes(np.array([1.0, 2.0, 2.0, 5.0]), None)
             >>> shared["scheme"], shared["categories"], shared["cmap"]
             ('categorical', [1, 2, 5], None)
@@ -698,7 +698,7 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> dict[str, Any]:
           palette instead of restarting it:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.figure import _pooled_codes
+            >>> from digitalearth.static.panels.figure import _pooled_codes
             >>> low, high = np.array([1.0, 2.0]), np.array([3.0, 4.0])
             >>> _pooled_codes(np.concatenate([low, high]), "Set2")["categories"]
             [1, 2, 3, 4]
@@ -707,7 +707,7 @@ def _pooled_codes(pooled: np.ndarray, cmap: Any) -> dict[str, Any]:
         - Values that are not class codes are refused, naming what to use instead:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.figure import _pooled_codes
+            >>> from digitalearth.static.panels.figure import _pooled_codes
             >>> try:
             ...     _pooled_codes(np.array([1.5, 2.5]), None)
             ... except ValueError as error:
@@ -748,7 +748,7 @@ def _checked_classes(style: dict[str, Any]) -> dict[str, Any]:
         - Beside a named scheme ``k`` is kept as the plain count it is; unset or ``None`` it is dropped, so
           :func:`_shared_style` falls back to :data:`_DEFAULT_CLASSES`:
             ```python
-            >>> from digitalearth.static.figure import _checked_classes
+            >>> from digitalearth.static.panels.figure import _checked_classes
             >>> _checked_classes({"scheme": "quantiles", "k": 3})
             {'scheme': 'quantiles', 'k': 3}
             >>> _checked_classes({"scheme": "quantiles", "k": None})
@@ -759,7 +759,7 @@ def _checked_classes(style: dict[str, Any]) -> dict[str, Any]:
             ```
         - Each spelling ``k`` could not apply to is refused, naming what the value would have counted:
             ```python
-            >>> from digitalearth.static.figure import _checked_classes
+            >>> from digitalearth.static.panels.figure import _checked_classes
             >>> for style in (
             ...     {"k": 4},
             ...     {"k": 4, "scheme": [0.0, 1.0, 2.0]},
@@ -778,7 +778,7 @@ def _checked_classes(style: dict[str, Any]) -> dict[str, Any]:
             ```
         - A value that is not a count is refused rather than truncated or coerced, ``True`` included:
             ```python
-            >>> from digitalearth.static.figure import _checked_classes
+            >>> from digitalearth.static.panels.figure import _checked_classes
             >>> for value in (2.7, "4", True, 0):
             ...     try:
             ...         _checked_classes({"scheme": "quantiles", "k": value})
@@ -1224,7 +1224,7 @@ def quickpanels(
     ``quickpanels`` is for the other case — a handful of *distinct* fields (temperature, pressure, wind) laid
     out together — so each panel is styled, scaled and keyed on its own, and titled from its own metadata.
 
-    Each panel is drawn with the same auto-styling :meth:`~digitalearth.static.maps.raster.RasterMixin.field`
+    Each panel is drawn with the same auto-styling :meth:`~digitalearth.static.builders.raster.RasterMixin.field`
     applies to any raster (so a recognised variable picks its canonical colormap), and captioned by
     :func:`~digitalearth.base.captions.caption`: the title is the field's human name, and the colorbar label
     is that name with its units. Pass ``titles=`` to override the auto titles, or ``suptitle=`` for one

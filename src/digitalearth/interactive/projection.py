@@ -34,7 +34,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 _GRATICULE_STEPS = (1, 5, 10, 15, 20, 30)
 
 #: The spacing :meth:`ProjectionMixin.graticule` draws when the caller names no step — the same default the
-#: static tier's :data:`~digitalearth.static.maps.projection.DEFAULT_GRATICULE_STEP` takes. It is a named
+#: static tier's :data:`~digitalearth.static.builders.projection.DEFAULT_GRATICULE_STEP` takes. It is a named
 #: constant rather than a literal in the signature so the two tiers' defaults cannot drift apart unnoticed
 #: (a parity probe holds them equal), and so ``lon_step``/``lat_step`` can default to ``None`` — which is what
 #: lets a step the caller wrote be told from one they did not, so ``spacing=`` can warn when it discards one

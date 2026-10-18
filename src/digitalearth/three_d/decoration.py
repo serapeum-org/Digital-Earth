@@ -841,7 +841,7 @@ class DecorationMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.static.maps.decoration.DecorationMixin.text: the same name on the static tier.
+            digitalearth.static.builders.decoration.DecorationMixin.text: the same name on the static tier.
         """
         call = "Scene3D.text()"
         if s is None:

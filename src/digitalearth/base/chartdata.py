@@ -35,7 +35,7 @@ def column_or_array(data: Any, value: Any) -> np.ndarray | None:
 
     Use this for *paired* inputs that must stay index-aligned and may legitimately contain non-finite values
     (scatter ``x``/``y``/``color_by``/``size_by``). For a *single* field reduced to its finite values (histogram
-    / :func:`digitalearth.static.charts.statistics`), use :func:`field_values` instead.
+    / :func:`digitalearth.static.charts.charts.statistics`), use :func:`field_values` instead.
 
     Args:
         data: A (Geo)DataFrame whose columns ``value`` may name, or ``None``.
@@ -110,7 +110,7 @@ def field_values(data: Any, column: str | None = None) -> np.ndarray:
     (non-``NaN``/non-``inf``) values as ``float64``.
 
     Use this for a *single* field that is summarised or binned on its own (histogram,
-    :func:`digitalearth.static.charts.statistics`). For *paired* inputs that must keep their (possibly
+    :func:`digitalearth.static.charts.charts.statistics`). For *paired* inputs that must keep their (possibly
     non-finite) entries index-aligned, use :func:`column_or_array` instead.
 
     Args:

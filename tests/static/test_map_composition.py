@@ -6,12 +6,12 @@ class structure so an accidental re-flattening or mis-wiring is caught.
 """
 
 from digitalearth.static import Map, Scene
-from digitalearth.static.maps.animation import AnimationMixin
-from digitalearth.static.maps.base import GeoLayerBase
-from digitalearth.static.maps.decoration import DecorationMixin
-from digitalearth.static.maps.projection import ProjectionMixin
-from digitalearth.static.maps.raster import RasterMixin
-from digitalearth.static.maps.vector import VectorMixin
+from digitalearth.static.builders.animation import AnimationMixin
+from digitalearth.static.builders.base import GeoLayerBase
+from digitalearth.static.builders.decoration import DecorationMixin
+from digitalearth.static.builders.projection import ProjectionMixin
+from digitalearth.static.builders.raster import RasterMixin
+from digitalearth.static.builders.vector import VectorMixin
 
 
 class TestMapComposition:

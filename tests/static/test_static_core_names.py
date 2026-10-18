@@ -21,7 +21,7 @@ from shapely.geometry import Point, Polygon
 
 from digitalearth.api import _STATIC_RASTER_KINDS, quickmap
 from digitalearth.static import Map
-from digitalearth.static.maps.animation import _ANIMATION_KINDS, _KIND_METHODS
+from digitalearth.static.builders.animation import _ANIMATION_KINDS, _KIND_METHODS
 
 #: The recipe key each Core name records under `symbology.props["via"]`. **Unchanged by the rename**, which is
 #: the claim `base/contract.py` makes for it: a figure written before the rename names `via="imshow"`, and the

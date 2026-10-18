@@ -315,7 +315,7 @@ disable_error_code = ["attr-defined", "no-any-return"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.animation"  # 4 errors at baseline
+module = "digitalearth.static.builders.animation"  # 4 errors at baseline
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
@@ -335,15 +335,15 @@ module = "digitalearth.interactive.raster"  # 3 errors at baseline
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.decoration"  # 3 errors at baseline
+module = "digitalearth.static.builders.decoration"  # 3 errors at baseline
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.vector"  # 3 errors at baseline
+module = "digitalearth.static.builders.vector"  # 3 errors at baseline
 disable_error_code = ["arg-type", "no-any-return", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.render_compat"  # 3 errors at baseline
+module = "digitalearth.static.render.compat"  # 3 errors at baseline
 disable_error_code = ["arg-type", "attr-defined"]
 
 [[tool.mypy.overrides]]
@@ -372,15 +372,15 @@ module = "digitalearth.interactive.temporal"  # 2 errors at baseline
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.raster"  # 2 errors at baseline
+module = "digitalearth.static.builders.raster"  # 2 errors at baseline
 disable_error_code = ["dict-item", "union-attr"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.scene"  # 2 errors at baseline
+module = "digitalearth.static.core.scene"  # 2 errors at baseline
 disable_error_code = ["assignment", "exit-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.series"  # 2 errors at baseline
+module = "digitalearth.static.charts.series"  # 2 errors at baseline
 disable_error_code = ["arg-type", "assignment"]
 
 [[tool.mypy.overrides]]
@@ -393,19 +393,19 @@ disable_error_code = ["no-any-return"]
 
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.figures"  # 1 error at baseline
+module = "digitalearth.static.charts.figures"  # 1 error at baseline
 disable_error_code = ["return-value"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.maps.projection"  # 1 error at baseline
+module = "digitalearth.static.builders.projection"  # 1 error at baseline
 disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.projections"  # 1 error at baseline
+module = "digitalearth.static.view.projections"  # 1 error at baseline
 disable_error_code = ["assignment"]
 
 [[tool.mypy.overrides]]
-module = "digitalearth.static.textured_globe"  # 1 error at baseline
+module = "digitalearth.static.globe.textured_globe"  # 1 error at baseline
 disable_error_code = ["exit-return"]
 
 [[tool.mypy.overrides]]

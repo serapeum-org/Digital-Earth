@@ -28,7 +28,7 @@ def _graticule_parameters():
     """
     import inspect
 
-    from digitalearth.static.maps.projection import ProjectionMixin as StaticMixin
+    from digitalearth.static.builders.projection import ProjectionMixin as StaticMixin
 
     return (
         inspect.signature(InteractiveMap.graticule).parameters,
@@ -44,7 +44,7 @@ def _set_bounds_parameters():
     """
     import inspect
 
-    from digitalearth.static.maps.projection import ProjectionMixin as StaticMixin
+    from digitalearth.static.builders.projection import ProjectionMixin as StaticMixin
 
     return (
         inspect.signature(InteractiveMap.set_bounds).parameters,
@@ -268,7 +268,7 @@ class TestGraticuleSpacing:
         from digitalearth.interactive.projection import (
             DEFAULT_GRATICULE_STEP as INTERACTIVE_DEFAULT,
         )
-        from digitalearth.static.maps.projection import (
+        from digitalearth.static.builders.projection import (
             DEFAULT_GRATICULE_STEP as STATIC_DEFAULT,
         )
 

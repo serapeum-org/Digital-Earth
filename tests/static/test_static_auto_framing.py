@@ -23,7 +23,8 @@ from pyramids.feature import FeatureCollection
 from shapely.geometry import Point
 
 from digitalearth.base.spec import Bounds
-from digitalearth.static import Map, projections
+from digitalearth.static import Map
+from digitalearth.static.view import projections
 
 #: Two point layers in EPSG:4326, built so that neither one's rectangle contains the other and the union takes
 #: a different corner from each. Degrees, and a map drawn in degrees, so every expected number below is the

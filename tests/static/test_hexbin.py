@@ -14,7 +14,8 @@ from matplotlib.collections import PolyCollection
 from pyramids.feature import FeatureCollection
 from shapely.geometry import LineString, Point
 
-from digitalearth.static import Map, projections
+from digitalearth.static import Map
+from digitalearth.static.view import projections
 
 #: Three coincident observations at the origin and one far away, so the origin's bin aggregates three.
 XY = [(0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (8.0, 8.0)]

@@ -1269,7 +1269,7 @@ class TestTheHsvComposite:
             would be the same divergence one level down. What each tier adds of its own — this tier's
             ``opacity``, the static tier's ``**opts`` — is outside the shared set and left alone.
         """
-        from digitalearth.static.maps.raster import RasterMixin as StaticRaster
+        from digitalearth.static.builders.raster import RasterMixin as StaticRaster
 
         here = inspect.signature(WebMap.hsv_composite).parameters
         there = inspect.signature(StaticRaster.hsv_composite).parameters

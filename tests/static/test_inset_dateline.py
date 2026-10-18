@@ -17,7 +17,7 @@ from matplotlib.patches import Polygon
 matplotlib.use("Agg")
 
 from digitalearth.static import Map  # noqa: E402 - after the Agg backend is set
-from digitalearth.static.maps.inset import _ring_wraps  # noqa: E402
+from digitalearth.static.builders.inset import _ring_wraps  # noqa: E402
 
 DATELINE = [170.0, -40.0, -170.0, 40.0]
 

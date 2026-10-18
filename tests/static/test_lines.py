@@ -235,7 +235,7 @@ class TestOffTheLimb:
             rivers: The reaches, all within a few degrees of the origin.
             builder: The line builder under test.
         """
-        from digitalearth.static import projections
+        from digitalearth.static.view import projections
 
         canvas = Map(crs=projections.orthographic(lon=180, lat=0), globe=True)
         getattr(canvas, builder)(rivers)

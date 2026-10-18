@@ -180,7 +180,7 @@ class TestTheCanvasMeasurement:
             The same figure size at two resolutions must ask for different canvases; measuring only the inches
             would answer the same for both.
         """
-        from digitalearth.static.maps.raster import _canvas_pixels
+        from digitalearth.static.builders.raster import _canvas_pixels
 
         class Figure:
             """The two attributes the measurement reads off a matplotlib figure."""
@@ -209,7 +209,7 @@ class TestTheCanvasMeasurement:
 
     def test_a_figure_that_cannot_be_measured_falls_back_rather_than_failing(self):
         """A scene with no figure yet still has to yield a budget, not a traceback."""
-        from digitalearth.static.maps.raster import _FALLBACK_CANVAS, _canvas_pixels
+        from digitalearth.static.builders.raster import _FALLBACK_CANVAS, _canvas_pixels
 
         assert _canvas_pixels(type("S", (), {"fig": None})()) == _FALLBACK_CANVAS
 
@@ -222,7 +222,7 @@ class TestTheCanvasMeasurement:
             expected: Whether it should be decimated.
         """
         from digitalearth.base.spec import RenderTarget
-        from digitalearth.static.maps.raster import _worth_decimating
+        from digitalearth.static.builders.raster import _worth_decimating
 
         side = int(cells**0.5)
         raster = type(
@@ -234,7 +234,7 @@ class TestTheCanvasMeasurement:
     def test_a_source_with_no_windowed_read_is_never_decimated(self):
         """Without pyramids' ``read_part`` there is no window to read, whatever the size says."""
         from digitalearth.base.spec import RenderTarget
-        from digitalearth.static.maps.raster import _worth_decimating
+        from digitalearth.static.builders.raster import _worth_decimating
 
         raster = type("R", (), {"rows": 10_000, "columns": 10_000})()
         assert (
@@ -245,7 +245,7 @@ class TestTheCanvasMeasurement:
     def test_a_grid_that_reports_no_integer_size_is_never_decimated(self):
         """A size that cannot be measured is not one to decide a read on."""
         from digitalearth.base.spec import RenderTarget
-        from digitalearth.static.maps.raster import _worth_decimating
+        from digitalearth.static.builders.raster import _worth_decimating
 
         raster = type(
             "R", (), {"rows": "many", "columns": 3, "read_part": lambda *a, **k: None}

@@ -17,8 +17,9 @@ from matplotlib.image import AxesImage
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.spec import DEFAULT_BAND
-from digitalearth.static import Map, projections
-from digitalearth.static.maps.animation import FrameUpdate
+from digitalearth.static import Map
+from digitalearth.static.builders.animation import FrameUpdate
+from digitalearth.static.view import projections
 
 #: A clim every test passes explicitly, so the colour scale is never what a comparison is measuring.
 CLIM = {"vmin": -10.0, "vmax": 40.0}
@@ -360,7 +361,9 @@ class TestInPlaceRefusals:
             names the kind that cannot be updated in place rather than leaving the choice unexplained.
         """
         scene = Map(crs=4326, figsize=(3, 3))
-        with caplog.at_level(logging.INFO, logger="digitalearth.static.maps.animation"):
+        with caplog.at_level(
+            logging.INFO, logger="digitalearth.static.builders.animation"
+        ):
             anim = scene.animate(rgb_stack, kind="rgb_composite", fps=2)
             anim._func(0)
             anim._func(1)
@@ -1145,7 +1148,7 @@ class TestATitledClipSaysItIsOverwritingAHeading:
         scene = Map(crs=4326, figsize=(3, 3))
         scene.set_title(self.HEADING)
         with caplog.at_level(
-            logging.WARNING, logger="digitalearth.static.maps.animation"
+            logging.WARNING, logger="digitalearth.static.builders.animation"
         ):
             scene.animate(stack[:2], fps=2, titles=self.TITLES, update=mode, **CLIM)
         scene.close()
@@ -1167,7 +1170,7 @@ class TestATitledClipSaysItIsOverwritingAHeading:
         scene = Map(crs=4326, figsize=(3, 3))
         scene.set_title(self.HEADING)
         with caplog.at_level(
-            logging.WARNING, logger="digitalearth.static.maps.animation"
+            logging.WARNING, logger="digitalearth.static.builders.animation"
         ):
             scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
         scene.close()
@@ -1189,7 +1192,7 @@ class TestATitledClipSaysItIsOverwritingAHeading:
         scene = Map(crs=4326, figsize=(3, 3))
         scene.set_title(self.HEADING)
         with caplog.at_level(
-            logging.WARNING, logger="digitalearth.static.maps.animation"
+            logging.WARNING, logger="digitalearth.static.builders.animation"
         ):
             clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
             for index in range(2):
@@ -1213,7 +1216,7 @@ class TestATitledClipSaysItIsOverwritingAHeading:
         """
         scene = Map(crs=4326, figsize=(3, 3))
         with caplog.at_level(
-            logging.WARNING, logger="digitalearth.static.maps.animation"
+            logging.WARNING, logger="digitalearth.static.builders.animation"
         ):
             scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
         scene.close()
@@ -1235,7 +1238,7 @@ class TestATitledClipSaysItIsOverwritingAHeading:
         scene = Map(crs=4326, figsize=(3, 3))
         scene.set_title(self.HEADING)
         with caplog.at_level(
-            logging.WARNING, logger="digitalearth.static.maps.animation"
+            logging.WARNING, logger="digitalearth.static.builders.animation"
         ):
             scene.animate(stack[:2], fps=2, **CLIM)
         scene.close()
@@ -1257,7 +1260,7 @@ class TestATitledClipSaysItIsOverwritingAHeading:
         scene = Map(crs=4326, figsize=(3, 3))
         scene.set_title(self.HEADING)
         with caplog.at_level(
-            logging.WARNING, logger="digitalearth.static.maps.animation"
+            logging.WARNING, logger="digitalearth.static.builders.animation"
         ):
             clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
             clip._func(1)
@@ -1281,7 +1284,7 @@ class TestATitledClipSaysItIsOverwritingAHeading:
         scene = Map(crs=4326, figsize=(3, 3))
         scene.set_title(self.HEADING)
         with caplog.at_level(
-            logging.WARNING, logger="digitalearth.static.maps.animation"
+            logging.WARNING, logger="digitalearth.static.builders.animation"
         ):
             clip = scene.animate(stack[:2], fps=2, titles=self.TITLES, **CLIM)
             clip._func(1)

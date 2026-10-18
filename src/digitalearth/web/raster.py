@@ -2144,7 +2144,7 @@ class RasterMixin(_MixinBase):
 
         See Also:
             digitalearth.web.raster.RasterMixin.rgb_composite: the same three bands as red/green/blue.
-            digitalearth.static.maps.raster.RasterMixin.hsv_composite: the matplotlib tier's counterpart,
+            digitalearth.static.builders.raster.RasterMixin.hsv_composite: the matplotlib tier's counterpart,
                 which this answers to on every parameter the two share.
         """
         return self._composite(

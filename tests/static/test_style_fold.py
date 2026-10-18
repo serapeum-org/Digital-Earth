@@ -14,8 +14,8 @@ import matplotlib
 import pytest
 from cleopatra.styling.scaling import ColorScale, ColorScaling
 
-from digitalearth.static.render_compat import group_render_kwargs
-from digitalearth.static.style_fold import (
+from digitalearth.static.render.compat import group_render_kwargs
+from digitalearth.static.render.style_fold import (
     COLOR_SCALE_ALIASES,
     coerce_color_scale,
     fold_color_scaling,

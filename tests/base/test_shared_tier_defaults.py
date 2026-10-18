@@ -140,7 +140,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             this table does not must reach the tier unchanged — otherwise adding the shared default would
             have quietly narrowed what ``basemap()`` accepts.
         """
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         sentinel = object()
         assert _resolve_tile_source(sentinel) is sentinel, (
@@ -158,7 +158,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             default. Resolving ``None`` here is what makes the omitted argument mean the same thing on this
             tier as the keyword default does on the other two.
         """
-        from digitalearth.static.maps.decoration import (
+        from digitalearth.static.builders.decoration import (
             _SHARED_PROVIDERS,
             _resolve_tile_source,
         )
@@ -178,7 +178,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
         """
         from cleopatra.basemap.tiles import get_provider
 
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         cleopatras_own = get_provider(None)
         assert cleopatras_own.name == "OpenStreetMap.Mapnik", (
@@ -196,7 +196,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
         """
         from cleopatra.basemap.tiles import get_provider
 
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
         from digitalearth.web.decoration import _BASEMAP_PROVIDERS
 
         static_url = get_provider(_resolve_tile_source(None)).build_url()
@@ -212,7 +212,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             ``xyzservices`` as an unknown provider, so the same argument worked on two tiers and raised on the
             third — the same divergence as the default, one step along.
         """
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         assert _resolve_tile_source("cartodark") == "CartoDB.DarkMatter"
         assert _resolve_tile_source("OSM") == "OpenStreetMap.Mapnik"
@@ -224,7 +224,7 @@ class TestM4TheBasemapDefaultReachesEveryTier:
             The translation must be additive: an ``xyzservices`` path, a ``TileProvider`` or a URL was always
             legal here and still is.
         """
-        from digitalearth.static.maps.decoration import _resolve_tile_source
+        from digitalearth.static.builders.decoration import _resolve_tile_source
 
         url = "https://a.tile.example/{z}/{x}/{y}.png"
         assert _resolve_tile_source("Esri.WorldImagery") == "Esri.WorldImagery"
@@ -307,7 +307,7 @@ class TestM9TheAnimationRateIsOneConstant:
     @pytest.mark.parametrize(
         ("module", "attribute"),
         [
-            ("digitalearth.static.maps.animation", "DEFAULT_FPS"),
+            ("digitalearth.static.builders.animation", "DEFAULT_FPS"),
             ("digitalearth.interactive.animation", "DEFAULT_FPS"),
             ("digitalearth.web.export", "DEFAULT_FPS"),
         ],
@@ -372,7 +372,7 @@ class TestM9TheAnimationRateIsOneConstant:
     @pytest.mark.parametrize(
         "module",
         [
-            "static/maps/animation.py",
+            "static/builders/animation.py",
             "interactive/animation.py",
             "three_d/animation.py",
             "web/export.py",
@@ -398,7 +398,7 @@ class TestM9TheAnimationRateIsOneConstant:
             rate is unknown — and it was also called ``DEFAULT_FPS``, at a different value. Two names now, so
             neither reads as a copy of the other.
         """
-        from digitalearth.static import animation
+        from digitalearth.static.render import animation
 
         assert not hasattr(animation, "DEFAULT_FPS"), (
             "the save-time fallback must not share the entry points' constant name"
@@ -512,7 +512,7 @@ class TestALabelsDefaultsAreDeclaredOnce:
         Args:
             keyword: The label keyword under test.
         """
-        written = self._labels_defaults("static/maps/vector.py")[keyword]
+        written = self._labels_defaults("static/builders/vector.py")[keyword]
         assert written == self.LABEL_DEFAULTS[keyword], (
             f"labels({keyword}=) should default to {self.LABEL_DEFAULTS[keyword]}; it is written {written!r}"
         )

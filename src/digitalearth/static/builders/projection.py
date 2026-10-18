@@ -30,9 +30,9 @@ from pyramids.base.crs import reproject_coordinates
 from digitalearth.base.domains import DomainLike, resolve_domain
 from digitalearth.base.spec import Bounds, LayerSpec, Symbology, Viewport
 from digitalearth.base.spec.bounds import same_crs
-from digitalearth.static import projections
-from digitalearth.static.renderer import DrawnLayer, artists_added
-from digitalearth.static.scene import LayerRecord, drawing_style
+from digitalearth.static.core.scene import LayerRecord, drawing_style
+from digitalearth.static.render.renderer import DrawnLayer, artists_added
+from digitalearth.static.view import projections
 
 #: The meridian and parallel spacing a graticule is drawn at when the caller names neither, in degrees —
 #: the same default the interactive and web tiers take (#263). The two arguments default to ``None`` rather
@@ -41,7 +41,7 @@ from digitalearth.static.scene import LayerRecord, drawing_style
 DEFAULT_GRATICULE_STEP: float = 30.0
 
 #: The most gridlines a graticule may draw along one axis. The count is ``~span/step`` —
-#: :func:`digitalearth.static.projections.graticule` cuts its lines to the view's ``window`` since #393, so
+#: :func:`digitalearth.static.view.projections.graticule` cuts its lines to the view's ``window`` since #393, so
 #: ``span`` is the degrees that window covers: the whole world (``360`` of longitude, ``180`` of latitude)
 #: for an unframed or global view, and the framed region otherwise. A vanishing step draws millions of lines
 #: and the call never returns rather than drawing or refusing (the R2-L4 follow-up: a step that is finite,
@@ -54,7 +54,7 @@ DEFAULT_GRATICULE_STEP: float = 30.0
 #: enlarged, so the ceiling is enforced wherever the lines are generated — :meth:`_Graticule.__init__`, which
 #: every draw passes through — and not only at the :meth:`ProjectionMixin.graticule` entry (review H1). The
 #: clipping that makes a fine step cheap on a small view lives in
-#: :func:`~digitalearth.static.projections.graticule` (and pyramids beneath it); the refusal that bounds it
+#: :func:`~digitalearth.static.view.projections.graticule` (and pyramids beneath it); the refusal that bounds it
 #: is :func:`_checked_step`.
 MAX_GRATICULE_LINES: int = 2000
 
@@ -71,7 +71,7 @@ _GRATICULE_STYLE: dict[str, Any] = {
 _GRATICULE_LABEL_STYLE: dict[str, Any] = {"fontsize": 8, "color": "gray"}
 
 #: The lon/lat window degree labels are placed in when nothing has framed the axes — the span the lines
-#: themselves cover (:func:`digitalearth.static.projections.graticule` runs its meridians from -89.5 to
+#: themselves cover (:func:`digitalearth.static.view.projections.graticule` runs its meridians from -89.5 to
 #: 89.5), so a label sits at the end of its own line rather than past it.
 _LABEL_WORLD_WINDOW: tuple[float, float, float, float] = (-180.0, -89.5, 180.0, 89.5)
 
@@ -86,7 +86,7 @@ _LABEL_INSET: float = 0.02
 _WINDOW_SAMPLES: int = 5
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+    from digitalearth.static.builders.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -268,7 +268,7 @@ class _Frame(NamedTuple):
 
 
 #: The axes limits matplotlib starts an unused axes at, read here as "nothing has framed this view yet".
-#: :data:`digitalearth.static.maps.decoration._UNFRAMED_LIMITS` is the same pair for the same reason — a
+#: :data:`digitalearth.static.builders.decoration._UNFRAMED_LIMITS` is the same pair for the same reason — a
 #: replayed basemap meets the same unframed axes — and the two are spelled where they are read because
 #: neither mixin imports the other.
 _UNFRAMED_LIMITS: tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
@@ -298,7 +298,7 @@ class _DegreeAxis:
         - The two directions differ in how far they reach, which letters they use and where a label hangs
           — everything :class:`_Graticule` would otherwise ask "is this a meridian?" to find out:
             ```python
-            >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS
+            >>> from digitalearth.static.builders.projection import _MERIDIANS, _PARALLELS
             >>> (_MERIDIANS.limit, _MERIDIANS.positive, _MERIDIANS.negative, _MERIDIANS.va)
             (180.0, 'E', 'W', 'bottom')
             >>> (_PARALLELS.limit, _PARALLELS.positive, _PARALLELS.negative, _PARALLELS.ha)
@@ -307,7 +307,7 @@ class _DegreeAxis:
             ```
         - So the same degree is read as a longitude on one and a latitude on the other:
             ```python
-            >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS
+            >>> from digitalearth.static.builders.projection import _MERIDIANS, _PARALLELS
             >>> [line.text for line in _MERIDIANS.lines_within(45.0, -50.0, 50.0)]
             ['45°W', '0°', '45°E']
             >>> [line.text for line in _PARALLELS.lines_within(45.0, -50.0, 50.0)]
@@ -340,14 +340,14 @@ class _DegreeAxis:
         Examples:
             - A window 5 degrees clear of the next line either way holds three meridians:
                 ```python
-                >>> from digitalearth.static.maps.projection import _MERIDIANS
+                >>> from digitalearth.static.builders.projection import _MERIDIANS
                 >>> [line.text for line in _MERIDIANS.lines_within(30.0, -35.0, 35.0)]
                 ['30°W', '0°', '30°E']
 
                 ```
             - Nothing past ``limit`` is ever a line, however wide the window:
                 ```python
-                >>> from digitalearth.static.maps.projection import _PARALLELS
+                >>> from digitalearth.static.builders.projection import _PARALLELS
                 >>> [line.value for line in _PARALLELS.lines_within(60.0, -400.0, 400.0)]
                 [-60.0, 0.0, 60.0]
 
@@ -373,7 +373,7 @@ class _DegreeAxis:
         Examples:
             - A meridian's degree is the longitude of its anchor, and a parallel's the latitude:
                 ```python
-                >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS
+                >>> from digitalearth.static.builders.projection import _MERIDIANS, _PARALLELS
                 >>> (_MERIDIANS.anchor(30.0, -80.0), _PARALLELS.anchor(30.0, -80.0))
                 ((30.0, -80.0), (-80.0, 30.0))
 
@@ -420,7 +420,7 @@ class _GridLine(NamedTuple):
         Examples:
             - East, nowhere, and west:
                 ```python
-                >>> from digitalearth.static.maps.projection import _MERIDIANS, _GridLine
+                >>> from digitalearth.static.builders.projection import _MERIDIANS, _GridLine
                 >>> [
                 ...     _GridLine(steps, steps * 30.0, _MERIDIANS).hemisphere
                 ...     for steps in (2, 0, -2, -6)
@@ -450,7 +450,7 @@ class _GridLine(NamedTuple):
         Examples:
             - A whole degree, a fractional one, and the prime meridian:
                 ```python
-                >>> from digitalearth.static.maps.projection import _MERIDIANS, _PARALLELS, _GridLine
+                >>> from digitalearth.static.builders.projection import _MERIDIANS, _PARALLELS, _GridLine
                 >>> (
                 ...     _GridLine(1, 30.0, _MERIDIANS).text,
                 ...     _GridLine(-1, -7.5, _PARALLELS).text,
@@ -528,7 +528,7 @@ class _Graticule:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.maps.projection import _Graticule
+            >>> from digitalearth.static.builders.projection import _Graticule
             >>> m = Map(crs=4326)
             >>> _ = m.set_bounds([-35.0, -5.0, 35.0, 65.0])
             >>> grid = _Graticule(m, {"lon_step": 30.0, "lat_step": 30.0, "labels": True})
@@ -545,7 +545,7 @@ class _Graticule:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.maps.projection import _Graticule
+            >>> from digitalearth.static.builders.projection import _Graticule
             >>> globe = Map(crs=4326, globe=True)
             >>> grid = _Graticule(globe, {"lon_step": 30.0, "lat_step": 30.0, "labels": False})
             >>> len(grid.lines), grid.window()
@@ -614,7 +614,7 @@ class _Graticule:
             layer: The layer being drawn, for its style and for the id its previous drawing is under.
 
         Returns:
-            A :class:`~digitalearth.static.renderer.DrawnLayer` whose ``artist`` is the projected lines —
+            A :class:`~digitalearth.static.render.renderer.DrawnLayer` whose ``artist`` is the projected lines —
             this builder's own value, the same on both frames — and whose ``artists`` are what is on the
             axes to hide and remove: the collection and its labels on a flat map, and **nothing yet** on a
             globe, where :meth:`ProjectionMixin._apply_frame` attaches them when the frame goes on.
@@ -946,14 +946,14 @@ def _checked_step(
     Examples:
         - A positive step comes back as it was, fractions included, and so does an argument nobody wrote:
             ```python
-            >>> from digitalearth.static.maps.projection import _checked_step
+            >>> from digitalearth.static.builders.projection import _checked_step
             >>> (_checked_step("spacing", 7.5), _checked_step("lon_step", None))
             (7.5, None)
 
             ```
         - A step no grid can be cut at is refused, naming the keyword that carried it:
             ```python
-            >>> from digitalearth.static.maps.projection import _checked_step
+            >>> from digitalearth.static.builders.projection import _checked_step
             >>> _checked_step("lat_step", -30.0)  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -962,7 +962,7 @@ def _checked_step(
             ```
         - And a step too small to draw is refused before it can build millions of lines:
             ```python
-            >>> from digitalearth.static.maps.projection import _checked_step
+            >>> from digitalearth.static.builders.projection import _checked_step
             >>> _checked_step("spacing", 1e-4)  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
@@ -1213,13 +1213,13 @@ class ProjectionMixin(_MixinBase):
     display CRS — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
 
     The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.static.maps.base.GeoLayerBase`, the state ``Map``
+    resolves each ``self.<attr>`` against :class:`~digitalearth.static.builders.base.GeoLayerBase`, the state ``Map``
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
     it was before the annotation.
 
     See Also:
         digitalearth.static.map.Map: the composition that supplies the state these methods use.
-        digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
+        digitalearth.static.builders.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
     #: The region the last framing call left the axes holding, in the display CRS, or ``None`` while nothing
@@ -1240,7 +1240,7 @@ class ProjectionMixin(_MixinBase):
         """Where the map is looking, as a value — including the region it has been framed on.
 
         Returns:
-            The view :class:`~digitalearth.static.maps.base.GeoLayerBase` builds from the display CRS, the
+            The view :class:`~digitalearth.static.builders.base.GeoLayerBase` builds from the display CRS, the
             declared domain and the globe flag, carrying the region the last framing call asked for when
             there has been one. A view holds a region **or** a named domain, never both, so a map that was
             built with a ``domain`` and then framed reports the rectangle it is actually showing — which is
@@ -2016,7 +2016,7 @@ class ProjectionMixin(_MixinBase):
 
         Returns:
             The ``(boundary_xy, (xmin, xmax), (ymin, ymax))`` tuple from
-            :func:`digitalearth.static.projections.projection_frame` for the current display CRS — a closed
+            :func:`digitalearth.static.view.projections.projection_frame` for the current display CRS — a closed
             ``(N, 2)`` boundary ring plus the projected x/y limits.
         """
         if self._frame_cache is None or self._frame_cache[0] != self.crs:
@@ -2125,7 +2125,7 @@ class ProjectionMixin(_MixinBase):
 
         Args:
             path: Destination file path; the extension picks the format matplotlib writes.
-            **kwargs: Forwarded to :meth:`~digitalearth.static.scene.Scene.save` / ``Figure.savefig``.
+            **kwargs: Forwarded to :meth:`~digitalearth.static.core.scene.Scene.save` / ``Figure.savefig``.
 
         Returns:
             The path that was written, as a :class:`pathlib.Path`.

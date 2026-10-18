@@ -615,7 +615,7 @@ class TestTheTiersShareOneRule:
             pinned by the bounded-scan test in ``tests/interactive/test_interactive_stack_clim.py`` — each
             in the env that can import it.
         """
-        from digitalearth.static.maps.animation import _CLIM_SCAN_CAP as static_cap
+        from digitalearth.static.builders.animation import _CLIM_SCAN_CAP as static_cap
 
         assert static_cap == DEFAULT_CLIM_SCAN_CAP, (
             f"the static tier must read the shared cap, got {static_cap}"

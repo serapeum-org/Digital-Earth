@@ -175,7 +175,7 @@ class TestTheReorderRationaleIsStillTrue:
 
     #: The tier modules that define `move_layer`, read as source so no engine has to be installed.
     MOVERS = (
-        "static/scene.py",
+        "static/core/scene.py",
         "interactive/base.py",
         "web/base.py",
         "three_d/base.py",

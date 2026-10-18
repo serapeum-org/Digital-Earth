@@ -1,6 +1,6 @@
 """The static tier's style fold: the colour group, built by cleopatra's own builder (DE-43, #302).
 
-The first piece of the static seam's ``style_fold`` to land. :mod:`digitalearth.static.render_compat` folds
+The first piece of the static seam's ``style_fold`` to land. :mod:`digitalearth.static.render.compat` folds
 every other flat style family (``Contour``, ``Classify``, ``DataStyle``, ``CellValues``, ``PointOverlay``) by
 mapping keys onto fields itself, because none of those groups has a builder upstream. ``ColorScaling`` does —
 :meth:`cleopatra.styling.scaling.ColorScaling.from_options` — and the hand-rolled copy of it had already
@@ -100,7 +100,7 @@ def coerce_color_scale(value: Any) -> ColorScale:
     Examples:
         - The underscored spelling this tier documents reaches the dashed enum value upstream:
             ```python
-            >>> from digitalearth.static.style_fold import coerce_color_scale
+            >>> from digitalearth.static.render.style_fold import coerce_color_scale
             >>> coerce_color_scale("sym_log").value
             'sym-lognorm'
 
@@ -108,7 +108,7 @@ def coerce_color_scale(value: Any) -> ColorScale:
         - Case is not significant, and a member passes through:
             ```python
             >>> from cleopatra.styling.scaling import ColorScale
-            >>> from digitalearth.static.style_fold import coerce_color_scale
+            >>> from digitalearth.static.render.style_fold import coerce_color_scale
             >>> coerce_color_scale("MidPoint") is coerce_color_scale(ColorScale.MIDPOINT)
             True
 
@@ -155,7 +155,7 @@ def fold_color_scaling(out: dict[str, Any]) -> None:
     Examples:
         - The flat keywords become the group, through cleopatra's own builder:
             ```python
-            >>> from digitalearth.static.style_fold import fold_color_scaling
+            >>> from digitalearth.static.render.style_fold import fold_color_scaling
             >>> kwargs = {"color_scale": "power", "gamma": 0.7, "cmap": "viridis"}
             >>> fold_color_scaling(kwargs)
             >>> kwargs["color"].kind.value, kwargs["color"].gamma, kwargs["cmap"]
@@ -164,7 +164,7 @@ def fold_color_scaling(out: dict[str, Any]) -> None:
             ```
         - The ``equalize`` scale's resolution is one of them, which is what the hand-rolled fold had lost:
             ```python
-            >>> from digitalearth.static.style_fold import fold_color_scaling
+            >>> from digitalearth.static.render.style_fold import fold_color_scaling
             >>> kwargs = {"color_scale": "equalize", "samples": 64}
             >>> fold_color_scaling(kwargs)
             >>> kwargs["color"].samples
@@ -173,7 +173,7 @@ def fold_color_scaling(out: dict[str, Any]) -> None:
             ```
         - Nothing about colour, nothing built — so a caller's own ``norm=`` is left in force:
             ```python
-            >>> from digitalearth.static.style_fold import fold_color_scaling
+            >>> from digitalearth.static.render.style_fold import fold_color_scaling
             >>> kwargs = {"cmap": "viridis"}
             >>> fold_color_scaling(kwargs)
             >>> kwargs

@@ -462,14 +462,14 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
     """Ask the matplotlib tier for a layer's colour key, tolerating only a layer that cannot carry one.
 
     **Which key is a property of the layer, not of the flag** — the branch :func:`_add_3d_key` already had.
-    The rule is stated in full at :func:`~digitalearth.static.guides.guide_kind` and is the same on all four
+    The rule is stated in full at :func:`~digitalearth.static.legends.legend.guide_kind` and is the same on all four
     backends: a scale is explained by what it is made of. Here that means a **categorical** fill is keyed by
     a swatch list and every other scale by a bar — a classified one banded on its class edges, a continuous
     one as a ramp. ``Map.colorbar`` refuses the categorical case outright, because a bar over it would read
     the class codes cleopatra assigned rather than the class names. Calling only ``colorbar()`` and
     swallowing that refusal is what left the default backend recording no key at all for a fill the web and
     3-D paths both keyed (review M6); the choice is asked of
-    :func:`~digitalearth.static.guides.guide_kind`, which is where this tier already answers it.
+    :func:`~digitalearth.static.legends.legend.guide_kind`, which is where this tier already answers it.
 
     This docstring said "a continuous ramp is explained by a bar and a *categorical* fill by a keyed list"
     while :func:`_add_3d_key`'s said a *classified* fill gets the list, so the two stated different rules
@@ -485,7 +485,7 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
     the flag is read, the ordering all four tiers share.
 
     **Since #350 that swatch legend is the layer's guide**, adopted by the renderer when the glyph draws it
-    (:meth:`~digitalearth.static.renderer.Renderer._adopt_glyph_legend`), so a single ``visible=False`` both
+    (:meth:`~digitalearth.static.render.renderer.Renderer._adopt_glyph_legend`), so a single ``visible=False`` both
     records the decision and takes the legend off — ``draw_guide`` detaches the layer's recorded guide, which
     the glyph's legend now is. This used to take **two** calls: draw the key through the tier's own method to
     make it the layer's, then switch it off. The gap that forced the extra call is closed, so the extra call
@@ -496,7 +496,7 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
             is ``Map.colorbar``/``Map.legend``'s own question since order 24 — the most recent one that
             publishes a colour encoding, never simply the last one added, so a coastline or a basemap drawn
             after the data cannot take the key. It is read here through the same
-            :meth:`~digitalearth.static.scene.Scene._color_keyed` list those methods resolve through, so the
+            :meth:`~digitalearth.static.core.scene.Scene._color_keyed` list those methods resolve through, so the
             layer this branches on and the layer they key cannot differ.
         visible: Whether the key is drawn. ``False`` records the guide switched **off** and takes off the
             key the builder drew, as ``quickmap(colorbar=False)`` asks for — in one call since #350, because
@@ -506,7 +506,7 @@ def _add_static_key(scene: Map, *, visible: bool) -> None:
         Nothing. Both methods return the map itself, as the Core declares, so there is no artist to hand
         back; the drawn key is reachable per layer from the renderer.
     """
-    from digitalearth.static.guides import guide_kind
+    from digitalearth.static.legends.legend import guide_kind
 
     keyed = scene._color_keyed()
     if not keyed:  # pragma: no cover - `_has_a_key_to_draw` is asked first
@@ -1039,7 +1039,7 @@ def _has_a_key_to_draw(scene: Map) -> bool:
     drawn after the data answered for the data, and ``quickmap(ds, coastlines=True)`` decided whether to key
     a raster by looking at a coastline.
 
-    It used to ask :func:`~digitalearth.static.guides.bar_refusal` — "can a **bar** describe this?" — and so
+    It used to ask :func:`~digitalearth.static.legends.legend.bar_refusal` — "can a **bar** describe this?" — and so
     answered `False` for a categorical fill, which is a layer with a key, just not that one. Choosing
     between the two is :func:`_add_static_key`'s job; the question here is only whether there is anything to
     explain (review M6).
@@ -1395,7 +1395,7 @@ def _add_3d_key(scene: Any, *, visible: bool) -> Any:
     The 3-D counterpart of :func:`_add_web_legend`, and the reason this path no longer reaches past the tier
     into a PyVista keyword: `Scene3D` has the methods now (order 24), and a `quickmap` flag routes through
     them. Which of the two is a property of the layer rather than of the flag, under the rule stated in full
-    at :func:`~digitalearth.static.guides.guide_kind`: a scale is explained by what it is made of, and a
+    at :func:`~digitalearth.static.legends.legend.guide_kind`: a scale is explained by what it is made of, and a
     **classified** scale means its classes. Here that is the keyed list, because this tier paints a
     classified fill by class **index** — `classified_scalars` assigns `0, 1, 2 …` — so a scalar bar over it
     would read those indices where the class ranges belong. The matplotlib and interactive tiers answer the
@@ -1777,7 +1777,7 @@ def voronoi(data: PlottableData, column: str | None = None, **kwargs) -> Map:
             ```
 
     See Also:
-        digitalearth.static.maps.vector.VectorMixin.voronoi: the ``Map`` method this wraps.
+        digitalearth.static.builders.vector.VectorMixin.voronoi: the ``Map`` method this wraps.
     """
     from digitalearth.static import Map
 
@@ -1838,7 +1838,7 @@ def cartogram(
             ```
 
     See Also:
-        digitalearth.static.maps.vector.VectorMixin.cartogram: the ``Map`` method this wraps.
+        digitalearth.static.builders.vector.VectorMixin.cartogram: the ``Map`` method this wraps.
     """
     from digitalearth.static import Map
 
@@ -1894,7 +1894,7 @@ def quadtree(data: PlottableData, column: str | None = None, **kwargs) -> Map:
             ```
 
     See Also:
-        digitalearth.static.maps.vector.VectorMixin.quadtree: the ``Map`` method this wraps.
+        digitalearth.static.builders.vector.VectorMixin.quadtree: the ``Map`` method this wraps.
     """
     from digitalearth.static import Map
 
@@ -1920,7 +1920,7 @@ def kde(data: PlottableData, **kwargs) -> Map:
         The finished :class:`Map`, with a colorbar added when the drawn layer has one to draw.
 
     See Also:
-        digitalearth.static.maps.vector.VectorMixin.kde: the ``Map`` method this wraps.
+        digitalearth.static.builders.vector.VectorMixin.kde: the ``Map`` method this wraps.
     """
     from digitalearth.static import Map
 
@@ -1994,7 +1994,7 @@ def sankey(
             ```
 
     See Also:
-        digitalearth.static.maps.vector.VectorMixin.sankey: the ``Map`` method this wraps.
+        digitalearth.static.builders.vector.VectorMixin.sankey: the ``Map`` method this wraps.
     """
     from digitalearth.static import Map
 

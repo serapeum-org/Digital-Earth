@@ -25,11 +25,12 @@ from matplotlib.colors import BoundaryNorm
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 
-import digitalearth.static.maps.animation as animation_module
-import digitalearth.static.maps.raster as raster_module
-from digitalearth.static import Map, OffLimbError, Scene, TexturedGlobe, projections
-from digitalearth.static.maps.decoration import STOCK_IMG_CMAP
-from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP
+import digitalearth.static.builders.animation as animation_module
+import digitalearth.static.builders.raster as raster_module
+from digitalearth.static import Map, OffLimbError, Scene, TexturedGlobe
+from digitalearth.static.builders.decoration import STOCK_IMG_CMAP
+from digitalearth.static.builders.raster import DEFAULT_FIELD_CMAP
+from digitalearth.static.view import projections
 
 #: The Natural-Earth reference layers the static tier names as methods (C12), and the ``natural_earth``
 #: layer each one draws.

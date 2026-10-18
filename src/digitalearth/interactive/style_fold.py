@@ -242,7 +242,7 @@ OPTION_GROUPS: tuple[str, ...] = ("style", "plot", "norm", "output")
 #: vocabulary all four tiers share and this is one of the two tiers that has a choice to record: Bokeh draws
 #: a continuous bar (``colorbar``) and a keyed box (``show_legend``) and they are not interchangeable, while
 #: a MapLibre panel and a PyVista scalar bar are each one piece of furniture. The static tier records the
-#: same thing under the same name (:data:`~digitalearth.static.guides.GUIDE_KIND_KEY`), for the same reason.
+#: same thing under the same name (:data:`~digitalearth.static.legends.legend.GUIDE_KIND_KEY`), for the same reason.
 GUIDE_KIND_KEY: str = "guide_kind"
 
 #: The two kinds of colour key this tier draws: a continuous bar beside the plot, or a keyed box in it.
@@ -265,7 +265,7 @@ def guide_kind(symbology: Symbology) -> str:
     categorical builder sets ``colorbar: False`` for itself, and why the answer for it is a legend rather
     than a flag to flip. The static tier reaches the same answer for a different reason — there a bar *is*
     drawn, and reads the class codes cleopatra assigned — and spells the rule the same way
-    (:func:`~digitalearth.static.guides.guide_kind`).
+    (:func:`~digitalearth.static.legends.legend.guide_kind`).
 
     Args:
         symbology: The layer's style.

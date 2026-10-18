@@ -11,12 +11,12 @@ Two halves live here, and they are deliberately the same shape as the reading th
 
 * :func:`color_encoding` publishes **what drives a layer's colour**, read off the artist that was drawn
   rather than recomputed beside it — the reading
-  :meth:`~digitalearth.static.scene.Scene._record_class_edges` already takes for ``last_breaks``, and for
+  :meth:`~digitalearth.static.core.scene.Scene._record_class_edges` already takes for ``last_breaks``, and for
   the same reason: cleopatra does the classifying, and the norm it leaves on the mappable is what
   matplotlib actually colours through. A layer whose colour is one flat constant publishes nothing, and a
   key on it is then refused rather than drawn empty.
 * :func:`draw_guide` draws the recorded guide, as the **one** place a key is drawn — so the same key comes
-  back whether the draw was reached by the caller's :meth:`~digitalearth.static.scene.Scene.colorbar` call,
+  back whether the draw was reached by the caller's :meth:`~digitalearth.static.core.scene.Scene.colorbar` call,
   by a restyle that rebuilt the layer, by a rollback, or by a figure read back onto another scene.
 
 This tier draws **two** kinds of key where the web tier draws one: a matplotlib ``Colorbar`` (a strip beside
@@ -123,7 +123,7 @@ _COLORBAR_SIDES = {
 #: What a layer is coloured by when its kind **computes** the values and no column names them.
 #:
 #: Each is the word this tier already uses for the quantity: ``count`` is the reducer
-#: :data:`~digitalearth.static.maps.vector._QUADTREE_AGG` adds to the shared NaN-aware registry, a KDE draws a
+#: :data:`~digitalearth.static.builders.vector._QUADTREE_AGG` adds to the shared NaN-aware registry, a KDE draws a
 #: density, and a u/v field colours its arrows by magnitude. They are named here rather than spelled at each
 #: drawer so the three cannot drift.
 COUNT_FIELD: str = "count"
@@ -226,7 +226,7 @@ def drawn_scale(artist: Any) -> Scale | None:
         - The limits a plain norm was built with come back as the scale's domain:
             ```python
             >>> from matplotlib.colors import Normalize
-            >>> from digitalearth.static.guides import drawn_scale
+            >>> from digitalearth.static.legends.legend import drawn_scale
             >>> mappable = type("A", (), {"norm": Normalize(vmin=-3.0, vmax=7.0)})()
             >>> drawn_scale(mappable).as_limits()
             (-3.0, 7.0)
@@ -234,7 +234,7 @@ def drawn_scale(artist: Any) -> Scale | None:
             ```
         - An artist that colours by nothing publishes no scale:
             ```python
-            >>> from digitalearth.static.guides import drawn_scale
+            >>> from digitalearth.static.legends.legend import drawn_scale
             >>> drawn_scale(object()) is None
             True
 
@@ -269,7 +269,7 @@ def color_encoding(field: str | None, drawn: Any) -> Encoding | None:
             ``None`` or empty for a layer that colours by no field, which publishes nothing: an encoding has
             to name what drives it, and a guide over a colour nothing varies has no values to label.
         drawn: What the layer's drawer produced, as
-            :class:`~digitalearth.static.renderer.DrawnLayer` describes it.
+            :class:`~digitalearth.static.render.renderer.DrawnLayer` describes it.
 
     Returns:
         A field-driven colour :class:`~digitalearth.base.spec.encoding.Encoding`, carrying the scale the
@@ -289,7 +289,7 @@ def color_encoding(field: str | None, drawn: Any) -> Encoding | None:
             >>> matplotlib.use("Agg")
             >>> import numpy as np
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.guides import color_encoding
+            >>> from digitalearth.static.legends.legend import color_encoding
             >>> m = Map(globe=False)
             >>> _ = m.field(np.array([[0.0, 1.0], [2.0, 3.0]]), name="grid")
             >>> encoding = color_encoding("band 1", m._renderer.drawn["grid"])
@@ -300,8 +300,8 @@ def color_encoding(field: str | None, drawn: Any) -> Encoding | None:
             ```
         - A layer that names no field publishes nothing, so a key on it is refused rather than drawn empty:
             ```python
-            >>> from digitalearth.static.guides import color_encoding
-            >>> from digitalearth.static.renderer import DrawnLayer
+            >>> from digitalearth.static.legends.legend import color_encoding
+            >>> from digitalearth.static.render.renderer import DrawnLayer
             >>> color_encoding(None, DrawnLayer()) is None
             True
 
@@ -330,7 +330,7 @@ def color_encoding(field: str | None, drawn: Any) -> Encoding | None:
 def bar_refusal(layer: LayerSpec) -> str | None:
     """Return why a colorbar cannot describe one layer's colour, or ``None`` when it can.
 
-    Asked twice, in one spelling: :meth:`~digitalearth.static.scene.Scene.colorbar` asks it **before** it
+    Asked twice, in one spelling: :meth:`~digitalearth.static.core.scene.Scene.colorbar` asks it **before** it
     records a guide, so a refused call leaves the layer exactly as it found it, and :func:`draw_guide` asks
     it again for a figure that was built somewhere else and asks for a bar the scale cannot be drawn as.
 
@@ -389,7 +389,7 @@ def guide_kind(layer: LayerSpec) -> str:
         The recorded kind, or — for a guide that arrived without one, which is a figure built where the
         distinction does not exist — ``"legend"`` for a categorical scale and ``"colorbar"`` for every
         other, which is the rule this tier already applied through ``add_colorbar=categorical`` in
-        :meth:`~digitalearth.static.maps.vector.VectorMixin._polygon_layer`.
+        :meth:`~digitalearth.static.builders.vector.VectorMixin._polygon_layer`.
     """
     recorded = layer.symbology.props.get(GUIDE_KIND_KEY)
     if recorded in GUIDE_KINDS:
@@ -510,7 +510,7 @@ def _marked_bands(artist: Any, bands: int) -> list[bool]:
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
             >>> import numpy as np
-            >>> from digitalearth.static.guides import _marked_bands
+            >>> from digitalearth.static.legends.legend import _marked_bands
             >>> fig, ax = plt.subplots()
             >>> contours = ax.contourf(
             ...     np.linspace(0.0, 0.95, 16).reshape(4, 4), levels=[0.0, 0.05, 1.0, 5.0, 10.0]
@@ -528,7 +528,7 @@ def _marked_bands(artist: Any, bands: int) -> list[bool]:
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
             >>> import numpy as np
-            >>> from digitalearth.static.guides import _marked_bands
+            >>> from digitalearth.static.legends.legend import _marked_bands
             >>> fig, ax = plt.subplots()
             >>> contours = ax.contourf(
             ...     np.linspace(0.0, 9.0, 16).reshape(4, 4), levels=[0.0, 3.0, 6.0, 9.0]
@@ -550,7 +550,7 @@ class GuidePlan:
     """One layer's colour key, derived and checked but not yet on the figure.
 
     The seam between deciding what a key *is* and putting it there, so that every refusal a description can
-    earn is raised while the figure is still untouched. :meth:`~digitalearth.static.renderer.Renderer
+    earn is raised while the figure is still untouched. :meth:`~digitalearth.static.render.renderer.Renderer
     .draw_guide` takes the layer's previous key off between the two, and until this split that removal came
     **first**: a redraw whose key then refused left the layer describing a bar whose axes had already been
     taken off the figure, and nothing could put it back — a removed axes cannot be re-added, and
@@ -618,7 +618,7 @@ class _HatchedKey:
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth import Map
-            >>> from digitalearth.static.guides import _HatchedKey
+            >>> from digitalearth.static.legends.legend import _HatchedKey
             >>> p = Dataset.from_array(
             ...     arr=np.linspace(0.0, 0.95, 16).reshape(4, 4),
             ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
@@ -647,7 +647,7 @@ class _HatchedKey:
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth import Map
-            >>> from digitalearth.static.guides import _HatchedKey
+            >>> from digitalearth.static.legends.legend import _HatchedKey
             >>> p = Dataset.from_array(
             ...     arr=np.linspace(0.0, 0.95, 16).reshape(4, 4),
             ...     geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
@@ -836,7 +836,7 @@ def plan_guide(layer: LayerSpec, drawn: Any) -> GuidePlan | None:
 
     Args:
         layer: The layer's description, which carries the guide.
-        drawn: What its drawer produced, as :class:`~digitalearth.static.renderer.DrawnLayer` describes it.
+        drawn: What its drawer produced, as :class:`~digitalearth.static.render.renderer.DrawnLayer` describes it.
 
     Returns:
         The plan :func:`paint_guide` draws, or ``None`` when there is nothing to draw — the guide is
@@ -888,7 +888,7 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
             :func:`_paint_hatch_legend`, which picks between the last two). These are the call's own
             styling and are **not** part of the record, so a key
             redrawn from the description comes back with matplotlib's defaults in their place — the same
-            trade :attr:`~digitalearth.static.scene.LayerRecord.opts` makes for a value no figure can carry.
+            trade :attr:`~digitalearth.static.core.scene.LayerRecord.opts` makes for a value no figure can carry.
 
     Returns:
         The one artist the key is — a ``Colorbar`` or a ``Legend``.
@@ -899,7 +899,7 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Scene
-            >>> from digitalearth.static.guides import GuidePlan, paint_guide
+            >>> from digitalearth.static.legends.legend import GuidePlan, paint_guide
             >>> with Scene() as scene:
             ...     key = paint_guide(
             ...         scene,
@@ -918,7 +918,7 @@ def paint_guide(scene: Any, plan: GuidePlan, **kwargs: Any) -> Any:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Scene
-            >>> from digitalearth.static.guides import GuidePlan, paint_guide
+            >>> from digitalearth.static.legends.legend import GuidePlan, paint_guide
             >>> with Scene() as scene:
             ...     empty = paint_guide(scene, GuidePlan("legend", title="class"))
             ...     [text.get_text() for text in empty.get_texts()]
@@ -969,7 +969,7 @@ def _is_transparent(color: str) -> bool:
     Examples:
         - An uncoloured band's 8-digit hex and the scale's ``"None"`` both read as see-through:
             ```python
-            >>> from digitalearth.static.guides import _is_transparent
+            >>> from digitalearth.static.legends.legend import _is_transparent
             >>> (_is_transparent("#aabbcc00"), _is_transparent("None"))
             (True, True)
 
@@ -977,7 +977,7 @@ def _is_transparent(color: str) -> bool:
         - An opaque colour whose blue channel is zero does not, which is what reading the spelling got
           wrong; nor does a colour matplotlib cannot parse at all:
             ```python
-            >>> from digitalearth.static.guides import _is_transparent
+            >>> from digitalearth.static.legends.legend import _is_transparent
             >>> (_is_transparent("#aabb00"), _is_transparent("mauve-ish"))
             (False, False)
             >>> "#aabb00".endswith("00")  # the reading this replaced
@@ -989,7 +989,7 @@ def _is_transparent(color: str) -> bool:
           opaque, while the bound itself is half a step:
             ```python
             >>> from matplotlib.colors import to_rgba
-            >>> from digitalearth.static.guides import _TRANSPARENT_ALPHA, _is_transparent
+            >>> from digitalearth.static.legends.legend import _TRANSPARENT_ALPHA, _is_transparent
             >>> round(to_rgba("#00000001")[3], 6), round(_TRANSPARENT_ALPHA, 6)
             (0.003922, 0.001961)
             >>> _is_transparent("#00000001"), _is_transparent("#00000000")
@@ -1039,14 +1039,14 @@ def draw_guide(scene: Any, layer: LayerSpec, drawn: Any, **kwargs: Any) -> Any |
     """Draw the colour key one layer's recorded guide asks for, and return what was drawn.
 
     The two halves in one call, for a caller with nothing to do between them.
-    :meth:`~digitalearth.static.renderer.Renderer.draw_guide` has something to do — it takes the layer's
+    :meth:`~digitalearth.static.render.renderer.Renderer.draw_guide` has something to do — it takes the layer's
     previous key off — so it calls :func:`plan_guide` and :func:`paint_guide` itself, with the removal
     between them and therefore after every refusal (review M4).
 
     Args:
         scene: The scene the layer is drawn on.
         layer: The layer's description, which carries the guide.
-        drawn: What its drawer produced, as :class:`~digitalearth.static.renderer.DrawnLayer` describes it.
+        drawn: What its drawer produced, as :class:`~digitalearth.static.render.renderer.DrawnLayer` describes it.
         **kwargs: Forwarded to the engine, as :func:`paint_guide` describes.
 
     Returns:
@@ -1054,8 +1054,8 @@ def draw_guide(scene: Any, layer: LayerSpec, drawn: Any, **kwargs: Any) -> Any |
         off, when the layer carries no colour encoding, and when nothing was drawn for it.
 
         One artist rather than a one-long tuple: a key *is* the single object matplotlib hands back, and
-        :meth:`~digitalearth.static.renderer.Renderer.draw_guide` already answers its own callers that way.
-        :attr:`~digitalearth.static.renderer.DrawnLayer.guides` stays a tuple, since that is the layer's
+        :meth:`~digitalearth.static.render.renderer.Renderer.draw_guide` already answers its own callers that way.
+        :attr:`~digitalearth.static.render.renderer.DrawnLayer.guides` stays a tuple, since that is the layer's
         *record* of what has to come off with it rather than one call's result.
 
     Raises:

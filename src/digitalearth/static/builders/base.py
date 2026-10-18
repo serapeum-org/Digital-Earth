@@ -16,13 +16,13 @@ from digitalearth.base.display import needs_reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import DEFAULT_BAND, Viewport
-from digitalearth.static.scene import Scene
+from digitalearth.static.core.scene import Scene
 
 logger = logging.getLogger(__name__)
 
 
 class GeoLayerBase(Scene):
-    """A :class:`~digitalearth.static.scene.Scene` with a display CRS and reproject/extract helpers.
+    """A :class:`~digitalearth.static.core.scene.Scene` with a display CRS and reproject/extract helpers.
 
     The protected base `Map` inherits and every capability mixin under `static/maps/` is typed against. It
     adds two things to a `Scene`: the **display-CRS state** a geospatial figure is drawn in, and the
@@ -36,7 +36,7 @@ class GeoLayerBase(Scene):
 
     Attributes:
         crs: The display CRS every layer is placed in before drawing. Anything pyramids resolves — an EPSG
-            code, an `"EPSG:3857"` string, a proj string from `digitalearth.static.projections`. Reassigning
+            code, an `"EPSG:3857"` string, a proj string from `digitalearth.static.view.projections`. Reassigning
             it does not redraw what is already on the axes.
         domain: The named region or bbox the map was built on, or `None`. It is what the view *declares*;
             `ProjectionMixin.set_domain` is what frames the axes from it.
@@ -66,7 +66,7 @@ class GeoLayerBase(Scene):
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth import Map
-            >>> from digitalearth.static.maps.base import GeoLayerBase
+            >>> from digitalearth.static.builders.base import GeoLayerBase
             >>> m = Map(crs=4326, domain="europe")
             >>> _ = m.set_domain()
             >>> m.viewport.bounds.as_bbox(), m.viewport.domain
@@ -117,7 +117,7 @@ class GeoLayerBase(Scene):
 
     See Also:
         digitalearth.static.map.Map: the composition callers build, which this class supplies the state for.
-        digitalearth.static.scene.Scene: the engine-level figure/axes host underneath it.
+        digitalearth.static.core.scene.Scene: the engine-level figure/axes host underneath it.
     """
 
     def __init__(
@@ -194,7 +194,7 @@ class GeoLayerBase(Scene):
             override's to add.
 
         See Also:
-            digitalearth.static.maps.projection.ProjectionMixin.viewport: what `Map.viewport` actually is.
+            digitalearth.static.builders.projection.ProjectionMixin.viewport: what `Map.viewport` actually is.
         """
         return Viewport(crs=self.crs, domain=self.domain, globe=bool(self.globe))
 

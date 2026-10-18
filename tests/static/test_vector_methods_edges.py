@@ -265,7 +265,9 @@ class TestGlobeNonFinite:
             not a debug line), and nothing opaque escapes from GEOS or numpy.
         """
         m = Map(crs=ORTHO)
-        with caplog.at_level(logging.WARNING, logger="digitalearth.static.maps.base"):
+        with caplog.at_level(
+            logging.WARNING, logger="digitalearth.static.builders.base"
+        ):
             getattr(m, method)(self._all_far_side(), **kwargs)
             assert m.layer_ids == [], (
                 f"{method} should draw nothing when every point is behind the limb"

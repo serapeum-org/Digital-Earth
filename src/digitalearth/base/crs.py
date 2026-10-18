@@ -224,7 +224,7 @@ class OffLimbError(RuntimeError):
             >>> matplotlib.use("Agg")
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
-            >>> from digitalearth.static import Map, projections
+            >>> from digitalearth.static import Map; from digitalearth.static.view import projections
             >>> ds = Dataset.from_array(
             ...     np.ones((20, 20), "float32"),
             ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
@@ -333,7 +333,7 @@ def reproject(dataset: Any, crs: Any) -> Any:
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.base.crs import OffLimbError, reproject
-            >>> from digitalearth.static import projections
+            >>> from digitalearth.static.view import projections
             >>> ds = Dataset.from_array(
             ...     np.ones((20, 20), "float32"),
             ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),

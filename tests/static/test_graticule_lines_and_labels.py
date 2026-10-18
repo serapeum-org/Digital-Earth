@@ -10,7 +10,7 @@ globe=True  -> artists=18  labels=0   layer=['g']
 
 So a **flat** map — which is the default — registered a graticule layer and drew nothing at all, because
 the only consumer of the computed lines is
-:meth:`~digitalearth.static.maps.projection.ProjectionMixin._apply_frame`, whose first statement returns
+:meth:`~digitalearth.static.builders.projection.ProjectionMixin._apply_frame`, whose first statement returns
 early off a globe. A globe did draw its meridians, through that frame. Neither frame ever drew a degree
 label: ``grep -rn "°" src/digitalearth/static`` found none.
 
@@ -25,10 +25,11 @@ import pytest
 from matplotlib.collections import LineCollection
 from matplotlib.text import Text
 
-from digitalearth.static import Map, projections
+from digitalearth.static import Map
+from digitalearth.static.view import projections
 
 #: The two steps every test here draws at, in degrees. 30 is also
-#: :data:`~digitalearth.static.maps.projection.DEFAULT_GRATICULE_STEP`, so the counts below are the ones a
+#: :data:`~digitalearth.static.builders.projection.DEFAULT_GRATICULE_STEP`, so the counts below are the ones a
 #: caller who names no spacing gets.
 STEP = 30.0
 

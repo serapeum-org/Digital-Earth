@@ -5,7 +5,7 @@ was never recorded as the layer's guide: ``DrawnLayer.guides`` stayed empty whil
 record knew nothing about sat on the axes, so ``set_visible`` did not hide it, ``remove`` did not take it off,
 and ``quickmap(colorbar=False)`` had to draw the key through the tier's own method first only to take it off
 again. The renderer now adopts that legend
-(:meth:`~digitalearth.static.renderer.Renderer._adopt_glyph_legend`), so the whole guide lifecycle owns it.
+(:meth:`~digitalearth.static.render.renderer.Renderer._adopt_glyph_legend`), so the whole guide lifecycle owns it.
 
 These tests pin the adoption and answer the issue's three open questions: ``set_visible(False)`` hides it,
 ``colorbars()`` leaves a categorical layer alone (its key is a swatch list, not a bar), and the adoption is

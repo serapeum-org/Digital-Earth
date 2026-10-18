@@ -19,7 +19,7 @@ step a small view now accepts, and the world step every view still refuses — a
 import pytest
 
 from digitalearth.static import Map
-from digitalearth.static.maps.projection import MAX_GRATICULE_LINES, _view_window
+from digitalearth.static.builders.projection import MAX_GRATICULE_LINES, _view_window
 
 #: A small framed region, as ``(west, south, east, north)`` in EPSG:4326: 2 degrees of longitude by 2 of
 #: latitude, far too narrow to hold anything near the world's line count at a fine step.
@@ -135,7 +135,7 @@ class TestTheRefusalIsWordedForTheSpanItBudgetedAgainst:
         """An unframed too-fine ``lat_step`` is refused "across the world", not "across this view" (L1).
 
         Test scenario:
-            An unframed flat map windows to :data:`~digitalearth.static.maps.projection._LABEL_WORLD_WINDOW`,
+            An unframed flat map windows to :data:`~digitalearth.static.builders.projection._LABEL_WORLD_WINDOW`,
             whose latitude is inset to +/-89.5 (span 179) so labels clear the poles. Budgeting that inset
             span would call an unframed refusal "across this view"; ``_window_spans`` treats the world-label
             window as the true world, so the refusal names the world as it should.
@@ -260,7 +260,7 @@ class TestReframingRecutsTheGrid:
 
         Test scenario:
             Its lines depend on the view whether or not they are labelled, so framing has to regenerate
-            them — the half of :meth:`~digitalearth.static.maps.projection.ProjectionMixin._relabel_graticule`
+            them — the half of :meth:`~digitalearth.static.builders.projection.ProjectionMixin._relabel_graticule`
             #393 widened from labelled grids to every grid.
         """
         scene = Map(crs=4326)

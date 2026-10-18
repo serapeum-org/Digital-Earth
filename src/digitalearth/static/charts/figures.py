@@ -3,7 +3,7 @@
 Split out of the old flat ``digitalearth._arrays`` when that module was divided: everything else in it is plain
 numpy and now lives in :mod:`digitalearth.base.arrays`, while this needs :mod:`matplotlib` and so belongs to
 the static backend. Keeping it out of :mod:`digitalearth.base` is what lets that subpackage stay free of any
-renderer import. Only :mod:`digitalearth.static.charts` and :mod:`digitalearth.static.series` use it.
+renderer import. Only :mod:`digitalearth.static.charts.charts` and :mod:`digitalearth.static.charts.series` use it.
 """
 
 from matplotlib.axes import Axes
@@ -25,7 +25,7 @@ def fig_of(ax: Axes | None) -> Figure | None:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.static.figures import fig_of
+            >>> from digitalearth.static.charts.figures import fig_of
             >>> fig, ax = plt.subplots()
             >>> fig_of(ax) is fig
             True
@@ -33,7 +33,7 @@ def fig_of(ax: Axes | None) -> Figure | None:
             ```
         - ``None`` short-circuits to ``None``:
             ```python
-            >>> from digitalearth.static.figures import fig_of
+            >>> from digitalearth.static.charts.figures import fig_of
             >>> fig_of(None) is None
             True
 

@@ -44,7 +44,7 @@ class TestTheDeclaration:
 
     def test_the_channels_are_the_ones_the_style_schema_declares(self):
         """Two, and they are not chosen here: the schema is where a keyword says what it drives."""
-        from digitalearth.static.render_compat import STATIC_STYLE_SCHEMA
+        from digitalearth.static.render.compat import STATIC_STYLE_SCHEMA
 
         declared = {
             key.channel for key in STATIC_STYLE_SCHEMA.keys.values() if key.channel
@@ -61,7 +61,7 @@ class TestTheDeclaration:
             passes those — so `data_driven` is empty rather than a copy of `channels`.
         """
         from digitalearth.base.spec import Encoding, Symbology
-        from digitalearth.static.render_compat import fold_symbology
+        from digitalearth.static.render.compat import fold_symbology
 
         driven = Symbology.of(opacity=Encoding.by_field("opacity", "confidence"))
         _, unsupported = fold_symbology(driven)

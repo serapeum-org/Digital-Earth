@@ -3,7 +3,8 @@
 import matplotlib.pyplot as plt
 import pytest
 
-from digitalearth.static import Map, figure, quickpanels
+from digitalearth.static import Map, quickpanels
+from digitalearth.static.panels import figure
 
 
 class TestQuickpanels:
@@ -111,7 +112,7 @@ class TestQuickpanels:
             cap.label, so the get_source + caption work is wasted; it must be skipped.
         """
         mocker.patch(
-            "digitalearth.static.figure.caption",
+            "digitalearth.static.panels.figure.caption",
             side_effect=AssertionError("caption computed though it was discarded"),
         )
         fig, maps = quickpanels([dataset, dataset], titles=["A", "B"], colorbar=False)
@@ -203,7 +204,7 @@ class TestUniqueTitles:
 
     def test_repeats_are_numbered_uniques_untouched(self):
         """A colliding title is suffixed per occurrence; a title appearing once is returned as-is."""
-        from digitalearth.static.figure import _unique_titles
+        from digitalearth.static.panels.figure import _unique_titles
 
         assert _unique_titles(["a", "a", "b"]) == ["a (1)", "a (2)", "b"]
         assert _unique_titles(["x", "y", "z"]) == ["x", "y", "z"]

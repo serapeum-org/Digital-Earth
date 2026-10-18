@@ -119,7 +119,7 @@ for m in maps:
 fig.savefig("rain.png")
 ```
 
-::: digitalearth.static.figure.facet
+::: digitalearth.static.panels.figure.facet
     options:
       heading_level: 3
 

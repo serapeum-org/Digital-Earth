@@ -96,14 +96,14 @@ def get(name: str, **kwargs) -> Any:
     Examples:
         - Resolve an EPSG-coded projection:
             ```python
-            >>> from digitalearth.static import projections
+            >>> from digitalearth.static.view import projections
             >>> projections.get("web_mercator")
             3857
 
             ```
         - Resolve a parametrised proj4 projection:
             ```python
-            >>> from digitalearth.static import projections
+            >>> from digitalearth.static.view import projections
             >>> projections.get("orthographic", lon=-9, lat=39)
             '+proj=ortho +lat_0=39 +lon_0=-9 +datum=WGS84 +units=m +no_defs'
 
@@ -143,7 +143,7 @@ def _drop_interior_points(pts: np.ndarray) -> np.ndarray:
         - A filled grid's interior is discarded, leaving far fewer points for the hull to walk:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import _drop_interior_points
+            >>> from digitalearth.static.view.projections import _drop_interior_points
             >>> grid = np.stack(np.meshgrid(np.arange(10.0), np.arange(10.0)), -1).reshape(-1, 2)
             >>> bool(len(_drop_interior_points(grid)) < len(grid))
             True
@@ -152,7 +152,7 @@ def _drop_interior_points(pts: np.ndarray) -> np.ndarray:
         - A cloud below the size guard is returned unchanged — filtering a handful of points saves nothing:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import _drop_interior_points
+            >>> from digitalearth.static.view.projections import _drop_interior_points
             >>> small = np.array([[0.0, 0.0], [2.0, 0.0], [1.0, 1.0]])
             >>> len(_drop_interior_points(small))
             3
@@ -211,7 +211,7 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
         - The hull of a filled square is its four corners, closed back to the start:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import _convex_hull
+            >>> from digitalearth.static.view.projections import _convex_hull
             >>> sq = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.5, 0.5]])
             >>> ring = _convex_hull(sq)
             >>> bool(np.allclose(ring[0], ring[-1]))
@@ -223,7 +223,7 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
         - A single point is returned as a closed degenerate ring (itself, repeated):
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import _convex_hull
+            >>> from digitalearth.static.view.projections import _convex_hull
             >>> _convex_hull(np.array([[2.0, 3.0]])).tolist()
             [[2.0, 3.0], [2.0, 3.0]]
 
@@ -279,7 +279,7 @@ def _split_finite(x: np.ndarray, y: np.ndarray) -> list[np.ndarray]:
         - A gap (``nan``) splits one line into two separate finite polylines:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import _split_finite
+            >>> from digitalearth.static.view.projections import _split_finite
             >>> x = np.array([0.0, 1.0, np.nan, 3.0, 4.0])
             >>> y = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
             >>> segs = _split_finite(x, y)
@@ -290,7 +290,7 @@ def _split_finite(x: np.ndarray, y: np.ndarray) -> list[np.ndarray]:
         - An isolated finite point (length-1 run) is dropped:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import _split_finite
+            >>> from digitalearth.static.view.projections import _split_finite
             >>> x = np.array([np.inf, 5.0, np.inf])
             >>> y = np.array([0.0, 5.0, 0.0])
             >>> _split_finite(x, y)
@@ -330,7 +330,7 @@ def densify_lonlat(xy: np.ndarray, step_deg: float = 1.0) -> np.ndarray:
         - A single 3-degree edge is split so no sub-segment exceeds the 1-degree step:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import densify_lonlat
+            >>> from digitalearth.static.view.projections import densify_lonlat
             >>> out = densify_lonlat(np.array([[0.0, 0.0], [3.0, 0.0]]), step_deg=1.0)
             >>> out[:, 0].tolist()
             [0.0, 1.0, 2.0, 3.0]
@@ -395,7 +395,7 @@ def close_visible_runs(
         - A fully-visible ring is returned closed, unchanged in shape:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import close_visible_runs, projection_frame
+            >>> from digitalearth.static.view.projections import close_visible_runs, projection_frame
             >>> boundary, _, _ = projection_frame(3857, n=180)
             >>> x = np.array([0.0, 1.0, 1.0, 0.0])
             >>> y = np.array([0.0, 0.0, 1.0, 1.0])
@@ -410,7 +410,7 @@ def close_visible_runs(
             ```python
             >>> import numpy as np
             >>> from pyramids.base.crs import reproject_coordinates
-            >>> from digitalearth.static.projections import (
+            >>> from digitalearth.static.view.projections import (
             ...     close_visible_runs, orthographic, projection_frame,
             ... )
             >>> crs = orthographic(0, 0)
@@ -430,7 +430,7 @@ def close_visible_runs(
         - A ring wholly on the far side has nothing to fill:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.static.projections import (
+            >>> from digitalearth.static.view.projections import (
             ...     close_visible_runs, orthographic, projection_frame,
             ... )
             >>> boundary, _, _ = projection_frame(orthographic(0, 0), n=90)
@@ -487,7 +487,7 @@ def projection_frame(
     Examples:
         - The Web-Mercator domain is a rectangle whose limits are symmetric about 0:
             ```python
-            >>> from digitalearth.static import projections
+            >>> from digitalearth.static.view import projections
             >>> ring, xlim, ylim = projections.projection_frame(3857, n=180)
             >>> ring.shape[1]
             2
@@ -556,7 +556,7 @@ def graticule(
     Examples:
         - A Web-Mercator graticule yields several straight grid lines:
             ```python
-            >>> from digitalearth.static import projections
+            >>> from digitalearth.static.view import projections
             >>> lines = projections.graticule(3857, lon_step=60, lat_step=30)
             >>> len(lines) > 0
             True
@@ -566,7 +566,7 @@ def graticule(
             ```
         - A window clips generation to the lines the view holds, so a 2° region draws only a few:
             ```python
-            >>> from digitalearth.static import projections
+            >>> from digitalearth.static.view import projections
             >>> few = projections.graticule(4326, lon_step=1, lat_step=1, window=(4.0, 50.0, 6.0, 52.0))
             >>> world = projections.graticule(4326, lon_step=1, lat_step=1)
             >>> len(few) < len(world)

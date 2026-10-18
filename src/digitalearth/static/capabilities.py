@@ -11,9 +11,9 @@ keywords it answered before: `crs`, `kind`, `domain`, `basemap`, `coastlines`, `
 Two fields are worth reading twice, because they are where this tier differs most from the other three:
 
 - **`channels` is two names.** `opacity` and `size` are the two
-  :data:`~digitalearth.static.render_compat.STATIC_STYLE_SCHEMA` declares, and `data_driven` is empty: the
+  :data:`~digitalearth.static.render.compat.STATIC_STYLE_SCHEMA` declares, and `data_driven` is empty: the
   flat keywords cleopatra's glyphs take carry a *constant*, so a channel driven by a field has to be resolved
-  to values by the builder — which :func:`~digitalearth.static.render_compat.fold_symbology` reports as
+  to values by the builder — which :func:`~digitalearth.static.render.compat.fold_symbology` reports as
   unsupported rather than pretends to do.
 - **`export_vector` is this tier's alone.** A matplotlib figure is written as PDF, SVG or EPS. The
   interactive and web tiers draw onto a canvas and say so in their own `absent` — "a vector export is the
@@ -23,7 +23,7 @@ Two fields are worth reading twice, because they are where this tier differs mos
   only `require` speaks — `CapabilityError: ... needs 'export_vector', which backend='3d' does not
   support`. An unlisted name is a refusal without an explanation, not a declared one.
 - **`custom:matplotlib` is declared**, as each other tier declares its own engine's custom kind: an
-  artist a caller hands to :meth:`~digitalearth.static.scene.Scene._add_layer` is described, held, and
+  artist a caller hands to :meth:`~digitalearth.static.core.scene.Scene._add_layer` is described, held, and
   drawn back from that description. Drawing straight onto ``Map.ax`` is still the escape hatch, and is
   still outside the description by design (D-3) — the figure never hears about it.
 

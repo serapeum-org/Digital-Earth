@@ -97,7 +97,7 @@ class DrawnLayer:
         is typed as "some dataclass" rather than as this one — a function declaring ``-> DrawnLayer`` then
         hands back a value nothing can check against the declaration. The ``cast`` is where that narrowing
         happens, once, which is the same reasoning as the static tier's
-        :meth:`~digitalearth.static.renderer.DrawnLayer.colored_by`.
+        :meth:`~digitalearth.static.render.renderer.DrawnLayer.colored_by`.
 
         Inside, it **is** ``replace``: a field-by-field copy would silently drop the next field this record
         grows, and ``replace`` cannot forget one.
@@ -255,7 +255,7 @@ def _draw_recorded_guide(layer: LayerSpec, drawn: DrawnLayer) -> DrawnLayer:
     redraw — a restyle, a rollback, a figure read back onto another map — hands back a new element on which
     nothing has ever been applied. Without this the description went on saying "hidden, titled Flow" while
     the picture drew a visible untitled bar (review H2), which is the divergence the static tier avoids by
-    calling :meth:`~digitalearth.static.renderer.Renderer.draw_guide` from its own `draw_layer`.
+    calling :meth:`~digitalearth.static.render.renderer.Renderer.draw_guide` from its own `draw_layer`.
 
     Reapplied **here** rather than by recording through
     :meth:`~digitalearth.interactive.base.InteractiveMapBase._change`: a guide is description and nothing

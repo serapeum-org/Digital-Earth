@@ -10,7 +10,7 @@ Three things are rejected, and the second is the one that actually bites in prac
 1. **A rendering engine imported directly** — cleopatra, pyvista, holoviews, maplibre, and the rest of
    :data:`BANNED_PACKAGES`.
 2. **A sibling backend imported at all** — ``digitalearth.static``/``interactive``/``web``/``three_d``. This is
-   how the coupling actually forms: one ``from digitalearth.static.figures import fig_of`` passes an
+   how the coupling actually forms: one ``from digitalearth.static.charts.figures import fig_of`` passes an
    engine-only check while dragging ``matplotlib.pyplot``, cleopatra and the whole static backend into every
    consumer of ``base/``. It is precisely the shape this restructure untangled (``interactive/charts.py``
    reaching into ``charts.py``; ``_arrays.fig_of`` blocking the split), so it is the shape most likely to
@@ -222,7 +222,7 @@ class TestOffenderRules:
         "target",
         [
             "digitalearth.static",
-            "digitalearth.static.figures",
+            "digitalearth.static.charts.figures",
             "digitalearth.interactive.charts",
             "digitalearth.web.base",
             "digitalearth.three_d.globe",
@@ -268,7 +268,7 @@ class TestOffenderRules:
         source = "from ..static.figures import fig_of\n"
         module = BASE / "symbology.py"
         targets = _imported_targets(ast.parse(source), module)
-        assert "digitalearth.static.figures" in targets, (
+        assert "digitalearth.static.charts.figures" in targets, (
             f"relative import not resolved: {sorted(targets)}"
         )
         assert _offenders(targets), "a relative backend import must be rejected"

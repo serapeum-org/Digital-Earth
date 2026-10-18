@@ -1,4 +1,4 @@
-"""Tests for digitalearth.static.animation.save_animation — render once, encode twice.
+"""Tests for digitalearth.static.render.animation.save_animation — render once, encode twice.
 
 The encoders themselves are cleopatra's (and ffmpeg's); what Digital-Earth owns is the wiring: which path is
 written, at what frame rate, and — the substantive decision — that the intermediate video is written at full
@@ -12,8 +12,8 @@ import pytest
 from matplotlib.animation import FuncAnimation
 
 from digitalearth.static import Map
-from digitalearth.static import animation as de_animation
-from digitalearth.static.animation import FULL_CHROMA_PIX_FMT, save_animation
+from digitalearth.static.render import animation as de_animation
+from digitalearth.static.render.animation import FULL_CHROMA_PIX_FMT, save_animation
 
 
 @pytest.fixture

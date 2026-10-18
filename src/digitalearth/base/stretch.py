@@ -89,7 +89,7 @@ def channel_limits(stack: np.ndarray) -> list[tuple[float, float]]:
 
     A channel with no finite cell at all (fully nodata, or all ``inf``) has no percentile to take and
     yields ``(nan, nan)`` rather than a warning; callers treat that as "this channel contributes no
-    bound" — see :meth:`~digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits`, which
+    bound" — see :meth:`~digitalearth.static.builders.animation.AnimationMixin._stack_channel_limits`, which
     drops it, and :func:`stretch_to_unit`, which falls back rather than dividing by it.
 
     Args:

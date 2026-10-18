@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from digitalearth.static import Map
-from digitalearth.static.maps.raster import _clip_window
+from digitalearth.static.builders.raster import _clip_window
 
 
 def _values(dataset) -> np.ndarray:

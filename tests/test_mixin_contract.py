@@ -4,7 +4,7 @@ Every capability mixin in ``static/``, ``interactive/``, ``three_d/`` and ``web/
 class as its own base **under ``TYPE_CHECKING`` only**::
 
     if TYPE_CHECKING:
-        from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+        from digitalearth.static.builders.base import GeoLayerBase as _MixinBase
     else:
         _MixinBase = object
 
@@ -55,7 +55,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 #: `<backend package> -> (module holding its base class, base class name)`. The mixins in each package must
 #: declare that base under TYPE_CHECKING; the composed class in the same package inherits it for real.
 BACKENDS = {
-    "digitalearth.static.maps": ("digitalearth.static.maps.base", "GeoLayerBase"),
+    "digitalearth.static.builders": (
+        "digitalearth.static.builders.base",
+        "GeoLayerBase",
+    ),
     "digitalearth.interactive": ("digitalearth.interactive.base", "InteractiveMapBase"),
     "digitalearth.three_d": ("digitalearth.three_d.base", "Scene3DBase"),
     "digitalearth.web": ("digitalearth.web.base", "WebMapBase"),
@@ -375,7 +378,7 @@ class TestComposedClassMro:
             ),
             ("digitalearth.web.map", "WebMap", "digitalearth.web"),
             ("digitalearth.three_d.scene3d", "Scene3D", "digitalearth.three_d"),
-            ("digitalearth.static.map", "Map", "digitalearth.static.maps"),
+            ("digitalearth.static.map", "Map", "digitalearth.static.builders"),
         ],
         ids=["interactive", "web", "three_d", "static"],
     )
@@ -550,10 +553,10 @@ REGISTRARS = frozenset(
 #: `WebMapBase`, `Scene3DBase` and `WebMapBase`'s composed `WebMap` own more. Round 2's M7 measured the
 #: previous scan at 3 methods on `*Mixin` classes only, which left every one of these unopened.
 COMPOSED_CLASSES = {
-    "digitalearth.static.scene": ("Scene",),
+    "digitalearth.static.core.scene": ("Scene",),
     "digitalearth.static.map": ("Map",),
-    "digitalearth.static.textured_globe": ("TexturedGlobe",),
-    "digitalearth.static.maps.base": ("GeoLayerBase",),
+    "digitalearth.static.globe.textured_globe": ("TexturedGlobe",),
+    "digitalearth.static.builders.base": ("GeoLayerBase",),
     "digitalearth.interactive.base": ("InteractiveMapBase",),
     "digitalearth.interactive.map": ("InteractiveMap",),
     "digitalearth.three_d.base": ("Scene3DBase",),
@@ -584,7 +587,7 @@ _THREE_D_ACTOR = (
 #: rather than escaping the scan silently. (N1's third shape, a description *reader*, is no longer flagged
 #: at all: see :data:`REGISTRARS`.)
 CONTRACT_CARVE_OUTS = {
-    "digitalearth.static.maps.decoration:DecorationMixin.stock_img": (
+    "digitalearth.static.builders.decoration:DecorationMixin.stock_img": (
         "hands back the backdrop artist a caller restyles; pinned by "
         "tests/static/test_decoration_chaining.py"
     ),

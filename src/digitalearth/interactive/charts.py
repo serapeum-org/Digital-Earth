@@ -1,6 +1,6 @@
-"""Interactive (HoloViz / Bokeh) charts — the counterpart of :mod:`digitalearth.static.charts` (DC.6).
+"""Interactive (HoloViz / Bokeh) charts — the counterpart of :mod:`digitalearth.static.charts.charts` (DC.6).
 
-``digitalearth.static.charts`` renders static matplotlib charts via cleopatra; these return **HoloViews elements**
+``digitalearth.static.charts.charts`` renders static matplotlib charts via cleopatra; these return **HoloViews elements**
 (``hv.Histogram`` / ``hv.Scatter`` / ``hv.Bars`` / ``hv.Curve``) for pan/zoom/hover charts in the interactive
 tier — surfacing DC.1 (histogram), DC.3 (scatter) and DC.4 (aggregate bar/line) on the HoloViz stack. The
 field-extraction and aggregation logic is shared with the static tier and lives in

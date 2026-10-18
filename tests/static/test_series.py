@@ -3,7 +3,8 @@
 import numpy as np
 import pytest
 
-from digitalearth.static import Map, series
+from digitalearth.static import Map
+from digitalearth.static.charts import series
 
 
 def test_spaghetti_over_collection(dataset):

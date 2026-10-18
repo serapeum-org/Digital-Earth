@@ -44,15 +44,15 @@ from digitalearth.base.stretch import (
     channel_limits,
     require_three_bands,
 )
-from digitalearth.static import projections
-from digitalearth.static.animation import save_animation
-from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.maps.raster import (
+from digitalearth.static.builders.base import OffLimbError
+from digitalearth.static.builders.raster import (
     DEFAULT_FIELD_CMAP,
     FieldColors,
     _field_source,
 )
-from digitalearth.static.render_compat import CENTER_KEY
+from digitalearth.static.render.animation import save_animation
+from digitalearth.static.render.compat import CENTER_KEY
+from digitalearth.static.view import projections
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ UNREADABLE_FRAME = (OSError, RuntimeError, TypeError, ValueError)
 # defaults to lives in `digitalearth.base.animation`, so `animate`/`rotate` play a clip built with defaults at
 # the same speed as the interactive, 3-D and web tiers. It stays importable from this module because that is
 # where this tier's callers and tests already reach for it. Not to be confused with
-# `digitalearth.static.animation.FALLBACK_SAVE_FPS`, the rate the *encoder* assumes for a clip of unknown rate.
+# `digitalearth.static.render.animation.FALLBACK_SAVE_FPS`, the rate the *encoder* assumes for a clip of unknown rate.
 
 
 def _scan_subset(datasets: Sequence[Any]) -> list[Any]:
@@ -172,7 +172,7 @@ _KIND_METHODS = {
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+    from digitalearth.static.builders.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
@@ -195,14 +195,14 @@ def _animated_band(opts: dict) -> int:
     Examples:
         - The first band is the default:
             ```python
-            >>> from digitalearth.static.maps.animation import _animated_band
+            >>> from digitalearth.static.builders.animation import _animated_band
             >>> _animated_band({}), _animated_band({"band": 3})
             (1, 3)
 
             ```
         - Counting from zero is refused, naming what was passed:
             ```python
-            >>> from digitalearth.static.maps.animation import _animated_band
+            >>> from digitalearth.static.builders.animation import _animated_band
             >>> _animated_band({"band": 0})
             Traceback (most recent call last):
                 ...
@@ -254,7 +254,7 @@ class FrameUpdate:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.maps.animation import FrameUpdate
+            >>> from digitalearth.static.builders.animation import FrameUpdate
             >>> scene = Map(crs=4326)
             >>> plan = FrameUpdate(scene, [], {}, kind="imshow")
             >>> plan.in_place, plan.blocker
@@ -268,7 +268,7 @@ class FrameUpdate:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.maps.animation import FrameUpdate
+            >>> from digitalearth.static.builders.animation import FrameUpdate
             >>> scene = Map(crs=4326)
             >>> FrameUpdate(scene, [], {}, kind="contourf").blocker
             "kind='contourf' draws a contour set, which is cut from the values rather than handed new ones"
@@ -283,7 +283,7 @@ class FrameUpdate:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from digitalearth.static import Map
-            >>> from digitalearth.static.maps.animation import FrameUpdate
+            >>> from digitalearth.static.builders.animation import FrameUpdate
             >>> scene = Map(crs=4326)
             >>> FrameUpdate(scene, [], {}, kind="imshow", mode="inplace")
             Traceback (most recent call last):
@@ -324,7 +324,7 @@ class FrameUpdate:
     #:
     #: `cyclic`'s mechanism, measured: a `(60, 120)` band drawn with `cyclic=True` leaves a `(60, 121)`
     #: image, while :meth:`apply` reads the next frame through
-    #: :func:`~digitalearth.static.maps.raster._field_source`, which does not close the seam and so hands
+    #: :func:`~digitalearth.static.builders.raster._field_source`, which does not close the seam and so hands
     #: back `(60, 120)`. Pointed at that artist, :meth:`apply` answers `False` and logs
     #: "animation: frame 1 holds a (60, 120) grid where the first frame held (60, 121), so the axes is
     #: cleared and every layer redrawn from here on" — the degrade this entry gets ahead of.
@@ -442,7 +442,7 @@ class FrameUpdate:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> from digitalearth.static.builders.animation import FrameUpdate
                 >>> scene = Map(crs=4326)
                 >>> FrameUpdate(scene, [], {}, kind="pcolormesh").in_place
                 True
@@ -483,7 +483,7 @@ class FrameUpdate:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> from digitalearth.static.builders.animation import FrameUpdate
                 >>> scene = Map(crs=4326)
                 >>> plan = FrameUpdate(scene, [], {}, kind="imshow")
                 >>> plan.settle(blit=False) is plan
@@ -498,7 +498,7 @@ class FrameUpdate:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> from digitalearth.static.builders.animation import FrameUpdate
                 >>> scene = Map(crs=4326)
                 >>> refused = FrameUpdate(scene, [], {}, kind="contour", mode="in_place")
                 >>> refused.settle(blit=False)  # doctest: +ELLIPSIS
@@ -571,7 +571,7 @@ class FrameUpdate:
             - The mode that was asked for opens the sentence, the reason is quoted as it stands, and the
               way out closes it:
                 ```python
-                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> from digitalearth.static.builders.animation import FrameUpdate
                 >>> message = FrameUpdate._in_place_refusal("frame 1 is on another grid")
                 >>> message.split(":")[0]
                 "update='in_place' is not available for this animation"
@@ -588,7 +588,7 @@ class FrameUpdate:
     def _display_grid(self, index: int) -> tuple[int, ...] | None:
         """Return the grid frame ``index`` is **drawn** on, or ``None`` when it draws nothing.
 
-        Read through :func:`~digitalearth.static.maps.raster._field_source`, the same reader
+        Read through :func:`~digitalearth.static.builders.raster._field_source`, the same reader
         :meth:`apply` compares against, so the answer here and the answer at playback cannot disagree.
         The raster's own shape is not that answer: a frame is warped into the display CRS and decimated to
         the canvas before it reaches an artist, so two frames of one source shape can be drawn on two
@@ -648,14 +648,14 @@ class FrameUpdate:
         """Give ``artist`` frame ``index``'s values instead of drawing that frame's layer again.
 
         The values are read through the field drawer's own reader
-        (:func:`~digitalearth.static.maps.raster._field_source`), not through a second pipeline of this
+        (:func:`~digitalearth.static.builders.raster._field_source`), not through a second pipeline of this
         class's own: a frame must arrive decimated, warped and masked exactly as the drawer would have
         delivered it, or the kept artist would show a different picture from the one a redraw puts up.
 
         The title goes with it. A title is the one piece of per-frame *decoration*, so an updated frame has
         to restate it just as a redrawn one does — leaving it to the first frame is how an in-place
         animation came out with every frame titled "Jan". It is set straight on the axes rather than
-        through :meth:`~digitalearth.static.scene.Scene.set_title`, which would also write it into the
+        through :meth:`~digitalearth.static.core.scene.Scene.set_title`, which would also write it into the
         figure's description: a frame's caption is not the figure's heading, and ``titles=`` leaves that
         heading to the caller *in the record*. On the axes there is only one title to draw, so a
         recorded heading is painted over here — :meth:`AnimationMixin.animate` says so once, at
@@ -672,7 +672,7 @@ class FrameUpdate:
 
         Raises:
             OffLimbError: only under the scene's ``strict=True``, from
-                :meth:`~digitalearth.static.maps.base.GeoLayerBase._skipped_off_limb` — the same refusal a
+                :meth:`~digitalearth.static.builders.base.GeoLayerBase._skipped_off_limb` — the same refusal a
                 strict still makes. Otherwise a frame the display CRS cannot show hides the artist for that
                 frame, because "draws nothing" has to mean nothing *is* drawn rather than the previous
                 frame staying up.
@@ -686,7 +686,7 @@ class FrameUpdate:
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> from digitalearth.static.builders.animation import FrameUpdate
                 >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
                 >>> frames = [Dataset.from_array(arr=np.full((60, 120), v, "float32"), geo_ref=geo)
                 ...           for v in (1.0, 2.0)]
@@ -710,7 +710,7 @@ class FrameUpdate:
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.animation import FrameUpdate
+                >>> from digitalearth.static.builders.animation import FrameUpdate
                 >>> fine = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
                 >>> coarse = GeoReference(geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326)
                 >>> frames = [
@@ -846,7 +846,7 @@ class AnimationMixin(_MixinBase):
                 ``gif``).
             fps: Frames per second. Defaults to the rate the animation was built with.
             gif: Optional second path to derive a GIF at. Requires ``path`` to be a video.
-            **kwargs: Forwarded to :func:`digitalearth.static.animation.save_animation` (and on to cleopatra) —
+            **kwargs: Forwarded to :func:`digitalearth.static.render.animation.save_animation` (and on to cleopatra) —
                 ``crf``, ``bitrate``, ``codec``, ``dpi``, ``gif_options``, and the rest.
 
         Returns:
@@ -1233,7 +1233,7 @@ class AnimationMixin(_MixinBase):
         """Resolve the per-variable style (``cmap``/``levels``/``units``) the frames will be drawn with.
 
         The frames resolve theirs one at a time inside
-        :meth:`~digitalearth.static.maps.raster.RasterMixin._field`; the persistent colorbar is built once,
+        :meth:`~digitalearth.static.builders.raster.RasterMixin._field`; the persistent colorbar is built once,
         before any frame is drawn, so it has to look the same style up here or it would key a ``viridis``
         bar to frames drawn in whatever colormap the variable actually selects.
 
@@ -1394,7 +1394,7 @@ class AnimationMixin(_MixinBase):
         """Resolve the diverging ramp a stated ``center=`` asks for **once over the stack**.
 
         The ramp is a colour decision, and an animation takes its colour decisions once: a frame drawing
-        itself asks :meth:`~digitalearth.static.maps.raster.FieldColors.ramp_over` whether *that frame*
+        itself asks :meth:`~digitalearth.static.builders.raster.FieldColors.ramp_over` whether *that frame*
         straddles the centre, which made the ramp flicker between diverging and sequential across a clip —
         and made the answer depend on ``update=``, because an artist kept across frames froze frame 0's
         answer while a redrawn one re-decided it. Asking once, of the shared ``vmin``/``vmax``
@@ -1402,7 +1402,7 @@ class AnimationMixin(_MixinBase):
 
         The resolved colormap is written into ``opts["cmap"]``. For the ``center=`` spelling the symmetric
         limits cleopatra would compute are then baked into ``opts["vmin"]``/``opts["vmax"]`` — reused from
-        cleopatra's own rule through :meth:`~digitalearth.static.maps.raster.FieldColors.centered_limits`,
+        cleopatra's own rule through :meth:`~digitalearth.static.builders.raster.FieldColors.centered_limits`,
         not recomputed here — and the ``center=`` keyword is dropped, so each frame reaches ``ramp_over``
         with no centre, draws the same widened domain, and adds no second warning: the one above is the
         whole clip's (issue #390). cleopatra does not widen the limits for a ``color_scale="midpoint"``
@@ -1423,7 +1423,7 @@ class AnimationMixin(_MixinBase):
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> from digitalearth.static.builders.raster import FieldColors
                 >>> scene = Map(crs=4326)
                 >>> opts = {"vmin": -5.0, "vmax": 5.0}
                 >>> scene._freeze_animation_ramp(opts, FieldColors(center=0.0), {"cmap": "viridis"})
@@ -1437,7 +1437,7 @@ class AnimationMixin(_MixinBase):
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> from digitalearth.static.builders.raster import FieldColors
                 >>> scene = Map(crs=4326)
                 >>> opts = {"vmin": -5.0, "vmax": 5.0, "cmap": "RdBu_r"}
                 >>> scene._freeze_animation_ramp(opts, FieldColors(center=0.0), {"cmap": "viridis"})
@@ -1452,7 +1452,7 @@ class AnimationMixin(_MixinBase):
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from digitalearth.static import Map
-                >>> from digitalearth.static.maps.raster import FieldColors
+                >>> from digitalearth.static.builders.raster import FieldColors
                 >>> scene = Map(crs=4326)
                 >>> opts = {"vmin": -3.0, "vmax": 8.0, "center": 100.0, "cmap": "RdBu_r"}
                 >>> colors = FieldColors(center=100.0, from_center=True)
@@ -1582,7 +1582,7 @@ class AnimationMixin(_MixinBase):
                 rate every animation entry point — here, :meth:`rotate`, and the other backends — starts from.
             titles: Optional per-frame captions; must match the stack length when given. They are drawn
                 on the axes and left out of the figure's description, so a heading
-                :meth:`~digitalearth.static.scene.Scene.set_title` recorded survives in the record — but
+                :meth:`~digitalearth.static.core.scene.Scene.set_title` recorded survives in the record — but
                 it is **painted over** on the axes by every frame, which is a disagreement between the
                 drawn and the described title and is said once, at ``WARNING``, when both are asked for
                 (round 2, L11).

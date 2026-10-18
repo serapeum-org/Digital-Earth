@@ -7,8 +7,8 @@ matplotlib.use("Agg")
 
 from digitalearth.static import (
     Map,  # noqa: E402
-    projections,  # noqa: E402
 )
+from digitalearth.static.view import projections  # noqa: E402
 
 
 class TestReprojectPoint:

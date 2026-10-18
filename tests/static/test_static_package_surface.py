@@ -15,14 +15,14 @@ import digitalearth
 
 #: ``digitalearth.static.__all__``, and the submodule each name is defined in.
 STATIC_EXPORTS = {
-    "Pick": "digitalearth.static.scene",
-    "Scene": "digitalearth.static.scene",
+    "Pick": "digitalearth.static.core.scene",
+    "Scene": "digitalearth.static.core.scene",
     "Map": "digitalearth.static.map",
-    "TexturedGlobe": "digitalearth.static.textured_globe",
-    "facet": "digitalearth.static.figure",
-    "grid": "digitalearth.static.figure",
-    "quickpanels": "digitalearth.static.figure",
-    "shared_colorbar": "digitalearth.static.figure",
+    "TexturedGlobe": "digitalearth.static.globe.textured_globe",
+    "facet": "digitalearth.static.panels.figure",
+    "grid": "digitalearth.static.panels.figure",
+    "quickpanels": "digitalearth.static.panels.figure",
+    "shared_colorbar": "digitalearth.static.panels.figure",
 }
 
 
