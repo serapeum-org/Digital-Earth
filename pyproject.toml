@@ -372,6 +372,10 @@ module = "digitalearth.interactive.legends.legend"  # guide code moved here from
 disable_error_code = ["attr-defined", "no-any-return"]
 
 [[tool.mypy.overrides]]
+module = "digitalearth.web.legends.legend"  # guide code moved here from decoration
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
 module = "digitalearth.interactive.temporal.temporal"  # 2 errors at baseline
 disable_error_code = ["union-attr"]
 
@@ -620,7 +624,3 @@ gdal = ">=3.13.0,<4"
 # Conda-forge's geopandas-base no longer pulls in a vector-IO backend.
 # pyogrio is required for GeoDataFrame.to_file / read_file.
 pyogrio = ">=0.12.1"
-
-[[tool.mypy.overrides]]
-module = "digitalearth.web.legends.legend"
-disable_error_code = ["attr-defined", "no-any-return"]
