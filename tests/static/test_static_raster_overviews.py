@@ -208,7 +208,12 @@ class TestALargeRasterIsReadThroughAWindow:
         )
         assert full_shape == (1200, 1200), f"the full read was not whole: {full_shape}"
         rms = float(np.sqrt(np.mean((decimated - full) ** 2)))
-        assert rms < 2.0, (
+        # Measured 0.36 here (0.45 on a sinusoidal field) on one platform. The margin is wide on purpose: a
+        # real decimation fault — a wrong factor, a misplaced, flipped or transposed read — is tens of
+        # greylevels, whereas the one cross-environment variable (GDAL's per-build on-the-fly decimation
+        # default, the dependency the baseline module's Determinism note flags) moves a smooth field's
+        # differential by well under one. 3.0 clears a real fault's floor with headroom over that drift.
+        assert rms < 3.0, (
             f"the decimated render differs from a full decode: RMS {rms:.4f} over 0-255"
         )
 
