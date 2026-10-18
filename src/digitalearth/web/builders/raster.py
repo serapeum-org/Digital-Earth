@@ -1647,7 +1647,7 @@ class RasterMixin(_MixinBase):
                 coloured from the shared categorical palette (``cmap`` picks another). The classes are cut by
                 :mod:`digitalearth.base.raster_classes`, the classifier the static and interactive tiers use,
                 so one band is classed — and coloured — alike on all three; they are recorded in the layer's
-                colour encoding, and :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` keys them
+                colour encoding, and :meth:`~digitalearth.web.legends.legend.LegendMixin.legend` keys them
                 one swatch per class. ``limits``/``vmin``/``vmax`` do not apply to a classified band. ``None``
                 (default) draws the continuous ramp. Not taken by a ``tiles`` route.
             k: How many classes a named graduated scheme cuts; ``None`` takes 5. Ignored without ``scheme``.

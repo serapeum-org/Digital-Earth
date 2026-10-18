@@ -741,7 +741,7 @@ def quickmap(
             adds one **if there is one to draw**; ``False`` draws none. Every backend accepts it, so the
             same call is valid everywhere (#254), but each reaches its own mechanism: ``matplotlib`` builds
             a colorbar, ``interactive`` toggles one, ``3d`` shows or hides the scalar bar, and ``web``
-            builds :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend`.
+            builds :meth:`~digitalearth.web.legends.legend.LegendMixin.legend`.
 
             ``False`` is the half that is genuinely uniform: it reliably means "no key" on all four.
             ``True`` is not one behaviour but two. On ``matplotlib`` and ``web`` it **actively builds** a

@@ -342,6 +342,7 @@ class TestConstructionDefaults:
         from digitalearth.web.builders.vector import VectorMixin
         from digitalearth.web.core.base import WebMapBase
         from digitalearth.web.decoration.decoration import DecorationMixin
+        from digitalearth.web.legends.legend import LegendMixin
         from digitalearth.web.output.export import ExportMixin
         from digitalearth.web.temporal.temporal import TemporalMixin
 
@@ -354,6 +355,7 @@ class TestConstructionDefaults:
             ThreeDMixin,
             TemporalMixin,
             DecorationMixin,
+            LegendMixin,
             ExportMixin,
         ):
             assert cls in mro, f"{cls.__name__} missing from WebMap MRO"

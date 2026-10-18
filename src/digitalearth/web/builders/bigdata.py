@@ -359,7 +359,7 @@ class BigDataMixin(_MixinBase):
         that aggregate with the same classified ``step``/``interpolate`` expression ``choropleth`` builds —
         reused through :meth:`~digitalearth.web.builders.vector.VectorMixin._color_expr`, not re-implemented here. A
         classified cluster is then **keyable** exactly as a choropleth is, so
-        :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` /
+        :meth:`~digitalearth.web.legends.legend.LegendMixin.legend` /
         :meth:`~digitalearth.web.core.base.WebMapBase.colorbar` draw its key from the colours it rendered. The
         aggregate is computed per cluster in the browser, while the class breaks are derived from the
         **single-feature** column's own spread, so the key shows the breaks the paint was compiled from. That

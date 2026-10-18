@@ -738,7 +738,7 @@ class WebMapBase:
         #: — the element type is the classified column's, which the tier does not constrain — where
         #: ``List[float]`` was a claim a caller could have written code against.
         self.last_breaks: list[Any] | None = None
-        #: Everything :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` needs to draw a key for
+        #: Everything :meth:`~digitalearth.web.legends.legend.LegendMixin.legend` needs to draw a key for
         #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
         #: :attr:`last_breaks`, which stays the bare-``values`` accessor it has always been.
@@ -2101,7 +2101,7 @@ class WebMapBase:
             layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
                 takes the topmost **visible** layer that published a colour scale (a classified
                 ``choropleth``/``points``, or a raster band's ramp), and under ``visible=False`` the layer
-                whose key is drawn, as :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend`
+                whose key is drawn, as :meth:`~digitalearth.web.legends.legend.LegendMixin.legend`
                 resolves it.
             label: What to call the key — the variable and its units, usually. Recorded as the guide's
                 ``title``.
@@ -2188,7 +2188,7 @@ class WebMapBase:
         Note:
             **The colour key goes with the layer.** A key is asked for by hanging a
             :class:`~digitalearth.base.spec.encoding.Guide` on the layer's own ``color`` encoding
-            (:meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend`), so removing the layer removes the
+            (:meth:`~digitalearth.web.legends.legend.LegendMixin.legend`), so removing the layer removes the
             guide, and the panel — derived from the guides the live layers carry — is rebuilt without it. A
             surviving layer that carries its own guide then shows its own key. Nothing has to be rebuilt by
             hand, and no key describes a layer that is gone.

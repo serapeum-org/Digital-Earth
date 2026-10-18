@@ -497,7 +497,7 @@ class VectorMixin(_MixinBase):
 
             Also sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp
             stops, and ``self.last_legend`` to those values *plus the colours they were drawn with*, which
-            is what :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` renders.
+            is what :meth:`~digitalearth.web.legends.legend.LegendMixin.legend` renders.
 
         Raises:
             ValueError: from :class:`~digitalearth.base.spec.scale.Scale` when the scheme cannot classify
@@ -1146,7 +1146,7 @@ class VectorMixin(_MixinBase):
             color_encoding: What drives the layer's colour when a `column` does, as
                 :meth:`~digitalearth.base.spec.encoding.Encoding.by_field` built it in `_color_expr`. Filed
                 on the symbology's ``color`` channel, which is where
-                :meth:`~digitalearth.web.decoration.decoration.DecorationMixin.legend` hangs its
+                :meth:`~digitalearth.web.legends.legend.LegendMixin.legend` hangs its
                 :class:`~digitalearth.base.spec.encoding.Guide` — so the colour key belongs to the layer and
                 moves, hides and disappears with it. `None` — a flat colour, or no colour at all — files
                 nothing, which is what makes a key on an unclassified layer refusable.
@@ -1708,7 +1708,7 @@ class VectorMixin(_MixinBase):
                 ```
 
         See Also:
-            digitalearth.web.decoration.decoration.DecorationMixin.legend: draws the key from ``last_legend``.
+            digitalearth.web.legends.legend.LegendMixin.legend: draws the key from ``last_legend``.
             digitalearth.web.builders.vector.VectorMixin.polygons: the same fill layer without the thematic
                 classification.
         """

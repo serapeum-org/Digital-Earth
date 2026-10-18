@@ -1203,7 +1203,7 @@ class GuideMixin(_MixinBase):
 
         See Also:
             colorbar: the scalar bar, for a layer coloured by a continuous ramp.
-            digitalearth.web.decoration.decoration.DecorationMixin.legend: the same name on the web tier.
+            digitalearth.web.legends.legend.LegendMixin.legend: the same name on the web tier.
         """
         self._record_guide(
             layer_id,
