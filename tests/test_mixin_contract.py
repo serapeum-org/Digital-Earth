@@ -55,7 +55,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 #: `<backend package> -> (module holding its base class, base class name)`. The mixins in each package must
 #: declare that base under TYPE_CHECKING; the composed class in the same package inherits it for real.
 BACKENDS = {
-    "digitalearth.static.builders": (
+    "digitalearth.static": (
         "digitalearth.static.builders.base",
         "GeoLayerBase",
     ),
@@ -387,7 +387,7 @@ class TestComposedClassMro:
             ),
             ("digitalearth.web.map", "WebMap", "digitalearth.web"),
             ("digitalearth.three_d.scene3d", "Scene3D", "digitalearth.three_d"),
-            ("digitalearth.static.map", "Map", "digitalearth.static.builders"),
+            ("digitalearth.static.map", "Map", "digitalearth.static"),
         ],
         ids=["interactive", "web", "three_d", "static"],
     )
