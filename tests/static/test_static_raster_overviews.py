@@ -169,6 +169,55 @@ class TestALargeRasterIsReadThroughAWindow:
             f"the decimated read lost the band's identity: {decimated!r} vs {undecimated!r}"
         )
 
+    def test_the_decimated_render_matches_a_full_decode(self, tmp_path, monkeypatch):
+        """At figure resolution the decimated read draws the same picture a full decode would (#480).
+
+        Args:
+            tmp_path: pytest's temporary directory, holding the raster on disk.
+            monkeypatch: lifts the decimation threshold for the reference render, so the same field path
+                reads the whole band instead of a decimated window.
+
+        Test scenario:
+            The ``pytest-mpl`` baseline in ``test_image_baselines.py`` is generated from the decimated render,
+            so it can only pin that the decimated render stays like itself — it cannot prove the decimated read
+            equals a *full* decode, which is what #480 asked for. That needs both drawn into one canvas and
+            compared. The same 1200-cell raster is rendered twice at one figure size — once decimated, once
+            with ``_DECIMATE_ABOVE`` raised so the band is read whole — and the two RGBA buffers are differenced.
+            A smooth field decimates without aliasing, so the two are the same picture to a fraction of a
+            greylevel; the full read is confirmed whole and the decimated one confirmed smaller, so the match is
+            between genuinely different reads rather than two identical ones.
+        """
+        from digitalearth.static.builders import raster as raster_mod
+
+        dataset = _raster(1200, path=tmp_path / "big.tif")
+
+        def _render():
+            with Map(crs=4326, figsize=(4, 4)) as scene:
+                scene.field(dataset, name="f")
+                # The public accessor (CLAUDE.md), not this file's legacy `_drawn_shape`/`_renderer.drawn`.
+                shape = np.asarray(scene.artist("f").get_array()).shape
+                scene.fig.canvas.draw()
+                buffer = np.asarray(scene.fig.canvas.buffer_rgba(), dtype=float)
+            return shape, buffer
+
+        decimated_shape, decimated = _render()
+        monkeypatch.setattr(raster_mod, "_DECIMATE_ABOVE", 1.0e9)
+        full_shape, full = _render()
+
+        assert max(decimated_shape) < 1200, (
+            f"the reference read was decimated too, so there is nothing to compare: {decimated_shape}"
+        )
+        assert full_shape == (1200, 1200), f"the full read was not whole: {full_shape}"
+        rms = float(np.sqrt(np.mean((decimated - full) ** 2)))
+        # Measured 0.36 here (0.45 on a sinusoidal field) on one platform. The margin is wide on purpose: a
+        # real decimation fault — a wrong factor, a misplaced, flipped or transposed read — is tens of
+        # greylevels, whereas the one cross-environment variable (GDAL's per-build on-the-fly decimation
+        # default, the dependency the baseline module's Determinism note flags) moves a smooth field's
+        # differential by well under one. 3.0 clears a real fault's floor with headroom over that drift.
+        assert rms < 3.0, (
+            f"the decimated render differs from a full decode: RMS {rms:.4f} over 0-255"
+        )
+
 
 class TestTheCanvasMeasurement:
     """The budget comes from the figure, so what it measures is worth pinning."""
@@ -328,3 +377,24 @@ class TestTheReadLeavesNothingBehind:
         assert len(_OBJECTS) == before, (
             f"the read pinned {len(_OBJECTS) - before} object(s) in the registry"
         )
+
+
+def test_the_large_raster_baseline_field_has_no_flip_or_transpose_symmetry():
+    """The image baseline can pin orientation only if its field has no flip or transpose symmetry (#480).
+
+    ``test_image_baselines.test_decimated_large_raster`` compares the decimated render against a committed
+    PNG, so it can only catch an orientation fault that *moves pixels*. A field equal to its own vertical flip
+    would let a y-sign / row-order regression pass unseen; the same holds for a horizontal flip and a
+    transpose. This asserts the baseline's field (``_large_field``) breaks all three — it fails on an even
+    field over a symmetric axis, the shape the fixture had before #480's review. It lives here, with the other
+    decimation property tests, so it runs in the main suite on every platform rather than only in the
+    single-runner image job the baseline itself lives in.
+    """
+    from tests.static.test_image_baselines import _large_field
+
+    arr = _large_field(64)
+    assert not np.array_equal(np.flipud(arr), arr), "a vertical flip would be invisible"
+    assert not np.array_equal(np.fliplr(arr), arr), (
+        "a horizontal flip would be invisible"
+    )
+    assert not np.array_equal(arr.T, arr), "a transpose would be invisible"
