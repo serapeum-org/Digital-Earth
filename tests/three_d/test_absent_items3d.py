@@ -442,8 +442,10 @@ class TestSceneBbox4326:
         try:
             _terrain(scene)
             west, south, east, north = _scene_bbox_4326(scene)
-            assert west < east and south < north, (west, south, east, north)
-            assert -180.0 <= west <= 180.0 and -90.0 <= south <= 90.0, (west, south)
+            assert west < east, (west, east)
+            assert south < north, (south, north)
+            assert -180.0 <= west <= 180.0, west
+            assert -90.0 <= south <= 90.0, south
         finally:
             scene.close()
 
@@ -455,7 +457,9 @@ class TestSceneBbox4326:
         try:
             _terrain_3857(scene)
             west, south, east, north = _scene_bbox_4326(scene)
-            assert -180.0 <= west <= 180.0 and -180.0 <= east <= 180.0, (west, east)
-            assert -90.0 <= south <= 90.0 and -90.0 <= north <= 90.0, (south, north)
+            assert -180.0 <= west <= 180.0, west
+            assert -180.0 <= east <= 180.0, east
+            assert -90.0 <= south <= 90.0, south
+            assert -90.0 <= north <= 90.0, north
         finally:
             scene.close()
