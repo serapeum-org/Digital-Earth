@@ -99,6 +99,29 @@ class TestBivariate:
         with pytest.raises(ValueError, match="same shape"):
             scene.bivariate(a, b)
 
+    def test_the_draped_image_is_not_flipped_north_south(self, scene):
+        """Input row 0 (the raster's north/top row) drapes on the north edge, not mirrored.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            A variable that increases with row (row 0 low → matrix[0], the light row) draped and viewed
+            top-down shows the north band lighter than the south; a vertical flip would invert this.
+        """
+        rows, cols = 6, 6
+        a = np.repeat(np.arange(rows, dtype=float).reshape(rows, 1), cols, axis=1)
+        b = np.repeat(np.arange(cols, dtype=float).reshape(1, cols), rows, axis=0)
+        scene.bivariate(a, b, scheme="equal_interval", n=3)
+        scene.plotter.view_xy()
+        frame = scene.plotter.screenshot(return_img=True)
+        band = frame.shape[0] // 3
+        north = frame[:band].reshape(-1, 3).mean()
+        south = frame[-band:].reshape(-1, 3).mean()
+        assert north > south, (
+            f"draped image flipped N-S: north {north:.0f} vs south {south:.0f}"
+        )
+
     def test_a_custom_matrix_is_honoured(self, scene):
         """A caller's own 2×2 matrix is accepted when n matches.
 
