@@ -1142,6 +1142,35 @@ def _apply_lighting(scene: Any, plotter: Any, held: dict[str, Any]) -> None:
     )
 
 
+def _label_anchors(
+    xs: Any, ys: Any, values: Any, z: float
+) -> tuple[list[list[float]], list[str]]:
+    """Return the drawable label anchors and their texts, dropping no-data features.
+
+    A feature with no finite representative point (an empty geometry) or a missing value is not labelled — the
+    same quiet drop the static tier's labels make rather than drawing text at ``NaN``.
+
+    Args:
+        xs: The representative x of each feature, in display-CRS coordinates.
+        ys: The representative y of each feature.
+        values: The column value of each feature, used as the label text.
+        z: The height the anchors are placed at.
+
+    Returns:
+        The ``[x, y, z]`` anchors that are drawable and their stringified label texts, in feature order.
+    """
+    points: list[list[float]] = []
+    kept: list[str] = []
+    for x, y, value in zip(xs, ys, values):
+        if not (math.isfinite(x) and math.isfinite(y)):
+            continue
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            continue
+        points.append([float(x), float(y), z])
+        kept.append(str(value))
+    return points, kept
+
+
 def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
     """Draw a label per feature a `labels` layer describes, each with a readable halo.
 
@@ -1199,17 +1228,7 @@ def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> tuple[Any, Any] | No
     ys = np.asarray(reps.y, dtype="float64")
     values = placed[column].to_numpy()
 
-    points: list[list[float]] = []
-    kept: list[str] = []
-    for x, y, value in zip(xs, ys, values):
-        # A feature with no finite representative point (an empty geometry) or a missing value is not labelled,
-        # the same quiet drop the static tier's labels make rather than drawing text at NaN.
-        if not (math.isfinite(x) and math.isfinite(y)):
-            continue
-        if value is None or (isinstance(value, float) and math.isnan(value)):
-            continue
-        points.append([float(x), float(y), z])
-        kept.append(str(value))
+    points, kept = _label_anchors(xs, ys, values, z)
     if not points:
         scene._skip_empty(
             layer.kind, f"no feature carried a geometry and a {column!r} value to label"
