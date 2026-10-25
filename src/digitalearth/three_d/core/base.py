@@ -2114,14 +2114,16 @@ class Scene3DBase:
         Returns:
             The box in the scene's display CRS — unchanged when the scene has no display CRS yet or already
             draws in ``crs``; otherwise the axis-aligned envelope of the four reprojected corners, since a
-            projected CRS does not map a box's edges to a box.
+            projected CRS does not map a box's edges to a box. The corner envelope is exact for the
+            axis-aligned 4326↔3857 case; for a curved projection (conic/UTM/polar) over a wide extent the true
+            edges bow outside the corner hull, so the frame may sit slightly inside the intended region.
         """
         display = getattr(self, "display_crs", None)
         from digitalearth.base.spec.bounds import same_crs
 
         if display is None or crs is None or same_crs(crs, display):
             return float(west), float(south), float(east), float(north)
-        from pyramids.feature.geometry import reproject_coordinates
+        from pyramids.base.crs import reproject_coordinates
 
         xs, ys = reproject_coordinates(
             [west, east, west, east],

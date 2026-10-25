@@ -461,7 +461,8 @@ def fetch_basemap_image(
     Note:
         cleopatra exposes tile fetching only bound to a matplotlib axes (`add_tiles`); there is no public
         "give me the stitched image for this box" call, so this reaches one private helper
-        (`_tiles_for_bbox`). A public headless-stitch entry point is worth requesting upstream in cleopatra.
+        (`_tiles_for_bbox`). A public headless-stitch entry point is tracked upstream as cleopatra#401; when it
+        lands, this seam drops the private reach for that one call.
 
     Args:
         bbox_4326: The area to cover, ``(west, south, east, north)`` in EPSG:4326 degrees.
@@ -1144,8 +1145,11 @@ class DecorationMixin(_MixinBase):
 
         Note:
             Switching to orthographic changes how the scene looks (parallel lines stop converging). That is the
-            cost of an honest bar; call :meth:`~digitalearth.three_d.core.base.Scene3DBase.view_angles` or set the
-            camera afterwards if a perspective view is wanted instead — without the scale bar.
+            cost of an honest bar, and it **persists for as long as the scale bar is on the scene**: the bar is
+            re-applied on every decoration redraw (each :meth:`attribution`/:meth:`north_arrow` call, and each
+            plotter rebuild), so a perspective camera set in between is reasserted to orthographic on the next
+            redraw — a scale bar read under perspective would misstate the distance. To return to a perspective
+            view, do not add a scale bar; there is no per-call toggle to drop it while keeping the scene.
 
         Examples:
             - A scale bar is drawn over a framed scene:
@@ -1286,7 +1290,9 @@ class DecorationMixin(_MixinBase):
             crs: What they are measured in.
 
         Returns:
-            The box in EPSG:4326, which is the CRS cleopatra's tile math works in.
+            The box in EPSG:4326, which is the CRS cleopatra's tile math works in. When a reprojection is
+            needed it is the envelope of the four reprojected corners — exact for the axis-aligned 4326↔3857
+            case, approximate (slightly inside) for a curved projection over a wide extent.
 
         Raises:
             ValueError: when `bbox` is not four numbers.
@@ -1304,7 +1310,7 @@ class DecorationMixin(_MixinBase):
         west, south, east, north = values
         if crs is None or same_crs(crs, 4326):
             return west, south, east, north
-        from pyramids.feature.geometry import reproject_coordinates
+        from pyramids.base.crs import reproject_coordinates
 
         xs, ys = reproject_coordinates(
             [west, east, west, east],

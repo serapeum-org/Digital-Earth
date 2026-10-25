@@ -1599,7 +1599,9 @@ def _scene_bbox_4326(scene: Any) -> tuple[float, float, float, float]:
         scene: A built ``Scene3D`` with at least one layer drawn.
 
     Returns:
-        The extent in EPSG:4326.
+        The extent in EPSG:4326. When the display CRS is not 4326 it is the envelope of the four reprojected
+        corners — exact for the axis-aligned 4326↔3857 case, approximate for a curved projection over a wide
+        extent.
     """
     from digitalearth.base.spec.bounds import same_crs
 
@@ -1607,7 +1609,7 @@ def _scene_bbox_4326(scene: Any) -> tuple[float, float, float, float]:
     display = scene.display_crs
     if display is None or same_crs(display, 4326):
         return float(bounds[0]), float(bounds[2]), float(bounds[1]), float(bounds[3])
-    from pyramids.feature.geometry import reproject_coordinates
+    from pyramids.base.crs import reproject_coordinates
 
     xs, ys = reproject_coordinates(
         [bounds[0], bounds[1], bounds[0], bounds[1]],
