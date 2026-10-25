@@ -612,6 +612,11 @@ def _from_netcdf(
         np.ma.asarray(nc.read_array(variable=variable, masked=True)).astype("float64"),
         np.nan,
     )
+    # pyramids 0.71 reads a NetCDF variable band-first — a single-variable grid comes back as ``(1, H, W)``
+    # where earlier it was ``(H, W)``. A ``Source`` wraps one 2-D field, so drop a leading band axis, taking
+    # the first band of a genuinely multi-band read — the same default the raster path's ``band`` takes.
+    if z.ndim == 3:
+        z = z[0]
     attributes = _variable_attributes(nc, variable)
     units = _attr(attributes, "units")
     return Source(

@@ -145,8 +145,9 @@ class TestGraticuleRefusals:
         Args:
             scene: The scene under test.
         """
+        nan = float("nan")
         with pytest.raises(ValueError, match="finite number"):
-            scene.graticule(bbox=BOX, z=float("nan"))
+            scene.graticule(bbox=BOX, z=nan)
 
 
 class TestGraticuleWithoutAnExtent:

@@ -94,8 +94,10 @@ class TestBivariate:
         Args:
             scene: The scene under test.
         """
+        a = np.zeros((6, 6))
+        b = np.zeros((5, 5))
         with pytest.raises(ValueError, match="same shape"):
-            scene.bivariate(np.zeros((6, 6)), np.zeros((5, 5)))
+            scene.bivariate(a, b)
 
     def test_a_custom_matrix_is_honoured(self, scene):
         """A caller's own 2×2 matrix is accepted when n matches.

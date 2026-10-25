@@ -149,8 +149,9 @@ class TestLabelRefusals:
         Args:
             scene: The scene under test.
         """
+        features = _points()
         with pytest.raises(KeyError, match="not a property"):
-            scene.labels(_points(), "nope")
+            scene.labels(features, "nope")
 
     def test_a_non_finite_text_size_is_refused(self, scene):
         """The text size has to be a real number.
@@ -158,8 +159,10 @@ class TestLabelRefusals:
         Args:
             scene: The scene under test.
         """
+        features = _points()
+        nan = float("nan")
         with pytest.raises(ValueError, match="finite number"):
-            scene.labels(_points(), "name", text_size=float("nan"))
+            scene.labels(features, "name", text_size=nan)
 
 
 class TestLabelsStrictAndRoundTrip:

@@ -81,8 +81,9 @@ class TestSun:
         Args:
             scene: The scene under test.
         """
+        nan = float("nan")
         with pytest.raises(ValueError, match="finite number"):
-            scene.sun(azimuth=0.0, elevation=float("nan"))
+            scene.sun(azimuth=0.0, elevation=nan)
 
 
 class TestShadowsAndAmbientOcclusion:
