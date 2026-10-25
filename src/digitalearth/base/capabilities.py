@@ -67,6 +67,7 @@ FEATURES: Mapping[str, str] = MappingProxyType(
         "export_vector": "the figure can be written as a vector image",
         "export_html": "the figure can be written as a page that opens in a browser",
         "lighting": "the scene can be lit by a positioned sun, with cast shadows and ambient occlusion",
+        "scene_bundle": "the whole scene can be saved to a file and opened back into an equivalent scene",
     }
 )
 

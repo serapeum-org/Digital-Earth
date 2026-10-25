@@ -2479,6 +2479,105 @@ class Scene3DBase:
             f"save() cannot infer a format from {str(path)!r}: {reason}; {supported_destinations()}"
         )
 
+    def save_bundle(self, path: Destination) -> Path:
+        """Save the whole scene to a versioned zip that :meth:`open_bundle` reads back (forge3d parity, #495).
+
+        A scene bundle stores the scene's **description** — its `figure_spec` plus its drawn decoration — in one
+        zip, so the picture can be put down and picked up again, on another machine or another day. The camera
+        and vertical exaggeration travel inside the figure, so the bundle reproduces the view as well as the
+        layers.
+
+        It stores a description, not the data: a layer drawn from a path or URL is re-opened from it on load. A
+        scene whose layers were built from an **in-memory** array or object has nothing a description can point
+        back at, so it is refused with a message that says to draw from a path instead — the same boundary
+        ``figure_spec.to_dict()`` keeps.
+
+        Args:
+            path: The bundle file to write.
+
+        Returns:
+            pathlib.Path: the file that was written.
+
+        Raises:
+            ValueError: when the scene holds a caller-built mesh (``add_mesh``/``add_volume``), or a layer
+                drawn from an in-memory source — neither of which a description can store.
+
+        Examples:
+            - Bundle a file-backed scene and read it back into an equivalent one:
+                ```python
+                >>> import os, shutil, tempfile
+                >>> from digitalearth.three_d import Scene3D
+                >>> folder = tempfile.mkdtemp()
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain("examples/data/acc4000.tif")
+                >>> _ = scene.set_title("Relief")
+                >>> out = scene.save_bundle(os.path.join(folder, "scene.dez"))
+                >>> scene.close()
+                >>> reopened = Scene3D.open_bundle(out, off_screen=True)
+                >>> reopened.layer_ids
+                ['terrain-1']
+                >>> reopened.figure_spec.panels[0].title
+                'Relief'
+                >>> reopened.close()
+                >>> shutil.rmtree(folder)
+
+                ```
+
+        See Also:
+            open_bundle: reads a bundle back into a scene.
+        """
+        if self.held_objects:
+            raise ValueError(
+                "save_bundle(): a scene holding caller-built meshes (add_mesh/add_volume) cannot be bundled — "
+                "the object is not described in the figure; export the geometry with save('scene.gltf'), or "
+                "draw from a pyramids source, which a bundle can store"
+            )
+        try:
+            figure_dict = self.figure_spec.to_dict()
+        except ValueError as error:
+            raise ValueError(
+                f"save_bundle(): {error} A bundle stores the description, so bundle a scene whose layers are "
+                "drawn from a path or URL rather than an in-memory array"
+            ) from error
+        from digitalearth.three_d.app.bundle import write_bundle
+
+        return write_bundle(
+            path, figure_dict=figure_dict, decoration=dict(self._decoration)
+        )
+
+    @classmethod
+    def open_bundle(cls, path: Destination, **scene_kwargs: Any) -> Self:
+        """Read a scene bundle written by :meth:`save_bundle` back into a scene.
+
+        The figure is rebuilt and drawn (:meth:`from_figure`), then the stored decoration is re-applied, so the
+        reopened scene draws the same picture — the same layers, the same view, the same title, furniture and
+        lighting.
+
+        Args:
+            path: The bundle file to read.
+            **scene_kwargs: Passed to the scene constructor — ``off_screen``, ``window_size``, ``strict``, ….
+
+        Returns:
+            The scene the bundle describes, with every layer drawn.
+
+        Raises:
+            ValueError: when the file is not a scene bundle, or is a format version this release cannot read.
+
+        See Also:
+            save_bundle: writes the bundle this reads.
+        """
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.three_d.app.bundle import read_manifest
+        from digitalearth.three_d.decoration.decoration import redraw_decoration
+
+        manifest = read_manifest(path)
+        scene = cls.from_figure(
+            FigureSpec.from_dict(manifest["figure"]), **scene_kwargs
+        )
+        scene._decoration = dict(manifest.get("decoration", {}))
+        redraw_decoration(scene)
+        return scene
+
     def show(self, **kwargs: Any) -> Any:
         """Display the scene interactively (or render a frame off-screen).
 

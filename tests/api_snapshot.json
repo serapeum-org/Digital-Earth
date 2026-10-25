@@ -32,7 +32,8 @@
         "legend",
         "lighting",
         "north_arrow",
-        "scale_bar"
+        "scale_bar",
+        "scene_bundle"
       ],
       "kinds": [
         "basemap",

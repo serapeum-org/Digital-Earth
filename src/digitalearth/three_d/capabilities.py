@@ -122,6 +122,10 @@ CAPABILITIES = Capabilities(
             # Drawn view state, re-applied on each plotter like the camera; not path tracing (VTK is a
             # rasterizer), which stays out of scope.
             "lighting",
+            # The whole scene saved to a versioned zip and opened back (`save_bundle()`/`open_bundle()`) —
+            # forge3d's reloadable scenes (#495). Stores the figure description plus the drawn decoration; a
+            # layer drawn from a path or URL round-trips, an in-memory source or a caller mesh is refused.
+            "scene_bundle",
         }
     ),
     absent={
