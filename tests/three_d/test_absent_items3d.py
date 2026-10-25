@@ -386,6 +386,24 @@ class TestQuickmapBasemapWiring:
         finally:
             scene.close()
 
+    def test_a_provider_object_is_forwarded_not_dropped(self, stub_tiles):
+        """A non-string provider (an xyzservices ``TileProvider`` is a dict) must reach basemap(), not OSM.
+
+        Guards against the ``isinstance(basemap, str) else None`` form that silently defaulted any provider
+        object to OpenStreetMap; the wiring must forward every non-``True`` value through ``_basemap_source``.
+        """
+        from digitalearth.api import _add_quickmap_basemap
+
+        provider = {"name": "Custom", "url": "https://tiles.example/{z}/{x}/{y}.png"}
+        scene = Scene3D(off_screen=True, crs=3857)
+        try:
+            _terrain_3857(scene)
+            _add_quickmap_basemap(scene, provider)
+            stored = scene.get_layer("basemap").symbology.props["provider"]
+            assert stored == provider, f"provider dropped to {stored!r}"
+        finally:
+            scene.close()
+
     def test_quickmap_frames_on_domain(self, dataset):
         """`quickmap(backend="3d", domain=...)` frames the camera on the region rather than refusing it."""
         from digitalearth import quickmap

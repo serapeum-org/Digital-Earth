@@ -1582,10 +1582,11 @@ def _add_quickmap_basemap(scene: Any, basemap: Any) -> None:
             display,
         )
         return
-    scene.basemap(
-        basemap if isinstance(basemap, str) else None,
-        bbox=_scene_bbox_4326(scene),
-    )
+    # Route through the shared `_basemap_source`, like the other three backends: `True` -> the backend
+    # default, and every other form (dotted name, keyed preset, an xyzservices TileProvider object) is
+    # forwarded intact. The old `basemap if isinstance(basemap, str) else None` silently dropped a provider
+    # object to the default (M1), the regression the api.py:1029-1030 comment warns against.
+    scene.basemap(_basemap_source(basemap), bbox=_scene_bbox_4326(scene))
 
 
 def _scene_bbox_4326(scene: Any) -> tuple[float, float, float, float]:
