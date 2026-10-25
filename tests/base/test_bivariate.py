@@ -89,10 +89,13 @@ class TestBivariateRefusals:
 
     def test_a_matrix_that_is_not_n_by_n_is_refused(self):
         """A 3×3 matrix cannot serve n=4."""
+        values = np.arange(4.0)
         with pytest.raises(ValueError, match="matrix for n=4"):
-            bivariate_rgba(np.arange(4.0), np.arange(4.0), n=4)
+            bivariate_rgba(values, values, n=4)
 
     def test_mismatched_sizes_are_refused(self):
         """`a` and `b` must have the same number of elements."""
+        five = np.arange(5.0)
+        four = np.arange(4.0)
         with pytest.raises(ValueError, match="same size"):
-            bivariate_rgba(np.arange(5.0), np.arange(4.0), n=3)
+            bivariate_rgba(five, four, n=3)

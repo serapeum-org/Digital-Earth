@@ -41,7 +41,7 @@ class ThreeDContract(LayerManagementContract):
     #: Meridians and parallels: registered, drawn from no data, and a 2-D tier's layer throughout. This was
     #: `text` until #203 gave this tier a `text()` builder of its own — a kind the tier now draws is no longer
     #: a kind it can refuse, and the probe needs one it genuinely has no drawer for.
-    undrawable_kind = "graticule"
+    undrawable_kind = "contours"
 
     def make(self):
         """Return an off-screen scene.
