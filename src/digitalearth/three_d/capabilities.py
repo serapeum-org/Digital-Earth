@@ -113,6 +113,11 @@ CAPABILITIES = Capabilities(
             # A data/tile credit line (`attribution()`), drawn in a corner like the title's subtitle. The old
             # reason ("a caller writes one beside the image") was under-building; the tier draws it now.
             "attribution",
+            # Directional sun (`sun(azimuth, elevation)`) plus cast shadows (`shadows()`) and ambient
+            # occlusion (`ambient_occlusion()`) — rasterization-grade relief shading (forge3d parity, #493).
+            # Drawn view state, re-applied on each plotter like the camera; not path tracing (VTK is a
+            # rasterizer), which stays out of scope.
+            "lighting",
         }
     ),
     absent={

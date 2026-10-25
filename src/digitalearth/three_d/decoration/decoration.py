@@ -571,6 +571,7 @@ def redraw_decoration(scene: Any) -> None:
         _draw_scale_bar(plotter, held["scale_bar"])
     if "north_arrow" in held:
         _draw_north_arrow(scene, plotter, held["north_arrow"])
+    _apply_lighting(scene, plotter, held)
 
 
 def draw_reference_lines(
@@ -1026,6 +1027,103 @@ def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] 
             f"{layer.id}-graticule-labels",
         )
     return merged, actor
+
+
+def _apply_sun(plotter: Any, sun: dict[str, Any]) -> None:
+    """Place a single distant directional light along a sun azimuth/elevation on the plotter.
+
+    Args:
+        plotter: The plotter to light.
+        sun: The ``azimuth``, ``elevation`` (degrees), ``intensity`` and ``color`` :meth:`DecorationMixin.sun`
+            recorded. Azimuth is measured from grid north (``+y``) clockwise; elevation from the horizon.
+    """
+    import pyvista as pv
+
+    azimuth = math.radians(float(sun["azimuth"]))
+    elevation = math.radians(float(sun["elevation"]))
+    # x east, y north, z up — the tier's axis convention (see `_AXIS_DIRECTIONS`).
+    dx = math.cos(elevation) * math.sin(azimuth)
+    dy = math.cos(elevation) * math.cos(azimuth)
+    dz = math.sin(elevation)
+    bounds = plotter.bounds
+    centre = (
+        (bounds[0] + bounds[1]) / 2.0,
+        (bounds[2] + bounds[3]) / 2.0,
+        (bounds[4] + bounds[5]) / 2.0,
+    )
+    diagonal = max(
+        math.dist((bounds[0], bounds[2], bounds[4]), (bounds[1], bounds[3], bounds[5])),
+        1.0,
+    )
+    distance = diagonal * 2.0
+    # A controlled directional sun: drop the default lights so the azimuth/elevation is what lights the scene,
+    # then place one distant light along the sun direction (positional=False makes it directional).
+    plotter.remove_all_lights()
+    light = pv.Light(
+        position=(
+            centre[0] + dx * distance,
+            centre[1] + dy * distance,
+            centre[2] + dz * distance,
+        ),
+        focal_point=centre,
+        color=sun.get("color") or "white",
+    )
+    light.positional = False
+    light.intensity = float(sun.get("intensity", 1.0))
+    plotter.add_light(light)
+
+
+def _toggle_pass(
+    plotter: Any, flag: str, enable_name: str, disable_name: str, on: bool
+) -> None:
+    """Turn a render pass (shadows / ambient occlusion) on or off, once per plotter.
+
+    Args:
+        plotter: The plotter to toggle the pass on.
+        flag: The attribute the plotter records this pass's state under, so a later decoration redraw on the
+            same plotter does not stack a second copy of the pass.
+        enable_name: The plotter method that turns the pass on.
+        disable_name: The plotter method that turns it off.
+        on: Whether the pass should be on.
+    """
+    enable = getattr(plotter, enable_name, None)
+    if enable is None:
+        return
+    if on and not getattr(plotter, flag, False):
+        enable()
+        setattr(plotter, flag, True)
+    elif not on and getattr(plotter, flag, False):
+        disable = getattr(plotter, disable_name, None)
+        if disable is not None:
+            disable()
+        setattr(plotter, flag, False)
+
+
+def _apply_lighting(scene: Any, plotter: Any, held: dict[str, Any]) -> None:
+    """Apply the scene's sun and shadow/ambient-occlusion settings to the plotter it is drawing on.
+
+    Lighting is **drawn view state**, re-applied to whichever plotter the scene is dressed with, exactly as the
+    vertical exaggeration and the camera are — so a sun set before anything is drawn survives the render, and a
+    plotter swapped in later gets it too.
+
+    Args:
+        scene: The scene whose lighting is applied (unused today beyond the signature the redraw hook shares).
+        plotter: The plotter being dressed.
+        held: The scene's decoration state, which carries ``sun`` / ``shadows`` / ``ssao`` when set.
+    """
+    sun = held.get("sun")
+    if sun is not None and hasattr(plotter, "add_light"):
+        _apply_sun(plotter, sun)
+    _toggle_pass(
+        plotter,
+        "_de_shadows",
+        "enable_shadows",
+        "disable_shadows",
+        bool(held.get("shadows")),
+    )
+    _toggle_pass(
+        plotter, "_de_ssao", "enable_ssao", "disable_ssao", bool(held.get("ssao"))
+    )
 
 
 def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
@@ -1598,6 +1696,130 @@ class DecorationMixin(_MixinBase):
                 f"north_arrow() anchor={anchor!r} must be one of {sorted(_ANCHOR_TO_VIEWPORT)}"
             )
         self._decoration["north_arrow"] = {"anchor": anchor, "color": color}
+        redraw_decoration(self)
+        return self
+
+    def sun(
+        self,
+        *,
+        azimuth: float,
+        elevation: float,
+        intensity: float = 1.0,
+        color: Any = None,
+    ) -> Self:
+        """Light the scene with a directional sun at a given azimuth and elevation (forge3d parity, #493).
+
+        The rasterization-grade half of forge3d's lighting: a single distant directional light, placed along a
+        compass azimuth and an elevation above the horizon, which is what gives relief its shading. It is
+        **not** a physically-based sun and there is no path tracing here — VTK is a rasterizer — but paired with
+        :meth:`shadows` and :meth:`ambient_occlusion` it reads as real relief rather than flat colour.
+
+        Lighting is **drawn view state**, like the vertical exaggeration and the camera: it is re-applied to
+        whichever plotter the scene is dressed with, so a sun set before anything is drawn survives the render
+        and a plotter swapped in later gets it. Setting a sun drops the default lights, so the azimuth and
+        elevation are what light the scene.
+
+        Args:
+            azimuth: Compass bearing of the sun in degrees, measured from grid north (``+y``) clockwise — ``90``
+                is due east, ``180`` due south.
+            elevation: Height of the sun above the horizon in degrees — ``0`` grazing, ``90`` overhead.
+            intensity: Brightness of the light; ``1.0`` is PyVista's default.
+            color: Light colour. ``None`` is white.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Raises:
+            ValueError: when `azimuth`, `elevation` or `intensity` is not a finite number.
+
+        Examples:
+            - A low morning sun from the east over relief:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+                >>> _ = scene.sun(azimuth=90.0, elevation=20.0)
+                >>> _ = scene.screenshot()
+                >>> scene.close()
+
+                ```
+        """
+        call = "Scene3D.sun()"
+        self._decoration["sun"] = {
+            "azimuth": _finite(azimuth, "azimuth", call),
+            "elevation": _finite(elevation, "elevation", call),
+            "intensity": _finite(intensity, "intensity", call),
+            "color": color,
+        }
+        redraw_decoration(self)
+        return self
+
+    def shadows(self, on: bool = True) -> Self:
+        """Turn cast shadows on or off (VTK's shadow-map pass).
+
+        Shadows need a light to cast them, so pair this with :meth:`sun`. Like the sun, it is drawn view state,
+        re-applied on each plotter the scene is dressed with; ``on=False`` turns it off and keeps it off.
+
+        Args:
+            on: Whether shadows are drawn.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Examples:
+            - Shadows under a sun:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+                >>> _ = scene.sun(azimuth=135.0, elevation=30.0).shadows()
+                >>> _ = scene.screenshot()
+                >>> scene.close()
+
+                ```
+        """
+        if on:
+            self._decoration["shadows"] = True
+        else:
+            self._decoration.pop("shadows", None)
+        redraw_decoration(self)
+        return self
+
+    def ambient_occlusion(self, on: bool = True) -> Self:
+        """Turn screen-space ambient occlusion on or off (VTK's SSAO pass).
+
+        Ambient occlusion darkens crevices and contact points, which reads as depth without a second light. It
+        is drawn view state like :meth:`sun` and :meth:`shadows`, re-applied on each plotter; ``on=False`` turns
+        it off and keeps it off.
+
+        Args:
+            on: Whether ambient occlusion is drawn.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Examples:
+            - Ambient occlusion over relief:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+                >>> _ = scene.ambient_occlusion()
+                >>> _ = scene.screenshot()
+                >>> scene.close()
+
+                ```
+        """
+        if on:
+            self._decoration["ssao"] = True
+        else:
+            self._decoration.pop("ssao", None)
         redraw_decoration(self)
         return self
 

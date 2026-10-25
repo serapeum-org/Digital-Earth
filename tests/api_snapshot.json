@@ -30,6 +30,7 @@
         "export_image",
         "export_vector",
         "legend",
+        "lighting",
         "north_arrow",
         "scale_bar"
       ],
