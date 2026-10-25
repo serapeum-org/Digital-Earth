@@ -136,7 +136,9 @@ def bivariate_rgba(
         A :class:`BivariateClasses` carrying the edges, the matrix, and the per-element RGBA.
 
     Raises:
-        ValueError: when `matrix` is not ``n×n``, or `a` and `b` are not the same size.
+        ValueError: when `matrix` is not ``n×n``, when `a` and `b` are not the same size, or when a variable
+            has no spread for the scheme to classify (propagated from the shared classifier, prefixed with the
+            scheme and class count).
 
     Examples:
         - Two variables classify to one colour per element, with no-data elements left neutral:
@@ -168,8 +170,13 @@ def bivariate_rgba(
         raise ValueError(
             f"bivariate_rgba() needs a and b the same size; got {values_a.size} and {values_b.size}"
         )
-    edges_a = Scale.breaks_of(values_a, scheme, n)
-    edges_b = Scale.breaks_of(values_b, scheme, n)
+    try:
+        edges_a = Scale.breaks_of(values_a, scheme, n)
+        edges_b = Scale.breaks_of(values_b, scheme, n)
+    except ValueError as error:
+        raise ValueError(
+            f"bivariate_rgba() cannot classify a variable with scheme={scheme!r}, n={n}: {error}"
+        ) from error
     classes_a = class_index(values_a, edges_a)
     classes_b = class_index(values_b, edges_b)
     lut = np.array(
