@@ -41,6 +41,22 @@ def write_bundle(
 
     Returns:
         pathlib.Path: the file that was written.
+
+    Examples:
+        - Write a bundle and read its manifest back:
+            ```python
+            >>> import os, tempfile
+            >>> from digitalearth.three_d.app.bundle import write_bundle, read_manifest
+            >>> folder = tempfile.mkdtemp()
+            >>> out = write_bundle(
+            ...     os.path.join(folder, "scene.dez"), figure_dict={"panels": []}, decoration={}
+            ... )
+            >>> out.name
+            'scene.dez'
+            >>> read_manifest(out)["figure"]
+            {'panels': []}
+
+            ```
     """
     manifest = {
         "format_version": BUNDLE_VERSION,
@@ -64,6 +80,24 @@ def read_manifest(path: Any) -> dict[str, Any]:
 
     Raises:
         ValueError: when the file carries no manifest, or a format version this release cannot read.
+
+    Examples:
+        - Read back the version and decoration a bundle was written with:
+            ```python
+            >>> import os, tempfile
+            >>> from digitalearth.three_d.app.bundle import write_bundle, read_manifest
+            >>> out = write_bundle(
+            ...     os.path.join(tempfile.mkdtemp(), "scene.dez"),
+            ...     figure_dict={"panels": []},
+            ...     decoration={"title": {"font_size": 18}},
+            ... )
+            >>> manifest = read_manifest(out)
+            >>> manifest["format_version"]
+            1
+            >>> manifest["decoration"]["title"]["font_size"]
+            18
+
+            ```
     """
     with zipfile.ZipFile(str(path)) as bundle:
         if MANIFEST_NAME not in bundle.namelist():
