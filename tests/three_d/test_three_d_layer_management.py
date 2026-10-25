@@ -38,9 +38,11 @@ class ThreeDContract(LayerManagementContract):
     """The 3-D tier's adapter for the shared layer-management probes."""
 
     backend = "3d"
-    #: Meridians and parallels: registered, drawn from no data, and a 2-D tier's layer throughout. This was
-    #: `text` until #203 gave this tier a `text()` builder of its own — a kind the tier now draws is no longer
-    #: a kind it can refuse, and the probe needs one it genuinely has no drawer for.
+    #: A kind this tier genuinely has no drawer for, to probe that a replacement it cannot draw is refused.
+    #: `contours` is a registered kind (the 2-D tiers trace iso-value lines) that the 3-D tier does not draw —
+    #: it is in `base.registry.kinds()` but not in `three_d.render.renderer.DRAWN_KINDS`, which is the exact
+    #: property this probe needs. It was `text`, then `graticule`, until each gained a 3-D drawer (#203 / this
+    #: PR) — a kind the tier now draws can no longer stand in for one it must refuse.
     undrawable_kind = "contours"
 
     def make(self):
