@@ -137,6 +137,15 @@ class TestNorthArrow:
         with pytest.raises(ValueError, match="anchor"):
             scene.north_arrow(anchor="centre")
 
+    def test_a_second_call_replaces_the_widget(self, scene):
+        """Calling it again turns the first widget off and installs a new one, rather than stacking markers."""
+        _terrain(scene)
+        scene.north_arrow()
+        _ = scene.plotter
+        assert scene._north_arrow_widget is not None
+        scene.north_arrow(anchor="bottom-left")
+        assert scene._north_arrow_widget is not None
+
 
 class TestDomain:
     """`domain` frames the camera on a named region or a box, reprojecting into the display CRS."""
@@ -175,6 +184,11 @@ class TestDomain:
         """A name no region is registered under is refused, pointing at the catalogue."""
         with pytest.raises(KeyError, match="not a registered region"):
             scene.domain("atlantis")
+
+    def test_none_is_refused(self, scene):
+        """`domain(None)` resolves to no box, so it is refused rather than framing on nothing."""
+        with pytest.raises(ValueError, match="got None"):
+            scene.domain(None)
 
 
 class TestBasemap:
@@ -235,3 +249,79 @@ class TestBasemap:
                 scene.basemap(bbox=(1.0, 2.0, 3.0))
         finally:
             scene.close()
+
+    def test_a_non_iterable_box_is_refused(self, stub_tiles):
+        """A box that is not even a sequence is refused through the same message, not a raw TypeError."""
+        scene = Scene3D(off_screen=True)
+        try:
+            with pytest.raises(ValueError, match="west, south, east, north"):
+                scene.basemap(bbox=5)
+        finally:
+            scene.close()
+
+    def test_a_non_mercator_scene_is_warned_about(self, stub_tiles, caplog):
+        """Tiles are EPSG:3857; over a non-mercator display CRS the layer draws but warns it may not align."""
+        import logging
+
+        scene = Scene3D(off_screen=True, crs=4326)
+        try:
+            _terrain(scene)
+            with caplog.at_level(logging.WARNING):
+                scene.basemap(bbox=(-10.0, 35.0, 30.0, 60.0), zoom=3)
+            assert any("EPSG:3857" in record.message for record in caplog.records), (
+                caplog.text
+            )
+        finally:
+            scene.close()
+
+
+class TestFetchBasemapImage:
+    """`fetch_basemap_image` composes cleopatra's tile helpers — exercised with those helpers stubbed."""
+
+    def _stub_cleopatra(self, monkeypatch, *, record):
+        """Replace cleopatra's tile functions with fakes that record what they were called with.
+
+        Args:
+            monkeypatch: pytest's patcher.
+            record: A dict the fakes write their call arguments into.
+        """
+        from cleopatra.basemap import tiles as cleo_tiles
+
+        monkeypatch.setattr(cleo_tiles, "get_provider", lambda name: f"provider:{name}")
+        monkeypatch.setattr(
+            cleo_tiles, "auto_zoom", lambda box: record.setdefault("auto", 6)
+        )
+        monkeypatch.setattr(
+            cleo_tiles,
+            "_tiles_for_bbox",
+            lambda box, level: record.update(level=level) or ["t"],
+        )
+        monkeypatch.setattr(
+            cleo_tiles, "fetch_tiles", lambda grid, provider: {"t": b"bytes"}
+        )
+        monkeypatch.setattr(
+            cleo_tiles,
+            "stitch_tiles",
+            lambda data, grid, level: (
+                np.zeros((2, 2, 4), dtype="uint8"),
+                (0.0, 0.0, 1.0, 1.0),
+            ),
+        )
+
+    def test_an_explicit_zoom_is_used_as_given(self, monkeypatch):
+        """A given `zoom` reaches the tile enumerator unchanged, and `auto_zoom` is not consulted."""
+        record: dict = {}
+        self._stub_cleopatra(monkeypatch, record=record)
+        image, extent = deco.fetch_basemap_image((0.0, 0.0, 1.0, 1.0), "OSM", 9)
+        assert record["level"] == 9, record
+        assert "auto" not in record, "auto_zoom must not run when a zoom is given"
+        assert image.shape == (2, 2, 4), image.shape
+        assert extent == (0.0, 0.0, 1.0, 1.0), extent
+
+    def test_a_missing_zoom_is_derived_with_auto_zoom(self, monkeypatch):
+        """`zoom=None` derives the level from the box through cleopatra's `auto_zoom`."""
+        record: dict = {}
+        self._stub_cleopatra(monkeypatch, record=record)
+        _image, _extent = deco.fetch_basemap_image((0.0, 0.0, 1.0, 1.0), "OSM", None)
+        assert record["auto"] == 6, record
+        assert record["level"] == 6, "the derived zoom must reach the tile enumerator"
