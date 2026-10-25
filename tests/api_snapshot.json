@@ -2,16 +2,11 @@
   "backend_capabilities": {
     "3d": {
       "absent": [
-        "attribution",
-        "basemap",
-        "domain",
         "fullscreen",
         "layer_switcher",
         "measure",
         "navigation",
-        "north_arrow",
         "raster_renderer",
-        "scale_bar",
         "time_slider"
       ],
       "backend": "3d",
@@ -27,13 +22,18 @@
       ],
       "features": [
         "animation",
+        "attribution",
         "colorbar",
         "display_crs",
+        "domain",
         "export_html",
         "export_image",
-        "legend"
+        "legend",
+        "north_arrow",
+        "scale_bar"
       ],
       "kinds": [
+        "basemap",
         "choropleth",
         "coastlines",
         "custom:pyvista",
@@ -287,8 +287,10 @@
   },
   "backend_keyword_capabilities": {
     "3d": [
+      "basemap",
       "colorbar",
-      "crs"
+      "crs",
+      "domain"
     ],
     "interactive": [
       "basemap",

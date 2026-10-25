@@ -418,7 +418,10 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # encoding and draws from it — PyVista's scalar bar for a ramp, its keyed legend for classes,
                 # derived from the layer's `Scale` — so the key follows the layer it explains. Both are
                 # declared features of the tier as well (`three_d/capabilities.py`).
-                "set_bounds": "a scene is framed by its camera, not by an extent (see Capabilities.absent)",
+                "set_bounds": (
+                    "Scene3D.domain() frames the camera on a named region or a box; the Core-spelled "
+                    "set_bounds(bounds, padding) is not yet adopted here"
+                ),
             }
         ),
         "interactive": MappingProxyType(
@@ -510,11 +513,11 @@ def pending_for(backend: str) -> Mapping[str, str]:
         `{name: reason}`, empty for a tier that answers to every Core name.
 
     Examples:
-        - A 3-D scene has no extent to frame, and says so rather than raising from a method:
+        - The 3-D tier frames with ``domain()`` but has not adopted the Core ``set_bounds`` spelling yet:
             ```python
             >>> from digitalearth.base.contract import pending_for
-            >>> pending_for("3d")["set_bounds"]
-            'a scene is framed by its camera, not by an extent (see Capabilities.absent)'
+            >>> "Scene3D.domain()" in pending_for("3d")["set_bounds"]
+            True
 
             ```
     """

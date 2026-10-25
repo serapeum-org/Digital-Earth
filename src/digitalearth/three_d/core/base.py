@@ -2038,6 +2038,99 @@ class Scene3DBase:
         self.camera = self._live_camera()
         return self
 
+    def domain(self, region: Any, *, crs: Any = 4326) -> Self:
+        """Frame the camera on a named region or a bounding box (#294 follow-up).
+
+        The 3-D counterpart of the static tier's ``domain=``. A scene is framed by its camera rather than by an
+        extent, which is why this tier once declared ``domain`` absent — but *setting the camera to frame a
+        given extent* is a thing a camera can do, and is what a caller reaching for ``domain`` wants: the same
+        named regions every tier resolves (:func:`~digitalearth.base.domains.resolve_domain` — ``"europe"``,
+        ``"germany"``, ``"uk"``, …) or an explicit ``(west, south, east, north)`` box, mapped into the scene's
+        display CRS through pyramids and used to re-fit the view. The vertical range of whatever is already
+        drawn is kept, so the relief is not flattened out of frame.
+
+        Args:
+            region: A registered region name or alias, an explicit ``(west, south, east, north)`` box, or a
+                sequence of either resolved to the enclosing box — exactly what
+                :func:`~digitalearth.base.domains.resolve_domain` accepts.
+            crs: What the box is measured in. EPSG:4326 by default (the CRS the named regions are listed in);
+                an explicit box in another CRS is reprojected into the scene's display CRS through pyramids.
+
+        Returns:
+            This scene, so it chains with the builders.
+
+        Raises:
+            KeyError: when ``region`` is a name no region is registered under (the message lists where to look).
+            ValueError: when ``region`` is a numeric box that is not four numbers.
+
+        Examples:
+            - Draw a field, then frame the view on Europe:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> lon = np.linspace(-30.0, 50.0, 12)
+                >>> lat = np.linspace(30.0, 75.0, 10)
+                >>> z = np.add.outer(np.cos(np.radians(lat)), np.zeros_like(lon))
+                >>> scene = Scene3D(off_screen=True, crs=4326)
+                >>> _ = scene.terrain(get_source(z, x=lon, y=lat))
+                >>> scene.domain("europe") is scene
+                True
+                >>> scene.close()
+
+                ```
+        """
+        from digitalearth.base.domains import resolve_domain
+
+        box = resolve_domain(region)
+        if box is None:
+            raise ValueError(
+                "domain() needs a region name or a (west, south, east, north) box; got None"
+            )
+        west, south, east, north = box
+        placed = self._domain_bounds(west, south, east, north, crs)
+        existing = self._plotter.bounds if self._plotter is not None else None
+        zmin, zmax = (
+            (float(existing[4]), float(existing[5])) if existing else (0.0, 0.0)
+        )
+        self.plotter.reset_camera(
+            bounds=(placed[0], placed[2], placed[1], placed[3], zmin, zmax)
+        )
+        self.camera = self._live_camera()
+        return self
+
+    def _domain_bounds(
+        self, west: float, south: float, east: float, north: float, crs: Any
+    ) -> tuple[float, float, float, float]:
+        """Return the box ``(xmin, ymin, xmax, ymax)`` the domain is in the scene's display CRS.
+
+        Args:
+            west: The box's western edge, in ``crs``.
+            south: The box's southern edge, in ``crs``.
+            east: The box's eastern edge, in ``crs``.
+            north: The box's northern edge, in ``crs``.
+            crs: What the four edges are measured in.
+
+        Returns:
+            The box in the scene's display CRS — unchanged when the scene has no display CRS yet or already
+            draws in ``crs``; otherwise the axis-aligned envelope of the four reprojected corners, since a
+            projected CRS does not map a box's edges to a box.
+        """
+        display = getattr(self, "display_crs", None)
+        from digitalearth.base.spec.bounds import same_crs
+
+        if display is None or crs is None or same_crs(crs, display):
+            return float(west), float(south), float(east), float(north)
+        from pyramids.feature.geometry import reproject_coordinates
+
+        xs, ys = reproject_coordinates(
+            [west, east, west, east],
+            [south, south, north, north],
+            from_crs=crs,
+            to_crs=display,
+        )
+        return float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))
+
     def screenshot(self, path: Destination | None = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).
 

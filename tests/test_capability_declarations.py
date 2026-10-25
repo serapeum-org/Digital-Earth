@@ -206,7 +206,7 @@ class TestTheDispatcherRefusesFromTheDeclarations:
         from digitalearth import quickmap
 
         with pytest.raises(CapabilityError):
-            quickmap(dataset, backend="3d", domain="europe")
+            quickmap(dataset, backend="3d", kind="imshow")
 
     def test_a_keyword_refusal_is_still_a_value_error(self, dataset):
         """Callers catching `ValueError` around `quickmap` keep catching this one.
@@ -221,26 +221,33 @@ class TestTheDispatcherRefusesFromTheDeclarations:
         from digitalearth import quickmap
 
         with pytest.raises(ValueError):
-            quickmap(dataset, backend="3d", domain="europe")
+            quickmap(dataset, backend="3d", kind="imshow")
 
     @pytest.mark.parametrize(
-        ("backend", "phrase"),
-        [("3d", "framed by its camera"), ("web", "pans and zooms")],
+        ("backend", "keyword", "value", "phrase"),
+        [
+            # The 3-D tier now frames on a `domain` and drapes a `basemap`, so the keyword it still refuses is
+            # `kind=` (it has no raster-renderer selector — a raster is a surface, a volume or a globe here).
+            ("3d", "kind", "imshow", "a surface, a volume or a globe"),
+            ("web", "domain", "europe", "pans and zooms"),
+        ],
     )
     def test_a_keyword_refusal_carries_the_tier_s_own_reason(
-        self, dataset, backend, phrase
+        self, dataset, backend, keyword, value, phrase
     ):
         """The sentence comes from that tier's `absent`, not from a table in `api.py`.
 
         Args:
             dataset: The raster to draw.
-            backend: The tier that cannot frame on a region.
-            phrase: Part of the reason it declared for having no `domain`.
+            backend: The tier that cannot honour the keyword.
+            keyword: The `quickmap` keyword that tier refuses.
+            value: A value for that keyword.
+            phrase: Part of the reason it declared for not honouring it.
         """
         from digitalearth import quickmap
 
         with pytest.raises(CapabilityError, match=phrase):
-            quickmap(dataset, backend=backend, domain="europe")
+            quickmap(dataset, backend=backend, **{keyword: value})
 
     @pytest.mark.parametrize("backend", ["3d", "web"])
     def test_a_renderer_wrapper_refusal_is_the_declared_error(self, dataset, backend):

@@ -120,13 +120,39 @@ def _dem():
     return Dataset.read_file(DEM_PATH)
 
 
+def _add_basemap(scene):
+    """Record a `basemap` layer without touching the network.
+
+    `basemap`'s drawer fetches web-map tiles over HTTP, which a test must not do, so the headless seam
+    `fetch_basemap_image` is replaced with one returning a synthetic RGBA image and a Web-Mercator extent for
+    the duration of the call, then restored.
+
+    Args:
+        scene: The scene to draw the basemap on.
+
+    Returns:
+        The registered actor.
+    """
+    import digitalearth.three_d.decoration.decoration as deco
+
+    original = deco.fetch_basemap_image
+    deco.fetch_basemap_image = lambda bbox, provider, zoom: (
+        np.full((4, 4, 4), 128, dtype="uint8"),
+        (-1_000_000.0, 4_000_000.0, 3_000_000.0, 8_000_000.0),
+    )
+    try:
+        return scene.basemap(bbox=(-10.0, 35.0, 30.0, 60.0), zoom=3)
+    finally:
+        deco.fetch_basemap_image = original
+
+
 #: Declared kind -> the builder call that records it. Every kind the row claims is here, so a kind added to
 #: the declaration without a builder has no entry and is caught by the coverage check below — and a builder
 #: that stops recording its kind fails on the call rather than on a list.
 #:
 #: `globe` is the only one that records two: it draws the raster onto the sphere and puts the shoreline on it
 #: in the same call, which is why the tier declares a `coastlines` kind while having no standalone coastline
-#: builder (review M6 on #295).
+#: builder (review M6 on #295). `basemap` draws from the network, so `_add_basemap` stubs its fetch seam.
 BUILDERS = {
     "terrain": lambda scene: scene.terrain(_dem()),
     "point_cloud": lambda scene: scene.point_cloud(_cloud()),
@@ -144,6 +170,7 @@ BUILDERS = {
     "reference_lines": lambda scene: scene.coastlines(),
     "reference_fill": lambda scene: scene.ocean(),
     "text": lambda scene: scene.text(0.0, 0.0, "here"),
+    "basemap": _add_basemap,
     "custom:pyvista": lambda scene: scene.add_mesh(pv.Sphere()),
 }
 
@@ -361,18 +388,20 @@ class TestTheSchemesAreTheSharedClassifiers:
 
 
 class TestARefusalCarriesTheDeclaredReason:
-    """The kind the tier cannot draw is refused in the declaration's words, not in new ones."""
+    """A kind another tier's figure names is refused by name; one the tier now draws is not refused at all."""
 
-    def test_a_kind_the_tier_declared_against_says_why(self):
-        """`basemap` is declared absent with a reason, and the refusal carries it.
+    def test_basemap_is_now_drawn_not_refused(self):
+        """`basemap` used to be this tier's one absent kind; the #294 follow-up built it, so it resolves.
 
         Test scenario:
-            Before #294 closed, the refusal said only that the kind was not drawn. A caller holding a
-            figure written for the web tier learned nothing from that; "there are no map tiles to drape
-            under a scene drawn in three dimensions" tells them the figure is for another backend.
+            The 3-D basemap (web-map tiles draped on the ground plane) moved `basemap` from `absent` into
+            `kinds`, so the refusal that once carried "no map tiles to drape" is gone — the request is no
+            longer refused, and `drawer_for` returns its drawer like any other drawn kind. The tier now
+            declares no layer kind absent at all; the reason-carrying path is exercised by the kinds other
+            tiers still decline (and by `tests/base/test_capabilities.py`).
         """
-        with pytest.raises(KeyError, match="no map tiles to drape"):
-            drawer_for("basemap")
+        assert "basemap" not in CAPABILITIES.absent, CAPABILITIES.absent
+        assert drawer_for("basemap") is not None
 
     def test_a_kind_the_tier_never_spoke_about_gets_no_invented_reason(self):
         """The other half: no declared reason, no sentence written at the call site.

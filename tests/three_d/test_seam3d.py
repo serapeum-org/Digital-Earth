@@ -447,8 +447,13 @@ class TestTheDeclaration:
         assert result.stdout.strip() == "False 3d", result.stdout or result.stderr
 
     def test_what_is_absent_says_why(self):
-        """The half that keeps the declaration honest: a decision, not a gap."""
-        assert CAPABILITIES.reason("domain").startswith("a scene is framed"), (
+        """The half that keeps the declaration honest: a decision, not a gap.
+
+        `domain`, `basemap`, `scale_bar`, `north_arrow` and `attribution` are no longer absent (the #294
+        follow-up built them), so the standing example of a declared-against capability is `raster_renderer`:
+        a 3-D raster is a surface, a volume or a globe, chosen by the builder called, not a render selector.
+        """
+        assert CAPABILITIES.reason("raster_renderer").startswith("a raster becomes"), (
             CAPABILITIES.absent
         )
 
@@ -456,17 +461,20 @@ class TestTheDeclaration:
         """`api.BACKEND_CAPABILITIES["3d"]` is derived, not written out beside the tier."""
         from digitalearth.api import BACKEND_CAPABILITIES
 
-        assert sorted(BACKEND_CAPABILITIES["3d"]) == ["colorbar", "crs"], (
-            BACKEND_CAPABILITIES["3d"]
-        )
+        assert sorted(BACKEND_CAPABILITIES["3d"]) == [
+            "basemap",
+            "colorbar",
+            "crs",
+            "domain",
+        ], BACKEND_CAPABILITIES["3d"]
 
     def test_a_refusal_carries_the_declared_reason(self):
         """A caller is told what the tier does instead of what they asked for."""
         from digitalearth import quickmap
 
         zeros = np.zeros((4, 4))
-        with pytest.raises(ValueError, match="framed by its camera"):
-            quickmap(zeros, backend="3d", domain="europe")
+        with pytest.raises(ValueError, match="a surface, a volume or a globe"):
+            quickmap(zeros, backend="3d", kind="imshow")
 
     def test_the_declaration_is_a_capabilities_value(self):
         """It is the shared type, so the support matrix can be built from every tier's row the same way."""

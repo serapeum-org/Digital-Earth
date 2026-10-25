@@ -51,6 +51,11 @@ CAPABILITIES = Capabilities(
             # A string placed at a coordinate (#203). It is a layer rather than furniture for the same reason
             # it is one on the interactive and web tiers: it is drawn where the data is, not in a corner.
             "text",
+            # Web-map tiles draped on the ground plane as an underlay (#294 follow-up). The tiles are read
+            # through cleopatra (image I/O, never GIS) and draped as a textured z=0 plane, the same way
+            # `terrain(texture=)` drapes imagery onto relief. It used to be declared absent; the tier draws it
+            # now, so it is a kind here and gone from `absent`.
+            "basemap",
             "custom:pyvista",
         }
     ),
@@ -79,26 +84,35 @@ CAPABILITIES = Capabilities(
             "animation",
             "export_image",
             "export_html",
+            # The map can be framed to a named region or a bbox: `domain()` sets the camera to frame that
+            # extent rather than leaving the view to whatever the data happened to fit (#294 follow-up). It
+            # used to be declared absent ("framed by its camera, not an extent"); framing the camera *to* an
+            # extent is how that reconciles, which is what forge3d's region framing does too.
+            "domain",
+            # A ground-distance scale bar (`scale_bar()`), drawn as VTK's legend-scale ruler. Honest only
+            # under a parallel (orthographic) projection — where one screen distance is one ground distance
+            # everywhere — so the method turns parallel projection on, and says so.
+            "scale_bar",
+            # A camera-aware north arrow (`north_arrow()`): an orientation-marker arrow pointing along the
+            # display CRS's north, placed in a corner and turning with the camera, so it reads correctly from
+            # any viewpoint. The companion to `orientation_axes`, for the one direction a map most wants named.
+            "north_arrow",
+            # A data/tile credit line (`attribution()`), drawn in a corner like the title's subtitle. The old
+            # reason ("a caller writes one beside the image") was under-building; the tier draws it now.
+            "attribution",
         }
     ),
     absent={
-        "domain": "a scene is framed by its camera, not by an extent, so there is no region to set",
         "raster_renderer": (
             "a raster becomes a surface, a volume or a globe here — which one is the builder that was called, "
             "not a rendering choice on top of one"
         ),
-        "basemap": "there are no map tiles to drape under a scene drawn in three dimensions",
         # `coastline_overlay` used to be declared absent ("a flat scene has none to trace"); TD-5b built it.
         # `coastlines()`/`borders()` now draw Natural-Earth reference lines in a non-globe scene (the
         # `reference_lines` kind above), so the overlay is a feature of the tier rather than a gap.
-        # `legend` and `colorbar` are not listed here and never will be: both are now built (order 24) and
-        # declared as features above. What that comment used to say — that they were Core *methods* this tier
-        # had not written, which was `contract.PENDING`'s answer rather than this one — is the reason they
-        # were never in `absent`: "we decided against it" and "nobody has written it yet" are different
-        # answers, and a name cannot be both (review M19).
-        "scale_bar": "a screen distance means nothing when the camera decides the scale of what is in front",
-        "north_arrow": "the scene can be looked at from any direction, so there is no fixed north on screen",
-        "attribution": "a render window has no credit line; a caller writes one beside the image it saves",
+        # `domain`, `basemap`, `scale_bar`, `north_arrow` and `attribution` were all declared absent until the
+        # #294 follow-up built them; they are declared above now (the first four as features, `basemap` as a
+        # kind) and so are gone from here — "we decided against it" became "the tier does it".
         "navigation": "the render window pans, zooms and rotates with the mouse rather than with buttons",
         "fullscreen": "the render window is resized by the window manager, not by a control in the scene",
         "layer_switcher": "layers are switched by id through the scene's own API rather than from a panel",

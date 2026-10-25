@@ -193,7 +193,7 @@ def _declared_row(declaration: Capabilities) -> frozenset[str]:
             ```python
             >>> from digitalearth.api import BACKEND_CAPABILITIES
             >>> sorted(BACKEND_CAPABILITIES["3d"])
-            ['colorbar', 'crs']
+            ['basemap', 'colorbar', 'crs', 'domain']
 
             ```
     """
@@ -389,14 +389,14 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             domain= is not supported by backend='web'
 
             ```
-        - ``basemap=0`` is a number the caller typed, not the inert ``False``, so it is refused:
+        - ``kind=0`` is a number the caller typed, not the inert ``"auto"``, so it is refused:
             ```python
             >>> from digitalearth.api import _reject_unsupported, _UNSET
             >>> try:
-            ...     _reject_unsupported("3d", basemap=0, crs=_UNSET)
+            ...     _reject_unsupported("3d", kind=0, crs=_UNSET)
             ... except ValueError as error:
             ...     print(str(error).split(";")[0])
-            basemap= is not supported by backend='3d'
+            kind= is not supported by backend='3d'
 
             ```
     """
@@ -823,10 +823,10 @@ def quickmap(
             >>> from digitalearth.api import quickmap
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
             >>> try:
-            ...     quickmap(ds, backend="3d", domain="europe")
+            ...     quickmap(ds, backend="3d", kind="imshow")
             ... except ValueError as error:
             ...     print(str(error).split(";")[0])
-            domain= is not supported by backend='3d'
+            kind= is not supported by backend='3d'
 
             ```
     """
@@ -851,7 +851,12 @@ def quickmap(
     domain = None if domain is _UNSET else domain
     if backend == "3d":
         return _quickmap_3d(
-            data, colorbar=colorbar, crs=None if crs is _UNSET else crs, **kwargs
+            data,
+            colorbar=colorbar,
+            crs=None if crs is _UNSET else crs,
+            domain=domain,
+            basemap=None if basemap is _UNSET else basemap,
+            **kwargs,
         )
     if backend == "interactive":
         return _quickmap_interactive(
@@ -1466,7 +1471,13 @@ def _add_key(backend: str, scene: Any, *, visible: bool) -> None:
 
 
 def _quickmap_3d(
-    data: PlottableData, *, colorbar: bool = True, crs: Any = None, **kwargs
+    data: PlottableData,
+    *,
+    colorbar: bool = True,
+    crs: Any = None,
+    domain: Any = None,
+    basemap: Any = None,
+    **kwargs,
 ) -> Any:
     """Build a finished ``Scene3D`` from ``data`` (the ``backend="3d"`` path, DX.1).
 
@@ -1474,8 +1485,11 @@ def _quickmap_3d(
     (``terrain``); a point ``FeatureCollection`` becomes a ``point_cloud`` (coloured by ``column`` when
     given); a polygon ``FeatureCollection`` becomes ``extruded_polygons`` (extruded by, and coloured by,
     ``column``). The ``Scene3D`` import is lazy so the core ``api`` works without the ``3d`` extra. ``crs``
-    becomes the scene's display CRS; the map-only kwargs (``kind``/``domain``/``basemap``/``coastlines``) have
-    no 3-D analogue and are refused by name in :func:`quickmap` before this is reached.
+    becomes the scene's display CRS. ``domain`` frames the camera on a named region or box
+    (:meth:`~digitalearth.three_d.core.base.Scene3DBase.domain`) and a truthy ``basemap`` drapes web-map tiles
+    over the data's extent (:meth:`~digitalearth.three_d.decoration.decoration.DecorationMixin.basemap`); the
+    remaining map-only kwargs (``kind``/``coastlines``) have no 3-D analogue and are refused by name in
+    :func:`quickmap` before this is reached.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
@@ -1529,7 +1543,46 @@ def _quickmap_3d(
     # layer's encoding, so there has to be a layer to put it on (order 24). Reached through the one seam the
     # four backends share.
     _add_key("3d", scene, visible=colorbar)
+    # The two map keywords the 3-D tier now honours (#294 follow-up): a basemap is draped over the data's own
+    # extent (derived from the scene after the layer is drawn), and the view is then framed on `domain`.
+    if basemap:
+        scene.basemap(
+            basemap if isinstance(basemap, str) else None,
+            bbox=_scene_bbox_4326(scene),
+        )
+    if domain is not None:
+        scene.domain(domain)
     return scene
+
+
+def _scene_bbox_4326(scene: Any) -> tuple[float, float, float, float]:
+    """Return a scene's drawn extent as a ``(west, south, east, north)`` box in EPSG:4326.
+
+    Used by :func:`_quickmap_3d` to drape a ``basemap=`` over the data without the caller naming a box: the
+    plotter's bounds give the extent in the scene's display CRS, reprojected to EPSG:4326 (what the tile math
+    needs) through pyramids.
+
+    Args:
+        scene: A built ``Scene3D`` with at least one layer drawn.
+
+    Returns:
+        The extent in EPSG:4326.
+    """
+    from digitalearth.base.spec.bounds import same_crs
+
+    bounds = scene.plotter.bounds
+    display = scene.display_crs
+    if display is None or same_crs(display, 4326):
+        return float(bounds[0]), float(bounds[2]), float(bounds[1]), float(bounds[3])
+    from pyramids.feature.geometry import reproject_coordinates
+
+    xs, ys = reproject_coordinates(
+        [bounds[0], bounds[1], bounds[0], bounds[1]],
+        [bounds[2], bounds[2], bounds[3], bounds[3]],
+        from_crs=display,
+        to_crs=4326,
+    )
+    return float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))
 
 
 def _finish(scene: Map, *, colorbar: bool) -> Map:

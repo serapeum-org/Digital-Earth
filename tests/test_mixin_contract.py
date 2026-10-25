@@ -619,6 +619,7 @@ CONTRACT_CARVE_OUTS = {
     "digitalearth.three_d.decoration.decoration:DecorationMixin.land": _THREE_D_ACTOR,
     "digitalearth.three_d.decoration.decoration:DecorationMixin.ocean": _THREE_D_ACTOR,
     "digitalearth.three_d.decoration.decoration:DecorationMixin.lakes": _THREE_D_ACTOR,
+    "digitalearth.three_d.decoration.decoration:DecorationMixin.basemap": _THREE_D_ACTOR,
 }
 
 
