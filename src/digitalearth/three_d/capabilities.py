@@ -93,6 +93,10 @@ CAPABILITIES = Capabilities(
             "animation",
             "export_image",
             "export_html",
+            # Vector export (`export_vector()` / `save("scene.svg")`) through VTK's GL2PS writer — forge3d
+            # parity (#494). SVG/PDF/EPS/PS/TEX; a high-resolution raster master is `screenshot(scale=N)`.
+            # Textured surfaces embed as raster insets, and EXR is not offered (VTK writes 8-bit rasters).
+            "export_vector",
             # The map can be framed to a named region or a bbox: `domain()` sets the camera to frame that
             # extent rather than leaving the view to whatever the data happened to fit (#294 follow-up). It
             # used to be declared absent ("framed by its camera, not an extent"); framing the camera *to* an

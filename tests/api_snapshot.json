@@ -28,6 +28,7 @@
         "domain",
         "export_html",
         "export_image",
+        "export_vector",
         "legend",
         "north_arrow",
         "scale_bar"

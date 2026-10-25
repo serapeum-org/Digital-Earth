@@ -78,6 +78,13 @@ SCENE_EXPORTERS: dict[str, str] = {
     ".vtksz": "export_vtksz",
 }
 
+#: Suffixes :meth:`Scene3DBase.save` / :meth:`Scene3DBase.export_vector` write as a vector graphic, through
+#: VTK's GL2PS exporter (:meth:`pyvista.Plotter.save_graphic`). GL2PS rasterises what it cannot draw as vectors —
+#: a textured surface or a ray-cast volume embeds as a raster inset — so these are "a vector page of the scene",
+#: not a guarantee every mark is a path. EXR and other HDR raster formats are deliberately absent: VTK's
+#: screenshot path writes 8-bit rasters only, so there is no lossless-float export to offer.
+VECTOR_SUFFIXES: tuple[str, ...] = (".svg", ".pdf", ".eps", ".ps", ".tex")
+
 
 def _reused_categories(scale: Scale | None) -> list[Any] | None:
     """Return a categorical scale's categories — the pass over the column — or ``None``.
@@ -385,7 +392,11 @@ def supported_destinations() -> str:
     """
     frames = " ".join(IMAGE_SUFFIXES)
     exports = " ".join([HTML_SUFFIX, *sorted(SCENE_EXPORTERS)])
-    return f"use a raster-frame suffix ({frames}) or a scene-export suffix ({exports})"
+    vectors = " ".join(VECTOR_SUFFIXES)
+    return (
+        f"use a raster-frame suffix ({frames}), a vector-graphic suffix ({vectors}) "
+        f"or a scene-export suffix ({exports})"
+    )
 
 
 def house_theme() -> "pv.themes.Theme":
@@ -2251,6 +2262,76 @@ class Scene3DBase:
             component.export_html(destination)
         return destination
 
+    def export_vector(self, path: Destination) -> Path:
+        """Export the current view as a vector graphic (SVG/PDF/EPS/PS/TEX) through VTK's GL2PS exporter.
+
+        forge3d's SVG/PDF export, for a publication figure that scales without pixelation. The format is the
+        suffix of ``path`` — one of :data:`VECTOR_SUFFIXES` — and PyVista's
+        :meth:`~pyvista.Plotter.save_graphic` writes it. **GL2PS rasterises what it cannot draw as vectors**: a
+        textured terrain, a draped basemap or a ray-cast volume embeds as a raster inset inside the
+        otherwise-vector page, so a scene of flat geometry (lines, polygons, a graticule) vectorises cleanly
+        while a textured one does not.
+
+        Args:
+            path: Output file. Its suffix picks the format and must be one of :data:`VECTOR_SUFFIXES`.
+
+        Returns:
+            pathlib.Path: the file that was written.
+
+        Raises:
+            ValueError: when ``path``'s suffix is not one this tier exports as a vector — the message names the
+                supported set — or when the installed pyvista has no ``save_graphic``.
+
+        Examples:
+            - Export a scene to SVG; the file is written and its path handed back:
+                ```python
+                >>> import os, tempfile, pyvista as pv
+                >>> from digitalearth.three_d.core.base import Scene3DBase
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     written = scene.export_vector(os.path.join(folder, "scene.svg"))
+                ...     scene.close()
+                ...     written.suffix, written.stat().st_size > 0
+                ('.svg', True)
+
+                ```
+            - A suffix GL2PS cannot write is refused by name, not by a cryptic VTK error:
+                ```python
+                >>> from digitalearth.three_d.core.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> try:
+                ...     scene.export_vector("scene.png")
+                ... except ValueError as error:
+                ...     print(str(error).split(";")[0])
+                ... finally:
+                ...     scene.close()
+                export_vector() writes a vector graphic and '.png' is not one it can write
+
+                ```
+
+        See Also:
+            save: dispatches here for the vector-graphic suffixes (:data:`VECTOR_SUFFIXES`).
+            screenshot: a rendered raster frame, which takes ``scale=`` for a high-resolution master.
+        """
+        suffix = Path(str(path)).suffix.lower()
+        if suffix not in VECTOR_SUFFIXES:
+            raise ValueError(
+                f"export_vector() writes a vector graphic and {suffix or 'no suffix'!r} is not one it can "
+                f"write; use one of {' '.join(VECTOR_SUFFIXES)}"
+            )
+        exporter = getattr(self.plotter, "save_graphic", None)
+        if exporter is None:
+            import pyvista as pv
+
+            raise ValueError(
+                f"the installed pyvista ({pv.__version__}) has no Plotter.save_graphic, so {suffix!r} cannot "
+                "be exported as a vector graphic"
+            )
+        self._apply_camera()
+        exporter(str(path))
+        return Path(str(path))
+
     def save(self, path: Destination, **kwargs: Any) -> Path:
         """Save the scene, dispatching on ``path``'s suffix — a rendered frame, or a scene export.
 
@@ -2265,6 +2346,8 @@ class Scene3DBase:
         - :data:`SCENE_EXPORTERS` (``.gltf`` ``.obj`` ``.vrml`` ``.wrl`` ``.vtksz``) → the matching
           :class:`pyvista.Plotter` scene exporter, which writes the geometry itself rather than a picture of
           it.
+        - :data:`VECTOR_SUFFIXES` (``.svg`` ``.pdf`` ``.eps`` ``.ps`` ``.tex``) → :meth:`export_vector`, a
+          vector graphic of the view (GL2PS), with textured surfaces embedded as raster insets.
         - anything else — **including a path with no suffix at all** — raises. A format is never invented on
           the caller's behalf, so ``save("scene")`` no longer quietly writes ``scene.png``.
 
@@ -2383,6 +2466,10 @@ class Scene3DBase:
                 )
             exporter(str(path), **kwargs)
             return Path(str(path))
+        if suffix in VECTOR_SUFFIXES:
+            # A vector graphic routes through save_graphic rather than a scene exporter; no **kwargs, since
+            # GL2PS takes none here.
+            return self.export_vector(path)
         reason = (
             "it has no suffix"
             if not suffix
