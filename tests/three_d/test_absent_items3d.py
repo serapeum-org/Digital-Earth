@@ -396,6 +396,22 @@ class TestQuickmapBasemapWiring:
         finally:
             scene.close()
 
+    def test_quickmap_basemap_is_wired_through_the_dispatch(self, stub_tiles, dataset):
+        """`quickmap(backend="3d", basemap=True)` reaches the basemap wiring instead of being refused.
+
+        The committed raster is not EPSG:3857, so the auto-basemap is skipped (the guarded path), but the call
+        exercises the dispatch (`_quickmap_3d` -> `_add_quickmap_basemap`) that `quickmap` now routes through.
+        """
+        from digitalearth import quickmap
+
+        scene = quickmap(dataset, backend="3d", basemap=True, colorbar=False)
+        try:
+            assert any(layer.startswith("terrain") for layer in scene.layer_ids), (
+                scene.layer_ids
+            )
+        finally:
+            scene.close()
+
 
 class TestSceneBbox4326:
     """`_scene_bbox_4326` returns the drawn extent in EPSG:4326, reprojecting from the display CRS."""
