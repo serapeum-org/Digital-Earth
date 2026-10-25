@@ -911,7 +911,7 @@ def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
 
 def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
-    """Draw a raster's cells as value-coloured polygons (pyramids ``get_cell_polygons`` -> ``PolygonGlyph``).
+    """Draw a raster's cells as value-coloured polygons (pyramids ``to_geodataframe`` -> ``PolygonGlyph``).
 
     Args:
         scene: The map being drawn on.
@@ -927,13 +927,18 @@ def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     opts = drawing_style(scene, layer)
     ds = scene._reproject(data)
     if ds.epsg is None:
-        # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
-        # on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g. an
-        # orthographic globe). We read only the cell geometry, in display-CRS coordinates computed from
-        # the geotransform, so the authority code is cosmetic; give the transient reprojected copy a
-        # placeholder EPSG (coordinates are untouched) so the call runs. Drop this once pyramids#979 ships.
+        # Work around pyramids#979: per-cell polygonisation labels the returned frame with `ds.epsg` and
+        # raises on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g.
+        # an orthographic globe). We read only the cell geometry, in display-CRS coordinates computed from the
+        # geotransform, so the authority code is cosmetic; give the transient reprojected copy a placeholder
+        # EPSG (coordinates are untouched) so the call runs. Drop this once pyramids#979 ships.
         ds.epsg = 4326
-    polygons = [np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry]
+    # pyramids 0.71 replaced `get_cell_polygons()` with `to_geodataframe(geometry="polygon", values=False)`,
+    # which returns the same one-polygon-per-cell footprints (no value column), as a FeatureCollection.
+    polygons = [
+        np.asarray(g.exterior.coords)
+        for g in ds.to_geodataframe(geometry="polygon", values=False).geometry
+    ]
     # 1-based band, nodata -> NaN (shared helper)
     values = read_masked_band(ds, layer.symbology.props["band"]).ravel()
     # drop far-side cells on a globe
@@ -2183,7 +2188,7 @@ class VectorMixin(_MixinBase):
         visible: bool = True,
         **opts: Any,
     ) -> Self:
-        """Draw raster cells as value-coloured polygons (pyramids ``get_cell_polygons`` → ``PolygonGlyph``).
+        """Draw raster cells as value-coloured polygons (pyramids ``to_geodataframe`` → ``PolygonGlyph``).
 
         Args:
             dataset: A pyramids ``Dataset``, or a path or URL to one (reprojected to the display CRS
@@ -2211,7 +2216,7 @@ class VectorMixin(_MixinBase):
         Raises:
             TypeError: when `dataset` is not a raster or a reference to one. A bare numpy array is refused
                 here where :meth:`~digitalearth.static.builders.raster.RasterMixin.field` takes one: the cell
-                polygons come from pyramids' ``get_cell_polygons``, which reads a geo-transform an array does
+                polygons come from pyramids' ``to_geodataframe``, which reads a geo-transform an array does
                 not carry.
             ValueError: from ``PolygonGlyph`` for a keyword in ``**opts`` it does not accept, naming the
                 ones it does. The layer is dropped from the description again before it propagates.
