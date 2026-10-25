@@ -1298,14 +1298,13 @@ class ProjectionMixin(_MixinBase):
             This map, so the call chains (``Map(crs=3857).set_bounds(bounds).coastlines()``). The Core
             declares `returns="self"` for this name, and every tier that has it answers that way — the
             static, interactive and web tiers; the 3-D tier declares the name **pending**, in
-            `base.contract.PENDING["3d"]`, as *"a scene is framed by its camera, not by an extent (see
-            Capabilities.absent)"*. The cross-reference that row makes resolves to the tier's `domain`
-            entry rather than to a `set_bounds` one: `Capabilities.absent` holds **feature** names, and
-            `three_d.capabilities.CAPABILITIES.absent` declares *"domain: a scene is framed by its camera,
-            not by an extent, so there is no region to set"* (review R2-N4 — this paragraph read "declares
-            the name absent", which `"set_bounds" in CAPABILITIES.absent` answers `False` to). The
-            spelling this tier used to carry returned `None`, so one line worked on one tier and raised on
-            another.
+            `base.contract.PENDING["3d"]`, as *"Scene3D.domain() frames the camera on a named region or a
+            box; the Core-spelled set_bounds(bounds, padding) is not yet adopted here"*. That tier frames to
+            an extent through `Scene3D.domain()` (its `domain` feature) rather than through a `set_bounds` of
+            this shape, so `"set_bounds" in CAPABILITIES.absent` is `False` — and so is
+            `"domain" in CAPABILITIES.absent`, now that `domain` is a declared feature rather than an absent
+            one. The spelling this tier used to carry returned `None`, so one line worked on one tier and
+            raised on another.
 
         Raises:
             ValueError: if the sequence form does not hold exactly four values; if ``bounds=None`` and the
