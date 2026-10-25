@@ -105,6 +105,22 @@ class TestLabels:
         scene.remove_layer("labels-1")
         assert scene.layer_ids == [], scene.layer_ids
 
+    def test_a_feature_with_a_missing_value_is_not_labelled(self, scene):
+        """A feature whose column value is NaN is dropped rather than labelled "nan".
+
+        Args:
+            scene: The scene under test.
+        """
+        gdf = gpd.GeoDataFrame(
+            {"pop": [1.0, float("nan")]},
+            geometry=[Point(0.0, 0.0), Point(10.0, 5.0)],
+            crs=4326,
+        )
+        scene.labels(gdf, "pop")
+        assert scene.mesh_of("labels-1").n_points == 1, (
+            "the NaN-valued feature is not labelled"
+        )
+
     def test_a_projected_scene_reprojects_the_features(self):
         """Over an EPSG:3857 scene the lon/lat features are reprojected to metres."""
         projected = Scene3D(off_screen=True, crs=3857)

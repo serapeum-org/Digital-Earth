@@ -12,6 +12,7 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 from digitalearth.base.crs import OffLimbError  # noqa: E402
+from digitalearth.base.sources import get_source  # noqa: E402
 from digitalearth.base.spec import FigureSpec  # noqa: E402
 from digitalearth.three_d import Scene3D  # noqa: E402
 
@@ -148,6 +149,44 @@ class TestGraticuleRefusals:
         nan = float("nan")
         with pytest.raises(ValueError, match="finite number"):
             scene.graticule(bbox=BOX, z=nan)
+
+
+class TestGraticuleFromTheDrawnExtent:
+    """With no bbox, the grid is framed on the scene's drawn extent, reprojected as needed."""
+
+    def test_it_frames_a_geographic_scene_on_its_drawn_extent(self, scene):
+        """A graticule with no bbox grids the extent of the data already drawn.
+
+        Args:
+            scene: The scene under test (EPSG:4326).
+        """
+        lon = np.linspace(-10.0, 30.0, 20)
+        lat = np.linspace(35.0, 60.0, 16)
+        scene.terrain(
+            get_source(
+                np.add.outer(np.cos(np.radians(lat)), np.sin(np.radians(lon))),
+                x=lon,
+                y=lat,
+            )
+        )
+        scene.graticule(spacing=10.0, labels=False)
+        assert scene.mesh_of(scene.layer_ids[-1]).n_cells > 0, (
+            "the grid framed the drawn extent"
+        )
+
+    def test_it_reprojects_the_extent_of_a_projected_scene(self):
+        """Over an EPSG:3857 scene the drawn extent is reprojected into the grid's CRS to pick the lines."""
+        mx = np.linspace(-1.0e6, 3.0e6, 20)
+        my = np.linspace(4.0e6, 8.0e6, 16)
+        projected = Scene3D(off_screen=True, crs=3857)
+        try:
+            projected.terrain(get_source(np.add.outer(my / 1e6, mx / 1e6), x=mx, y=my))
+            projected.graticule(crs=4326, labels=False)
+            assert projected.mesh_of(projected.layer_ids[-1]).n_cells > 0, (
+                "grid framed the reprojected extent"
+            )
+        finally:
+            projected.close()
 
 
 class TestGraticuleWithoutAnExtent:
