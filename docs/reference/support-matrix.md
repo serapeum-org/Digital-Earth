@@ -99,7 +99,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `domain` | ✓ | — | — | ✓ |
 | `export_html` | — | ✓ | ✓ | ✓ |
 | `export_image` | ✓ | ✓ | ✓ | ✓ |
-| `export_vector` | ✓ | — | — | — |
+| `export_vector` | ✓ | — | — | ✓ |
 | `fullscreen` | — | ✓ | — | — |
 | `geocoder` | — | ✓ | — | — |
 | `geolocate` | — | ✓ | — | — |
