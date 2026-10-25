@@ -12,6 +12,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | capability | matplotlib | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `basemap` | ✓ | ✓ | ✓ | ✓ |
+| `bivariate` | — | — | — | ✓ |
 | `borders` | ✓ | — | ✓ | — |
 | `choropleth` | ✓ | ✓ | ✓ | ✓ |
 | `clusters` | — | ✓ | — | — |

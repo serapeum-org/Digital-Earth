@@ -177,6 +177,10 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "labels are one anchor point and one string each, so there is nothing to reduce; a scene with too "
             "many labels to read is a composition the caller chose rather than data to thin"
         ),
+        "bivariate": (
+            "a bivariate raster is one four-corner plane carrying a classified RGBA image, so its geometry is "
+            "already two triangles; detail is the raster's own resolution, chosen upstream, not mesh density"
+        ),
     }
 )
 

@@ -341,6 +341,143 @@ class TerrainMixin(_MixinBase):
             **kwargs,
         )
 
+    def bivariate(
+        self,
+        a: Any,
+        b: Any,
+        *,
+        scheme: str = "quantiles",
+        n: int = 3,
+        matrix: Any = None,
+        bbox: Any = None,
+        z: float = 0.0,
+        name: Any = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Drape a bivariate raster — two variables encoded as one colour from an n×n matrix (#492).
+
+        forge3d's ``BivariateRasterStyle``: each of two rasters is cut into ``n`` classes by the shared
+        classifier, and the ``(class_a, class_b)`` pair picks a colour from an ``n×n`` matrix. The colour
+        computation is engine-neutral (:func:`digitalearth.base.bivariate.bivariate_rgba`), and this tier drapes
+        the resulting RGBA image on a flat ground plane, the same texture path
+        :meth:`terrain` and :meth:`~digitalearth.three_d.decoration.decoration.DecorationMixin.basemap` use.
+
+        Args:
+            a: The first variable, a 2-D array.
+            b: The second variable, a 2-D array of the same shape as `a`.
+            scheme: The classification scheme both variables are cut with (one of the shared schemes), so one
+                ``scheme``/``n`` pair cuts the same classes here as on any tier.
+            n: The number of classes per variable, and the side length of `matrix`.
+            matrix: The ``n×n`` colour matrix as rows of hex strings; ``None`` uses the default 3×3 palette
+                (which requires ``n == 3``).
+            bbox: The ``(west, south, east, north)`` extent to drape the image over, in the scene's display
+                CRS. ``None`` uses the array's own ``(0, 0, cols, rows)`` index extent.
+            z: The ground-plane height the image is draped at.
+            name: The layer id; ``None`` numbers it ``bivariate``.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
+
+        Returns:
+            The registered :class:`pyvista.Actor`, or ``None`` when nothing was drawn and the scene is not
+            ``strict``.
+
+        Raises:
+            ValueError: when `bbox` is not four numbers, `matrix` is not ``n×n``, or `a` and `b` are not 2-D
+                arrays of the same shape (the last two raised when the layer is drawn).
+
+        Examples:
+            - Drape two variables as one bivariate colour:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.three_d import Scene3D
+                >>> a = np.add.outer(np.arange(6.0), np.arange(6.0))
+                >>> b = np.add.outer(np.arange(6.0)[::-1], np.arange(6.0))
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.bivariate(a, b)
+                >>> scene.get_layer(scene.layer_ids[-1]).kind
+                'bivariate'
+                >>> scene.close()
+
+                ```
+        """
+        call = "Scene3D.bivariate()"
+        extra: dict[str, Any] = {}
+        if bbox is not None:
+            edges = tuple(bbox)
+            if len(edges) != 4:
+                raise ValueError(
+                    f"{call} bbox must be (west, south, east, north); got {bbox!r}"
+                )
+            extra["bbox"] = tuple(float(value) for value in edges)
+        return self._add_described_layer(
+            kind="bivariate",
+            data=a,
+            name=name,
+            b=b,
+            scheme=scheme,
+            n=int(n),
+            matrix=(
+                tuple(tuple(row) for row in matrix) if matrix is not None else None
+            ),
+            z=float(z),
+            **extra,
+            **kwargs,
+        )
+
+
+def draw_bivariate(scene: Any, data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
+    """Drape the bivariate-classified RGBA image a `bivariate` layer describes on a ground plane.
+
+    The two variables are classified engine-neutrally
+    (:func:`~digitalearth.base.bivariate.bivariate_rgba`), and the resulting ``(rows, cols, 4)`` RGBA image is
+    draped on a flat :class:`pyvista.StructuredGrid` at the layer's ``z`` with the same texture path
+    :func:`draw_terrain` uses for imagery — so the bivariate colour is pixels on a plane, not a per-cell mesh.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: the first variable's 2-D array.
+        layer: The layer's description, whose props carry the second variable, the scheme, the class count,
+            the matrix, the extent and the ground-plane height.
+
+    Returns:
+        The ``(plane, actor)`` pair.
+
+    Raises:
+        ValueError: when the matrix is not ``n×n``, or the two arrays are not 2-D and the same shape.
+    """
+    props = drawing_props(layer.symbology.props)
+    b = props.pop("b")
+    scheme = props.pop("scheme", "quantiles")
+    n = int(props.pop("n", 3))
+    matrix = props.pop("matrix", None)
+    bbox = props.pop("bbox", None)
+    z = float(props.pop("z", 0.0))
+
+    from digitalearth.base.bivariate import bivariate_rgba
+
+    a_arr = np.asarray(data, dtype="float64")
+    b_arr = np.asarray(b, dtype="float64")
+    if a_arr.ndim != 2 or a_arr.shape != b_arr.shape:
+        raise ValueError(
+            f"bivariate expects two 2-D arrays of the same shape; got {a_arr.shape} and {b_arr.shape}"
+        )
+    classes = bivariate_rgba(a_arr, b_arr, scheme=scheme, n=n, matrix=matrix)
+    image = classes.rgba.reshape(a_arr.shape[0], a_arr.shape[1], 4)
+    rows, cols = a_arr.shape
+    if bbox is not None:
+        west, south, east, north = (float(value) for value in bbox)
+    else:
+        west, south, east, north = 0.0, 0.0, float(cols), float(rows)
+
+    import pyvista as pv
+
+    xx, yy = np.meshgrid(
+        np.array([west, east], dtype="float64"),
+        np.array([south, north], dtype="float64"),
+    )
+    plane = pv.StructuredGrid(xx, yy, np.full(xx.shape, z, dtype="float64"))
+    _drape_uv(plane)
+    return plane, scene.plotter.add_mesh(plane, texture=_as_texture(image), **props)
+
 
 def draw_terrain(scene: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the surface a `terrain` layer describes and add it to the scene's plotter.
