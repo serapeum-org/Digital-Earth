@@ -106,6 +106,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `globe_control` | — | ✓ | — | — |
 | `layer_switcher` | — | ✓ | ✓ | — |
 | `legend` | ✓ | ✓ | ✓ | ✓ |
+| `lighting` | — | — | — | ✓ |
 | `measure` | — | ✓ | — | — |
 | `navigation` | — | ✓ | — | — |
 | `north_arrow` | — | — | — | ✓ |
