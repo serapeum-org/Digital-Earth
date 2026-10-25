@@ -207,6 +207,7 @@ nav:
       - Multi-panel scenes & serving: examples/threed/16_panels_and_serving.ipynb
       - 'One-call quickmap & export': examples/threed/17_quickmap_3d_and_export.ipynb
       - 'Real-world DEM (earthlens)': examples/threed/18_real_world_dem_earthlens.ipynb
+      - 'Cartographic furniture & styling': examples/threed/19_cartographic_furniture.ipynb
     # The gallery's labels are the *method* vocabulary; its filenames are the *render* vocabulary — the
     # `kind=`/`via` token each notebook demonstrates (`imshow`, `contour`, `contourf`, `scatter`, `shapes`,
     # and `pcolormesh`, `quiver`, `tricontourf`, … beside them). Those tokens are all live, so the five that
