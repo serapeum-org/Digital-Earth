@@ -61,6 +61,10 @@ CAPABILITIES = Capabilities(
             # drawn where the data is, reprojected into the display CRS through pyramids, not pinned to a
             # corner of the window.
             "graticule",
+            # Two rasters encoded as one colour from an n×n matrix (forge3d's BivariateRasterStyle, #492).
+            # The class/colour maths is engine-neutral (`base/bivariate.py`); this tier drapes the RGBA image
+            # on a ground plane, so it is a drawn kind like `basemap`, not a feature.
+            "bivariate",
             # A set of placed labels, each with a filled halo and occlusion handling (forge3d parity, #491).
             # The plural, styled companion to `text`: a layer, drawn where the data is and reprojected into
             # the display CRS, not corner furniture.

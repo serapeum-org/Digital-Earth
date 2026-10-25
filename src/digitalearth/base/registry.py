@@ -742,7 +742,7 @@ def kind_info(name: str) -> KindInfo:
             >>> kind_info("polygon")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            KeyError: "no layer kind 'polygon' is registered; registered kinds are ['basemap', 'borders', ...]"
+            KeyError: "no layer kind 'polygon' is registered; registered kinds are ['basemap', 'bivariate', ...]"
 
             ```
     """
@@ -1286,6 +1286,12 @@ _BUILT_IN_KINDS = (
         "none",
         "tiles drawn under the data — basemap, tiles, static stock_img",
         "underlay",
+    ),
+    (
+        "bivariate",
+        "raster",
+        "two rasters encoded as one colour from an n×n matrix — 3-D bivariate",
+        "data",
     ),
     (
         "coastlines",
