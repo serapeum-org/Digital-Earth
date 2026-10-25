@@ -725,15 +725,18 @@ def quickmap(
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
             nothing) is accepted anywhere.
-        domain: Optional named region / bbox to set the extent. ``backend="matplotlib"`` only — it is the one
-            tier with a fixed extent to set — and passing it to any other backend is refused by name.
+        domain: Optional named region / bbox to set the extent. Honoured by ``backend="matplotlib"`` (its fixed
+            extent) and by ``backend="3d"`` (it frames the camera on the region); the ``"interactive"`` and
+            ``"web"`` tiers pan and zoom instead, so passing it to those is refused by name.
         basemap: The basemap to draw beneath the data: ``False`` for none, ``True`` for the backend's
             default source, or the source itself — a cleopatra provider name, an ``xyzservices``
             ``TileProvider``, or a **keyed** preset name such as ``"Planet.NICFI"`` — forwarded to the
             backend's basemap method. Unreachable tiles are tolerated and warned about; a request the
             backend cannot satisfy (an unknown preset, a missing credential) is raised. Honoured by
-            ``"matplotlib"``, ``"interactive"`` and ``"web"``; ``backend="3d"`` has no basemap, so asking for
-            one there is refused rather than ignored, while ``basemap=False`` is accepted anywhere.
+            ``"matplotlib"``, ``"interactive"``, ``"web"`` and ``"3d"``; on ``"3d"`` the tiles are EPSG:3857, so
+            the automatic ``basemap=`` is applied only when the scene is built in EPSG:3857 and skipped with a
+            warning otherwise (place tiles over other CRSes with ``Scene3D.basemap`` directly). ``basemap=False``
+            is accepted anywhere.
         coastlines: When True, overlay coastlines (tolerated and warned about if the assets are
             unreachable). ``backend="matplotlib"``/``"interactive"`` only; ``coastlines=True`` on another
             backend is refused, while ``coastlines=False`` — which asks for nothing — is accepted anywhere.
@@ -1546,13 +1549,43 @@ def _quickmap_3d(
     # The two map keywords the 3-D tier now honours (#294 follow-up): a basemap is draped over the data's own
     # extent (derived from the scene after the layer is drawn), and the view is then framed on `domain`.
     if basemap:
-        scene.basemap(
-            basemap if isinstance(basemap, str) else None,
-            bbox=_scene_bbox_4326(scene),
-        )
+        _add_quickmap_basemap(scene, basemap)
     if domain is not None:
         scene.domain(domain)
     return scene
+
+
+def _add_quickmap_basemap(scene: Any, basemap: Any) -> None:
+    """Drape a ``quickmap(basemap=...)`` basemap over a 3-D scene, but only where the tiles can align.
+
+    Web-map tiles are EPSG:3857, and :meth:`~digitalearth.three_d.decoration.decoration.DecorationMixin.basemap`
+    draws them in that CRS. When the scene's display CRS is also EPSG:3857 the plane lands on the data; when it
+    is anything else (the common lon/lat raster is EPSG:4326) the plane would sit millions of metres from the
+    data and the camera fit would collapse the data to a dot. Reprojecting the tile plane into the display CRS
+    is a pyramids job this tier does not do yet, so rather than drape a basemap nobody can see, this **skips it
+    and says why** for a non-3857 scene — the honest behaviour for an automatic convenience keyword. A caller
+    who wants tiles over non-mercator data builds the scene in EPSG:3857, or places them deliberately with
+    :meth:`Scene3D.basemap`.
+
+    Args:
+        scene: The built ``Scene3D`` to drape onto.
+        basemap: The ``basemap=`` value — a provider name/object, or ``True`` for the default provider.
+    """
+    from digitalearth.base.spec.bounds import same_crs
+
+    display = scene.display_crs
+    if display is None or not same_crs(display, 3857):
+        logger.warning(
+            "quickmap(backend='3d', basemap=...) draws EPSG:3857 tiles and needs an EPSG:3857 scene to align "
+            "them with the data; the scene's display CRS is %r, so the basemap is skipped. Build the scene "
+            "with crs=3857, or place tiles yourself with Scene3D.basemap(bbox=...).",
+            display,
+        )
+        return
+    scene.basemap(
+        basemap if isinstance(basemap, str) else None,
+        bbox=_scene_bbox_4326(scene),
+    )
 
 
 def _scene_bbox_4326(scene: Any) -> tuple[float, float, float, float]:

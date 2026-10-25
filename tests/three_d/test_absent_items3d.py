@@ -325,3 +325,103 @@ class TestFetchBasemapImage:
         _image, _extent = deco.fetch_basemap_image((0.0, 0.0, 1.0, 1.0), "OSM", None)
         assert record["auto"] == 6, record
         assert record["level"] == 6, "the derived zoom must reach the tile enumerator"
+
+
+def _terrain_3857(scene: Scene3D) -> Scene3D:
+    """Add a small terrain in EPSG:3857 metres so the scene's display CRS is Web Mercator.
+
+    Args:
+        scene: A scene built with ``crs=3857``.
+
+    Returns:
+        The same scene.
+    """
+    x = np.linspace(-3_000_000.0, 3_000_000.0, 8)
+    y = np.linspace(4_000_000.0, 8_000_000.0, 8)
+    z = np.add.outer(np.linspace(0.0, 1.0, 8), np.zeros_like(x))
+    scene.terrain(get_source(z, x=x, y=y))
+    return scene
+
+
+class TestQuickmapBasemapWiring:
+    """`quickmap(backend="3d", basemap=...)` aligns tiles only in EPSG:3857, and skips with a warning else."""
+
+    @pytest.fixture
+    def stub_tiles(self, monkeypatch):
+        """Replace the tile-fetch seam with a synthetic image and a Web-Mercator extent (no network)."""
+        monkeypatch.setattr(
+            deco,
+            "fetch_basemap_image",
+            lambda bbox, provider, zoom: (
+                np.full((4, 4, 4), 128, dtype="uint8"),
+                (-1_000_000.0, 4_000_000.0, 3_000_000.0, 8_000_000.0),
+            ),
+        )
+
+    def test_a_non_3857_scene_is_skipped_with_a_warning(self, stub_tiles, caplog):
+        """Over a 4326 scene the 3857 tile plane would land millions of units away, so it is skipped."""
+        import logging
+
+        from digitalearth.api import _add_quickmap_basemap
+
+        scene = Scene3D(off_screen=True, crs=4326)
+        try:
+            _terrain(scene)
+            with caplog.at_level(logging.WARNING):
+                _add_quickmap_basemap(scene, True)
+            assert "basemap" not in scene.layer_ids, scene.layer_ids
+            assert "EPSG:3857" in caplog.text, caplog.text
+        finally:
+            scene.close()
+
+    def test_a_3857_scene_is_draped(self, stub_tiles):
+        """Over a 3857 scene the tiles align, so the basemap layer is registered."""
+        from digitalearth.api import _add_quickmap_basemap
+
+        scene = Scene3D(off_screen=True, crs=3857)
+        try:
+            _terrain_3857(scene)
+            _add_quickmap_basemap(scene, True)
+            assert "basemap" in scene.layer_ids, scene.layer_ids
+        finally:
+            scene.close()
+
+    def test_quickmap_frames_on_domain(self, dataset):
+        """`quickmap(backend="3d", domain=...)` frames the camera on the region rather than refusing it."""
+        from digitalearth import quickmap
+
+        scene = quickmap(dataset, backend="3d", domain="europe", colorbar=False)
+        try:
+            assert scene._camera_set is True, "domain= should set the scene camera"
+        finally:
+            scene.close()
+
+
+class TestSceneBbox4326:
+    """`_scene_bbox_4326` returns the drawn extent in EPSG:4326, reprojecting from the display CRS."""
+
+    def test_same_crs_returns_degrees_in_wsen_order(self):
+        """A 4326 scene passes its plotter bounds through, reordered to (west, south, east, north)."""
+        from digitalearth.api import _scene_bbox_4326
+
+        scene = Scene3D(off_screen=True, crs=4326)
+        try:
+            _terrain(scene)
+            west, south, east, north = _scene_bbox_4326(scene)
+            assert west < east and south < north, (west, south, east, north)
+            assert -180.0 <= west <= 180.0 and -90.0 <= south <= 90.0, (west, south)
+        finally:
+            scene.close()
+
+    def test_reproject_branch_turns_metres_into_degrees(self):
+        """A 3857 scene's metre bounds are reprojected into lon/lat degrees."""
+        from digitalearth.api import _scene_bbox_4326
+
+        scene = Scene3D(off_screen=True, crs=3857)
+        try:
+            _terrain_3857(scene)
+            west, south, east, north = _scene_bbox_4326(scene)
+            assert -180.0 <= west <= 180.0 and -180.0 <= east <= 180.0, (west, east)
+            assert -90.0 <= south <= 90.0 and -90.0 <= north <= 90.0, (south, north)
+        finally:
+            scene.close()
