@@ -113,6 +113,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `north_arrow` | — | — | — | ✓ |
 | `raster_renderer` | ✓ | — | ✓ | — |
 | `scale_bar` | — | ✓ | — | ✓ |
+| `scene_bundle` | — | — | — | ✓ |
 | `terrain_control` | — | ✓ | — | — |
 | `time_slider` | — | ✓ | ✓ | — |
 
