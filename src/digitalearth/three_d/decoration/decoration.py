@@ -463,8 +463,9 @@ def fetch_basemap_image(
     Note:
         cleopatra exposes tile fetching only bound to a matplotlib axes (`add_tiles`); there is no public
         "give me the stitched image for this box" call, so this reaches one private helper
-        (`_tiles_for_bbox`). A public headless-stitch entry point is tracked upstream as cleopatra#401; when it
-        lands, this seam drops the private reach for that one call.
+        (`_tiles_for_bbox`). A public headless-stitch entry point is tracked upstream as cleopatra#401; the
+        swap to make here once it lands is tracked as Digital-Earth#483. Until then this seam keeps the private
+        reach isolated to this one call.
 
     Args:
         bbox_4326: The area to cover, ``(west, south, east, north)`` in EPSG:4326 degrees.
