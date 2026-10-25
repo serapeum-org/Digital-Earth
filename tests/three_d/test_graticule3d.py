@@ -211,6 +211,24 @@ class TestGraticuleProjectedAutoStep:
         )
 
 
+class TestGraticuleUnitMismatchWarning:
+    """A geographic grid CRS over clearly non-degree bounds (no display CRS) warns rather than failing silently."""
+
+    def test_a_projected_bare_array_scene_warns_about_units(self, caplog):
+        """A CRS-less scene whose data is in metres, gridded with the default crs=4326, warns about the units."""
+        import logging
+
+        axis = np.linspace(0.0, 4_000_000.0, 16)
+        built = Scene3D(off_screen=True)
+        built.terrain(get_source(np.add.outer(axis / 1e6, axis / 1e6), x=axis, y=axis))
+        with caplog.at_level(logging.WARNING):
+            built.graticule(labels=False)
+        built.close()
+        assert "far outside" in caplog.text, (
+            f"no unit-mismatch warning emitted: {caplog.text!r}"
+        )
+
+
 class TestGraticuleWithoutAnExtent:
     """With no bbox and nothing drawn, there is no extent to frame."""
 

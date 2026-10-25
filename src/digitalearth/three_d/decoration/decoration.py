@@ -986,6 +986,21 @@ def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] 
         )
         return None
     west, south, east, north = box
+    # No display CRS means `box` is the raw drawn extent taken as `crs` coordinates. If `crs` is geographic yet
+    # the extent is far outside the degree range, the data is almost certainly projected-but-undeclared, so the
+    # grid (and its degree labels) would be drawn in the wrong units — say so rather than fail silently.
+    if (
+        bbox is None
+        and scene.display_crs is None
+        and is_geographic(crs)
+        and max(abs(west), abs(south), abs(east), abs(north)) > 360.0
+    ):
+        logger.warning(
+            "graticule: the scene declares no display CRS and its extent %r lies far outside the %r degree "
+            "range; the grid is drawn as if that extent were degrees — pass crs= for the data's CRS, or bbox=",
+            (west, south, east, north),
+            crs,
+        )
     lon_spacing = (
         float(lon_step) if lon_step is not None else _nice_graticule_step(east - west)
     )
@@ -1217,6 +1232,15 @@ def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> tuple[Any, Any] | No
         style["shape"] = None
         style["fill_shape"] = False
     props.setdefault("show_points", False)
+    # A leftover keyword naming one of the style slots labels() fills from its own arguments would reach
+    # add_point_labels twice and raise an opaque "multiple values for keyword" TypeError; name the clash
+    # instead, pointing at the argument that owns it (the pattern extruded_polygons' _classify_or_refuse uses).
+    clashing = sorted((set(style) | {"always_visible"}) & set(props))
+    if clashing:
+        raise TypeError(
+            f"labels() sets {', '.join(clashing)} from its own arguments (text_size, color, halo, "
+            f"halo_color, occlude); drop {clashing} from the extra keywords"
+        )
     drawn = scene.plotter.add_point_labels(
         anchors, kept, always_visible=not occlude, **style, **props
     )
