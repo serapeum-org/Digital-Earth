@@ -24,6 +24,7 @@ naming the call, the type and what it takes — rather than the attribute error 
 wrong type first.
 """
 
+import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
@@ -41,6 +42,8 @@ from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, Selection
 from digitalearth.base.types import PlottableData, RasterLike
+
+logger = logging.getLogger(__name__)
 
 #: The families of data a builder may declare it draws, each with the phrase a refusal uses to say so. They
 #: are the branches :func:`extract` dispatches on, named — a builder takes some of them and not others, and
@@ -614,8 +617,14 @@ def _from_netcdf(
     )
     # pyramids 0.71 reads a NetCDF variable band-first — a single-variable grid comes back as ``(1, H, W)``
     # where earlier it was ``(H, W)``. A ``Source`` wraps one 2-D field, so drop a leading band axis, taking
-    # the first band of a genuinely multi-band read — the same default the raster path's ``band`` takes.
+    # the first slice of a genuinely multi-slice read — the same default the raster path's ``band`` takes.
     if z.ndim == 3:
+        if z.shape[0] > 1:
+            logger.warning(
+                "NetCDF variable %r has %d slices; the Source draws the first (slice 0)",
+                variable,
+                z.shape[0],
+            )
         z = z[0]
     attributes = _variable_attributes(nc, variable)
     units = _attr(attributes, "units")
