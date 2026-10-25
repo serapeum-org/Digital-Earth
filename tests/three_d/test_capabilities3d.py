@@ -171,6 +171,8 @@ BUILDERS = {
     "reference_fill": lambda scene: scene.ocean(),
     "text": lambda scene: scene.text(0.0, 0.0, "here"),
     "basemap": _add_basemap,
+    "graticule": lambda scene: scene.graticule(bbox=(-10.0, 35.0, 30.0, 60.0)),
+    "labels": lambda scene: scene.labels(_polygons(), column="value"),
     "custom:pyvista": lambda scene: scene.add_mesh(pv.Sphere()),
 }
 

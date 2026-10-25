@@ -26,10 +26,10 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `extrusion` | — | ✓ | — | ✓ |
 | `filled_contours` | ✓ | ✓ | ✓ | — |
 | `flow` | ✓ | — | ✓ | — |
-| `graticule` | ✓ | ✓ | ✓ | — |
+| `graticule` | ✓ | ✓ | ✓ | ✓ |
 | `heatmap` | ✓ | ✓ | ✓ | — |
 | `isosurface` | — | — | — | ✓ |
-| `labels` | ✓ | ✓ | ✓ | — |
+| `labels` | ✓ | ✓ | ✓ | ✓ |
 | `lakes` | ✓ | — | ✓ | — |
 | `land` | ✓ | — | ✓ | — |
 | `lines` | ✓ | ✓ | ✓ | ✓ |

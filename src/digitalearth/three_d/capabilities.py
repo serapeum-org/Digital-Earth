@@ -56,6 +56,15 @@ CAPABILITIES = Capabilities(
             # `terrain(texture=)` drapes imagery onto relief. It used to be declared absent; the tier draws it
             # now, so it is a kind here and gone from `absent`.
             "basemap",
+            # A latitude/longitude grid drawn across the framed extent and labelled along its edges
+            # (forge3d parity, #490). A layer rather than furniture for the same reason `text` is: it is
+            # drawn where the data is, reprojected into the display CRS through pyramids, not pinned to a
+            # corner of the window.
+            "graticule",
+            # A set of placed labels, each with a filled halo and occlusion handling (forge3d parity, #491).
+            # The plural, styled companion to `text`: a layer, drawn where the data is and reprojected into
+            # the display CRS, not corner furniture.
+            "labels",
             "custom:pyvista",
         }
     ),
