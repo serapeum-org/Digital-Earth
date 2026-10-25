@@ -36,12 +36,14 @@ missing. Both are Core names keyed to a layer's `Encoding`, so they are **guides
 explain something the layer publishes, where a title, a label and a coordinate frame explain nothing. They live
 in :mod:`digitalearth.three_d.legends.legend` as `colorbar()` and `legend()` (order 24), under those spellings and no
 others — a differently shaped `scalar_bar()` here would put two spellings on one concept, which is the single
-thing the Core contract exists to prevent. A north arrow is not built at all: the tier declares it absent, with
-its reason (a scene can be looked at from any direction, so there is no fixed north on screen).
+thing the Core contract exists to prevent. A north arrow *is* built, as :meth:`DecorationMixin.north_arrow`: a
+camera-aware corner marker (not a fixed on-screen arrow, since a scene can be looked at from any direction), the
+single-direction companion to the orientation triad — see its method docstring.
 """
 
 import logging
 import math
+from contextlib import suppress
 from dataclasses import replace as with_fields
 from typing import TYPE_CHECKING, Any, Self
 
@@ -63,9 +65,11 @@ __all__ = [
     "DecorationMixin",
     "axis_labels",
     "axis_titles",
+    "draw_basemap",
     "draw_reference_fill",
     "draw_reference_lines",
     "draw_text",
+    "fetch_basemap_image",
     "redraw_decoration",
 ]
 
@@ -81,6 +85,30 @@ TITLE_SLOT: int = 7
 
 #: The actor name PyVista files a subtitle under, so a second `set_title` replaces it rather than stacking.
 SUBTITLE_ACTOR: str = "digitalearth-subtitle"
+
+#: The actor names the corner furniture is filed under, so a second call replaces rather than stacks it — the
+#: same discipline as `SUBTITLE_ACTOR`.
+ATTRIBUTION_ACTOR: str = "digitalearth-attribution"
+SCALE_BAR_ACTOR: str = "digitalearth-scale-bar"
+
+#: The four panel anchors (contract C, :data:`~digitalearth.base.registry.FURNITURE_ANCHORS`) mapped to the
+#: corner names :meth:`pyvista.Plotter.add_text` places text at. One map, so attribution and any later corner
+#: text agree on where "bottom-right" is.
+_ANCHOR_TO_TEXT_POSITION: dict[str, str] = {
+    "top-left": "upper_left",
+    "top-right": "upper_right",
+    "bottom-left": "lower_left",
+    "bottom-right": "lower_right",
+}
+
+#: The same four anchors as a normalised ``(xmin, ymin, xmax, ymax)`` viewport box, for the orientation-marker
+#: widget the north arrow is drawn as — which is placed by viewport fraction rather than by a corner name.
+_ANCHOR_TO_VIEWPORT: dict[str, tuple[float, float, float, float]] = {
+    "top-left": (0.0, 0.8, 0.2, 1.0),
+    "top-right": (0.8, 0.8, 1.0, 1.0),
+    "bottom-left": (0.0, 0.0, 0.2, 0.2),
+    "bottom-right": (0.8, 0.0, 1.0, 0.2),
+}
 
 #: What the axes are called when the scene's display CRS says nothing useful: the plain survey words, which are
 #: what #203 asked for in place of PyVista's `X`/`Y`/`Z`. A bare array has no CRS to read, and `X`/`Y`/`Z`
@@ -333,6 +361,176 @@ def _draw_orientation_axes(plotter: Any, crs: Any, style: dict[str, Any]) -> Non
     plotter.add_axes(**options)
 
 
+def _draw_attribution(plotter: Any, style: dict[str, Any]) -> None:
+    """Put a credit line in a corner of the render window.
+
+    Args:
+        plotter: The plotter to draw on.
+        style: The `text`, `anchor`, `font_size` and `color` :meth:`DecorationMixin.attribution` recorded. It
+            is filed under :data:`ATTRIBUTION_ACTOR`, so a second call replaces the line rather than stacking a
+            second one — the same discipline the subtitle follows.
+    """
+    plotter.add_text(
+        style["text"],
+        position=_ANCHOR_TO_TEXT_POSITION[style["anchor"]],
+        font_size=int(style["font_size"]),
+        color=style.get("color"),
+        name=ATTRIBUTION_ACTOR,
+    )
+
+
+def _draw_scale_bar(plotter: Any, _style: dict[str, Any]) -> None:
+    """Put a ground-distance scale bar on the plotter, as VTK's legend-scale ruler.
+
+    A scale bar is honest only under a **parallel (orthographic)** projection: in perspective, one screen
+    distance is a different ground distance at every depth, which is why this tier declared a scale bar absent.
+    So this turns parallel projection on — the mode the bar is true in — rather than draw a bar that lies, and
+    adds a :class:`vtkLegendScaleActor` configured to label the bottom edge in distance units of the scene's
+    coordinates. Filed under :data:`SCALE_BAR_ACTOR`, so a second call replaces it.
+
+    Args:
+        plotter: The plotter to draw on.
+        _style: The keywords :meth:`DecorationMixin.scale_bar` recorded; none is read today (the actor labels
+            itself from the view), so the slot is kept for a later option rather than read.
+    """
+    # Orthographic is the only projection a single screen-to-ground scale is true in, so switch it on here.
+    if hasattr(plotter, "enable_parallel_projection"):
+        plotter.enable_parallel_projection()
+    from vtkmodules.vtkRenderingAnnotation import vtkLegendScaleActor
+
+    actor = vtkLegendScaleActor()
+    # Labels as distances along one edge, not as x/y coordinate values at every edge — the scale-bar reading.
+    actor.SetLabelModeToDistance()
+    actor.TopAxisVisibilityOff()
+    actor.LeftAxisVisibilityOff()
+    actor.RightAxisVisibilityOff()
+    actor.BottomAxisVisibilityOn()
+    actor.LegendVisibilityOn()
+    plotter.add_actor(actor, name=SCALE_BAR_ACTOR, render=False)
+
+
+def _draw_north_arrow(scene: Any, plotter: Any, style: dict[str, Any]) -> None:
+    """Put a camera-aware north arrow in a corner, as an orientation-marker widget.
+
+    The tier declared a north arrow absent because a 3-D scene can be looked at from any direction, so a fixed
+    on-screen arrow would point the wrong way. This is the answer that holds: an arrow pointing along ``+y`` —
+    grid north in the scene's display CRS (true north too for a north-up CRS such as EPSG:4326/3857) — shown in
+    a corner viewport that **turns with the camera**, so it reads correctly from every viewpoint. It is the
+    single-direction companion to the orientation triad.
+
+    Held on the scene (``_north_arrow_widget``) because an orientation widget is interactive machinery VTK
+    drops the moment nothing references it; a second call turns the first off so a marker does not stack.
+
+    Args:
+        scene: The scene, which holds the widget so it is not garbage-collected.
+        plotter: The plotter to draw on.
+        style: The `anchor` and `color` :meth:`DecorationMixin.north_arrow` recorded.
+    """
+    import pyvista as pv
+
+    existing = getattr(scene, "_north_arrow_widget", None)
+    if existing is not None:
+        # A stand-in plotter's widget need not implement VTK's toggle; turning the old one off is best-effort.
+        with suppress(Exception):
+            existing.EnabledOff()
+    arrow = pv.Arrow(
+        start=(0.0, -1.0, 0.0),
+        direction=(0.0, 1.0, 0.0),
+        tip_length=0.35,
+        tip_radius=0.12,
+        shaft_radius=0.04,
+    )
+    mapper = pv.DataSetMapper(arrow)
+    actor = pv.Actor(mapper=mapper)
+    with suppress(Exception):
+        actor.prop.color = style.get("color") or "#d62728"
+    scene._north_arrow_widget = plotter.add_orientation_widget(
+        actor, interactive=False, viewport=_ANCHOR_TO_VIEWPORT[style["anchor"]]
+    )
+
+
+def fetch_basemap_image(
+    bbox_4326: tuple[float, float, float, float], provider: Any, zoom: Any
+) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+    """Return a stitched web-map image and its EPSG:3857 extent for a lon/lat box, through cleopatra.
+
+    The headless seam :func:`draw_basemap` fetches tiles through. It composes cleopatra's tile helpers —
+    `get_provider`, `auto_zoom`, the bbox→tiles enumerator, `fetch_tiles` and `stitch_tiles` — which is **image
+    I/O, not GIS** (the tier's one carve-out, as for the Natural-Earth reference layers). Isolated as one
+    function so a test can replace it with a synthetic image and never touch the network, exactly as
+    `FeatureCollection._fetch_vectortileserver_tile` is isolated upstream.
+
+    Note:
+        cleopatra exposes tile fetching only bound to a matplotlib axes (`add_tiles`); there is no public
+        "give me the stitched image for this box" call, so this reaches one private helper
+        (`_tiles_for_bbox`). A public headless-stitch entry point is tracked upstream as cleopatra#401; the
+        swap to make here once it lands is tracked as Digital-Earth#483. Until then this seam keeps the private
+        reach isolated to this one call.
+
+    Args:
+        bbox_4326: The area to cover, ``(west, south, east, north)`` in EPSG:4326 degrees.
+        provider: A cleopatra/xyzservices provider, or a dotted provider name such as ``"CartoDB.Positron"``.
+        zoom: The tile zoom level, or ``None`` to derive one from the box with cleopatra's `auto_zoom`.
+
+    Returns:
+        The stitched RGBA image ``(H, W, 4)`` and its ``(west, south, east, north)`` extent in EPSG:3857.
+    """
+    from cleopatra.basemap import tiles as cleo_tiles
+
+    resolved = cleo_tiles.get_provider(provider)
+    box = tuple(float(v) for v in bbox_4326)
+    level = int(zoom) if zoom is not None else cleo_tiles.auto_zoom(box)
+    grid = cleo_tiles._tiles_for_bbox(box, level)
+    data = cleo_tiles.fetch_tiles(grid, resolved)
+    image, extent = cleo_tiles.stitch_tiles(data, grid, level)
+    west, south, east, north = extent
+    return np.asarray(image), (float(west), float(south), float(east), float(north))
+
+
+def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
+    """Drape web-map tiles under the scene as a textured plane (the `basemap` kind).
+
+    The 3-D answer to the web/static tiers' tile basemap: the stitched image from :func:`fetch_basemap_image`
+    is draped onto a flat `StructuredGrid` at the layer's `z` using the same texture path `terrain(texture=)`
+    uses (`_as_texture`/`_drape_uv`), so tiles sit under the data as ground cover (contract band `underlay`).
+
+    Args:
+        scene: The scene being drawn into.
+        _data: The source slot every drawer takes, unread here — the image is fetched from the tile provider
+            named in the layer's props, so a figure holding this layer is storable with no in-memory source.
+        layer: The layer's description, whose props carry the lon/lat `bbox`, the `provider`, the `zoom`, the
+            ground-plane `z` and the draw style.
+
+    Returns:
+        The `(plane, actor)` pair.
+    """
+    import pyvista as pv
+
+    from digitalearth.three_d.builders.terrain import _as_texture, _drape_uv
+
+    props = drawing_props(layer.symbology.props)
+    bbox = props.pop("bbox")
+    provider = props.pop("provider")
+    zoom = props.pop("zoom", None)
+    z = float(props.pop("z", 0.0))
+    # Tiles are EPSG:3857; aligning them to a non-mercator display CRS is pyramids' reprojection job, not this
+    # tier's, so draw them in their own extent and say so — the rule the reference layers follow (#205).
+    if scene.display_crs is not None and not same_crs(scene.display_crs, 3857):
+        logger.warning(
+            "basemap tiles are in EPSG:3857 and may not align with the scene's %r display CRS; draw the "
+            "scene in EPSG:3857, or wait on the pyramids reprojection path",
+            scene.display_crs,
+        )
+    image, (west, south, east, north) = fetch_basemap_image(bbox, provider, zoom)
+    xx, yy = np.meshgrid(
+        np.array([west, east], dtype="float64"),
+        np.array([south, north], dtype="float64"),
+    )
+    plane = pv.StructuredGrid(xx, yy, np.full(xx.shape, z, dtype="float64"))
+    _drape_uv(plane)
+    return plane, scene.plotter.add_mesh(plane, texture=_as_texture(image), **props)
+
+
 def redraw_decoration(scene: Any) -> None:
     """Put the scene's own decoration onto the plotter it is about to draw on.
 
@@ -365,6 +563,12 @@ def redraw_decoration(scene: Any) -> None:
         _draw_axes_box(plotter, scene.display_crs, held["axes"])
     if "orientation_axes" in held:
         _draw_orientation_axes(plotter, scene.display_crs, held["orientation_axes"])
+    if "attribution" in held:
+        _draw_attribution(plotter, held["attribution"])
+    if "scale_bar" in held:
+        _draw_scale_bar(plotter, held["scale_bar"])
+    if "north_arrow" in held:
+        _draw_north_arrow(scene, plotter, held["north_arrow"])
 
 
 def draw_reference_lines(
@@ -714,10 +918,10 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Show the corner triad, so a reader can tell which way the scene is being looked at from.
 
-        A 3-D scene has no fixed orientation — the camera decides — which is why this tier declares a north
-        arrow absent. The triad is the answer that does hold: three arrows in the corner of the window,
-        turning with the camera, labelled for the CRS the scene draws in rather than `X`/`Y`/`Z` (see
-        :func:`axis_labels`).
+        A 3-D scene has no fixed orientation — the camera decides — so the triad shows all three axes at once:
+        three arrows in the corner of the window, turning with the camera, labelled for the CRS the scene
+        draws in rather than `X`/`Y`/`Z` (see :func:`axis_labels`). For the one direction a map most wants
+        named on its own, :meth:`north_arrow` draws a camera-aware single arrow instead.
 
         Figure furniture, like :meth:`axes`: it sits in a corner of the window rather than in the scene's
         coordinates, so it is not a layer.
@@ -863,6 +1067,261 @@ class DecorationMixin(_MixinBase):
             **kwargs,
         )
         return self
+
+    def attribution(
+        self,
+        text: str,
+        *,
+        anchor: str = "bottom-right",
+        font_size: int = 10,
+        color: Any = None,
+    ) -> Self:
+        """Draw a data or tile credit line in a corner of the scene.
+
+        A rendered 3-D scene travels alone — a screenshot, an exported page — so the credit a basemap or a
+        dataset carries has to be part of the picture, not a line in the notebook around it. The tier once
+        declared this absent ("a caller writes one beside the image"); drawing it is less work than that was.
+
+        It is **figure furniture, drawn**: kept on the scene and re-applied to whichever plotter it draws on
+        (:func:`redraw_decoration`), exactly as the title's subtitle is, and filed under one actor name so a
+        second call replaces the line rather than stacking a second one. It is not a layer — it has no place on
+        the ground and `remove_layer` never touches it.
+
+        Args:
+            text: The credit line. Drawn verbatim in the chosen corner.
+            anchor: Which corner — one of ``"top-left"``, ``"top-right"``, ``"bottom-left"``,
+                ``"bottom-right"`` (:data:`~digitalearth.base.registry.FURNITURE_ANCHORS`). ``"bottom-right"``
+                by default, where a credit line conventionally sits.
+            font_size: Size of the line in points.
+            color: Text colour. ``None`` leaves PyVista's theme colour.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Raises:
+            TypeError: when `text` is not a string.
+            ValueError: when `anchor` is not one of the four corners.
+
+        Examples:
+            - A credit line is drawn and recorded as scene decoration:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.attribution("© OpenStreetMap contributors")
+                >>> _ = scene.screenshot()
+                >>> scene.close()
+
+                ```
+        """
+        if not isinstance(text, str):
+            raise TypeError(
+                f"attribution() needs the credit as a string; got {type(text).__name__}"
+            )
+        if anchor not in _ANCHOR_TO_TEXT_POSITION:
+            raise ValueError(
+                f"attribution() anchor={anchor!r} must be one of {sorted(_ANCHOR_TO_TEXT_POSITION)}"
+            )
+        self._decoration["attribution"] = {
+            "text": text,
+            "anchor": anchor,
+            "font_size": int(font_size),
+            "color": color,
+        }
+        redraw_decoration(self)
+        return self
+
+    def scale_bar(self) -> Self:
+        """Draw a ground-distance scale bar — and switch the view to orthographic, the only mode it is true in.
+
+        A scale bar answers "how far is this on the ground?", and that has one answer only under a **parallel
+        (orthographic)** projection: in perspective, a fixed screen length is a different ground distance at
+        every depth, which is why this tier declared a scale bar absent. Rather than draw a bar that lies under
+        the default perspective camera, this turns parallel projection on and adds VTK's legend-scale ruler,
+        which labels the bottom edge in the distance units of the scene's coordinates and updates as the view
+        is zoomed. Call it after the data is added, so the ruler has a framed extent to measure.
+
+        Figure furniture, drawn and re-applied like :meth:`attribution`; filed under one actor name so a second
+        call replaces it.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Note:
+            Switching to orthographic changes how the scene looks (parallel lines stop converging). That is the
+            cost of an honest bar, and it **persists for as long as the scale bar is on the scene**: the bar is
+            re-applied on every decoration redraw (each :meth:`attribution`/:meth:`north_arrow` call, and each
+            plotter rebuild), so a perspective camera set in between is reasserted to orthographic on the next
+            redraw — a scale bar read under perspective would misstate the distance. To return to a perspective
+            view, do not add a scale bar; there is no per-call toggle to drop it while keeping the scene.
+
+        Examples:
+            - A scale bar is drawn over a framed scene:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+                >>> _ = scene.scale_bar()
+                >>> scene.close()
+
+                ```
+        """
+        self._decoration["scale_bar"] = {}
+        redraw_decoration(self)
+        return self
+
+    def north_arrow(self, *, anchor: str = "top-right", color: Any = None) -> Self:
+        """Draw a camera-aware north arrow in a corner of the scene.
+
+        A 3-D scene has no fixed up-is-north, because the camera decides the view — which is why this tier
+        declared a north arrow absent and offers :meth:`orientation_axes` instead. This is the single-direction
+        companion to that triad: an arrow pointing along ``+y`` (grid north in the display CRS — true north too
+        for a north-up CRS such as EPSG:4326/3857), shown in a corner viewport that **turns with the camera**,
+        so it points the right way from any viewpoint rather than lying the moment the scene is rotated.
+
+        Figure furniture, drawn and re-applied like :meth:`attribution`; a second call turns the first arrow
+        off so a marker does not stack.
+
+        Args:
+            anchor: Which corner — one of the four
+                :data:`~digitalearth.base.registry.FURNITURE_ANCHORS`. ``"top-right"`` by default, where a
+                north arrow conventionally sits.
+            color: Arrow colour. ``None`` draws it in a default red so it reads against most scenes.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Raises:
+            ValueError: when `anchor` is not one of the four corners.
+
+        Examples:
+            - A north arrow is drawn and tracks the camera:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True, crs=4326)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+                >>> _ = scene.north_arrow()
+                >>> _ = scene.screenshot()
+                >>> scene.close()
+
+                ```
+        """
+        if anchor not in _ANCHOR_TO_VIEWPORT:
+            raise ValueError(
+                f"north_arrow() anchor={anchor!r} must be one of {sorted(_ANCHOR_TO_VIEWPORT)}"
+            )
+        self._decoration["north_arrow"] = {"anchor": anchor, "color": color}
+        redraw_decoration(self)
+        return self
+
+    def basemap(
+        self,
+        provider: Any = None,
+        *,
+        bbox: Any,
+        zoom: Any = None,
+        name: Any = None,
+        z: float = 0.0,
+        crs: Any = 4326,
+        opacity: float = 1.0,
+        visible: bool = True,
+    ) -> Any:
+        """Drape web-map tiles under the scene as ground cover (the `basemap` kind).
+
+        The 3-D answer to the web and static tiers' tile basemap, and what this tier once declared absent
+        ("no map tiles to drape under a scene drawn in three dimensions"): the tiles covering ``bbox`` are
+        fetched through cleopatra (image I/O, never GIS — the tier's one carve-out, as for the Natural-Earth
+        reference layers) and draped onto a flat plane at ``z`` with the same texture path
+        ``terrain(texture=)`` uses. It is a layer of the ``basemap`` kind, banded ``underlay``, so it sits
+        beneath the data in the layer tree with an id, visibility and removal like any other.
+
+        The tiles are EPSG:3857 (Web Mercator). Over a scene whose display CRS is also 3857 they align; over
+        another projected CRS they are drawn in their own extent and warned about, because reprojecting them is
+        pyramids' job, not this tier's — the same boundary the reference lines keep (#205).
+
+        Args:
+            provider: The tile provider — a cleopatra/xyzservices provider object, or a dotted name such as
+                ``"CartoDB.Positron"`` or ``"Esri.WorldImagery"``. ``None`` uses cleopatra's default
+                (OpenStreetMap). First positional, as the Core `basemap` contract spells it.
+            bbox: The area to cover, ``(west, south, east, north)``, in `crs`. Keyword-only and required — a
+                3-D scene has no map extent of its own to default to, so the area is named explicitly.
+            zoom: The tile zoom level (``0``–``19``), or ``None`` to let cleopatra pick one for the extent.
+            name: The layer id; ``None`` numbers it ``basemap``.
+            z: The ground-plane height the tiles are draped at, in the scene's vertical units. ``0.0`` puts
+                them on the ground, under elevated data.
+            crs: What `bbox` is measured in. EPSG:4326 by default; a box in another CRS is reprojected to
+                EPSG:4326 (what the tile math needs) through pyramids.
+            opacity: Tile opacity in ``[0, 1]`` — below 1 lets flat data drawn at the same ``z`` show through.
+            visible: Whether the layer is drawn when added.
+
+        Returns:
+            The registered actor.
+
+        Raises:
+            ValueError: when `bbox` is not four numbers.
+
+        Examples:
+            - Add a basemap under a scene (needs the ``3d`` extra and network tiles; not run in doctests):
+                ```python
+                >>> from digitalearth.three_d import Scene3D  # doctest: +SKIP
+                >>> scene = Scene3D(off_screen=True, crs=3857)  # doctest: +SKIP
+                >>> _ = scene.basemap(bbox=(-10.0, 35.0, 30.0, 60.0), zoom=4)  # doctest: +SKIP
+                ```
+        """
+        box = self._basemap_bbox_4326(bbox, crs)
+        return self._add_described_layer(
+            kind="basemap",
+            data=None,
+            name=name if name is not None else "basemap",
+            visible=visible,
+            bbox=box,
+            provider=provider,
+            zoom=zoom,
+            z=float(z),
+            opacity=float(opacity),
+        )
+
+    @staticmethod
+    def _basemap_bbox_4326(bbox: Any, crs: Any) -> tuple[float, float, float, float]:
+        """Return `bbox` as a ``(west, south, east, north)`` box in EPSG:4326, reprojecting if needed.
+
+        Args:
+            bbox: Four numbers in `crs`.
+            crs: What they are measured in.
+
+        Returns:
+            The box in EPSG:4326, which is the CRS cleopatra's tile math works in. When a reprojection is
+            needed it is the envelope of the four reprojected corners — exact for the axis-aligned 4326↔3857
+            case, approximate (slightly inside) for a curved projection over a wide extent.
+
+        Raises:
+            ValueError: when `bbox` is not four numbers.
+        """
+        try:
+            values = [float(v) for v in bbox]
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"basemap() bbox must be (west, south, east, north); got {bbox!r}"
+            ) from None
+        if len(values) != 4:
+            raise ValueError(
+                f"basemap() bbox must be (west, south, east, north); got {bbox!r}"
+            )
+        west, south, east, north = values
+        if crs is None or same_crs(crs, 4326):
+            return west, south, east, north
+        from pyramids.base.crs import reproject_coordinates
+
+        xs, ys = reproject_coordinates(
+            [west, east, west, east],
+            [south, south, north, north],
+            from_crs=crs,
+            to_crs=4326,
+        )
+        return float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))
 
     def coastlines(
         self,

@@ -11,7 +11,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 
 | capability | matplotlib | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
-| `basemap` | ✓ | ✓ | ✓ | — |
+| `basemap` | ✓ | ✓ | ✓ | ✓ |
 | `borders` | ✓ | — | ✓ | — |
 | `choropleth` | ✓ | ✓ | ✓ | ✓ |
 | `clusters` | — | ✓ | — | — |
@@ -92,11 +92,11 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | capability | matplotlib | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `animation` | ✓ | ✓ | ✓ | ✓ |
-| `attribution` | — | ✓ | — | — |
+| `attribution` | — | ✓ | — | ✓ |
 | `coastline_overlay` | ✓ | — | ✓ | — |
 | `colorbar` | ✓ | ✓ | ✓ | ✓ |
 | `display_crs` | ✓ | ✓ | ✓ | ✓ |
-| `domain` | ✓ | — | — | — |
+| `domain` | ✓ | — | — | ✓ |
 | `export_html` | — | ✓ | ✓ | ✓ |
 | `export_image` | ✓ | ✓ | ✓ | ✓ |
 | `export_vector` | ✓ | — | — | — |
@@ -108,8 +108,9 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `legend` | ✓ | ✓ | ✓ | ✓ |
 | `measure` | — | ✓ | — | — |
 | `navigation` | — | ✓ | — | — |
+| `north_arrow` | — | — | — | ✓ |
 | `raster_renderer` | ✓ | — | ✓ | — |
-| `scale_bar` | — | ✓ | — | — |
+| `scale_bar` | — | ✓ | — | ✓ |
 | `terrain_control` | — | ✓ | — | — |
 | `time_slider` | — | ✓ | ✓ | — |
 
@@ -176,15 +177,10 @@ omissions with no positive counterpart on any backend, so they appear only in th
 
 ### 3d
 
-- **`attribution`** — a render window has no credit line; a caller writes one beside the image it saves
-- **`basemap`** — there are no map tiles to drape under a scene drawn in three dimensions
-- **`domain`** — a scene is framed by its camera, not by an extent, so there is no region to set
 - **`fullscreen`** — the render window is resized by the window manager, not by a control in the scene
 - **`layer_switcher`** — layers are switched by id through the scene's own API rather than from a panel
 - **`measure`** — PyVista's own measurement widget is the tier's answer, and is not part of a figure
 - **`navigation`** — the render window pans, zooms and rotates with the mouse rather than with buttons
-- **`north_arrow`** — the scene can be looked at from any direction, so there is no fixed north on screen
 - **`raster_renderer`** — a raster becomes a surface, a volume or a globe here — which one is the builder that
   was called, not a rendering choice on top of one
-- **`scale_bar`** — a screen distance means nothing when the camera decides the scale of what is in front
 - **`time_slider`** — frames over time are rendered by record() rather than scrubbed in the window

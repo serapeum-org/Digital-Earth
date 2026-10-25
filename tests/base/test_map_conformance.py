@@ -647,8 +647,8 @@ def _web_frame(drawn) -> tuple:
 #: Keyed by the tiers that subclass :class:`MapConformanceBase`, and held to that by
 #: :meth:`TestTheTablesDescribeThePackage.test_every_tier_that_signs_can_have_its_frame_read` — so a fourth
 #: tier signing the suite cannot inherit the framing probes with nothing to read them with. The 3-D tier is
-#: absent on purpose and says so in `PENDING`: a scene is framed by its camera, not by an extent, and it has
-#: no `set_bounds` under any spelling.
+#: absent on purpose and says so in `PENDING`: it frames the camera through `Scene3D.domain()` rather than a
+#: Core `set_bounds`, so it has no `set_bounds` under any spelling for these readers to call.
 FRAME_READERS: dict[str, Callable[[Any], tuple]] = {
     "matplotlib": _static_frame,
     "interactive": _interactive_frame,

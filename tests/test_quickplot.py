@@ -749,9 +749,7 @@ class TestBackendCapabilityRefusal:
     @pytest.mark.parametrize(
         ("backend", "parameter", "value"),
         [
-            ("3d", "domain", "europe"),
             ("3d", "coastlines", True),
-            ("3d", "basemap", True),
             ("3d", "kind", "contourf"),
             ("web", "domain", "europe"),
             ("web", "coastlines", True),
@@ -787,9 +785,7 @@ class TestBackendCapabilityRefusal:
     @pytest.mark.parametrize(
         ("backend", "parameter"),
         [
-            ("3d", "domain"),
             ("3d", "coastlines"),
-            ("3d", "basemap"),
             ("3d", "kind"),
             ("web", "coastlines"),
             ("web", "kind"),
@@ -860,8 +856,8 @@ class TestBackendCapabilityRefusal:
             figure. Checking first is what keeps every rejected call free of a resource nobody will close.
         """
         three_d = mocker.patch.object(qp, "_quickmap_3d")
-        with pytest.raises(ValueError, match="domain="):
-            qp.quickmap(dataset, backend="3d", domain="europe")
+        with pytest.raises(ValueError, match="kind="):
+            qp.quickmap(dataset, backend="3d", kind="contourf")
         assert not three_d.called, "a refused call must not reach the backend builder"
 
     def test_a_crs_is_forwarded_to_the_3d_backend(self, dataset, mocker):
@@ -978,10 +974,10 @@ class TestTheRefusalNamesWhatTheCallerWrote:
 
     @pytest.mark.parametrize(
         ("backend", "kwargs"),
-        [("3d", {"basemap": 0}), ("web", {"coastlines": 0})],
+        [("3d", {"kind": 0}), ("web", {"coastlines": 0})],
     )
     def test_a_numeric_zero_is_not_the_inert_false(self, backend, kwargs):
-        """``0 == False`` is ``True`` in Python, but ``basemap=0`` is a value the caller typed.
+        """``0 == False`` is ``True`` in Python, but ``kind=0`` is a value the caller typed.
 
         Args:
             backend: The tier that cannot honour the keyword.

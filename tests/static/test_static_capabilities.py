@@ -257,11 +257,16 @@ class TestTheDispatcherReadsIt:
             set(BACKEND_CAPABILITIES).symmetric_difference(_DECLARATIONS)
         )
 
-    def test_this_tier_is_the_only_one_that_frames_on_a_region(self):
-        """`domain=` is what the row has that no other row does, and that is why it is checked."""
+    def test_the_static_and_3d_tiers_frame_on_a_region(self):
+        """`domain=` frames on a region on the static and 3-D tiers; interactive and web pan/zoom instead.
+
+        The static tier has a fixed extent to set, and the 3-D tier frames its camera on the region (the #294
+        follow-up that built `Scene3D.domain()`), so both declare the `domain` feature and honour `domain=`.
+        The `interactive` and `web` tiers do not — they pan and zoom — so the keyword is refused there.
+        """
         from digitalearth.api import BACKEND_CAPABILITIES
 
         framing = sorted(
             backend for backend, row in BACKEND_CAPABILITIES.items() if "domain" in row
         )
-        assert framing == ["matplotlib"], framing
+        assert framing == ["3d", "matplotlib"], framing

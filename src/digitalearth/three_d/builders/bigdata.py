@@ -160,6 +160,11 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "a label is one anchor point and one string, so there is never anything to reduce; a scene with "
             "too many labels to read is a composition the caller chose rather than data to thin"
         ),
+        "basemap": (
+            "a basemap is one four-corner plane carrying a stitched tile image, so its geometry is already "
+            "two triangles; detail comes from the tile zoom level, which the caller chooses, not from mesh "
+            "resolution there is anything to thin"
+        ),
         "custom:pyvista": (
             "the caller built the object and chose what it is made of, so reducing it here would overrule "
             "that silently; reduce it before handing it over"

@@ -54,6 +54,7 @@ DRAWN_KINDS: tuple[str, ...] = (
     "reference_lines",
     "reference_fill",
     "text",
+    "basemap",
     "custom:pyvista",
 )
 
@@ -135,6 +136,7 @@ def drawer_for(kind: str) -> Any:
         "reference_lines": decoration.draw_reference_lines,
         "reference_fill": decoration.draw_reference_fill,
         "text": decoration.draw_text,
+        "basemap": decoration.draw_basemap,
         "custom:pyvista": draw_custom,
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
