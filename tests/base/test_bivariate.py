@@ -99,3 +99,10 @@ class TestBivariateRefusals:
         four = np.arange(4.0)
         with pytest.raises(ValueError, match="same size"):
             bivariate_rgba(five, four, n=3)
+
+    def test_a_constant_variable_is_refused_naming_the_function(self):
+        """A variable with no spread cannot be classified; the error is prefixed with bivariate_rgba."""
+        constant = np.ones(6)
+        spread = np.arange(6.0)
+        with pytest.raises(ValueError, match="bivariate_rgba.. cannot classify"):
+            bivariate_rgba(constant, spread, n=3)
