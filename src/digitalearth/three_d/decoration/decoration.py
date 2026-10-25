@@ -36,8 +36,9 @@ missing. Both are Core names keyed to a layer's `Encoding`, so they are **guides
 explain something the layer publishes, where a title, a label and a coordinate frame explain nothing. They live
 in :mod:`digitalearth.three_d.legends.legend` as `colorbar()` and `legend()` (order 24), under those spellings and no
 others — a differently shaped `scalar_bar()` here would put two spellings on one concept, which is the single
-thing the Core contract exists to prevent. A north arrow is not built at all: the tier declares it absent, with
-its reason (a scene can be looked at from any direction, so there is no fixed north on screen).
+thing the Core contract exists to prevent. A north arrow *is* built, as :meth:`DecorationMixin.north_arrow`: a
+camera-aware corner marker (not a fixed on-screen arrow, since a scene can be looked at from any direction), the
+single-direction companion to the orientation triad — see its method docstring.
 """
 
 import logging
@@ -413,8 +414,9 @@ def _draw_north_arrow(scene: Any, plotter: Any, style: dict[str, Any]) -> None:
 
     The tier declared a north arrow absent because a 3-D scene can be looked at from any direction, so a fixed
     on-screen arrow would point the wrong way. This is the answer that holds: an arrow pointing along ``+y`` —
-    north in the scene's display CRS — shown in a corner viewport that **turns with the camera**, so it reads
-    correctly from every viewpoint. It is the single-direction companion to the orientation triad.
+    grid north in the scene's display CRS (true north too for a north-up CRS such as EPSG:4326/3857) — shown in
+    a corner viewport that **turns with the camera**, so it reads correctly from every viewpoint. It is the
+    single-direction companion to the orientation triad.
 
     Held on the scene (``_north_arrow_widget``) because an orientation widget is interactive machinery VTK
     drops the moment nothing references it; a second call turns the first off so a marker does not stack.
@@ -915,10 +917,10 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Show the corner triad, so a reader can tell which way the scene is being looked at from.
 
-        A 3-D scene has no fixed orientation — the camera decides — which is why this tier declares a north
-        arrow absent. The triad is the answer that does hold: three arrows in the corner of the window,
-        turning with the camera, labelled for the CRS the scene draws in rather than `X`/`Y`/`Z` (see
-        :func:`axis_labels`).
+        A 3-D scene has no fixed orientation — the camera decides — so the triad shows all three axes at once:
+        three arrows in the corner of the window, turning with the camera, labelled for the CRS the scene
+        draws in rather than `X`/`Y`/`Z` (see :func:`axis_labels`). For the one direction a map most wants
+        named on its own, :meth:`north_arrow` draws a camera-aware single arrow instead.
 
         Figure furniture, like :meth:`axes`: it sits in a corner of the window rather than in the scene's
         coordinates, so it is not a layer.
@@ -1173,9 +1175,9 @@ class DecorationMixin(_MixinBase):
 
         A 3-D scene has no fixed up-is-north, because the camera decides the view — which is why this tier
         declared a north arrow absent and offers :meth:`orientation_axes` instead. This is the single-direction
-        companion to that triad: an arrow pointing along the display CRS's north (``+y``), shown in a corner
-        viewport that **turns with the camera**, so it points the right way from any viewpoint rather than
-        lying the moment the scene is rotated.
+        companion to that triad: an arrow pointing along ``+y`` (grid north in the display CRS — true north too
+        for a north-up CRS such as EPSG:4326/3857), shown in a corner viewport that **turns with the camera**,
+        so it points the right way from any viewpoint rather than lying the moment the scene is rotated.
 
         Figure furniture, drawn and re-applied like :meth:`attribution`; a second call turns the first arrow
         off so a marker does not stack.
