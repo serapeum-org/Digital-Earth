@@ -66,6 +66,8 @@ __all__ = [
     "axis_labels",
     "axis_titles",
     "draw_basemap",
+    "draw_graticule",
+    "draw_labels",
     "draw_reference_fill",
     "draw_reference_lines",
     "draw_text",
@@ -740,6 +742,388 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | Non
     return anchor, drawn
 
 
+#: The readable degree spacings a graticule's automatic step is chosen from, smallest first — the familiar
+#: map intervals from half a degree to thirty. The step is the first of these that draws no more than about ten
+#: lines across the wider span of the box, so the grid reads without crowding at any extent.
+_GRATICULE_STEPS: tuple[float, ...] = (0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0)
+
+#: How many vertices each meridian/parallel is densified to before reprojection, so a line that is straight in
+#: lon/lat is drawn as the smooth curve it becomes in a projected display CRS rather than as one chord.
+_GRATICULE_DENSITY: int = 60
+
+
+def _nice_graticule_step(span: float) -> float:
+    """Return a readable grid spacing in degrees for a box spanning `span` degrees.
+
+    Args:
+        span: The wider of the box's two extents, in degrees.
+
+    Returns:
+        The first of :data:`_GRATICULE_STEPS` that draws at most about ten lines across `span`, or the coarsest
+        one for a very wide box; the finest for a non-positive or non-finite span.
+    """
+    if not math.isfinite(span) or span <= 0:
+        return _GRATICULE_STEPS[0]
+    for step in _GRATICULE_STEPS:
+        if span / step <= 10.0:
+            return step
+    return _GRATICULE_STEPS[-1]
+
+
+def _grid_values(lo: float, hi: float, step: float) -> list[float]:
+    """Return the grid-line coordinates at multiples of `step` within ``[lo, hi]``.
+
+    Args:
+        lo: The low edge of the range.
+        hi: The high edge of the range.
+        step: The spacing between lines.
+
+    Returns:
+        The multiples of `step` that fall within the range, low to high; empty when `step` is not a positive
+        finite number or the range holds none.
+    """
+    if not math.isfinite(step) or step <= 0:
+        return []
+    start = math.ceil(lo / step) * step
+    values: list[float] = []
+    value = start
+    # Cap the count so a tiny step over a wide box cannot spin: a graticule is a reading aid, not a raster.
+    while value <= hi + 1e-9 and len(values) < 1000:
+        values.append(round(value, 6))
+        value += step
+    return values
+
+
+def _reproject_xy(
+    xs: Any, ys: Any, crs: Any, display: Any
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return `xs`/`ys` in the scene's display CRS, reprojected from `crs` through pyramids.
+
+    Args:
+        xs: The x coordinates, in `crs`.
+        ys: The y coordinates, in `crs`.
+        crs: What the coordinates are measured in, or `None` for "the scene's own".
+        display: The scene's display CRS, or `None` when it has none yet.
+
+    Returns:
+        The `(xs, ys)` arrays unchanged when there is nothing to reproject, else the reprojected pair — the
+        reprojection is pyramids' job, never this tier's (the rule the reference layers keep, #205).
+    """
+    xs_arr = np.asarray(xs, dtype="float64")
+    ys_arr = np.asarray(ys, dtype="float64")
+    if display is None or crs is None or same_crs(crs, display):
+        return xs_arr, ys_arr
+    from pyramids.base.crs import reproject_coordinates
+
+    px, py = reproject_coordinates(
+        xs_arr.tolist(), ys_arr.tolist(), from_crs=crs, to_crs=display
+    )
+    return np.asarray(px, dtype="float64"), np.asarray(py, dtype="float64")
+
+
+def _graticule_box(
+    scene: Any, bbox: Any, crs: Any
+) -> tuple[float, float, float, float] | None:
+    """Return the ``(west, south, east, north)`` box a graticule spans, in `crs`.
+
+    Args:
+        scene: The scene, whose drawn extent frames the grid when no `bbox` is given.
+        bbox: An explicit ``(west, south, east, north)`` box in `crs`, or `None` to read the scene's extent.
+        crs: What the box is measured in — the grid is built in this CRS, then reprojected to the display CRS.
+
+    Returns:
+        The box in `crs`, or `None` when no `bbox` was given and the scene has drawn nothing to frame. A box
+        read from the plotter is in the display CRS, so its corners are reprojected back into `crs` for the
+        grid values (pyramids does the reprojection).
+    """
+    if bbox is not None:
+        west, south, east, north = (float(value) for value in bbox)
+        return west, south, east, north
+    plotter = getattr(scene, "_plotter", None)
+    bounds = plotter.bounds if plotter is not None else None
+    if not bounds:
+        return None
+    xmin, xmax, ymin, ymax = (
+        float(bounds[0]),
+        float(bounds[1]),
+        float(bounds[2]),
+        float(bounds[3]),
+    )
+    if xmin >= xmax or ymin >= ymax:
+        return None
+    display = scene.display_crs
+    if display is None or crs is None or same_crs(crs, display):
+        return xmin, ymin, xmax, ymax
+    from pyramids.base.crs import reproject_coordinates
+
+    xs, ys = reproject_coordinates(
+        [xmin, xmax, xmin, xmax],
+        [ymin, ymin, ymax, ymax],
+        from_crs=display,
+        to_crs=crs,
+    )
+    return float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))
+
+
+def _format_graticule_label(value: float, axis: str, geographic: bool) -> str:
+    """Return the text a graticule line is labelled with.
+
+    Args:
+        value: The line's constant coordinate.
+        axis: ``"lon"`` for a meridian, ``"lat"`` for a parallel.
+        geographic: Whether the grid CRS is geographic, so a hemisphere letter is meaningful.
+
+    Returns:
+        A degree label with a hemisphere letter for a geographic CRS (``"10°E"``, ``"35°N"``), else the plain
+        number of a projected grid.
+    """
+    if not geographic:
+        return f"{value:g}"
+    if axis == "lon":
+        hemisphere = "E" if value >= 0 else "W"
+    else:
+        hemisphere = "N" if value >= 0 else "S"
+    return f"{abs(value):g}°{hemisphere}"
+
+
+def _draw_graticule_labels(
+    scene: Any,
+    lon_values: list[float],
+    lat_values: list[float],
+    box: tuple[float, float, float, float],
+    crs: Any,
+    display: Any,
+    z: float,
+    label_step: int,
+    name: str,
+) -> None:
+    """Label the graticule's meridians along the south edge and its parallels along the west edge.
+
+    Args:
+        scene: The scene being drawn into.
+        lon_values: The meridian coordinates, in `crs`.
+        lat_values: The parallel coordinates, in `crs`.
+        box: The ``(west, south, east, north)`` box the grid spans, in `crs`.
+        crs: What the grid is measured in.
+        display: The scene's display CRS the labels are reprojected into.
+        z: The height the labels are drawn at.
+        label_step: Label every `label_step`-th line, so a dense grid is not labelled on every line.
+        name: The actor name the labels are filed under, so a redraw replaces rather than stacks them.
+    """
+    west, south, _east, _north = box
+    geographic = bool(is_geographic(crs))
+    points: list[list[float]] = []
+    texts: list[str] = []
+    for index, lon in enumerate(lon_values):
+        if index % label_step:
+            continue
+        px, py = _reproject_xy([lon], [south], crs, display)
+        points.append([float(px[0]), float(py[0]), z])
+        texts.append(_format_graticule_label(lon, "lon", geographic))
+    for index, lat in enumerate(lat_values):
+        if index % label_step:
+            continue
+        px, py = _reproject_xy([west], [lat], crs, display)
+        points.append([float(px[0]), float(py[0]), z])
+        texts.append(_format_graticule_label(lat, "lat", geographic))
+    if not points:
+        return
+    import pyvista as pv
+
+    anchors = pv.PolyData(np.asarray(points, dtype="float64"))
+    scene.plotter.add_point_labels(
+        anchors, texts, show_points=False, font_size=10, name=name
+    )
+
+
+def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
+    """Draw the meridian/parallel grid a `graticule` layer describes (lat/lon lines + edge labels).
+
+    The tier's answer to forge3d's graticules: constant-longitude and constant-latitude lines across the
+    framed extent, **reprojected into the scene's display CRS through pyramids** so the grid aligns with the
+    data (unlike the reference lines, which are drawn as-given and warned about — a graticule is generated here,
+    so it is cheap to project). The coordinate work is pyramids'; this tier only draws the polylines.
+
+    Args:
+        scene: The scene being drawn into — its display CRS places the grid, its extent frames it when the
+            layer named no `bbox`, and its `strict` policy decides what an empty grid does.
+        _data: The source slot every drawer takes, unread here — a graticule is generated from the box and the
+            step, so a figure holding one is storable with no in-memory source.
+        layer: The layer's description, whose props carry the `bbox`, `step`, `crs`, line style and labelling.
+
+    Returns:
+        The `(mesh, actor)` pair for the merged grid lines, or `None` when there was no extent to draw over, or
+        the box spanned less than one step, and the scene is not `strict`.
+
+    Raises:
+        OffLimbError: when there is nothing to draw and the scene is `strict`.
+
+    Note:
+        The edge labels are a second actor, filed under a name derived from the layer id so a redraw of the
+        same scene replaces them. :meth:`DecorationMixin.graticule` documents that `remove_layer` takes the
+        grid lines off and leaves the labels, the same auxiliary-actor shape the globe's coastline keeps.
+    """
+    props = drawing_props(layer.symbology.props)
+    crs = props.pop("crs", 4326)
+    bbox = props.pop("bbox", None)
+    lon_step = props.pop("lon_step", None)
+    lat_step = props.pop("lat_step", None)
+    color = props.pop("color", "#888888")
+    width = float(props.pop("width", 0.5))
+    opacity = float(props.pop("opacity", 1.0))
+    labels = bool(props.pop("labels", True))
+    label_step = props.pop("label_step", None)
+    z = float(props.pop("z", 0.0))
+    display = scene.display_crs
+
+    box = _graticule_box(scene, bbox, crs)
+    if box is None:
+        scene._skip_empty(
+            layer.kind,
+            "the scene has drawn nothing to frame a graticule over; pass bbox=",
+        )
+        return None
+    west, south, east, north = box
+    lon_spacing = (
+        float(lon_step) if lon_step is not None else _nice_graticule_step(east - west)
+    )
+    lat_spacing = (
+        float(lat_step) if lat_step is not None else _nice_graticule_step(north - south)
+    )
+    lon_values = _grid_values(west, east, lon_spacing)
+    lat_values = _grid_values(south, north, lat_spacing)
+    if not lon_values and not lat_values:
+        scene._skip_empty(layer.kind, "the box spans less than one grid step")
+        return None
+
+    import pyvista as pv
+
+    from digitalearth.three_d.builders.vector import _polyline
+
+    lines = []
+    for lon in lon_values:
+        ys = np.linspace(south, north, _GRATICULE_DENSITY)
+        px, py = _reproject_xy(np.full(_GRATICULE_DENSITY, lon), ys, crs, display)
+        lines.append(_polyline(np.column_stack([px, py, np.full(len(px), z)])))
+    for lat in lat_values:
+        xs = np.linspace(west, east, _GRATICULE_DENSITY)
+        px, py = _reproject_xy(xs, np.full(_GRATICULE_DENSITY, lat), crs, display)
+        lines.append(_polyline(np.column_stack([px, py, np.full(len(px), z)])))
+    merged = pv.MultiBlock(lines).combine()
+    actor = scene.plotter.add_mesh(
+        merged, color=color, line_width=width, opacity=opacity, **props
+    )
+    if labels:
+        _draw_graticule_labels(
+            scene,
+            lon_values,
+            lat_values,
+            box,
+            crs,
+            display,
+            z,
+            int(label_step) if label_step else 1,
+            f"{layer.id}-graticule-labels",
+        )
+    return merged, actor
+
+
+def draw_labels(scene: Any, data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
+    """Draw a label per feature a `labels` layer describes, each with a readable halo.
+
+    The tier's Core ``labels`` verb (the plural, styled companion to :func:`draw_text`): each feature in the
+    collection is labelled with the text in its ``column``, at a representative point, drawn on a filled box so
+    the text reads against any scene, with occlusion so labels behind geometry can be hidden. The features are
+    placed in the scene's display CRS through pyramids (:meth:`~digitalearth.three_d.core.base.Scene3DBase._place`),
+    exactly as the extrusion and line builders place theirs; a feature with no finite representative point or no
+    ``column`` value is not labelled.
+
+    Args:
+        scene: The scene being drawn into — its display CRS places the features, its `strict` policy decides
+            what an empty collection does.
+        data: The layer's source object: the feature collection to label.
+        layer: The layer's description, whose props carry the `column`, the text style and the halo/occlusion
+            settings.
+
+    Returns:
+        The `(anchors, actor)` pair — the anchors are the one-point-per-label `PolyData` the labels hang off,
+        so `mesh_of()` answers for the layer — or `None` when nothing was labelled and the scene is not
+        `strict`.
+
+    Raises:
+        KeyError: when ``column`` is not a property of the features.
+        OffLimbError: when nothing could be labelled and the scene is `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    column = props.pop("column")
+    text_size = int(props.pop("text_size", 12))
+    color = props.pop("color", None)
+    halo = bool(props.pop("halo", True))
+    halo_color = props.pop("halo_color", "white")
+    occlude = bool(props.pop("occlude", True))
+    z = float(props.pop("z", 0.0))
+    crs = props.pop("crs", None)
+
+    gdf = data
+    # The Core `crs` keyword names what a collection declaring none is measured in — the one case pyramids
+    # cannot reproject — so it is applied before `_place`, which otherwise draws a CRS-less frame as given.
+    if (
+        crs is not None
+        and getattr(gdf, "crs", None) is None
+        and hasattr(gdf, "set_crs")
+    ):
+        gdf = gdf.set_crs(crs)
+    placed = scene._place(gdf, layer="labels")
+    if column not in placed.columns:
+        raise KeyError(
+            f"labels(): {column!r} is not a property of the features; it has {sorted(placed.columns)}"
+        )
+    # A point labels at the point, a line or polygon at a representative interior point — the fallback every
+    # reader of vector geometry in this package uses. geopandas does the geometry op; no shapely is imported.
+    reps = placed.geometry.representative_point()
+    xs = np.asarray(reps.x, dtype="float64")
+    ys = np.asarray(reps.y, dtype="float64")
+    values = placed[column].to_numpy()
+
+    points: list[list[float]] = []
+    kept: list[str] = []
+    for x, y, value in zip(xs, ys, values):
+        # A feature with no finite representative point (an empty geometry) or a missing value is not labelled,
+        # the same quiet drop the static tier's labels make rather than drawing text at NaN.
+        if not (math.isfinite(x) and math.isfinite(y)):
+            continue
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            continue
+        points.append([float(x), float(y), z])
+        kept.append(str(value))
+    if not points:
+        scene._skip_empty(
+            layer.kind, f"no feature carried a geometry and a {column!r} value to label"
+        )
+        return None
+
+    import pyvista as pv
+
+    anchors = pv.PolyData(np.asarray(points, dtype="float64"))
+    style: dict[str, Any] = {"font_size": text_size}
+    if color is not None:
+        style["text_color"] = color
+    # A filled rounded box behind each label is the halo that keeps it readable against any scene. `occlude`
+    # maps to PyVista's `always_visible`: when it is False, geometry in front of a label hides it.
+    if halo:
+        style["shape"] = "rounded_rect"
+        style["shape_color"] = halo_color
+        style["fill_shape"] = True
+    else:
+        style["shape"] = None
+        style["fill_shape"] = False
+    props.setdefault("show_points", False)
+    drawn = scene.plotter.add_point_labels(
+        anchors, kept, always_visible=not occlude, **style, **props
+    )
+    return anchors, drawn
+
+
 class DecorationMixin(_MixinBase):
     """Title, labels and the coordinate frame for a :class:`~digitalearth.three_d.scene3d.Scene3D`.
 
@@ -1215,6 +1599,205 @@ class DecorationMixin(_MixinBase):
             )
         self._decoration["north_arrow"] = {"anchor": anchor, "color": color}
         redraw_decoration(self)
+        return self
+
+    def graticule(
+        self,
+        *,
+        lon_step: Any = None,
+        lat_step: Any = None,
+        spacing: Any = None,
+        bbox: Any = None,
+        crs: Any = 4326,
+        color: Any = "#888888",
+        width: float = 0.5,
+        labels: bool = True,
+        label_step: Any = None,
+        z: float = 0.0,
+        name: Any = None,
+        **kwargs: Any,
+    ) -> Self:
+        """Draw a latitude/longitude grid across the scene, labelled along its edges.
+
+        The tier's answer to forge3d's graticules, and the Core ``graticule`` verb: meridians (constant
+        longitude, ``lon_step`` apart) and parallels (constant latitude, ``lat_step`` apart) over the framed
+        extent, **reprojected into the display CRS through pyramids** so the grid lies on the data rather than
+        beside it. A graticule is generated here rather than read from a file, so — unlike the Natural-Earth
+        reference lines — it is reprojected rather than warned about.
+
+        It is a **layer** of the ``graticule`` kind, not furniture: it has an id, :meth:`set_visible` hides it,
+        :meth:`remove_layer` takes it off, and it is drawn again from ``figure_spec.to_dict()``.
+
+        Args:
+            lon_step: Degrees between meridians. ``None`` chooses a readable spacing for the extent
+                (:func:`_nice_graticule_step`); the keyword is the Core contract's (the same name the web and
+                interactive tiers use).
+            lat_step: Degrees between parallels. ``None`` chooses a readable spacing.
+            spacing: One step for both axes, for a square grid; overrides ``lon_step`` and ``lat_step``.
+            bbox: The ``(west, south, east, north)`` box to grid, in `crs` — a 3-D extra beyond the Core
+                keywords. ``None`` reads the scene's drawn extent, so draw the data first (or pass a box): a
+                scene with nothing drawn has no extent to frame and the layer is skipped (or raises under
+                ``strict``).
+            crs: What `bbox` and the steps are measured in, and the CRS the grid is generated in before being
+                reprojected to the display CRS. EPSG:4326 by default.
+            color: Line colour.
+            width: Line width in screen pixels (PyVista's ``line_width``).
+            labels: Whether to label meridians along the south edge and parallels along the west edge.
+            label_step: Label every `label_step`-th line, to keep a dense grid legible. ``None`` labels every
+                line.
+            z: The height the grid is drawn at, in the scene's vertical units. ``0.0`` puts it on the ground.
+            name: The layer id; ``None`` numbers it ``graticule``.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Raises:
+            ValueError: when `bbox` is given but is not four numbers, a step or `z` is not a finite number, or
+                a step is not positive.
+
+        Note:
+            The edge labels are an auxiliary actor. :meth:`remove_layer` takes the grid lines off; the labels
+            are re-applied (and so replaced) on every redraw of the scene, the same shape the globe's coastline
+            keeps beside its sphere.
+
+        Examples:
+            - A grid over an explicit box is a layer with an id like any other:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True, crs=4326)
+                >>> _ = scene.graticule(bbox=(-10.0, 35.0, 30.0, 60.0), spacing=10.0)
+                >>> scene.get_layer(scene.layer_ids[-1]).kind
+                'graticule'
+                >>> scene.close()
+
+                ```
+        """
+        call = "Scene3D.graticule()"
+        if spacing is not None:
+            lon_step = lat_step = spacing
+        extra: dict[str, Any] = {}
+        if bbox is not None:
+            edges = tuple(bbox)
+            if len(edges) != 4:
+                raise ValueError(
+                    f"{call} bbox must be (west, south, east, north); got {bbox!r}"
+                )
+            extra["bbox"] = tuple(_finite(value, "bbox", call) for value in edges)
+        for step_name, step_value in (("lon_step", lon_step), ("lat_step", lat_step)):
+            if step_value is not None:
+                resolved_step = _finite(step_value, step_name, call)
+                if resolved_step <= 0:
+                    raise ValueError(
+                        f"{call} {step_name} must be positive; got {step_value!r}"
+                    )
+                extra[step_name] = resolved_step
+        self._add_described_layer(
+            kind="graticule",
+            name=name,
+            crs=crs_to_json(crs, f"{call} crs="),
+            color=color,
+            width=float(width),
+            labels=bool(labels),
+            label_step=int(label_step) if label_step else None,
+            z=_finite(z, "z", call),
+            **extra,
+            **kwargs,
+        )
+        return self
+
+    def labels(
+        self,
+        features: Any,
+        column: str,
+        *,
+        text_size: float = 12.0,
+        color: Any = None,
+        halo: bool = True,
+        halo_color: Any = "white",
+        occlude: bool = True,
+        z: float = 0.0,
+        crs: Any = None,
+        name: Any = None,
+        visible: bool = True,
+        **kwargs: Any,
+    ) -> Self:
+        """Label every feature with the text in ``column``, each on a readable halo (forge3d parity, #491).
+
+        The tier's Core ``labels`` verb — "label features from a column" — and the plural, styled companion to
+        :meth:`text` (which places one string at one coordinate). It is the tier's answer to forge3d's labels
+        with halos and occlusion handling: each feature is labelled at a representative point, on a filled box
+        that keeps the text legible against busy geometry, with occlusion so labels behind the terrain can be
+        hidden. The keywords are the web and static tiers' wherever the three can mean the same thing (the Core
+        contract's point — one spelling per concept).
+
+        Like :meth:`text`, it is a **layer**: it has an id, :meth:`set_visible` hides it, :meth:`remove_layer`
+        takes it off, and it is drawn again from ``figure_spec.to_dict()``. The features are placed in the
+        display CRS through pyramids, exactly as a vector layer's data is.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` or GeoDataFrame (or a path/URL to one, the only form a
+                figure can be written down with). Points label at the point, lines and polygons at a
+                representative interior point.
+            column: The property to read each label's text from.
+            text_size: Text size in points. Named for the text rather than ``size``, which is a marker's size
+                everywhere else (contract C3).
+            color: Text colour. ``None`` leaves PyVista's theme colour.
+            halo: Whether each label is drawn on a filled rounded box, so it reads against busy geometry.
+            halo_color: The halo's fill colour.
+            occlude: Whether geometry in front of a label hides it (``True``) or labels are always drawn on top
+                (``False``).
+            z: The height the labels are anchored at, in the scene's vertical units. ``0.0`` is the ground.
+            crs: What the features are in when they carry no CRS of their own — the one case pyramids cannot
+                reproject. ``None`` leaves a self-describing collection alone (matches the static/web tiers).
+            name: The layer id; ``None`` numbers it ``labels``.
+            visible: Whether the layer is drawn when added.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_point_labels` — `bold`, `italic`, `margin`, ….
+
+        Returns:
+            This scene, so decoration chains.
+
+        Raises:
+            ValueError: when `text_size` or `z` is not a finite number.
+            KeyError: when `column` is not a property of the features (raised when they are placed).
+
+        Examples:
+            - Label two polygons by an attribute (needs geopandas at the call site — only ever as the type
+              pyramids hands back):
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth.three_d import Scene3D
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"name": ["A", "B"]},
+                ...     geometry=[Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                ...               Polygon([(2, 0), (3, 0), (3, 1), (2, 1)])],
+                ...     crs=4326,
+                ... )
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.labels(gdf, "name")
+                >>> scene.get_layer(scene.layer_ids[-1]).kind
+                'labels'
+                >>> scene.close()
+
+                ```
+        """
+        call = "Scene3D.labels()"
+        self._add_described_layer(
+            kind="labels",
+            data=features,
+            name=name,
+            visible=visible,
+            column=column,
+            text_size=_finite(text_size, "text_size", call),
+            color=color,
+            halo=bool(halo),
+            halo_color=halo_color,
+            occlude=bool(occlude),
+            z=_finite(z, "z", call),
+            crs=crs,
+            **kwargs,
+        )
         return self
 
     def basemap(
