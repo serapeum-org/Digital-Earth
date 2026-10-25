@@ -294,7 +294,7 @@ def _display_point(
     display = getattr(scene, "display_crs", None)
     if display is None or crs is None or same_crs(crs, display):
         return x, y
-    from pyramids.feature.geometry import reproject_coordinates
+    from pyramids.base.crs import reproject_coordinates
 
     placed_x, placed_y = reproject_coordinates([x], [y], from_crs=crs, to_crs=display)
     if not (math.isfinite(placed_x[0]) and math.isfinite(placed_y[0])):
