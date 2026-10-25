@@ -169,6 +169,16 @@ class TestLabelRefusals:
         with pytest.raises(KeyError, match="not a property"):
             scene.labels(features, "nope")
 
+    def test_a_style_keyword_collision_is_refused_by_name(self, scene):
+        """A kwarg naming an internal style slot (e.g. font_size) is refused by name, not an opaque dup error.
+
+        Args:
+            scene: The scene under test.
+        """
+        features = _points()
+        with pytest.raises(TypeError, match=r"labels\(\) sets font_size"):
+            scene.labels(features, "name", font_size=10)
+
     def test_a_non_finite_text_size_is_refused(self, scene):
         """The text size has to be a real number.
 
