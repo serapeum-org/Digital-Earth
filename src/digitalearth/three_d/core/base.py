@@ -2347,7 +2347,8 @@ class Scene3DBase:
           :class:`pyvista.Plotter` scene exporter, which writes the geometry itself rather than a picture of
           it.
         - :data:`VECTOR_SUFFIXES` (``.svg`` ``.pdf`` ``.eps`` ``.ps`` ``.tex``) → :meth:`export_vector`, a
-          vector graphic of the view (GL2PS), with textured surfaces embedded as raster insets.
+          vector graphic of the view (GL2PS), with textured surfaces embedded as raster insets. These take
+          **no** ``**kwargs`` — passing any with a vector suffix is refused rather than dropped.
         - anything else — **including a path with no suffix at all** — raises. A format is never invented on
           the caller's behalf, so ``save("scene")`` no longer quietly writes ``scene.png``.
 
@@ -2467,8 +2468,13 @@ class Scene3DBase:
             exporter(str(path), **kwargs)
             return Path(str(path))
         if suffix in VECTOR_SUFFIXES:
-            # A vector graphic routes through save_graphic rather than a scene exporter; no **kwargs, since
-            # GL2PS takes none here.
+            # A vector graphic routes through save_graphic, which takes none of save()'s **kwargs — so refuse
+            # them by name rather than drop them silently (a raster suffix forwards them to screenshot).
+            if kwargs:
+                raise ValueError(
+                    f"save() passes no keywords to a vector export; got {sorted(kwargs)} with {suffix!r}. "
+                    "Drop them, or render a high-resolution raster master with screenshot(scale=N)"
+                )
             return self.export_vector(path)
         reason = (
             "it has no suffix"
@@ -2499,8 +2505,9 @@ class Scene3DBase:
             pathlib.Path: the file that was written.
 
         Raises:
-            ValueError: when the scene holds a caller-built mesh (``add_mesh``/``add_volume``), or a layer
-                drawn from an in-memory source — neither of which a description can store.
+            ValueError: when the scene holds a caller-built mesh (``add_mesh``/``add_volume``), a layer drawn
+                from an in-memory source, or decoration that is not JSON-serialisable — none of which a
+                description can store.
 
         Examples:
             - Bundle a file-backed scene and read it back into an equivalent one:
@@ -2539,11 +2546,19 @@ class Scene3DBase:
                 f"save_bundle(): {error} A bundle stores the description, so bundle a scene whose layers are "
                 "drawn from a path or URL rather than an in-memory array"
             ) from error
+        import json
+
+        decoration = dict(self._decoration)
+        try:
+            json.dumps(decoration)
+        except TypeError as error:
+            raise ValueError(
+                f"save_bundle(): the scene's decoration is not JSON-serialisable ({error}); a keyword passed "
+                "to axes()/orientation_axes() holds a value a bundle cannot store — remove it before bundling"
+            ) from error
         from digitalearth.three_d.app.bundle import write_bundle
 
-        return write_bundle(
-            path, figure_dict=figure_dict, decoration=dict(self._decoration)
-        )
+        return write_bundle(path, figure_dict=figure_dict, decoration=decoration)
 
     @classmethod
     def open_bundle(cls, path: Destination, **scene_kwargs: Any) -> Self:

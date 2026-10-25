@@ -75,6 +75,17 @@ class TestVectorExport:
         with pytest.raises(ValueError, match="not one it can write"):
             scene.export_vector(tmp_path / "scene.png")
 
+    def test_kwargs_with_a_vector_suffix_are_refused(self, scene, tmp_path):
+        """`save("x.svg", scale=2)` refuses the keyword rather than dropping it silently.
+
+        Args:
+            scene: The scene under test.
+            tmp_path: An unused output path.
+        """
+        out = tmp_path / "scene.svg"
+        with pytest.raises(ValueError, match="no keywords"):
+            scene.save(out, scale=2)
+
     def test_save_routes_a_vector_suffix_to_export_vector(self, scene, tmp_path):
         """`save("scene.svg")` dispatches to the vector exporter and returns the path.
 

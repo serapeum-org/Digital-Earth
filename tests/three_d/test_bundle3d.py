@@ -95,6 +95,21 @@ class TestBundleRefusals:
         finally:
             scene.close()
 
+    def test_non_json_decoration_is_refused(self, tmp_path):
+        """Decoration carrying a non-JSON value is refused with a clear message, not a cryptic TypeError.
+
+        Args:
+            tmp_path: Where the bundle would be written.
+        """
+        scene = Scene3D(off_screen=True)
+        scene.terrain(DEM_PATH)
+        scene._decoration["axes"] = {"bad": object()}
+        try:
+            with pytest.raises(ValueError, match="JSON-serialisable"):
+                scene.save_bundle(tmp_path / "scene.dez")
+        finally:
+            scene.close()
+
     def test_a_caller_built_mesh_is_refused(self, tmp_path):
         """A scene holding an add_mesh object cannot be bundled.
 
