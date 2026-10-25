@@ -142,6 +142,32 @@ class TestBundleFormat:
             manifest = json.loads(bundle.read("manifest.json"))
         assert manifest["format_version"] == 1, manifest.get("format_version")
 
+    def test_a_non_json_figure_is_refused_by_the_writer(self, tmp_path):
+        """A non-JSON value anywhere in the manifest is refused with a clear ValueError, not a raw TypeError.
+
+        Args:
+            tmp_path: Where the bundle would be written.
+        """
+        from digitalearth.three_d.app.bundle import write_bundle
+
+        bad_figure = {"panels": {1, 2, 3}}
+        with pytest.raises(ValueError, match="not JSON-serialisable"):
+            write_bundle(tmp_path / "scene.dez", figure_dict=bad_figure, decoration={})
+
+    def test_a_v1_manifest_without_a_figure_is_refused(self, tmp_path):
+        """A format-1 manifest missing its figure section is refused as corrupt, not a bare KeyError.
+
+        Args:
+            tmp_path: Where the file is written.
+        """
+        out = tmp_path / "nofigure.dez"
+        with zipfile.ZipFile(out, "w") as bundle:
+            bundle.writestr(
+                "manifest.json", json.dumps({"format_version": 1, "decoration": {}})
+            )
+        with pytest.raises(ValueError, match="missing its 'figure'"):
+            Scene3D.open_bundle(out, off_screen=True)
+
     def test_an_unknown_format_version_is_refused(self, tmp_path):
         """A bundle from a newer format is refused rather than mis-read.
 

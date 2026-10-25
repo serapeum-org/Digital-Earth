@@ -42,6 +42,10 @@ def write_bundle(
     Returns:
         pathlib.Path: the file that was written.
 
+    Raises:
+        ValueError: when the manifest is not JSON-serialisable — a layer property or decoration value holds
+            something `json` cannot encode.
+
     Examples:
         - Write a bundle and read its manifest back:
             ```python
@@ -63,9 +67,19 @@ def write_bundle(
         "figure": figure_dict,
         "decoration": decoration,
     }
+    # Serialise before opening the file, so a non-JSON value anywhere in the manifest (a layer prop or a
+    # decoration value) is reported as a clear ValueError rather than a raw TypeError from deep in json — and
+    # no empty/partial zip is left behind. This is the catch-all over save_bundle's decoration-only guard.
+    try:
+        payload = json.dumps(manifest, indent=2)
+    except TypeError as error:
+        raise ValueError(
+            f"the scene could not be serialised to a bundle ({error}); a layer property or decoration value "
+            "is not JSON-serialisable"
+        ) from error
     out = Path(str(path))
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as bundle:
-        bundle.writestr(MANIFEST_NAME, json.dumps(manifest, indent=2))
+        bundle.writestr(MANIFEST_NAME, payload)
     return out
 
 
@@ -79,7 +93,8 @@ def read_manifest(path: Any) -> dict[str, Any]:
         The manifest dict, with its ``figure`` and ``decoration`` members.
 
     Raises:
-        ValueError: when the file carries no manifest, or a format version this release cannot read.
+        ValueError: when the file carries no manifest, a format version this release cannot read, or a
+            manifest missing its `figure` section.
 
     Examples:
         - Read back the version and decoration a bundle was written with:
@@ -110,5 +125,10 @@ def read_manifest(path: Any) -> dict[str, Any]:
         raise ValueError(
             f"the scene bundle at {path} is format version {version!r}, which this digitalearth cannot read "
             f"(it writes and reads version {BUNDLE_VERSION})"
+        )
+    if "figure" not in manifest:
+        raise ValueError(
+            f"the scene bundle at {path} is missing its 'figure' section; the file is corrupt or not a "
+            "digitalearth scene bundle"
         )
     return manifest
