@@ -743,32 +743,33 @@ def draw_text(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | Non
     return anchor, drawn
 
 
-#: The readable degree spacings a graticule's automatic step is chosen from, smallest first — the familiar
-#: map intervals from half a degree to thirty. The step is the first of these that draws no more than about ten
-#: lines across the wider span of the box, so the grid reads without crowding at any extent.
-_GRATICULE_STEPS: tuple[float, ...] = (0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0)
-
 #: How many vertices each meridian/parallel is densified to before reprojection, so a line that is straight in
 #: lon/lat is drawn as the smooth curve it becomes in a projected display CRS rather than as one chord.
 _GRATICULE_DENSITY: int = 60
 
 
 def _nice_graticule_step(span: float) -> float:
-    """Return a readable grid spacing in degrees for a box spanning `span` degrees.
+    """Return a readable grid spacing in the box's own units for a box spanning `span`.
+
+    Aims for roughly eight lines across `span`, rounded to a 1/2/5 × 10ⁿ "nice" number. The step is derived
+    from the span's own magnitude rather than a fixed degree table, so a projected grid in metres gets a
+    metre-scaled step and a geographic grid in degrees a degree-scaled one — neither collapses to a meaningless
+    interval over the wrong units.
 
     Args:
-        span: The wider of the box's two extents, in degrees.
+        span: The wider of the box's two extents, in the grid CRS's units.
 
     Returns:
-        The first of :data:`_GRATICULE_STEPS` that draws at most about ten lines across `span`, or the coarsest
-        one for a very wide box; the finest for a non-positive or non-finite span.
+        A positive "nice" step in the same units; ``1.0`` for a non-positive or non-finite span.
     """
     if not math.isfinite(span) or span <= 0:
-        return _GRATICULE_STEPS[0]
-    for step in _GRATICULE_STEPS:
-        if span / step <= 10.0:
-            return step
-    return _GRATICULE_STEPS[-1]
+        return 1.0
+    raw = span / 8.0
+    magnitude = 10.0 ** math.floor(math.log10(raw))
+    for multiple in (1.0, 2.0, 5.0, 10.0):
+        if multiple * magnitude >= raw:
+            return multiple * magnitude
+    return 10.0 * magnitude
 
 
 def _grid_values(lo: float, hi: float, step: float) -> list[float]:

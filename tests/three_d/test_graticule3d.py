@@ -189,6 +189,28 @@ class TestGraticuleFromTheDrawnExtent:
             projected.close()
 
 
+class TestGraticuleProjectedAutoStep:
+    """The auto step must scale to the grid CRS's units, not assume degrees."""
+
+    def test_a_projected_crs_without_a_step_reads(self, scene):
+        """Over a projected box (metres) with no step, the auto step picks a readable interval, not 30 units.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            A 4,000,000 m span with a degrees-only auto step would fall back to a 30 m grid and hit the
+            1000-line safety cap, drawing a dense meaningless grid; a unit-agnostic step keeps it readable.
+        """
+        scene.graticule(
+            bbox=(0.0, 0.0, 4_000_000.0, 4_000_000.0), crs=32618, labels=False
+        )
+        lines = scene.mesh_of(scene.layer_ids[-1]).n_cells
+        assert lines < 100, (
+            f"auto-step produced a degenerate {lines}-line grid over a projected span"
+        )
+
+
 class TestGraticuleWithoutAnExtent:
     """With no bbox and nothing drawn, there is no extent to frame."""
 
