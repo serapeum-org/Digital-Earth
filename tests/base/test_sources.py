@@ -112,6 +112,33 @@ def test_netcdf_source():
     assert src.y.values.ndim == 1
 
 
+def test_netcdf_multislice_warns_and_takes_the_first(caplog):
+    """A multi-slice NetCDF variable warns and is reduced to its first slice (a 2-D field).
+
+    Test scenario:
+        pyramids 0.71 reads a variable band-first; a genuine ``(2, H, W)`` read must not silently lose its
+        extra slice — the Source draws slice 0 and says so at WARNING.
+    """
+    import logging
+
+    from pyramids.dataset import Dataset, GeoReference
+    from pyramids.netcdf import NetCDF
+
+    ds = Dataset.read_file("examples/data/acc4000.tif")
+    band = ds.read_array(band=0).astype("float32")
+    arr = np.stack([band, band * 2.0])
+    nc = NetCDF.from_array(
+        arr,
+        geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg),
+        no_data_value=ds.no_data_value[0],
+        variable_name="acc",
+    )
+    with caplog.at_level(logging.WARNING):
+        src = get_source(nc)
+    assert src.z.values.ndim == 2, f"expected a 2-D field, got {src.z.values.ndim}-D"
+    assert "slices" in caplog.text, f"no multi-slice warning emitted: {caplog.text!r}"
+
+
 def test_unsupported_type_raises():
     """An unsupported input type raises TypeError."""
     with pytest.raises(TypeError, match="cannot build a Source"):
