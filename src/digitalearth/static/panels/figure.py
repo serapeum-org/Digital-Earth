@@ -360,8 +360,9 @@ def _scale_groups(maps: Sequence[Map]) -> list[tuple[list[Map], Any]]:
     Each panel's scale-bearing layer — the topmost that colours by a scale, so the field beneath any
     decoration, not whatever happens to be on top — is found by :func:`_scale_bearing`, and its scale is read
     with :func:`~digitalearth.static.legends.legend.drawn_scale`. Panels are grouped by the pair
-    *(scale, colormap)*: equal :class:`~digitalearth.base.spec.scale.Scale` (a frozen dataclass — value equality
-    over its limits, scheme, breaks and categories) **and** equal colormap. The colormap is part of the key
+    *(scale, colormap)*: equal :class:`~digitalearth.base.spec.scale.Scale` (a frozen dataclass, compared by
+    value — the limits a continuous scale carries, plus the class breaks a graduated one adds) **and** equal
+    colormap. The colormap is part of the key
     because `Scale` captures the *domain* but not the colours, so grouping on it alone would merge two panels
     keyed the same but coloured differently (viridis vs magma) into one bar showing only the first's colours —
     so two panels land together only when they would draw the *same* bar. A panel that drew nothing that colours
@@ -382,7 +383,9 @@ def _scale_groups(maps: Sequence[Map]) -> list[tuple[list[Map], Any]]:
         artist, scale = _scale_bearing(panel)
         if scale is None:
             continue
-        cmap = artist.get_cmap()
+        # Defensive: every artist `drawn_scale` reads a scale off is a ScalarMappable (it has a norm), which
+        # also has `get_cmap`; the fallback keeps the two predicates from diverging if that ever stops holding.
+        cmap = getattr(artist, "get_cmap", lambda: None)()
         for index, (known_scale, known_cmap) in enumerate(keys):
             if known_scale == scale and known_cmap == cmap:
                 groups[index].append(panel)
@@ -411,6 +414,14 @@ def shared_colorbars(
     without the caller nominating which mappable represents which group. Two panels keyed the same but coloured
     differently (viridis vs magma) are **not** merged — the colormap is part of what distinguishes a scale. A
     panel that drew nothing that colours by a scale contributes no bar.
+
+    Two cases to know. A panel with **several coloured data layers** (a field with filled contours over it, say)
+    is keyed off the *topmost* one — its bar represents the upper layer, not the base field; give the panels one
+    coloured layer each where every scale matters. A **categorical** panel is skipped: it colours by class code
+    and publishes its own swatch legend, which a colorbar cannot stand in for (as :meth:`Scene.colorbar` refuses
+    it). And since each bar spans its group's axes, a group whose panels are **not adjacent** (a scale that
+    recurs after an intervening one) steals space from non-contiguous panels, which matplotlib lays out but not
+    always tidily — keep a shared scale's panels together where the layout matters.
 
     Args:
         fig: The figure created by :func:`grid`.
