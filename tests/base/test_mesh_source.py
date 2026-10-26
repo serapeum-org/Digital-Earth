@@ -126,3 +126,41 @@ class TestMeshSource:
         assert src.metadata("variable", "FALLBACK") == "FALLBACK"
         assert src.x.values.size == 3 and src.y.values.size == 3
         assert src.crs is None and src.epsg is None
+
+    def test_init_refuses_a_triangulation_that_is_not_three_columns(self):
+        """A triangulation that is not ``(n_triangles, 3)`` is refused (review L4)."""
+        x, y = _axes(4)
+        quads = np.array([[0, 1, 2, 3]])
+        with pytest.raises(ValueError, match=r"\(n_triangles, 3\)"):
+            MeshSource(None, x, y, triangles=quads, location="node")
+
+    def test_init_refuses_triangles_indexing_a_node_that_is_not_there(self):
+        """A node index beyond the coordinates is refused, rather than failing inside matplotlib."""
+        x, y = _axes(3)
+        beyond = np.array([[0, 1, 99]])
+        with pytest.raises(ValueError, match="index nodes outside"):
+            MeshSource(None, x, y, triangles=beyond, location="node")
+
+    @pytest.mark.parametrize(
+        "location, size, expected_word",
+        [("face", 9, "triangle"), ("node", 2, "node")],
+    )
+    def test_init_refuses_values_that_do_not_match_the_location(
+        self, location, size, expected_word
+    ):
+        """``z`` must hold one value per node or per triangle, as ``location`` says (review L4).
+
+        Args:
+            location: Where the values claim to sit.
+            size: How many values are supplied, deliberately wrong for that location.
+            expected_word: The unit the message should name.
+
+        Test scenario:
+            This is the gap H4 was firing through: a temporal variable built a Source whose ``z`` was the
+            wrong length for its location, and the complaint arrived as an IndexError from matplotlib.
+        """
+        x, y = _axes(4)
+        values = DimensionInfo(np.arange(float(size)), "z")
+        triangles = np.array([[0, 1, 2]])
+        with pytest.raises(ValueError, match=f"one per {expected_word}"):
+            MeshSource(values, x, y, triangles=triangles, location=location)

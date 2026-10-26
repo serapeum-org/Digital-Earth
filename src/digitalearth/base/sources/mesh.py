@@ -28,6 +28,35 @@ __all__ = ["MESH_LOCATIONS", "MeshSource"]
 MESH_LOCATIONS: tuple[str, ...] = ("node", "face")
 
 
+def _check_triangles(triangles: np.ndarray, nodes: int) -> None:
+    """Refuse a triangulation that is not ``(n_triangles, 3)`` indices into ``nodes`` coordinates.
+
+    The class documents both shapes; enforcing them is the whole job of a value object, and an invalid one
+    used to surface as an ``IndexError`` from inside matplotlib instead (review L4).
+
+    Args:
+        triangles: The candidate triangulation. An empty array is allowed — a mesh can legitimately have
+            nothing left to draw, and :attr:`MeshSource.n_triangles` answers 0 for it.
+        nodes: How many node coordinates the source carries.
+
+    Raises:
+        ValueError: when the array is not two-dimensional with three columns, or indexes a node the source
+            does not have.
+    """
+    if triangles.size == 0:
+        return
+    if triangles.ndim != 2 or triangles.shape[1] != 3:
+        raise ValueError(
+            f"triangles must be an (n_triangles, 3) array of node indices, got shape "
+            f"{tuple(int(size) for size in triangles.shape)}"
+        )
+    if int(triangles.min()) < 0 or int(triangles.max()) >= nodes:
+        raise ValueError(
+            f"triangles index nodes outside 0..{nodes - 1}: "
+            f"min {int(triangles.min())}, max {int(triangles.max())}"
+        )
+
+
 class MeshSource(Source):
     """An unstructured-mesh source: node coordinates, an explicit triangulation, and values on it.
 
@@ -43,6 +72,11 @@ class MeshSource(Source):
         crs: The CRS the coordinates are expressed in, **as given**.
         metadata: Free-form metadata (``kind``, ``variable``, ``n_faces``, …).
         units: Unit string for the values, or ``None``.
+
+    Both shapes it documents are enforced in ``__init__``: the triangulation must be ``(n_triangles, 3)``
+    indices into the nodes it was given, and ``z`` must hold one value per node or per triangle. Checking
+    them is the point of the object — an invalid one otherwise surfaced as an ``IndexError`` from inside
+    matplotlib, several frames from the mistake.
 
     Examples:
         - A two-triangle mesh with a value on each face:
@@ -73,6 +107,19 @@ class MeshSource(Source):
             ('node', 4)
 
             ```
+        - Values that do not line up with what ``location`` says are refused:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import DimensionInfo, MeshSource
+            >>> try:
+            ...     MeshSource(DimensionInfo(np.arange(9.0), "z"),
+            ...                DimensionInfo(np.zeros(4), "x"), DimensionInfo(np.zeros(4), "y"),
+            ...                triangles=np.array([[0, 1, 2]]), location="face")
+            ... except ValueError as error:
+            ...     print(error)
+            face-located values must be one per triangle (1 expected), got 9
+
+            ```
         - An unknown location is refused, because a renderer would otherwise guess which array to colour:
             ```python
             >>> import numpy as np
@@ -101,8 +148,20 @@ class MeshSource(Source):
     ):
         if location not in MESH_LOCATIONS:
             raise ValueError(f"location={location!r} is not one of {MESH_LOCATIONS}")
+        faces = np.asarray(triangles)
+        nodes = int(np.asarray(x.values).size)
+        _check_triangles(faces, nodes)
+        if z is not None:
+            expected = int(faces.shape[0]) if location == "face" else nodes
+            held = int(np.asarray(z.values).size)
+            if held != expected:
+                raise ValueError(
+                    f"{location}-located values must be one per "
+                    f"{'triangle' if location == 'face' else 'node'} "
+                    f"({expected} expected), got {held}"
+                )
         super().__init__(z, x, y, crs, metadata, units)
-        self._triangles = np.asarray(triangles)
+        self._triangles = faces
         self._location = location
 
     @property
