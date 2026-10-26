@@ -971,7 +971,8 @@ def test_ugrid_node_values_stay_one_per_node(ugrid_mesh):
     assert src.z.values.size == 5, (
         f"expected one value per node, got {src.z.values.size}"
     )
-    assert src.x.values.size == 5 and src.y.values.size == 5
+    assert src.x.values.size == 5
+    assert src.y.values.size == 5
 
 
 def test_ugrid_source_records_the_mesh_in_metadata(ugrid_mesh):

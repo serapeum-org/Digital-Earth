@@ -99,9 +99,10 @@ def test_tripcolor_skips_a_mesh_no_projection_can_place(ugrid_mesh, caplog):
     with caplog.at_level(logging.WARNING):
         scene.tripcolor(unplaceable)
     assert not scene.ax.collections, "an unplaceable mesh should have drawn nothing"
-    assert (
-        "tripcolor" in caplog.text and "none of the data could be placed" in caplog.text
-    ), f"the skip should be recorded, not silent: {caplog.text!r}"
+    assert "tripcolor" in caplog.text, f"the skip should name the verb: {caplog.text!r}"
+    assert "none of the data could be placed" in caplog.text, (
+        f"the skip should be recorded, not silent: {caplog.text!r}"
+    )
     assert "raster" not in caplog.text, (
         f"a mesh was skipped, so the message must not blame a raster: {caplog.text!r}"
     )

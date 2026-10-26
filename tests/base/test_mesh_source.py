@@ -124,8 +124,10 @@ class TestMeshSource:
         )
         assert src.metadata("kind") == "mesh"
         assert src.metadata("variable", "FALLBACK") == "FALLBACK"
-        assert src.x.values.size == 3 and src.y.values.size == 3
-        assert src.crs is None and src.epsg is None
+        assert src.x.values.size == 3
+        assert src.y.values.size == 3
+        assert src.crs is None
+        assert src.epsg is None
 
     def test_init_refuses_a_triangulation_that_is_not_three_columns(self):
         """A triangulation that is not ``(n_triangles, 3)`` is refused (review L4)."""

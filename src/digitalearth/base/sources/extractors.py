@@ -671,6 +671,60 @@ def _netcdf_slice(z: np.ndarray, named: str, band: int) -> np.ndarray:
     return taken
 
 
+def _netcdf_variable(nc: Any, variable: str | None, pinned: bool) -> str | None:
+    """Which variable to read: the one named, the container's first, or the one a subset already is.
+
+    Args:
+        nc: The container or pinned subset.
+        variable: The name the caller gave, or ``None``.
+        pinned: Whether ``nc`` is a pinned variable subset.
+
+    Returns:
+        The variable's name, or ``None`` for a subset whose name cannot be recovered.
+
+    Raises:
+        ValueError: when a container exposes no variables to plot.
+    """
+    if variable is not None:
+        return variable
+    if not pinned:
+        names: list[str] = list(nc.variable_names)
+        if not names:
+            raise ValueError("NetCDF has no variables to plot")
+        return names[0]
+    # The subset knows which variable it is. Recovering the name is what keeps the identity the style
+    # matcher reads (`metadata("variable")`), the interactive colorbar label, and the slice messages — all
+    # of which went blank when the name was dropped here (round-1 H1).
+    recovered: str | None = getattr(nc, "_source_var_name", None)
+    return recovered
+
+
+def _netcdf_attributes(nc: Any, variable: str | None, pinned: bool) -> dict:
+    """The CF attributes for the variable, read from the container or off a pinned subset itself.
+
+    Args:
+        nc: The container or pinned subset.
+        variable: The variable's name, or ``None``.
+        pinned: Whether ``nc`` is a pinned variable subset.
+
+    Returns:
+        dict: the attributes, empty when neither source carries any.
+    """
+    attributes = _variable_attributes(nc, variable)
+    if not (pinned and not attributes):
+        return attributes
+    # A subset's metadata holds no per-variable entry for the variable it already is, so the CF attributes
+    # are read off the subset itself; without them the units and standard-name steps of the style matcher
+    # cannot fire on the one input type they were written for.
+    attributes = dict(getattr(nc, "attrs", None) or {})
+    # `_variable_attributes` folds the container's resolved `unit` into "units"; a subset has no container
+    # entry to read and carries the unit on its band instead (round-2 L2).
+    resolved = next(iter(getattr(nc, "band_units", None) or []), None)
+    if resolved and not _attr(attributes, "units"):
+        attributes["units"] = resolved
+    return attributes
+
+
 def _from_netcdf(
     nc: Any,
     variable: str | None,
@@ -713,16 +767,7 @@ def _from_netcdf(
 
     # A pinned subset reports no variable_names of its own, so it is read without naming one.
     pinned = isinstance(nc, Variable)
-    if variable is None and not pinned:
-        names = list(nc.variable_names)
-        if not names:
-            raise ValueError("NetCDF has no variables to plot")
-        variable = names[0]
-    if pinned and variable is None:
-        # The subset knows which variable it is. Recovering the name is what keeps the identity the style
-        # matcher reads (`metadata("variable")`), the interactive colorbar label, and the slice messages —
-        # all of which went blank when the name was dropped here (review H1).
-        variable = getattr(nc, "_source_var_name", None)
+    variable = _netcdf_variable(nc, variable, pinned)
     named = "pinned variable" if variable is None else f"variable {variable!r}"
     # Read by name only from a container: a subset *is* the variable and refuses to be asked for one.
     by_name = {} if pinned else {"variable": variable}
@@ -745,17 +790,7 @@ def _from_netcdf(
             f"single leading axis, so select the extra dimensions first (e.g. NetCDF.sel(...)) and plot "
             f"the 2-D or 3-D result"
         )
-    attributes = _variable_attributes(nc, variable)
-    if pinned and not attributes:
-        # A subset's metadata holds no per-variable entry for the variable it already is, so the CF
-        # attributes are read off the subset itself; without them the units and standard-name steps of the
-        # style matcher cannot fire on the one input type they were written for.
-        attributes = dict(getattr(nc, "attrs", None) or {})
-        # `_variable_attributes` folds the container's resolved `unit` into "units"; a subset has no
-        # container entry to read and carries the unit on its band instead (round-2 L2).
-        resolved = next(iter(getattr(nc, "band_units", None) or []), None)
-        if resolved and not _attr(attributes, "units"):
-            attributes["units"] = resolved
+    attributes = _netcdf_attributes(nc, variable, pinned)
     units = _attr(attributes, "units")
     return Source(
         z=_axis(z, "z", units),
