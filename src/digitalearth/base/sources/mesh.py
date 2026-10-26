@@ -40,11 +40,17 @@ def _check_triangles(triangles: np.ndarray, nodes: int) -> None:
         nodes: How many node coordinates the source carries.
 
     Raises:
-        ValueError: when the array is not two-dimensional with three columns, or indexes a node the source
-            does not have.
+        ValueError: when the array is not integer-typed, is not two-dimensional with three columns, or
+            indexes a node the source does not have.
     """
     if triangles.size == 0:
         return
+    if not np.issubdtype(triangles.dtype, np.integer):
+        # A float triangulation indexes nothing: numpy refuses it as an index and the complaint arrives
+        # from matplotlib, which is the failure mode this check exists to prevent (round-2 L1).
+        raise ValueError(
+            f"triangles must be integer node indices, got dtype {triangles.dtype}"
+        )
     if triangles.ndim != 2 or triangles.shape[1] != 3:
         raise ValueError(
             f"triangles must be an (n_triangles, 3) array of node indices, got shape "

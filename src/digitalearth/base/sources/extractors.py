@@ -751,6 +751,11 @@ def _from_netcdf(
         # attributes are read off the subset itself; without them the units and standard-name steps of the
         # style matcher cannot fire on the one input type they were written for.
         attributes = dict(getattr(nc, "attrs", None) or {})
+        # `_variable_attributes` folds the container's resolved `unit` into "units"; a subset has no
+        # container entry to read and carries the unit on its band instead (round-2 L2).
+        resolved = next(iter(getattr(nc, "band_units", None) or []), None)
+        if resolved and not _attr(attributes, "units"):
+            attributes["units"] = resolved
     units = _attr(attributes, "units")
     return Source(
         z=_axis(z, "z", units),

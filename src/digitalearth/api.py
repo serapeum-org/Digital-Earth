@@ -665,12 +665,16 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
         # An already-pinned subset *is* one variable and reports no names of its own, so the container
         # wording below would describe the wrong situation ("which carries []"). Naming the same variable
         # asks for what is already in hand; naming another cannot be served from a subset (review L2).
+        # The name is pyramids' own private record of which variable this subset is. Read through
+        # getattr so a rename upstream degrades to a vaguer message rather than an AttributeError — and
+        # so the message never prints `None` as though it were a name (round-2 L3).
         held = getattr(data, "_source_var_name", None)
         if held is not None and variable == held:
             return data
+        already = f"the variable {held!r}" if held is not None else "a pinned variable"
         raise ValueError(
-            f"this input is already the variable {held!r}, so variable={variable!r} cannot select "
-            f"another from it; pass the NetCDF container instead"
+            f"this input is already {already}, so variable={variable!r} cannot select another from it; "
+            f"pass the NetCDF container instead"
         )
     carried = list(data.variable_names)
     if variable not in carried:

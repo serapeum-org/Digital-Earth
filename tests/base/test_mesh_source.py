@@ -164,3 +164,10 @@ class TestMeshSource:
         triangles = np.array([[0, 1, 2]])
         with pytest.raises(ValueError, match=f"one per {expected_word}"):
             MeshSource(values, x, y, triangles=triangles, location=location)
+
+    def test_init_refuses_a_float_triangulation(self):
+        """A float triangulation is refused: it indexes nothing (round-2 L1)."""
+        x, y = _axes(3)
+        floats = np.array([[0.0, 1.0, 2.0]])
+        with pytest.raises(ValueError, match="integer node indices"):
+            MeshSource(None, x, y, triangles=floats, location="node")

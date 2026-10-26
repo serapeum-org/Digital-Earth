@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from digitalearth.base.sources import DimensionInfo, Source, get_source
+from digitalearth.base.spec import DEFAULT_BAND
 
 
 def test_raster_source(dataset):
@@ -1292,7 +1293,7 @@ def test_mesh_step_refuses_a_flat_variable_of_the_wrong_length():
 
     values = np.arange(5.0)
     with pytest.raises(ValueError, match="holds 5 values"):
-        _mesh_step(values, "variable 'depth'", None, 2)
+        _mesh_step(values, "variable 'depth'", DEFAULT_BAND, 2)
 
 
 def test_mesh_step_refuses_a_shape_it_cannot_reduce():
@@ -1305,8 +1306,8 @@ def test_mesh_step_refuses_a_shape_it_cannot_reduce():
     from digitalearth.base.sources.extractors import _mesh_step
 
     transposed = np.zeros((2, 3))
-    with pytest.raises(ValueError, match="cannot "):
-        _mesh_step(transposed, "variable 'depth'", None, 5)
+    with pytest.raises(ValueError, match="cannot reduce to one value per element"):
+        _mesh_step(transposed, "variable 'depth'", DEFAULT_BAND, 5)
     layered = np.zeros((3, 4, 2))
-    with pytest.raises(ValueError, match="cannot "):
-        _mesh_step(layered, "variable 'depth'", None, 2)
+    with pytest.raises(ValueError, match="cannot reduce to one value per element"):
+        _mesh_step(layered, "variable 'depth'", DEFAULT_BAND, 2)
