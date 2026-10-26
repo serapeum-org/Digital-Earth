@@ -25,7 +25,7 @@ classifiers = [
 requires-python = ">= 3.11, <4"
 
 # GDAL is intentionally omitted from runtime deps: conda-forge / pixi
-# users get gdal via the feedstock, and pyramids-gis pulls native GDAL
+# users get gdal via the feedstock, and pyramids-core pulls native GDAL
 # in transitively. Listing pip's PyPI GDAL would force a from-source
 # build on Windows (no wheel exists) and break most end-user installs.
 dependencies = [
