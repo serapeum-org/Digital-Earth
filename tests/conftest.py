@@ -172,9 +172,10 @@ def ugrid_mesh():
     Shared by the base, static and quickmap suites, which all need the same mesh.
 
     Returns:
-        Callable: ``build(location="face", node_x=None)`` → a pyramids ``UgridDataset``. ``location`` is
-        ``"face"`` or ``"node"``; ``node_x`` overrides the node x coordinates (pass non-finite ones to make
-        a mesh no projection can place).
+        Callable: ``build(location="face", node_x=None, steps=1)`` → a pyramids ``UgridDataset``.
+        ``location`` is ``"face"`` or ``"node"``; ``node_x`` overrides the node x coordinates (pass
+        non-finite ones to make a mesh no projection can place); ``steps`` > 1 gives the variable a leading
+        time axis, which is the shape UGRID model output normally has.
     """
     import numpy as np
     from pyramids.netcdf.ugrid.connectivity import Connectivity
@@ -182,7 +183,7 @@ def ugrid_mesh():
     from pyramids.netcdf.ugrid.mesh import Mesh2d
     from pyramids.netcdf.ugrid.models import MeshVariable
 
-    def build(location: str = "face", node_x=None):
+    def build(location: str = "face", node_x=None, steps: int = 1):
         mesh = Mesh2d(
             node_x=(
                 np.array([0.0, 1.0, 1.0, 0.0, 2.0])
@@ -197,26 +198,28 @@ def ugrid_mesh():
                 original_start_index=0,
             ),
         )
-        if location == "face":
-            held = {
-                "depth": MeshVariable(
-                    name="depth",
-                    location="face",
-                    mesh_name="m",
-                    shape=(2,),
-                    _data=np.array([10.0, 20.0]),
-                )
-            }
-        else:
-            held = {
-                "zs": MeshVariable(
-                    name="zs",
-                    location="node",
-                    mesh_name="m",
-                    shape=(5,),
-                    _data=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
-                )
-            }
+        name = "depth" if location == "face" else "zs"
+        per_step = (
+            np.array([10.0, 20.0])
+            if location == "face"
+            else np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        )
+        # steps > 1 gives the variable the leading time axis real UGRID output carries, each step offset
+        # by 100 so the step that was drawn is identifiable from its values alone.
+        data = (
+            per_step
+            if steps == 1
+            else np.stack([per_step + 100.0 * step for step in range(steps)])
+        )
+        held = {
+            name: MeshVariable(
+                name=name,
+                location=location,
+                mesh_name="m",
+                shape=data.shape,
+                _data=data,
+            )
+        }
         return UgridDataset(mesh=mesh, data_variables=held, global_attributes={})
 
     return build

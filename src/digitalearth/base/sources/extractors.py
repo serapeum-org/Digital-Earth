@@ -332,7 +332,7 @@ def extract(
     from pyramids.netcdf import NetCDF
 
     if _is_mesh(data):
-        return _from_ugrid(data, variable, metadata, crs=crs)
+        return _from_ugrid(data, variable, metadata, band=band, crs=crs)
     # NetCDF subclasses Dataset, so it MUST be checked before the Dataset branch.
     if isinstance(data, NetCDF):
         return _from_netcdf(data, variable, metadata, band=band, crs=crs)
@@ -782,8 +782,64 @@ def _fan_values(values: np.ndarray, mesh: Any, triangles: np.ndarray) -> np.ndar
     return spread
 
 
+def _mesh_step(
+    values: np.ndarray, named: str, band: int, expected: int
+) -> np.ndarray:
+    """Reduce a temporal or layered mesh variable to the single step ``band`` names.
+
+    ``UgridDataset.masked_values`` keeps a variable's full shape, and UGRID model output normally carries a
+    leading time axis — so ``(n_steps, n_elements)`` is the common case, not the exception. A surface render
+    colours one value per element, so the step is taken here: letting a 2-D array through reached the
+    fan-spread as a bare numpy broadcast error for face data, and built a ``MeshSource`` with a 2-D ``z``
+    for node data, against that class's own documented contract (review H4).
+
+    Args:
+        values: The variable as read — 1-D, or ``(n_steps, n_elements)``.
+        named: How the variable reads in a message.
+        band: 1-based index of the step to draw.
+        expected: How many elements the mesh has at this variable's location.
+
+    Returns:
+        np.ndarray: one value per element.
+
+    Raises:
+        ValueError: when the shape cannot be reduced to one value per element, or when ``band`` names a
+            step the variable does not carry.
+    """
+    if values.ndim == 1:
+        if values.size != expected:
+            raise ValueError(
+                f"{named} holds {values.size} values but its mesh has {expected} at that location"
+            )
+        return values
+    if values.ndim != 2 or int(values.shape[-1]) != expected:
+        raise ValueError(
+            f"{named} has shape {tuple(int(size) for size in values.shape)}, which a mesh render cannot "
+            f"reduce to one value per element ({expected} expected on the last axis)"
+        )
+    steps = int(values.shape[0])
+    if not 1 <= band <= steps:
+        raise ValueError(
+            f"band={band} is out of range for {named}, which carries {steps} step(s)"
+        )
+    if steps > 1 and band == DEFAULT_BAND:
+        logger.warning(
+            "The %s has %d steps; the Source draws band=%d (pass band= to choose another)",
+            named,
+            steps,
+            DEFAULT_BAND,
+        )
+    taken: np.ndarray = values[band - 1]
+    return taken
+
+
 def _from_ugrid(
-    ug: Any, variable: str | None, metadata: dict | None, *, crs: Any = None
+    ug: Any,
+    variable: str | None,
+    metadata: dict | None,
+    *,
+    band: int = DEFAULT_BAND,
+    crs: Any = None,
 ) -> MeshSource:
     """Build a :class:`MeshSource` from a pyramids ``UgridDataset`` variable (defaults to the first).
 
@@ -797,6 +853,7 @@ def _from_ugrid(
         ug: The pyramids ``UgridDataset`` to read.
         variable: The data variable to draw; ``None`` takes the first.
         metadata: Extra metadata merged over the derived keys (the caller wins).
+        band: 1-based step to draw from a variable carrying a time (or layer) axis.
         crs: The CRS the mesh's coordinates are already in, stored verbatim; ``None`` derives it.
 
     Returns:
@@ -804,7 +861,8 @@ def _from_ugrid(
 
     Raises:
         ValueError: when the mesh carries no data variables, when ``variable`` names one it does not
-            carry, or when the variable sits on a location a surface render cannot colour.
+            carry, when the variable sits on a location a surface render cannot colour, or when its shape
+            cannot be reduced to one value per element (including a ``band`` it does not carry).
     """
     carried = list(ug.data_variable_names)
     if variable is None:
@@ -827,6 +885,8 @@ def _from_ugrid(
     values = np.ma.filled(
         np.ma.asarray(ug.masked_values(variable)).astype("float64"), np.nan
     )
+    expected = int(mesh.n_face) if location == "face" else int(mesh.n_node)
+    values = _mesh_step(values, f"variable {variable!r}", band, expected)
     if location == "face":
         values = _fan_values(values, mesh, triangles)
     units = getattr(held, "units", None)

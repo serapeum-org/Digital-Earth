@@ -1148,3 +1148,45 @@ def test_pinned_variable_is_named_in_an_out_of_range_band_message():
     ).get_variable("tp")
     with pytest.raises(ValueError, match=r"variable 'tp'"):
         get_source(pinned, band=9)
+
+
+@pytest.mark.parametrize("location", ["face", "node"])
+def test_ugrid_temporal_variable_draws_one_step(ugrid_mesh, location):
+    """A variable with a leading time axis reduces to a single step instead of failing raw (review H4).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        location: Where the variable sits.
+
+    Test scenario:
+        ``masked_values`` keeps a UGRID variable's full ``(n_time, n_elements)`` shape, which is the normal
+        shape of model output. The face case raised a bare numpy broadcast error; the node case built a
+        Source whose ``z`` was 2-D, against that class's own documented contract, and died inside
+        matplotlib.
+    """
+    src = get_source(ugrid_mesh(location, steps=3))
+    assert src.z.values.ndim == 1, f"expected one step, got z with shape {src.z.values.shape}"
+    expected = src.n_triangles if location == "face" else src.x.values.size
+    assert src.z.values.size == expected, (
+        f"expected {expected} values for {location}-located data, got {src.z.values.size}"
+    )
+
+
+def test_ugrid_band_selects_the_step(ugrid_mesh):
+    """``band=`` picks the time step on a mesh, the 1-based index the raster and NetCDF paths use.
+
+    Test scenario:
+        Each step is offset by 100, so the values say which step was drawn. Step 3 of the face variable is
+        ``[210, 220]``, spread over the quad's two fan triangles and the lone triangle.
+    """
+    first = get_source(ugrid_mesh("face", steps=3), band=1).z.values
+    third = get_source(ugrid_mesh("face", steps=3), band=3).z.values
+    assert first.tolist() == [10.0, 10.0, 20.0], f"step 1 wrong: {first.tolist()}"
+    assert third.tolist() == [210.0, 210.0, 220.0], f"step 3 wrong: {third.tolist()}"
+
+
+def test_ugrid_step_out_of_range_is_refused(ugrid_mesh):
+    """A step the mesh variable does not carry is refused by name, not answered with the first."""
+    mesh = ugrid_mesh("face", steps=3)
+    with pytest.raises(ValueError, match="out of range"):
+        get_source(mesh, band=9)
