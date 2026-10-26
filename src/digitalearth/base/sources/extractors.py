@@ -683,6 +683,10 @@ def _from_netcdf(
     own, because it *is* the variable; it is read without one. Refusing it as "no variables to plot" was
     the defect #499 reported.
 
+    A subset still carries its identity, and this reads it back: the variable's **name** off the subset
+    and its **CF attributes** off the subset's own attributes. Both matter beyond tidiness — the style
+    matcher picks a colormap from the name, so losing it silently restyled the map.
+
     Args:
         nc: The pyramids ``NetCDF`` container to read, or a pinned ``Variable`` subset of one.
         variable: The variable to plot; ``None`` takes the first, or the pinned one.
@@ -706,8 +710,14 @@ def _from_netcdf(
         if not names:
             raise ValueError("NetCDF has no variables to plot")
         variable = names[0]
+    if pinned and variable is None:
+        # The subset knows which variable it is. Recovering the name is what keeps the identity the style
+        # matcher reads (`metadata("variable")`), the interactive colorbar label, and the slice messages —
+        # all of which went blank when the name was dropped here (review H1).
+        variable = getattr(nc, "_source_var_name", None)
     named = "pinned variable" if variable is None else f"variable {variable!r}"
-    by_name = {} if variable is None else {"variable": variable}
+    # Read by name only from a container: a subset *is* the variable and refuses to be asked for one.
+    by_name = {} if pinned else {"variable": variable}
     z = np.ma.filled(
         np.ma.asarray(nc.read_array(masked=True, **by_name)).astype("float64"),
         np.nan,
@@ -718,6 +728,11 @@ def _from_netcdf(
     if z.ndim == 3:
         z = _netcdf_slice(z, named, band)
     attributes = _variable_attributes(nc, variable)
+    if pinned and not attributes:
+        # A subset's metadata holds no per-variable entry for the variable it already is, so the CF
+        # attributes are read off the subset itself; without them the units and standard-name steps of the
+        # style matcher cannot fire on the one input type they were written for.
+        attributes = dict(getattr(nc, "attrs", None) or {})
     units = _attr(attributes, "units")
     return Source(
         z=_axis(z, "z", units),
@@ -727,8 +742,8 @@ def _from_netcdf(
         units=units,
         metadata={
             "kind": "raster",
-            # A pinned subset carries no recoverable variable name, so the key is left out rather than
-            # recorded as None — a reader asking for it then gets their own fallback.
+            # Left out rather than recorded as None in the one case the name is unrecoverable, so a reader
+            # asking for it gets their own fallback.
             **({} if variable is None else {"variable": variable}),
             **_identity(attributes),
             **(metadata or {}),

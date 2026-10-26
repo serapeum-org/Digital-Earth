@@ -205,14 +205,46 @@ def test_netcdf_pinned_variable_honours_band():
     assert np.unique(get_source(pinned, band=3).z.values).tolist() == [2.0]
 
 
-def test_netcdf_pinned_variable_leaves_the_variable_key_absent():
-    """A pinned subset carries no recoverable name, so the metadata key falls back rather than reading None.
+def test_netcdf_pinned_variable_records_its_recovered_name():
+    """A pinned subset records the variable it is, so readers keyed on the name still work (review H1).
+
+    Test scenario:
+        This asserted the opposite until the pinned path was fixed: the name was dropped, the style
+        matcher fell back, and the map was restyled in silence. The subset knows its own name, so it is
+        read back and recorded.
+    """
+    src = get_source(_slice_valued_netcdf().get_variable("t2m"))
+    assert src.metadata("variable") == "t2m", (
+        f"the pinned subset did not record its name: {src.metadata('variable', None)!r}"
+    )
+
+
+def test_netcdf_variable_key_is_absent_when_the_name_cannot_be_recovered():
+    """When a subset exposes no name at all, the key is left out rather than recorded as ``None``.
 
     Test scenario:
         Recording ``variable=None`` would make every reader's ``metadata("variable", fallback)`` answer
-        ``None`` instead of their fallback, which is worse than the key being absent.
+        ``None`` instead of their own fallback. Exercised with a subset-shaped stub, because pyramids'
+        own subsets always carry the name.
     """
-    src = get_source(_slice_valued_netcdf().get_variable("t2m"))
+    from pyramids.netcdf import Variable
+
+    from digitalearth.base.sources.extractors import _from_netcdf
+
+    class _NamelessSubset(Variable):
+        def __init__(self):  # noqa: D107 - a stand-in, not a pyramids subset
+            pass
+
+        variable_names: list = []
+        lon = np.array([0.0, 1.0])
+        lat = np.array([0.0, 1.0])
+        attrs: dict = {}
+
+        @staticmethod
+        def read_array(masked=True):
+            return np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    src = _from_netcdf(_NamelessSubset(), None, None)
     assert src.metadata("variable", "FALLBACK") == "FALLBACK"
 
 
@@ -1074,3 +1106,45 @@ def test_netcdf_two_dimensional_variable_needs_no_slicing():
         f"a 2-D read was reshaped: {src.z.values.shape}"
     )
     assert src.z.values.tolist() == [[1.0, 2.0], [3.0, 4.0]]
+
+
+def test_pinned_variable_keeps_the_identity_the_style_matcher_reads():
+    """A pinned subset resolves to the same variable identity as naming it on the container (review H1).
+
+    Test scenario:
+        The two sides are built differently on purpose — one threads ``variable=`` through the extractor,
+        the other pins the subset first — and must agree. They did not: the pinned side recorded no
+        variable name, so the style matcher fell back and silently restyled the map (coolwarm -> viridis).
+    """
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    from digitalearth.base.autostyle import auto_style
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    nc = NetCDF.from_array(
+        np.full((1, 4, 4), 5.0, dtype="float32"), geo_ref=geo, variable_name="temperature"
+    )
+    threaded = get_source(nc, variable="temperature")
+    pinned = get_source(nc.get_variable("temperature"))
+    assert pinned.metadata("variable") == threaded.metadata("variable") == "temperature", (
+        f"the pinned subset lost its name: {pinned.metadata('variable', None)!r}"
+    )
+    assert auto_style(pinned).get("cmap") == auto_style(threaded).get("cmap"), (
+        "the pinned subset styles differently from the same variable named on the container"
+    )
+
+
+def test_pinned_variable_is_named_in_an_out_of_range_band_message():
+    """An out-of-range slice on a pinned subset names the variable, not "the pinned variable"."""
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    pinned = NetCDF.from_array(
+        np.stack([np.zeros((4, 4)), np.ones((4, 4))]).astype("float32"),
+        geo_ref=geo,
+        variable_name="tp",
+    ).get_variable("tp")
+    with pytest.raises(ValueError, match=r"variable 'tp'"):
+        get_source(pinned, band=9)
