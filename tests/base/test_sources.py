@@ -139,6 +139,79 @@ def test_netcdf_multislice_warns_and_takes_the_first(caplog):
     assert "slices" in caplog.text, f"no multi-slice warning emitted: {caplog.text!r}"
 
 
+def _slice_valued_netcdf(slices: int = 3):
+    """Build a NetCDF whose variable carries ``slices`` slices, slice ``k`` filled with the value ``k``.
+
+    Args:
+        slices: How many slices the variable carries.
+
+    Returns:
+        The pyramids ``NetCDF`` container, so a drawn slice is identifiable by its value alone.
+    """
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    arr = np.stack([np.full((6, 6), float(k)) for k in range(slices)]).astype("float32")
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    return NetCDF.from_array(arr, geo_ref=geo, variable_name="t2m")
+
+
+def test_netcdf_band_selects_the_slice():
+    """``band=`` draws the slice it names, on the same 1-based index the raster path uses.
+
+    Test scenario:
+        Slice ``k`` is filled with the value ``k``, so the slice that was drawn is read straight off the
+        values. Before #499 the band was dropped on the NetCDF branch and slice 0 was drawn whatever was
+        asked for.
+    """
+    nc = _slice_valued_netcdf()
+    drawn = [np.unique(get_source(nc, band=b).z.values).tolist() for b in (1, 2, 3)]
+    assert drawn == [[0.0], [1.0], [2.0]], f"band= did not select the slice: {drawn}"
+
+
+@pytest.mark.parametrize("band", [0, 4, 99])
+def test_netcdf_band_out_of_range_is_refused(band):
+    """A band the variable does not carry is refused, not quietly answered with slice 0.
+
+    Args:
+        band: A 1-based index outside the three slices the variable carries.
+    """
+    nc = _slice_valued_netcdf()
+    with pytest.raises(ValueError, match="out of range"):
+        get_source(nc, band=band)
+
+
+def test_netcdf_pinned_variable_is_plottable():
+    """A pinned ``get_variable`` subset becomes a Source instead of "no variables to plot" (#499).
+
+    Test scenario:
+        ``NetCDF.get_variable(name)`` hands back a subset that reports no ``variable_names`` of its own,
+        because it *is* the variable. The extractor used to read that as an empty container and refuse it.
+    """
+    pinned = _slice_valued_netcdf().get_variable("t2m")
+    assert list(pinned.variable_names) == [], "a pinned subset should report no names of its own"
+    src = get_source(pinned)
+    assert src.z.values.ndim == 2, f"expected a 2-D field, got {src.z.values.ndim}-D"
+    assert np.unique(src.z.values).tolist() == [0.0], "the pinned subset should default to its first slice"
+
+
+def test_netcdf_pinned_variable_honours_band():
+    """``band=`` chooses the slice on a pinned subset too, not only on a named container variable."""
+    pinned = _slice_valued_netcdf().get_variable("t2m")
+    assert np.unique(get_source(pinned, band=3).z.values).tolist() == [2.0]
+
+
+def test_netcdf_pinned_variable_leaves_the_variable_key_absent():
+    """A pinned subset carries no recoverable name, so the metadata key falls back rather than reading None.
+
+    Test scenario:
+        Recording ``variable=None`` would make every reader's ``metadata("variable", fallback)`` answer
+        ``None`` instead of their fallback, which is worse than the key being absent.
+    """
+    src = get_source(_slice_valued_netcdf().get_variable("t2m"))
+    assert src.metadata("variable", "FALLBACK") == "FALLBACK"
+
+
 def test_unsupported_type_raises():
     """An unsupported input type raises TypeError."""
     with pytest.raises(TypeError, match="cannot build a Source"):

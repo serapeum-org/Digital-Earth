@@ -310,7 +310,7 @@ def extract(
 
     # NetCDF subclasses Dataset, so it MUST be checked before the Dataset branch.
     if isinstance(data, NetCDF):
-        return _from_netcdf(data, variable, metadata, crs=crs)
+        return _from_netcdf(data, variable, metadata, band=band, crs=crs)
     if isinstance(data, Dataset):
         return _from_raster(data, band, metadata, crs=crs)
     if isinstance(data, DatasetCollection):
@@ -585,8 +585,43 @@ def _variable_attributes(nc: Any, variable: str) -> dict:
     return {}
 
 
+def _netcdf_slice(z: np.ndarray, named: str, band: int) -> np.ndarray:
+    """Take the 1-based ``band`` slice off a band-first NetCDF read.
+
+    Args:
+        z: The 3-D ``(slices, rows, columns)`` array pyramids read.
+        named: How the variable reads in a message — ``"variable 't2m'"``, or ``"pinned variable"``.
+        band: 1-based index of the slice to draw.
+
+    Returns:
+        np.ndarray: the 2-D slice ``band`` names.
+
+    Raises:
+        ValueError: when ``band`` names a slice the variable does not carry. Silently drawing slice 0 for
+            an out-of-range index would show the wrong field without saying so.
+    """
+    slices = int(z.shape[0])
+    if not 1 <= band <= slices:
+        raise ValueError(
+            f"band={band} is out of range for the {named}, which carries {slices} slice(s)"
+        )
+    if slices > 1 and band == DEFAULT_BAND:
+        logger.warning(
+            "The %s has %d slices; the Source draws band=%d (pass band= to choose another)",
+            named,
+            slices,
+            DEFAULT_BAND,
+        )
+    return z[band - 1]
+
+
 def _from_netcdf(
-    nc: Any, variable: str | None, metadata: dict | None, *, crs: Any = None
+    nc: Any,
+    variable: str | None,
+    metadata: dict | None,
+    *,
+    band: int = DEFAULT_BAND,
+    crs: Any = None,
 ) -> Source:
     """Build a raster :class:`Source` from a pyramids ``NetCDF`` variable (defaults to the first).
 
@@ -594,38 +629,45 @@ def _from_netcdf(
     here and carried onto the ``Source``; without them the style matcher's units and standard-name steps
     could never fire on the one input type they were written for.
 
+    Two shapes of input arrive here. A **container** exposes ``variable_names`` and is read by name. A
+    **pinned variable subset** — what ``NetCDF.get_variable(name)`` hands back — reports no names of its
+    own, because it *is* the variable; it is read without one. Refusing it as "no variables to plot" was
+    the defect #499 reported.
+
     Args:
-        nc: The pyramids ``NetCDF`` container to read.
-        variable: The variable to plot; ``None`` takes the first.
+        nc: The pyramids ``NetCDF`` container to read, or a pinned ``Variable`` subset of one.
+        variable: The variable to plot; ``None`` takes the first, or the pinned one.
         metadata: Extra metadata merged over the derived keys (the caller wins).
+        band: 1-based slice to draw from a variable carrying a band/time dimension.
         crs: The CRS the container's coordinates are already in, stored verbatim; ``None`` derives it.
 
     Returns:
         Source: the raster source.
 
     Raises:
-        ValueError: when the container exposes no variables to plot.
+        ValueError: when the container exposes no variables to plot, or when ``band`` names a slice the
+            variable does not carry.
     """
-    names = list(nc.variable_names)
-    if variable is None:
+    from pyramids.netcdf import Variable
+
+    # A pinned subset reports no variable_names of its own, so it is read without naming one.
+    pinned = isinstance(nc, Variable)
+    if variable is None and not pinned:
+        names = list(nc.variable_names)
         if not names:
             raise ValueError("NetCDF has no variables to plot")
         variable = names[0]
+    named = "pinned variable" if variable is None else f"variable {variable!r}"
+    by_name = {} if variable is None else {"variable": variable}
     z = np.ma.filled(
-        np.ma.asarray(nc.read_array(variable=variable, masked=True)).astype("float64"),
+        np.ma.asarray(nc.read_array(masked=True, **by_name)).astype("float64"),
         np.nan,
     )
     # pyramids 0.71 reads a NetCDF variable band-first — a single-variable grid comes back as ``(1, H, W)``
-    # where earlier it was ``(H, W)``. A ``Source`` wraps one 2-D field, so drop a leading band axis, taking
-    # the first slice of a genuinely multi-slice read — the same default the raster path's ``band`` takes.
+    # where earlier it was ``(H, W)``. A ``Source`` wraps one 2-D field, so take one slice off a leading
+    # band axis: the one ``band`` names, on the same 1-based index the raster path's ``band`` uses.
     if z.ndim == 3:
-        if z.shape[0] > 1:
-            logger.warning(
-                "NetCDF variable %r has %d slices; the Source draws the first (slice 0)",
-                variable,
-                z.shape[0],
-            )
-        z = z[0]
+        z = _netcdf_slice(z, named, band)
     attributes = _variable_attributes(nc, variable)
     units = _attr(attributes, "units")
     return Source(
@@ -636,7 +678,9 @@ def _from_netcdf(
         units=units,
         metadata={
             "kind": "raster",
-            "variable": variable,
+            # A pinned subset carries no recoverable variable name, so the key is left out rather than
+            # recorded as None — a reader asking for it then gets their own fallback.
+            **({} if variable is None else {"variable": variable}),
             **_identity(attributes),
             **(metadata or {}),
         },
