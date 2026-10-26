@@ -75,6 +75,31 @@ def _coords_from_array(data: Any) -> np.ndarray:
     return arr
 
 
+def _placed_coords(
+    placed: Any, value_column: str | None
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Return ``(points, gdf_values)`` for a placed point source, dispatching on its shape.
+
+    The three inputs the draw step can receive after :meth:`Scene3DBase._place`: a GeoDataFrame of points
+    (duck-typed by ``geometry``, which also yields a value column), a CRS-carrying
+    :class:`~digitalearth.base.points.PointArrays` (e.g. a decoded LAS/LAZ file — its colour field rode along
+    as ``values``, so there is none here), or a bare ``(N, 2)``/``(N, 3)`` array.
+
+    Args:
+        placed: The placed source: a points GeoDataFrame, a `PointArrays`, or an array-like table.
+        value_column: The column to read off a GeoDataFrame; ignored for the other two shapes.
+
+    Returns:
+        tuple: ``(points, gdf_values)`` — an ``(N, 3)`` float coordinate array and the GeoDataFrame value
+        column (or ``None`` for the non-GeoDataFrame shapes).
+    """
+    if hasattr(placed, "geometry"):
+        return _coords_from_geodataframe(placed, value_column)
+    if isinstance(placed, PointArrays):
+        return placed.as_columns(), None
+    return _coords_from_array(placed), None
+
+
 #: LAS/LAZ per-point fields a cloud may be coloured by via ``value_column=`` (the `pointclouds` accessors).
 LAS_COLOUR_FIELDS = ("classification", "intensity", "return_number", "x", "y", "z")
 
@@ -484,14 +509,7 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
     _refuse_folded_marker_size(props)
     props["point_size"] = props.pop("size", None)
     placed = scene._place(data, layer="point_cloud")
-    if hasattr(placed, "geometry"):
-        points, gdf_values = _coords_from_geodataframe(placed, value_column)
-    elif isinstance(placed, PointArrays):
-        # A LAS/LAZ read (or any CRS-carrying point source) arrives as PointArrays; _place has already
-        # adopted or reprojected its CRS. Its colour field rode along as `values`, so there is none here.
-        points, gdf_values = placed.as_columns(), None
-    else:
-        points, gdf_values = _coords_from_array(placed), None
+    points, gdf_values = _placed_coords(placed, value_column)
 
     scalar = np.asarray(values) if values is not None else gdf_values
     if len(points) == 0:
