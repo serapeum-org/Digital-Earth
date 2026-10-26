@@ -2859,11 +2859,13 @@ class VectorMixin(_MixinBase):
         visible: bool = True,
         **opts,
     ) -> Any:
-        """Triangulate scattered points and render via ``cleopatra.MeshGlyph``.
+        """Render unstructured data via ``cleopatra.MeshGlyph``, triangulating it if it is not a mesh.
 
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a path
-                or URL to either. It is recorded as the layer's source as given, so only a path-backed
+            data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
+                ``UgridDataset`` — which keeps its **own** ``face_node_connectivity`` instead of being
+                re-triangulated — or a path or URL to one. It is recorded as the layer's source as given,
+                so only a path-backed
                 layer can be written down.
             kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
                 ``tripcolor``).
@@ -2923,9 +2925,15 @@ class VectorMixin(_MixinBase):
     ) -> Self:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
+        Contours are interpolated **between values at the nodes**, so a UGRID mesh is drawable here only
+        when its variable sits on the nodes. A face-located mesh is refused by name and pointed at
+        :meth:`tripcolor`, which shades each face — averaging the faces onto the nodes to make it work
+        would invent data.
+
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
-                path or URL to either. Only a path-backed layer can be written down.
+            data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
+                node-located ``UgridDataset`` — or a path or URL to one. Only a path-backed layer can be
+                written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2943,8 +2951,8 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
-                numeric column to contour.
+            ValueError: when fewer than three points were supplied, a ``FeatureCollection`` carries no
+                numeric column to contour, or a mesh's values sit on its faces rather than its nodes.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
         self._tri(
@@ -2963,9 +2971,15 @@ class VectorMixin(_MixinBase):
     ) -> Self:
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
+        Contours are interpolated **between values at the nodes**, so a UGRID mesh is drawable here only
+        when its variable sits on the nodes. A face-located mesh is refused by name and pointed at
+        :meth:`tripcolor`, which shades each face — averaging the faces onto the nodes to make it work
+        would invent data.
+
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
-                path or URL to either. Only a path-backed layer can be written down.
+            data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
+                node-located ``UgridDataset`` — or a path or URL to one. Only a path-backed layer can be
+                written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2983,8 +2997,8 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
-                numeric column to contour.
+            ValueError: when fewer than three points were supplied, a ``FeatureCollection`` carries no
+                numeric column to contour, or a mesh's values sit on its faces rather than its nodes.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
         self._tri(
@@ -3028,8 +3042,8 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
-                numeric column to contour.
+            ValueError: when fewer than three points were supplied, a ``FeatureCollection`` carries no
+                numeric column to contour, or a mesh's values sit on its faces rather than its nodes.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
         self._tri(

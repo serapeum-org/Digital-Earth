@@ -99,6 +99,12 @@ def test_tripcolor_skips_a_mesh_no_projection_can_place(ugrid_mesh, caplog):
     with caplog.at_level(logging.WARNING):
         scene.tripcolor(unplaceable)
     assert not scene.ax.collections, "an unplaceable mesh should have drawn nothing"
+    assert (
+        "tripcolor" in caplog.text and "none of the data could be placed" in caplog.text
+    ), f"the skip should be recorded, not silent: {caplog.text!r}"
+    assert "raster" not in caplog.text, (
+        f"a mesh was skipped, so the message must not blame a raster: {caplog.text!r}"
+    )
 
 
 def test_tripcolor_keeps_a_finite_view_when_part_of_the_mesh_is_unplaceable(ugrid_mesh):
@@ -116,9 +122,15 @@ def test_tripcolor_keeps_a_finite_view_when_part_of_the_mesh_is_unplaceable(ugri
     scene = Map()
     scene.tripcolor(partly)
     (x0, y0), (x1, y1) = scene.ax.dataLim.get_points()
-    assert np.isfinite([x0, y0, x1, y1]).all(), f"the extent is not finite: {(x0, y0, x1, y1)}"
-    assert x1 - x0 >= 0.9, f"x extent collapsed to {x1 - x0}, so the drawn triangles are off-view"
-    assert y1 - y0 >= 0.9, f"y extent collapsed to {y1 - y0}, so the drawn triangles are off-view"
+    assert np.isfinite([x0, y0, x1, y1]).all(), (
+        f"the extent is not finite: {(x0, y0, x1, y1)}"
+    )
+    assert x1 - x0 >= 0.9, (
+        f"x extent collapsed to {x1 - x0}, so the drawn triangles are off-view"
+    )
+    assert y1 - y0 >= 0.9, (
+        f"y extent collapsed to {y1 - y0}, so the drawn triangles are off-view"
+    )
 
 
 @pytest.mark.parametrize("display", [3857, "EPSG:3857"])
