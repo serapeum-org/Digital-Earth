@@ -9,7 +9,7 @@ Two vector visualizations:
   carved all the way through (#199), so a ring courtyard or a lake in a landmass is a shaft, not a filled column.
 
 Polygons come from the GeoDataFrame pyramids returns (a ``FeatureCollection``, which *is* a GeoDataFrame, or
-``Dataset.get_cell_polygons()``); only their coordinates are read (``geom.exterior.coords``,
+``Dataset.to_geodataframe(geometry="polygon")``); only their coordinates are read (``geom.exterior.coords``,
 ``geom.interiors``, ``geom.geoms``), so this module imports neither shapely nor geopandas (the HARD RULE /
 ``test_no_competitor_imports`` guard). CRS work stays in pyramids.
 """
@@ -578,8 +578,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             gdf: A GeoDataFrame of ``Polygon``/``MultiPolygon`` geometries (e.g. a pyramids
-                ``FeatureCollection`` / ``get_cell_polygons()``); coordinates are read by duck-typing (no
-                geopandas/shapely import).
+                ``FeatureCollection`` / ``to_geodataframe(geometry="polygon")``); coordinates are read by
+                duck-typing (no geopandas/shapely import).
             height: Uniform extrusion height (``float``), or the name of a column (``str``) to read a
                 per-feature height from. Every height must be finite: a ``NaN`` one builds a prism whose
                 coordinates are all ``NaN``, which draws nothing while still counting as cells on the
