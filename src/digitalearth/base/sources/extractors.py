@@ -39,6 +39,7 @@ from digitalearth.base.arrays import read_masked_band
 from digitalearth.base.crs import declared_crs, source_epsg
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources.dimension import DimensionInfo
+from digitalearth.base.sources.mesh import MESH_LOCATIONS, MeshSource
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, Selection
 from digitalearth.base.types import PlottableData, RasterLike
@@ -55,6 +56,7 @@ DRAWABLE_FAMILIES: Mapping[str, str] = MappingProxyType(
         "raster": "a pyramids Dataset (a NetCDF or a DatasetCollection counts as one)",
         "array": "a 2-D numpy array",
         "vector": "a pyramids FeatureCollection",
+        "mesh": "a pyramids UgridDataset (an unstructured mesh)",
     }
 )
 
@@ -104,8 +106,29 @@ def _is_vector(data: Any) -> bool:
 
 #: How each family is recognised. Keyed by the same names as :data:`DRAWABLE_FAMILIES`, so a family with a
 #: phrase and no test — or the reverse — is a `KeyError` here rather than a silent "no".
+def _is_mesh(data: Any) -> bool:
+    """Whether `data` is an unstructured mesh :func:`extract` can read a variable off.
+
+    Args:
+        data: The candidate.
+
+    Returns:
+        `True` for a pyramids `UgridDataset`. Matched by type, like the raster test, because that is how
+        :func:`extract` chooses the branch — a mesh is told apart from a raster by *being* one, not by
+        exposing a member a raster lacks.
+    """
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    return isinstance(data, UgridDataset)
+
+
 _RECOGNISERS: Mapping[str, Callable[[Any], bool]] = MappingProxyType(
-    {"raster": _is_raster, "array": _is_array, "vector": _is_vector}
+    {
+        "raster": _is_raster,
+        "array": _is_array,
+        "vector": _is_vector,
+        "mesh": _is_mesh,
+    }
 )
 
 
@@ -308,6 +331,8 @@ def extract(
     from pyramids.feature import FeatureCollection
     from pyramids.netcdf import NetCDF
 
+    if _is_mesh(data):
+        return _from_ugrid(data, variable, metadata, crs=crs)
     # NetCDF subclasses Dataset, so it MUST be checked before the Dataset branch.
     if isinstance(data, NetCDF):
         return _from_netcdf(data, variable, metadata, band=band, crs=crs)
@@ -555,7 +580,7 @@ def _from_raster(
     )
 
 
-def _variable_attributes(nc: Any, variable: str) -> dict:
+def _variable_attributes(nc: Any, variable: str | None) -> dict:
     """The CF attributes pyramids read off one NetCDF variable, as a plain mapping.
 
     ``NetCDF.meta_data`` is a ``NetCDFMetadata`` whose ``variables`` hold one ``VariableInfo`` per variable,
@@ -612,7 +637,8 @@ def _netcdf_slice(z: np.ndarray, named: str, band: int) -> np.ndarray:
             slices,
             DEFAULT_BAND,
         )
-    return z[band - 1]
+    taken: np.ndarray = z[band - 1]
+    return taken
 
 
 def _from_netcdf(
@@ -682,6 +708,106 @@ def _from_netcdf(
             # recorded as None — a reader asking for it then gets their own fallback.
             **({} if variable is None else {"variable": variable}),
             **_identity(attributes),
+            **(metadata or {}),
+        },
+    )
+
+
+def _fan_values(values: np.ndarray, mesh: Any, triangles: np.ndarray) -> np.ndarray:
+    """Spread one value per mesh face over the fan triangles that face was cut into.
+
+    A face with ``N`` nodes becomes ``N - 2`` triangles, so a face-located variable carries fewer values
+    than the triangulation has triangles. Repeating each face's value across its own triangles is what
+    keeps a quad flat-shaded as one colour instead of being silently misaligned onto other faces.
+
+    Args:
+        values: One value per mesh face.
+        mesh: The pyramids ``Mesh2d`` whose connectivity was triangulated.
+        triangles: The fan triangulation, used to check the spread result lines up with it.
+
+    Returns:
+        np.ndarray: one value per triangle.
+
+    Raises:
+        ValueError: when the repeated values do not match the triangle count, which means the mesh's
+            connectivity and its fan triangulation disagree — colouring it would be a guess.
+    """
+    per_face = np.asarray(mesh.face_node_connectivity.nodes_per_element()) - 2
+    # A face with fewer than three valid nodes yields no triangles and pyramids skips it, so clip rather
+    # than repeat a negative count.
+    spread = np.repeat(values, np.clip(per_face, 0, None))
+    if spread.size != triangles.shape[0]:
+        raise ValueError(
+            f"the mesh has {triangles.shape[0]} triangles but its face values spread to "
+            f"{spread.size}; connectivity and triangulation disagree"
+        )
+    return spread
+
+
+def _from_ugrid(
+    ug: Any, variable: str | None, metadata: dict | None, *, crs: Any = None
+) -> MeshSource:
+    """Build a :class:`MeshSource` from a pyramids ``UgridDataset`` variable (defaults to the first).
+
+    The geometry comes from pyramids rather than being rebuilt here: ``Mesh2d.fan_triangles`` cuts every
+    face — triangle, quad or larger polygon — into triangles with pure numpy, which is both the one shape
+    a triangular renderer takes and the reason this stays inside ``base/``'s engine-neutral rule.
+    Re-triangulating the nodes instead (a Delaunay pass) would invent faces the mesh does not have and
+    mis-assign face-located values onto them.
+
+    Args:
+        ug: The pyramids ``UgridDataset`` to read.
+        variable: The data variable to draw; ``None`` takes the first.
+        metadata: Extra metadata merged over the derived keys (the caller wins).
+        crs: The CRS the mesh's coordinates are already in, stored verbatim; ``None`` derives it.
+
+    Returns:
+        MeshSource: the mesh source, with values on the nodes or on the triangles.
+
+    Raises:
+        ValueError: when the mesh carries no data variables, when ``variable`` names one it does not
+            carry, or when the variable sits on a location a surface render cannot colour.
+    """
+    carried = list(ug.data_variable_names)
+    if variable is None:
+        if not carried:
+            raise ValueError("UgridDataset has no data variables to plot")
+        variable = carried[0]
+    elif variable not in carried:
+        raise ValueError(
+            f"variable={variable!r} is not in this UgridDataset, which carries {carried}"
+        )
+    held = ug.data_vars[variable]
+    location = getattr(held, "location", None)
+    if location not in MESH_LOCATIONS:
+        raise ValueError(
+            f"variable={variable!r} sits on {location!r}; a mesh render colours "
+            f"{' or '.join(MESH_LOCATIONS)} values"
+        )
+    mesh = ug.mesh
+    triangles = np.asarray(mesh.fan_triangles)
+    values = np.ma.filled(
+        np.ma.asarray(ug.masked_values(variable)).astype("float64"), np.nan
+    )
+    if location == "face":
+        values = _fan_values(values, mesh, triangles)
+    units = getattr(held, "units", None)
+    standard_name = getattr(held, "standard_name", None)
+    return MeshSource(
+        _axis(values, "z", units),
+        _axis(mesh.node_x, "x"),
+        _axis(mesh.node_y, "y"),
+        triangles=triangles,
+        location=location,
+        crs=crs if crs is not None else declared_crs(ug),
+        units=units,
+        metadata={
+            "kind": "mesh",
+            "variable": variable,
+            "location": location,
+            "n_faces": int(mesh.n_face),
+            "n_nodes": int(mesh.n_node),
+            **({} if standard_name is None else {"standard_name": standard_name}),
             **(metadata or {}),
         },
     )

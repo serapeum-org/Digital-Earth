@@ -24,14 +24,17 @@ from digitalearth.base.sources.extractors import (
     get_stack,
     require_drawable,
 )
+from digitalearth.base.sources.mesh import MESH_LOCATIONS, MeshSource
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.types import PlottableData
 
 __all__ = [
     "DRAWABLE_FAMILIES",
+    "MESH_LOCATIONS",
     "UNNAMED_BAND",
     "DimensionInfo",
+    "MeshSource",
     "Source",
     "band_field_name",
     "get_source",

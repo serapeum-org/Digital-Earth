@@ -189,10 +189,14 @@ def test_netcdf_pinned_variable_is_plottable():
         because it *is* the variable. The extractor used to read that as an empty container and refuse it.
     """
     pinned = _slice_valued_netcdf().get_variable("t2m")
-    assert list(pinned.variable_names) == [], "a pinned subset should report no names of its own"
+    assert list(pinned.variable_names) == [], (
+        "a pinned subset should report no names of its own"
+    )
     src = get_source(pinned)
     assert src.z.values.ndim == 2, f"expected a 2-D field, got {src.z.values.ndim}-D"
-    assert np.unique(src.z.values).tolist() == [0.0], "the pinned subset should default to its first slice"
+    assert np.unique(src.z.values).tolist() == [0.0], (
+        "the pinned subset should default to its first slice"
+    )
 
 
 def test_netcdf_pinned_variable_honours_band():
@@ -907,3 +911,134 @@ class TestRequireDrawableRefusesByName:
 
         with pytest.raises(ValueError, match="must name families from"):
             require_drawable({}, caller="Map.field()", accepts=())
+
+
+def _quad_and_triangle_mesh(location: str = "face"):
+    """Build a two-face UGRID mesh: a quad and a triangle, with values on ``location``.
+
+    The quad fan-triangulates into two triangles and the triangle into one, so a face-located value that
+    is spread correctly reads back as ``[10, 10, 20]`` — the mesh's own faces, not a Delaunay guess.
+
+    Args:
+        location: ``"face"`` or ``"node"`` — where the data variable sits.
+
+    Returns:
+        The pyramids ``UgridDataset``.
+    """
+    import numpy as np
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    mesh = Mesh2d(
+        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
+        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
+        face_node_connectivity=Connectivity(
+            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
+            fill_value=-1,
+            cf_role="face_node_connectivity",
+            original_start_index=0,
+        ),
+    )
+    if location == "face":
+        held = {
+            "depth": MeshVariable(
+                name="depth",
+                location="face",
+                mesh_name="m",
+                shape=(2,),
+                _data=np.array([10.0, 20.0]),
+            )
+        }
+    else:
+        held = {
+            "zs": MeshVariable(
+                name="zs",
+                location="node",
+                mesh_name="m",
+                shape=(5,),
+                _data=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
+            )
+        }
+    return UgridDataset(mesh=mesh, data_variables=held, global_attributes={})
+
+
+def test_ugrid_face_values_spread_over_the_faces_own_triangles():
+    """A face-located variable keeps each face's value on that face's fan triangles (#499).
+
+    Test scenario:
+        The quad carries 10 and fan-triangulates into two triangles; the triangle carries 20. Colouring
+        the mesh by a Delaunay triangulation of its nodes instead would invent faces the mesh does not
+        have and paint these values onto the wrong ones.
+    """
+    src = get_source(_quad_and_triangle_mesh("face"))
+    assert src.location == "face", f"expected face-located values, got {src.location!r}"
+    assert src.n_triangles == 3, (
+        f"a quad plus a triangle is three fan triangles, got {src.n_triangles}"
+    )
+    assert src.z.values.tolist() == [10.0, 10.0, 20.0], (
+        f"face values did not follow their own faces: {src.z.values.tolist()}"
+    )
+
+
+def test_ugrid_node_values_stay_one_per_node():
+    """A node-located variable keeps one value per node, with the node indices left untouched."""
+    src = get_source(_quad_and_triangle_mesh("node"))
+    assert src.location == "node"
+    assert src.z.values.size == 5, (
+        f"expected one value per node, got {src.z.values.size}"
+    )
+    assert src.x.values.size == 5 and src.y.values.size == 5
+
+
+def test_ugrid_source_records_the_mesh_in_metadata():
+    """The mesh source describes itself as a mesh and records its face and node counts."""
+    src = get_source(_quad_and_triangle_mesh("face"))
+    recorded = (
+        src.metadata("kind"),
+        src.metadata("variable"),
+        src.metadata("n_faces"),
+        src.metadata("n_nodes"),
+    )
+    assert recorded == ("mesh", "depth", 2, 5), f"unexpected mesh metadata: {recorded}"
+
+
+def test_ugrid_variable_not_carried_is_refused():
+    """Naming a variable the mesh does not carry is refused, listing the ones it does."""
+    with pytest.raises(ValueError, match="is not in this UgridDataset"):
+        get_source(_quad_and_triangle_mesh("face"), variable="nope")
+
+
+def test_ugrid_without_data_variables_is_refused():
+    """A mesh with no data variables is refused rather than drawn as a blank surface."""
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    mesh = _quad_and_triangle_mesh("face").mesh
+    empty = UgridDataset(mesh=mesh, data_variables={}, global_attributes={})
+    with pytest.raises(ValueError, match="no data variables"):
+        get_source(empty)
+
+
+def test_ugrid_variable_on_an_uncolourable_location_is_refused():
+    """A variable on an edge is refused: a surface render colours nodes or faces, nothing else."""
+    import numpy as np
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    mesh = _quad_and_triangle_mesh("face").mesh
+    edged = UgridDataset(
+        mesh=mesh,
+        data_variables={
+            "e": MeshVariable(
+                name="e",
+                location="edge",
+                mesh_name="m",
+                shape=(1,),
+                _data=np.array([1.0]),
+            )
+        },
+        global_attributes={},
+    )
+    with pytest.raises(ValueError, match="colours node or face"):
+        get_source(edged)
