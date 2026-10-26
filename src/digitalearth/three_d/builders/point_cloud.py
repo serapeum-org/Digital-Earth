@@ -145,13 +145,13 @@ def _read_las_path(
         ImportError: when ``pointclouds`` is not installed.
         ValueError: when ``path`` is not a ``.las``/``.laz`` file, or ``value_column`` names an unknown field.
     """
-    pointclouds = _require_pointclouds()
     suffix = Path(path).suffix.lower()
     if suffix not in (".las", ".laz"):
         raise ValueError(
             f"point_cloud() reads a file only as LAS/LAZ, got {Path(path).name!r}; pass a .las/.laz path, or "
             "decode other formats to an (N, 3) array first"
         )
+    pointclouds = _require_pointclouds()
     cloud = pointclouds.PointCloud.read_file(str(path))
     coords = PointArrays.of(cloud.x, cloud.y, cloud.z, crs=cloud.crs)
     values = _las_colour(cloud, value_column) if value_column else None
