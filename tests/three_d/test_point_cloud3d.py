@@ -10,8 +10,46 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 
+from pathlib import Path
+
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.builders.point_cloud import SCALAR, _coords_from_array
+from digitalearth.three_d.builders.point_cloud import (
+    LAS_COLOUR_FIELDS,
+    SCALAR,
+    _coords_from_array,
+    _read_las_path,
+    _require_pointclouds,
+)
+
+#: The tiny LAS fixture: 8 points, EPSG:28992, 0.01 scale with a 155000/463000 offset (see make_las_fixture).
+_LAS_FIXTURE = Path(__file__).resolve().parents[1] / "data" / "point_cloud_28992.las"
+#: Real-world coordinates the fixture encodes, exact at the 0.01 LAS scale.
+_LAS_X = np.array(
+    [
+        155000.00,
+        155000.50,
+        155001.00,
+        155001.50,
+        155002.00,
+        155002.50,
+        155003.00,
+        155003.50,
+    ]
+)
+_LAS_Y = np.array(
+    [
+        463000.00,
+        463000.25,
+        463000.50,
+        463000.75,
+        463001.00,
+        463001.25,
+        463001.50,
+        463001.75,
+    ]
+)
+_LAS_Z = np.array([10.00, 10.50, 11.00, 11.50, 12.00, 12.50, 13.00, 13.50])
+_LAS_CLASSIFICATION = [2, 2, 6, 6, 2, 5, 5, 2]
 
 
 @pytest.fixture(autouse=True)
@@ -589,3 +627,103 @@ class TestTheColumnIsClassifiedOnce:
         assert np.isnan(with_missing["scalars"][1]), (
             f"a missing value must stay missing, not re-categorise the column: {with_missing['scalars']}"
         )
+
+
+class TestLasPath:
+    """`point_cloud(<path>)` reads a LAS/LAZ file through `pointclouds` (#206), not by decoding it here."""
+
+    @pytest.fixture(autouse=True)
+    def _need_pointclouds(self):
+        """Skip the whole class unless the optional `pointclouds` reader is installed."""
+        pytest.importorskip("pointclouds")
+
+    def test_reads_a_las_path_and_registers_one_layer(self):
+        """A `.las` path renders and registers a single layer with one point per record."""
+        scene = Scene3D(off_screen=True)
+        actor = scene.point_cloud(str(_LAS_FIXTURE), eye_dome_lighting=False)
+        assert actor is not None, "reading a LAS path should render a cloud"
+        assert len(scene.layers) == 1, f"expected one layer, got {len(scene.layers)}"
+        assert scene.layers[0][0].n_points == 8, scene.layers[0][0].n_points
+        scene.close()
+
+    def test_a_pathlib_path_is_accepted(self):
+        """A `Path` (not only a `str`) is read, so callers need not stringify first."""
+        scene = Scene3D(off_screen=True)
+        actor = scene.point_cloud(_LAS_FIXTURE, eye_dome_lighting=False)
+        assert actor is not None, "a pathlib.Path LAS file should render"
+        scene.close()
+
+    def test_coordinates_use_the_scaled_accessors(self):
+        """The reader applies the LAS scale/offset, so coordinates are real-world values, not raw integers."""
+        coords, _values = _read_las_path(_LAS_FIXTURE, None)
+        pts = coords.as_columns()
+        assert np.allclose(pts[:, 0], _LAS_X, atol=1e-6), pts[:, 0]
+        assert np.allclose(pts[:, 1], _LAS_Y, atol=1e-6), pts[:, 1]
+        assert np.allclose(pts[:, 2], _LAS_Z, atol=1e-6), pts[:, 2]
+
+    def test_the_file_crs_is_adopted_by_the_scene(self):
+        """The LAS header CRS is read and sets the scene's display CRS (the first layer to carry one)."""
+        scene = Scene3D(off_screen=True)
+        assert scene.display_crs is None, "a fresh scene declares no CRS"
+        scene.point_cloud(_LAS_FIXTURE, eye_dome_lighting=False)
+        assert scene.display_crs == 28992, scene.display_crs
+        scene.close()
+
+    def test_colour_by_classification(self):
+        """`value_column="classification"` colours the cloud by the ASPRS class codes it carries."""
+        scene = Scene3D(off_screen=True)
+        scene.point_cloud(
+            _LAS_FIXTURE, value_column="classification", eye_dome_lighting=False
+        )
+        cloud = scene.layers[0][0]
+        assert SCALAR in cloud.point_data, "a coloured cloud carries its colour scalar"
+        assert cloud.n_points == len(_LAS_CLASSIFICATION), cloud.n_points
+        scene.close()
+
+    def test_colour_by_intensity(self):
+        """`value_column="intensity"` is accepted and produces a monotonic scalar matching the fixture."""
+        coords, values = _read_las_path(_LAS_FIXTURE, "intensity")
+        assert values is not None, "intensity should be read as the colour field"
+        assert len(values) == len(coords.as_columns()), "one intensity per point"
+        assert values.tolist() == [100, 200, 300, 400, 500, 600, 700, 800], (
+            values.tolist()
+        )
+
+    def test_an_unknown_value_column_raises(self):
+        """A field the reader does not expose is a clear error naming the allowed fields."""
+        with pytest.raises(
+            ValueError, match="cannot colour a LAS/LAZ cloud by 'elevation'"
+        ) as exc:
+            _read_las_path(_LAS_FIXTURE, "elevation")
+        assert "classification" in str(exc.value), exc.value
+
+    def test_a_non_las_path_raises(self):
+        """A path that is not LAS/LAZ is refused rather than handed to the reader."""
+        with pytest.raises(ValueError, match="reads a file only as LAS/LAZ") as exc:
+            _read_las_path("survey.csv", None)
+        assert "survey.csv" in str(exc.value), exc.value
+
+    def test_laz_suffix_is_accepted_by_the_guard(self):
+        """The suffix guard accepts `.laz` too (a missing file then fails later, not at the guard)."""
+        with pytest.raises(Exception) as exc:
+            _read_las_path("nope.laz", None)
+        assert "reads a file only as LAS/LAZ" not in str(exc.value), (
+            "a .laz suffix must pass the format guard and fail only on the missing file"
+        )
+
+    def test_missing_pointclouds_raises_an_actionable_error(self, monkeypatch):
+        """Without `pointclouds` installed, the reader raises a clear ImportError naming the install."""
+        import sys
+
+        monkeypatch.setitem(sys.modules, "pointclouds", None)
+        with pytest.raises(ImportError, match=r"digitalearth\[3d\]") as exc:
+            _require_pointclouds()
+        assert "pointclouds" in str(exc.value), exc.value
+
+    def test_colour_fields_are_the_documented_set(self):
+        """The colourable LAS fields match what the docstring advertises."""
+        assert set(LAS_COLOUR_FIELDS) >= {
+            "classification",
+            "intensity",
+            "return_number",
+        }, LAS_COLOUR_FIELDS

@@ -79,6 +79,11 @@ dependencies = [
     # stack too. Accepted deliberately — it is what keeps the export dependencies correct per pyvista version.
     "pyvista[jupyter] >=0.48",
     "geovista >=0.5.3",
+    # LAS/LAZ point-cloud reading for `point_cloud(<path>)`, imported lazily via `_require_pointclouds` so the
+    # rest of the tier works without it. `pointclouds` is the stack's point-cloud engine, not a GIS competitor:
+    # its GDAL-free core (numpy/laspy/pyproj/scipy) reads LAS/LAZ, and Digital-Earth consumes it rather than
+    # decoding LAS itself or importing laspy directly (enforced by `test_no_competitor_imports`).
+    "pointclouds >=0.1.0",
     "imageio >=2.34",
     "imageio-ffmpeg >=0.5",
 ]

@@ -9,6 +9,10 @@ see ``planning/interactive-3d/00-architecture-and-ingestion.md``.
 ``geopandas``/``shapely`` are forbidden as **imports** too: we *read* coordinates off the GeoDataFrame pyramids
 returns (no import needed). A genuine need to import them is a signal to push the capability into pyramids, not to
 relax this test.
+
+Point-cloud readers (``laspy``/``lazrs``/``pdal``) are forbidden for the same reason: reading a LAS/LAZ file is
+point-cloud I/O, which lives in the ``pointclouds`` package (the stack's point-cloud engine). The tier consumes
+``pointclouds`` — which is **not** forbidden — and never decodes LAS itself (#206).
 """
 
 import ast
@@ -31,6 +35,9 @@ FORBIDDEN = {
     "geopandas",
     "pyvista_xarray",
     "pvxarray",
+    "laspy",
+    "lazrs",
+    "pdal",
 }
 
 #: Package roots the rule applies to (relative to the repo root). Only ``src/`` is guarded — test
