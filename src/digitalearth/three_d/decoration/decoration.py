@@ -941,7 +941,7 @@ def _draw_graticule_labels(
 def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> tuple[Any, Any] | None:
     """Draw the meridian/parallel grid a `graticule` layer describes (lat/lon lines + edge labels).
 
-    The tier's answer to forge3d's graticules: constant-longitude and constant-latitude lines across the
+    The tier's graticules: constant-longitude and constant-latitude lines across the
     framed extent, **reprojected into the scene's display CRS through pyramids** so the grid aligns with the
     data (unlike the reference lines, which are drawn as-given and warned about — a graticule is generated here,
     so it is cheap to project). The coordinate work is pyramids'; this tier only draws the polylines.
@@ -1751,9 +1751,9 @@ class DecorationMixin(_MixinBase):
         intensity: float = 1.0,
         color: Any = None,
     ) -> Self:
-        """Light the scene with a directional sun at a given azimuth and elevation (forge3d parity, #493).
+        """Light the scene with a directional sun at a given azimuth and elevation (#493).
 
-        The rasterization-grade half of forge3d's lighting: a single distant directional light, placed along a
+        The rasterization-grade half of scene lighting: a single distant directional light, placed along a
         compass azimuth and an elevation above the horizon, which is what gives relief its shading. It is
         **not** a physically-based sun and there is no path tracing here — VTK is a rasterizer — but paired with
         :meth:`shadows` and :meth:`ambient_occlusion` it reads as real relief rather than flat colour.
@@ -1885,7 +1885,7 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Draw a latitude/longitude grid across the scene, labelled along its edges.
 
-        The tier's answer to forge3d's graticules, and the Core ``graticule`` verb: meridians (constant
+        The tier's graticules, and the Core ``graticule`` verb: meridians (constant
         longitude, ``lon_step`` apart) and parallels (constant latitude, ``lat_step`` apart) over the framed
         extent, **reprojected into the display CRS through pyramids** so the grid lies on the data rather than
         beside it. A graticule is generated here rather than read from a file, so — unlike the Natural-Earth
@@ -1988,10 +1988,10 @@ class DecorationMixin(_MixinBase):
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
-        """Label every feature with the text in ``column``, each on a readable halo (forge3d parity, #491).
+        """Label every feature with the text in ``column``, each on a readable halo (#491).
 
         The tier's Core ``labels`` verb — "label features from a column" — and the plural, styled companion to
-        :meth:`text` (which places one string at one coordinate). It is the tier's answer to forge3d's labels
+        :meth:`text` (which places one string at one coordinate). It is the tier's labels layer
         with halos and occlusion handling: each feature is labelled at a representative point, on a filled box
         that keeps the text legible against busy geometry, with occlusion so labels behind the terrain can be
         hidden. The keywords are the web and static tiers' wherever the three can mean the same thing (the Core

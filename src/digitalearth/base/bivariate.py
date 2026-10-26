@@ -1,6 +1,6 @@
 """Bivariate classification: two variables encoded as one colour from an n×n matrix (engine-neutral).
 
-forge3d's ``BivariateRasterStyle`` in the shared, renderer-free layer. Each variable is cut into ``n`` classes
+A bivariate raster style in the shared, renderer-free layer. Each variable is cut into ``n`` classes
 by the **shared classifier** (the same ``scheme``/``k`` every tier uses, through
 :meth:`~digitalearth.base.spec.scale.Scale.breaks_of`), and the ``(class_a, class_b)`` pair picks a colour from
 an ``n×n`` matrix. The result is per-element RGBA plus the legend grid, so any tier can draw it.

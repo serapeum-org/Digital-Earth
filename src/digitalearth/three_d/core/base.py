@@ -2265,7 +2265,7 @@ class Scene3DBase:
     def export_vector(self, path: Destination) -> Path:
         """Export the current view as a vector graphic (SVG/PDF/EPS/PS/TEX) through VTK's GL2PS exporter.
 
-        forge3d's SVG/PDF export, for a publication figure that scales without pixelation. The format is the
+        Vector SVG/PDF export, for a publication figure that scales without pixelation. The format is the
         suffix of ``path`` — one of :data:`VECTOR_SUFFIXES` — and PyVista's
         :meth:`~pyvista.Plotter.save_graphic` writes it. **GL2PS rasterises what it cannot draw as vectors**: a
         textured terrain, a draped basemap or a ray-cast volume embeds as a raster inset inside the
@@ -2486,7 +2486,7 @@ class Scene3DBase:
         )
 
     def save_bundle(self, path: Destination) -> Path:
-        """Save the whole scene to a versioned zip that :meth:`open_bundle` reads back (forge3d parity, #495).
+        """Save the whole scene to a versioned zip that :meth:`open_bundle` reads back (#495).
 
         A scene bundle stores the scene's **description** — its `figure_spec` plus its drawn decoration — in one
         zip, so the picture can be put down and picked up again, on another machine or another day. The camera

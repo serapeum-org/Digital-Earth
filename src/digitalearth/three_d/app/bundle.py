@@ -1,6 +1,6 @@
 """Scene bundles — save a 3-D scene to a versioned zip and open it back (#495).
 
-forge3d saves and reloads whole scenes. This tier already has the hard half — a :class:`FigureSpec` that
+Whole scenes save and reload to a versioned bundle. This tier already has the hard half — a :class:`FigureSpec` that
 serializes to a dict and redraws from one — so a bundle is a small, versioned container around that: a zip
 holding one ``manifest.json`` with the figure description and the scene's drawn decoration (title styling, the
 coordinate frame, the cartographic furniture, the lighting). The camera and vertical exaggeration already
