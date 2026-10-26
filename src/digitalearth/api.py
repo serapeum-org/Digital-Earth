@@ -716,7 +716,7 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
             ['matplotlib']
 
             ```
-        - Only a mesh is refused: anything else passes on every backend, unexamined:
+        - Only a mesh is refused: anything else passes on every backend, whatever it is:
             ```python
             >>> import numpy as np
             >>> from digitalearth.api import _reject_mesh_backend
@@ -875,7 +875,8 @@ def quickmap(
     """Build a finished map from a single pyramids object in one call.
 
     Args:
-        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
+        data: A pyramids ``Dataset`` (raster), ``FeatureCollection`` (points/polygons) or
+            ``UgridDataset`` (an unstructured mesh, drawn on ``backend="matplotlib"`` only).
         crs: Display CRS for the map (`backend="matplotlib"`/`"interactive"`, where it defaults to `3857`, and
             `"web"`, which accepts only `4326`). With `backend="3d"` the scene is drawn in it; left out, the 3-D
             scene takes the data's own CRS.
@@ -954,9 +955,13 @@ def quickmap(
             ``FeatureCollection``, which would otherwise draw nothing in silence, and for a keyword that
             contradicts the ``kind`` it was written beside — ``kind="contourf"`` *is* ``filled=True``, so
             naming both says one thing twice and disagrees. ``colorbar`` is never refused, since every
-            backend honours it.
-        TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection`` — and, on
-            ``backend="3d"``, for a line ``FeatureCollection`` too, which has no 3-D builder.
+            backend honours it. Also for a ``variable`` the input does not carry (or names on an input
+            with no variables to choose from), and for a ``kind`` other than ``"tripcolor"`` on a mesh,
+            which has only the one render.
+        TypeError: if ``data`` is none of a ``Dataset``, a ``FeatureCollection`` or a ``UgridDataset``;
+            for a ``UgridDataset`` on any backend but ``"matplotlib"``, which is the only tier with a
+            triangular render (:data:`MESH_BACKENDS`); and, on ``backend="3d"``, for a line
+            ``FeatureCollection`` too, which has no 3-D builder.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -1015,8 +1020,10 @@ def quickmap(
     )
     # Select the input before any backend is built: `variable=` is about which field is drawn, so it is
     # answered the same way for all four tiers.
-    data = _pinned_variable(data, variable)
+    # Refuse first, then narrow: narrowing a mesh the chosen backend cannot draw is work thrown away,
+    # and `_reject_mesh_backend` only needs the input's type (round-2 N4).
     _reject_mesh_backend(data, backend)
+    data = _pinned_variable(data, variable)
     # Past the gate, fill in the defaults the surviving backends expect.
     colorbar = True if colorbar is _UNSET else colorbar
     coastlines = False if coastlines is _UNSET else coastlines

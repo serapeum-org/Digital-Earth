@@ -345,7 +345,8 @@ def extract(
     if isinstance(data, np.ndarray):
         return _from_numpy(data, x, y, metadata, crs=crs)
     # Last, not first: a UgridDataset is no subclass of any branch above, so the order is free — and
-    # testing it here keeps the ugrid subpackage unimported for every raster and vector extraction.
+    # testing it here keeps the ugrid subpackage unimported for a raster or vector extraction that does
+    # not come through `quickmap`, whose own input gate imports it on every call anyway.
     if _is_mesh(data):
         return _from_ugrid(data, variable, metadata, band=band, crs=crs)
     raise TypeError(f"cannot build a Source from {type(data).__name__}")

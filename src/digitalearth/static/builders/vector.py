@@ -1170,6 +1170,15 @@ class _TriInput:
         triangles = np.asarray(self.triangles)
         keep = _placeable_triangles(triangles, x, y)
         if not keep.any():
+            # Logged as well as raised: `_tri` answers an OffLimbError with the scene's own generic skip
+            # message, so this detail — that it was *every* triangle, and how many — would otherwise be
+            # built and thrown away (round-2 N1).
+            logger.warning(
+                "%s: none of the mesh's %d triangles keep all three nodes in %r",
+                kind,
+                int(triangles.shape[0]),
+                crs,
+            )
             raise OffLimbError(
                 f"{kind}: none of the mesh's {triangles.shape[0]} triangles keep all three nodes "
                 f"in {crs!r}, so there is nothing on the view to draw"
@@ -3051,8 +3060,9 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: when fewer than three points were supplied, a ``FeatureCollection`` carries no
-                numeric column to contour, or a mesh's values sit on its faces rather than its nodes.
+            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
+                numeric column to colour by. A mesh's values may sit on its faces **or** its nodes here —
+                that is the difference between this render and the contour ones.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
         self._tri(
