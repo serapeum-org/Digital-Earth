@@ -793,3 +793,49 @@ class TestLasPath:
             f"the refusal should name the file CRS by code, got: {exc.value}"
         )
         scene.close()
+
+    def test_a_las_without_a_crs_leaves_the_scene_crs_unset(self, monkeypatch):
+        """A LAS declaring no CRS is placed as-is: pointclouds returns crs=None and the scene CRS stays unset."""
+        import pointclouds
+
+        stub = pointclouds.PointCloud(
+            x=np.arange(4.0), y=np.arange(4.0), z=np.zeros(4), crs=None
+        )
+        monkeypatch.setattr(
+            pointclouds.PointCloud, "read_file", staticmethod(lambda path: stub)
+        )
+        scene = Scene3D(off_screen=True)
+        scene.point_cloud("nocrs.las", eye_dome_lighting=False)
+        assert scene.display_crs is None, (
+            f"a CRS-less LAS must leave display_crs unset, got {scene.display_crs!r}"
+        )
+        assert scene.layers[0][0].n_points == 4, scene.layers[0][0].n_points
+        scene.close()
+
+    def test_a_crs_without_an_epsg_code_is_carried_as_the_object(self, monkeypatch):
+        """A LAS CRS with no authority code is carried (not dropped), so the scene still adopts it."""
+        import pointclouds
+        import pyproj
+
+        crs = pyproj.CRS.from_proj4("+proj=laea +lat_0=52 +lon_0=10 +datum=WGS84")
+        assert crs.to_epsg() is None, "guard: this CRS must have no authority code"
+        stub = pointclouds.PointCloud(
+            x=np.arange(4.0), y=np.arange(4.0), z=np.zeros(4), crs=crs
+        )
+        monkeypatch.setattr(
+            pointclouds.PointCloud, "read_file", staticmethod(lambda path: stub)
+        )
+        scene = Scene3D(off_screen=True)
+        scene.point_cloud("wkt.las", eye_dome_lighting=False)
+        assert scene.display_crs is not None, (
+            "a no-authority CRS must be adopted, not silently dropped"
+        )
+        scene.close()
+
+    def test_a_non_las_path_is_refused_even_without_pointclouds(self, monkeypatch):
+        """The suffix guard runs before the import, so a non-LAS path is refused with pointclouds absent (L2)."""
+        import sys
+
+        monkeypatch.setitem(sys.modules, "pointclouds", None)
+        with pytest.raises(ValueError, match="reads a file only as LAS/LAZ"):
+            _read_las_path("x.csv", None)
