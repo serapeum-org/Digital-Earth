@@ -474,7 +474,7 @@ def fetch_basemap_image(
     from cleopatra.basemap import tiles as cleo_tiles
 
     box = tuple(float(v) for v in bbox_4326)
-    level: Any = int(zoom) if zoom is not None else "auto"
+    level: int | str = int(zoom) if zoom is not None else "auto"
     image, extent = cleo_tiles.stitch_basemap(box, provider, zoom=level)
     west, south, east, north = extent
     return np.asarray(image), (float(west), float(south), float(east), float(north))
