@@ -56,6 +56,9 @@ DRAWS_WITH_KWARGS = {
     "text": "`add_point_labels(anchor, [label], **style, **props)` — it takes no array, so PyVista refuses one",
     "add_mesh": "the caller's own object and the caller's own array name; VTK refuses a missing array",
     "add_volume": "the caller's own grid and array name; VTK refuses a missing array",
+    "graticule": "`add_mesh(merged, color=..., **props)` — grid lines, so PyVista refuses an array it has none for",
+    "labels": "`add_point_labels(anchors, texts, **style, **props)` — it takes no array, so PyVista refuses one",
+    "bivariate": "`add_mesh(plane, texture=..., **props)` — a textured plane, so PyVista refuses a scalars keyword",
 }
 
 #: The other methods whose signature ends in ``**kwargs`` and which draw nothing from a derived style, each with
@@ -77,6 +80,7 @@ NOT_A_DRAWING_CALL = {
     "slider": "a live widget below the seam: its keywords reach add_slider_widget, not a derived style",
     "enable_picking": "turns on a pick gesture; its keywords reach enable_*_picking, not a derived style",
     "serve": "opens a live trame view of the already-described scene; its keywords reach show_trame",
+    "open_bundle": "a constructor: the keywords configure the new scene opened from the bundle, deriving no style from data",
 }
 
 
@@ -202,6 +206,13 @@ def _draw(scene, builder: str, extra: dict):
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),
         "text": lambda: scene.text(0.0, 0.0, "here", **extra),
+        "graticule": lambda: scene.graticule(bbox=(-10.0, 35.0, 30.0, 60.0), **extra),
+        "labels": lambda: scene.labels(_point_gdf(), "pop", **extra),
+        "bivariate": lambda: scene.bivariate(
+            np.add.outer(np.arange(6.0), np.arange(6.0)),
+            np.add.outer(np.arange(6.0)[::-1], np.arange(6.0)),
+            **extra,
+        ),
         "add_mesh": lambda: scene.add_mesh(pv.Sphere(), **extra),
         "add_volume": lambda: scene.add_volume(_grid(), **extra),
     }

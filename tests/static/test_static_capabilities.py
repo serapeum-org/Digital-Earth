@@ -143,17 +143,26 @@ class TestTheDeclaration:
             CAPABILITIES.schemes.symmetric_difference(INTERACTIVE.schemes)
         )
 
-    def test_the_vector_export_is_this_tier_s_alone(self):
-        """A figure written as PDF or SVG is what matplotlib has and a canvas does not."""
+    def test_vector_export_is_a_renderer_tier_feature_not_a_canvas_one(self):
+        """A figure written as PDF or SVG is what a renderer (matplotlib, and the 3-D GL2PS path) has and a
+        web/interactive canvas does not."""
         from digitalearth.api import _DECLARATIONS
 
-        others = [
+        canvas = [
             backend
             for backend, declaration in _DECLARATIONS.items()
-            if backend != "matplotlib" and declaration.supports("export_vector")
+            if backend not in ("matplotlib", "3d")
+            and declaration.supports("export_vector")
         ]
         assert CAPABILITIES.supports("export_vector"), sorted(CAPABILITIES.features)
-        assert not others, others
+        # The 3-D tier gained SVG/PDF export via VTK's GL2PS writer (#494), so vector export is no longer the
+        # static tier's alone — but it is still a renderer's capability, which a browser canvas does not share.
+        assert _DECLARATIONS["3d"].supports("export_vector"), (
+            "the 3-D tier exports SVG/PDF via GL2PS"
+        )
+        assert not canvas, (
+            f"a browser-canvas tier should not claim vector export: {canvas}"
+        )
 
     @pytest.mark.parametrize(
         "name, phrase",

@@ -12,6 +12,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | capability | matplotlib | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `basemap` | ✓ | ✓ | ✓ | ✓ |
+| `bivariate` | — | — | — | ✓ |
 | `borders` | ✓ | — | ✓ | — |
 | `choropleth` | ✓ | ✓ | ✓ | ✓ |
 | `clusters` | — | ✓ | — | — |
@@ -26,10 +27,10 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `extrusion` | — | ✓ | — | ✓ |
 | `filled_contours` | ✓ | ✓ | ✓ | — |
 | `flow` | ✓ | — | ✓ | — |
-| `graticule` | ✓ | ✓ | ✓ | — |
+| `graticule` | ✓ | ✓ | ✓ | ✓ |
 | `heatmap` | ✓ | ✓ | ✓ | — |
 | `isosurface` | — | — | — | ✓ |
-| `labels` | ✓ | ✓ | ✓ | — |
+| `labels` | ✓ | ✓ | ✓ | ✓ |
 | `lakes` | ✓ | — | ✓ | — |
 | `land` | ✓ | — | ✓ | — |
 | `lines` | ✓ | ✓ | ✓ | ✓ |
@@ -99,18 +100,20 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `domain` | ✓ | — | — | ✓ |
 | `export_html` | — | ✓ | ✓ | ✓ |
 | `export_image` | ✓ | ✓ | ✓ | ✓ |
-| `export_vector` | ✓ | — | — | — |
+| `export_vector` | ✓ | — | — | ✓ |
 | `fullscreen` | — | ✓ | — | — |
 | `geocoder` | — | ✓ | — | — |
 | `geolocate` | — | ✓ | — | — |
 | `globe_control` | — | ✓ | — | — |
 | `layer_switcher` | — | ✓ | ✓ | — |
 | `legend` | ✓ | ✓ | ✓ | ✓ |
+| `lighting` | — | — | — | ✓ |
 | `measure` | — | ✓ | — | — |
 | `navigation` | — | ✓ | — | — |
 | `north_arrow` | — | — | — | ✓ |
 | `raster_renderer` | ✓ | — | ✓ | — |
 | `scale_bar` | — | ✓ | — | ✓ |
+| `scene_bundle` | — | — | — | ✓ |
 | `terrain_control` | — | ✓ | — | — |
 | `time_slider` | — | ✓ | ✓ | — |
 

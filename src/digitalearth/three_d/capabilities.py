@@ -56,6 +56,19 @@ CAPABILITIES = Capabilities(
             # `terrain(texture=)` drapes imagery onto relief. It used to be declared absent; the tier draws it
             # now, so it is a kind here and gone from `absent`.
             "basemap",
+            # A latitude/longitude grid drawn across the framed extent and labelled along its edges
+            # (#490). A layer rather than furniture for the same reason `text` is: it is
+            # drawn where the data is, reprojected into the display CRS through pyramids, not pinned to a
+            # corner of the window.
+            "graticule",
+            # Two rasters encoded as one colour from an n×n matrix (#492).
+            # The class/colour maths is engine-neutral (`base/bivariate.py`); this tier drapes the RGBA image
+            # on a ground plane, so it is a drawn kind like `basemap`, not a feature.
+            "bivariate",
+            # A set of placed labels, each with a filled halo and occlusion handling (#491).
+            # The plural, styled companion to `text`: a layer, drawn where the data is and reprojected into
+            # the display CRS, not corner furniture.
+            "labels",
             "custom:pyvista",
         }
     ),
@@ -84,10 +97,14 @@ CAPABILITIES = Capabilities(
             "animation",
             "export_image",
             "export_html",
+            # Vector export (`export_vector()` / `save("scene.svg")`) through VTK's GL2PS writer (#494).
+            # SVG/PDF/EPS/PS/TEX; a high-resolution raster master is `screenshot(scale=N)`.
+            # Textured surfaces embed as raster insets, and EXR is not offered (VTK writes 8-bit rasters).
+            "export_vector",
             # The map can be framed to a named region or a bbox: `domain()` sets the camera to frame that
             # extent rather than leaving the view to whatever the data happened to fit (#294 follow-up). It
             # used to be declared absent ("framed by its camera, not an extent"); framing the camera *to* an
-            # extent is how that reconciles, which is what forge3d's region framing does too.
+            # extent is how that reconciles, which is what region framing does too.
             "domain",
             # A ground-distance scale bar (`scale_bar()`), drawn as VTK's legend-scale ruler. Honest only
             # under a parallel (orthographic) projection — where one screen distance is one ground distance
@@ -100,6 +117,15 @@ CAPABILITIES = Capabilities(
             # A data/tile credit line (`attribution()`), drawn in a corner like the title's subtitle. The old
             # reason ("a caller writes one beside the image") was under-building; the tier draws it now.
             "attribution",
+            # Directional sun (`sun(azimuth, elevation)`) plus cast shadows (`shadows()`) and ambient
+            # occlusion (`ambient_occlusion()`) — rasterization-grade relief shading (#493).
+            # Drawn view state, re-applied on each plotter like the camera; not path tracing (VTK is a
+            # rasterizer), which stays out of scope.
+            "lighting",
+            # The whole scene saved to a versioned zip and opened back (`save_bundle()`/`open_bundle()`) —
+            # a reloadable scene bundle (#495). Stores the figure description plus the drawn decoration; a
+            # layer drawn from a path or URL round-trips, an in-memory source or a caller mesh is refused.
+            "scene_bundle",
         }
     ),
     absent={

@@ -78,6 +78,13 @@ SCENE_EXPORTERS: dict[str, str] = {
     ".vtksz": "export_vtksz",
 }
 
+#: Suffixes :meth:`Scene3DBase.save` / :meth:`Scene3DBase.export_vector` write as a vector graphic, through
+#: VTK's GL2PS exporter (:meth:`pyvista.Plotter.save_graphic`). GL2PS rasterises what it cannot draw as vectors —
+#: a textured surface or a ray-cast volume embeds as a raster inset — so these are "a vector page of the scene",
+#: not a guarantee every mark is a path. EXR and other HDR raster formats are deliberately absent: VTK's
+#: screenshot path writes 8-bit rasters only, so there is no lossless-float export to offer.
+VECTOR_SUFFIXES: tuple[str, ...] = (".svg", ".pdf", ".eps", ".ps", ".tex")
+
 
 def _reused_categories(scale: Scale | None) -> list[Any] | None:
     """Return a categorical scale's categories — the pass over the column — or ``None``.
@@ -385,7 +392,11 @@ def supported_destinations() -> str:
     """
     frames = " ".join(IMAGE_SUFFIXES)
     exports = " ".join([HTML_SUFFIX, *sorted(SCENE_EXPORTERS)])
-    return f"use a raster-frame suffix ({frames}) or a scene-export suffix ({exports})"
+    vectors = " ".join(VECTOR_SUFFIXES)
+    return (
+        f"use a raster-frame suffix ({frames}), a vector-graphic suffix ({vectors}) "
+        f"or a scene-export suffix ({exports})"
+    )
 
 
 def house_theme() -> "pv.themes.Theme":
@@ -2251,6 +2262,76 @@ class Scene3DBase:
             component.export_html(destination)
         return destination
 
+    def export_vector(self, path: Destination) -> Path:
+        """Export the current view as a vector graphic (SVG/PDF/EPS/PS/TEX) through VTK's GL2PS exporter.
+
+        Vector SVG/PDF export, for a publication figure that scales without pixelation. The format is the
+        suffix of ``path`` — one of :data:`VECTOR_SUFFIXES` — and PyVista's
+        :meth:`~pyvista.Plotter.save_graphic` writes it. **GL2PS rasterises what it cannot draw as vectors**: a
+        textured terrain, a draped basemap or a ray-cast volume embeds as a raster inset inside the
+        otherwise-vector page, so a scene of flat geometry (lines, polygons, a graticule) vectorises cleanly
+        while a textured one does not.
+
+        Args:
+            path: Output file. Its suffix picks the format and must be one of :data:`VECTOR_SUFFIXES`.
+
+        Returns:
+            pathlib.Path: the file that was written.
+
+        Raises:
+            ValueError: when ``path``'s suffix is not one this tier exports as a vector — the message names the
+                supported set — or when the installed pyvista has no ``save_graphic``.
+
+        Examples:
+            - Export a scene to SVG; the file is written and its path handed back:
+                ```python
+                >>> import os, tempfile, pyvista as pv
+                >>> from digitalearth.three_d.core.base import Scene3DBase
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     written = scene.export_vector(os.path.join(folder, "scene.svg"))
+                ...     scene.close()
+                ...     written.suffix, written.stat().st_size > 0
+                ('.svg', True)
+
+                ```
+            - A suffix GL2PS cannot write is refused by name, not by a cryptic VTK error:
+                ```python
+                >>> from digitalearth.three_d.core.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> try:
+                ...     scene.export_vector("scene.png")
+                ... except ValueError as error:
+                ...     print(str(error).split(";")[0])
+                ... finally:
+                ...     scene.close()
+                export_vector() writes a vector graphic and '.png' is not one it can write
+
+                ```
+
+        See Also:
+            save: dispatches here for the vector-graphic suffixes (:data:`VECTOR_SUFFIXES`).
+            screenshot: a rendered raster frame, which takes ``scale=`` for a high-resolution master.
+        """
+        suffix = Path(str(path)).suffix.lower()
+        if suffix not in VECTOR_SUFFIXES:
+            raise ValueError(
+                f"export_vector() writes a vector graphic and {suffix or 'no suffix'!r} is not one it can "
+                f"write; use one of {' '.join(VECTOR_SUFFIXES)}"
+            )
+        exporter = getattr(self.plotter, "save_graphic", None)
+        if exporter is None:
+            import pyvista as pv
+
+            raise ValueError(
+                f"the installed pyvista ({pv.__version__}) has no Plotter.save_graphic, so {suffix!r} cannot "
+                "be exported as a vector graphic"
+            )
+        self._apply_camera()
+        exporter(str(path))
+        return Path(str(path))
+
     def save(self, path: Destination, **kwargs: Any) -> Path:
         """Save the scene, dispatching on ``path``'s suffix — a rendered frame, or a scene export.
 
@@ -2265,6 +2346,9 @@ class Scene3DBase:
         - :data:`SCENE_EXPORTERS` (``.gltf`` ``.obj`` ``.vrml`` ``.wrl`` ``.vtksz``) → the matching
           :class:`pyvista.Plotter` scene exporter, which writes the geometry itself rather than a picture of
           it.
+        - :data:`VECTOR_SUFFIXES` (``.svg`` ``.pdf`` ``.eps`` ``.ps`` ``.tex``) → :meth:`export_vector`, a
+          vector graphic of the view (GL2PS), with textured surfaces embedded as raster insets. These take
+          **no** ``**kwargs`` — passing any with a vector suffix is refused rather than dropped.
         - anything else — **including a path with no suffix at all** — raises. A format is never invented on
           the caller's behalf, so ``save("scene")`` no longer quietly writes ``scene.png``.
 
@@ -2383,6 +2467,15 @@ class Scene3DBase:
                 )
             exporter(str(path), **kwargs)
             return Path(str(path))
+        if suffix in VECTOR_SUFFIXES:
+            # A vector graphic routes through save_graphic, which takes none of save()'s **kwargs — so refuse
+            # them by name rather than drop them silently (a raster suffix forwards them to screenshot).
+            if kwargs:
+                raise ValueError(
+                    f"save() passes no keywords to a vector export; got {sorted(kwargs)} with {suffix!r}. "
+                    "Drop them, or render a high-resolution raster master with screenshot(scale=N)"
+                )
+            return self.export_vector(path)
         reason = (
             "it has no suffix"
             if not suffix
@@ -2391,6 +2484,114 @@ class Scene3DBase:
         raise ValueError(
             f"save() cannot infer a format from {str(path)!r}: {reason}; {supported_destinations()}"
         )
+
+    def save_bundle(self, path: Destination) -> Path:
+        """Save the whole scene to a versioned zip that :meth:`open_bundle` reads back (#495).
+
+        A scene bundle stores the scene's **description** — its `figure_spec` plus its drawn decoration — in one
+        zip, so the picture can be put down and picked up again, on another machine or another day. The camera
+        and vertical exaggeration travel inside the figure, so the bundle reproduces the view as well as the
+        layers.
+
+        It stores a description, not the data: a layer drawn from a path or URL is re-opened from it on load. A
+        scene whose layers were built from an **in-memory** array or object has nothing a description can point
+        back at, so it is refused with a message that says to draw from a path instead — the same boundary
+        ``figure_spec.to_dict()`` keeps.
+
+        Args:
+            path: The bundle file to write.
+
+        Returns:
+            pathlib.Path: the file that was written.
+
+        Raises:
+            ValueError: when the scene holds a caller-built mesh (``add_mesh``/``add_volume``), a layer drawn
+                from an in-memory source, or decoration that is not JSON-serialisable — none of which a
+                description can store.
+
+        Examples:
+            - Bundle a file-backed scene and read it back into an equivalent one:
+                ```python
+                >>> import os, shutil, tempfile
+                >>> from digitalearth.three_d import Scene3D
+                >>> folder = tempfile.mkdtemp()
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain("examples/data/acc4000.tif")
+                >>> _ = scene.set_title("Relief")
+                >>> out = scene.save_bundle(os.path.join(folder, "scene.dez"))
+                >>> scene.close()
+                >>> reopened = Scene3D.open_bundle(out, off_screen=True)
+                >>> reopened.layer_ids
+                ['terrain-1']
+                >>> reopened.figure_spec.panels[0].title
+                'Relief'
+                >>> reopened.close()
+                >>> shutil.rmtree(folder)
+
+                ```
+
+        See Also:
+            open_bundle: reads a bundle back into a scene.
+        """
+        if self.held_objects:
+            raise ValueError(
+                "save_bundle(): a scene holding caller-built meshes (add_mesh/add_volume) cannot be bundled — "
+                "the object is not described in the figure; export the geometry with save('scene.gltf'), or "
+                "draw from a pyramids source, which a bundle can store"
+            )
+        try:
+            figure_dict = self.figure_spec.to_dict()
+        except ValueError as error:
+            raise ValueError(
+                f"save_bundle(): {error} A bundle stores the description, so bundle a scene whose layers are "
+                "drawn from a path or URL rather than an in-memory array"
+            ) from error
+        import json
+
+        decoration = dict(self._decoration)
+        try:
+            json.dumps(decoration)
+        except TypeError as error:
+            raise ValueError(
+                f"save_bundle(): the scene's decoration is not JSON-serialisable ({error}); a keyword passed "
+                "to axes()/orientation_axes() holds a value a bundle cannot store — remove it before bundling"
+            ) from error
+        from digitalearth.three_d.app.bundle import write_bundle
+
+        return write_bundle(path, figure_dict=figure_dict, decoration=decoration)
+
+    @classmethod
+    def open_bundle(cls, path: Destination, **scene_kwargs: Any) -> Self:
+        """Read a scene bundle written by :meth:`save_bundle` back into a scene.
+
+        The figure is rebuilt and drawn (:meth:`from_figure`), then the stored decoration is re-applied, so the
+        reopened scene draws the same picture — the same layers, the same view, the same title, furniture and
+        lighting.
+
+        Args:
+            path: The bundle file to read.
+            **scene_kwargs: Passed to the scene constructor — ``off_screen``, ``window_size``, ``strict``, ….
+
+        Returns:
+            The scene the bundle describes, with every layer drawn.
+
+        Raises:
+            ValueError: when the file is not a scene bundle, or is a format version this release cannot read.
+
+        See Also:
+            save_bundle: writes the bundle this reads.
+        """
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.three_d.app.bundle import read_manifest
+        from digitalearth.three_d.decoration.decoration import redraw_decoration
+
+        manifest = read_manifest(path)
+        scene = cls.from_figure(
+            FigureSpec.from_dict(manifest["figure"]), **scene_kwargs
+        )
+        scene._decoration = dict(manifest.get("decoration", {}))
+        redraw_decoration(scene)
+        return scene
 
     def show(self, **kwargs: Any) -> Any:
         """Display the scene interactively (or render a frame off-screen).
