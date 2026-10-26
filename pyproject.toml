@@ -25,7 +25,7 @@ classifiers = [
 requires-python = ">= 3.11, <4"
 
 # GDAL is intentionally omitted from runtime deps: conda-forge / pixi
-# users get gdal via the feedstock, and pyramids-gis pulls native GDAL
+# users get gdal via the feedstock, and pyramids-core pulls native GDAL
 # in transitively. Listing pip's PyPI GDAL would force a from-source
 # build on Windows (no wheel exists) and break most end-user installs.
 dependencies = [
@@ -58,7 +58,7 @@ dependencies = [
     # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is
     # one repackaging away from a ModuleNotFoundError raised from inside basemap().
     "xyzservices >=2023.10.0",
-    "pyramids-gis >=0.71.0",
+    "pyramids-core >=0.71.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]

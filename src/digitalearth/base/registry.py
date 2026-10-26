@@ -19,7 +19,7 @@ notebook.
 
 Nothing here imports a renderer. pyramids is imported inside the default resolver rather than at module level
 to keep importing this module cheap — not to make `base/` pyramids-free, which it is not: `base/crs.py` and
-`base/sources/extractors.py` both import it at module level and `pyramids-gis` is a hard dependency.
+`base/sources/extractors.py` both import it at module level and `pyramids-core` is a hard dependency.
 """
 
 import os
