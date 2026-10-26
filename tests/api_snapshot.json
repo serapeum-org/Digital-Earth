@@ -681,6 +681,7 @@
     "quickplot",
     "scatter",
     "shared_colorbar",
+    "shared_colorbars",
     "statistics",
     "stripes",
     "to_backend"

@@ -23,6 +23,7 @@ STATIC_EXPORTS = {
     "grid": "digitalearth.static.panels.figure",
     "quickpanels": "digitalearth.static.panels.figure",
     "shared_colorbar": "digitalearth.static.panels.figure",
+    "shared_colorbars": "digitalearth.static.panels.figure",
 }
 
 

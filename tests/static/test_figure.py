@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from digitalearth.static import Map, facet, grid, shared_colorbar
+from digitalearth.static import Map, facet, grid, shared_colorbar, shared_colorbars
 from digitalearth.static.panels import figure
 
 #: The words ``plt.subplots`` reads for ``sharex``/``sharey``, as ``grid``'s docstring enumerates them.
@@ -120,6 +120,60 @@ class TestSharedColorbar:
             "a None mappable should add no bar rather than raising"
         )
         assert not fig.axes[0].collections, "no colorbar axes should have been added"
+
+
+class TestSharedColorbars:
+    """Tests for shared_colorbars() — one bar per distinct scale, grouped across panels."""
+
+    def test_groups_panels_by_scale(self, dataset):
+        """Panels sharing a scale get one bar; a panel on a different scale gets its own.
+
+        Test scenario:
+            The "panels 0-2 share a scale, panel 3 is a different variable" case the issue names — three
+            panels keyed 0-100 and one keyed -50..50 must yield two bars, in first-appearance order, without
+            the caller naming a mappable.
+        """
+        fig, maps = grid(2, 2, crs=dataset.epsg)
+        for panel in maps[:3]:
+            panel.field(dataset, vmin=0.0, vmax=100.0)
+        maps[3].field(dataset, vmin=-50.0, vmax=50.0)
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 2, "three panels share one scale, the fourth differs"
+        assert [bar.mappable.get_clim() for bar in bars] == [
+            (0.0, 100.0),
+            (-50.0, 50.0),
+        ]
+        assert len(fig.axes) == 6, "four panels + two colorbar axes"
+
+    def test_one_shared_scale_gives_one_spanning_bar(self, dataset):
+        """Every panel on one scale yields a single bar, labelled once, with no mappable nominated."""
+        fig, maps = grid(1, 3, crs=dataset.epsg)
+        for panel in maps:
+            panel.field(dataset, vmin=0.0, vmax=10.0)
+        bars = shared_colorbars(fig, maps, label="mm")
+        assert len(bars) == 1, "one scale across the panels is one bar"
+        assert bars[0].ax.get_ylabel() == "mm", "the shared label is applied"
+
+    def test_a_panel_that_drew_nothing_contributes_no_bar(self):
+        """Panels with no drawn layer carry no scale, so an empty grid yields no bars and no extra axes."""
+        fig, maps = grid(1, 2, figsize=(4, 4))
+        assert shared_colorbars(fig, maps) == [], "nothing drawn, nothing to key"
+        assert len(fig.axes) == 2, "no colorbar axes added"
+
+    def test_bars_come_in_first_appearance_order(self, dataset):
+        """A scale that recurs rejoins its group; the bars follow where each scale first appears.
+
+        Test scenario:
+            Panels keyed (0, 1), (5, 6), (0, 1) — the third repeats the first's scale, so it joins that
+            group rather than opening a third; two bars result, ordered by first appearance.
+        """
+        fig, maps = grid(1, 3, crs=dataset.epsg)
+        maps[0].field(dataset, vmin=0.0, vmax=1.0)
+        maps[1].field(dataset, vmin=5.0, vmax=6.0)
+        maps[2].field(dataset, vmin=0.0, vmax=1.0)
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 2, "the repeated scale rejoins its group, not a third bar"
+        assert [bar.mappable.get_clim() for bar in bars] == [(0.0, 1.0), (5.0, 6.0)]
 
 
 def _x_group(panel):

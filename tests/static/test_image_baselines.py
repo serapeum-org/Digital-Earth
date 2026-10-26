@@ -49,7 +49,7 @@ import pytest
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 
-from digitalearth.static import Map, grid, shared_colorbar
+from digitalearth.static import Map, grid, shared_colorbar, shared_colorbars
 from digitalearth.static.view import projections
 
 #: Every test in this module is an image test, selected with ``-m mpl`` and compared with ``--mpl``.
@@ -593,6 +593,27 @@ def test_grid_panels_with_shared_colorbar(dataset):
     first = maps[0].field(dataset, cmap="viridis").artist()
     maps[1].contours(dataset, cmap="viridis", levels=6, filled=True)
     shared_colorbar(fig, first, maps, label="accumulation")
+    return fig
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
+def test_grid_panels_with_two_grouped_colorbars(dataset):
+    """A 2×2 grid where three panels share a scale and the fourth differs gets two grouped colorbars (#219).
+
+    Test scenario:
+        ``shared_colorbars`` reads each panel's resolved scale, groups the panels by it, and draws one bar per
+        distinct scale spanning its group — the layout a single ``shared_colorbar`` cannot produce. Three
+        panels keyed 0–100 share one bar; the fourth, keyed −50..50, gets its own. The baseline pins both bars
+        and the space they steal from the four panels, so a regression in the grouping or the span moves it.
+
+    Returns:
+        Figure: the shared figure.
+    """
+    fig, maps = grid(2, 2, crs=dataset.epsg, figsize=(6.0, 6.0))
+    for panel in maps[:3]:
+        panel.field(dataset, cmap="viridis", vmin=0.0, vmax=100.0)
+    maps[3].field(dataset, cmap="magma", vmin=-50.0, vmax=50.0)
+    shared_colorbars(fig, maps)
     return fig
 
 
