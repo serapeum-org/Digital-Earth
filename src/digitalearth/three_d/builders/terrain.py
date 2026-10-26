@@ -356,7 +356,7 @@ class TerrainMixin(_MixinBase):
     ) -> Any:
         """Drape a bivariate raster — two variables encoded as one colour from an n×n matrix (#492).
 
-        forge3d's ``BivariateRasterStyle``: each of two rasters is cut into ``n`` classes by the shared
+        A bivariate raster style: each of two rasters is cut into ``n`` classes by the shared
         classifier, and the ``(class_a, class_b)`` pair picks a colour from an ``n×n`` matrix. The colour
         computation is engine-neutral (:func:`digitalearth.base.bivariate.bivariate_rgba`), and this tier drapes
         the resulting RGBA image on a flat ground plane, the same texture path
