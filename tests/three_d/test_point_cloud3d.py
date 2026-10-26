@@ -21,7 +21,8 @@ from digitalearth.three_d.builders.point_cloud import (
     _require_pointclouds,
 )
 
-#: The tiny LAS fixture: 8 points, EPSG:28992, 0.01 scale with a 155000/463000 offset (see make_las_fixture).
+#: The tiny LAS fixture: 8 points, EPSG:28992, 0.01 scale with a 155000/463000 offset. Regenerate with
+#: ``python tests/data/make_point_cloud_fixture.py tests/data/point_cloud_28992.las``.
 _LAS_FIXTURE = Path(__file__).resolve().parents[1] / "data" / "point_cloud_28992.las"
 #: Real-world coordinates the fixture encodes, exact at the 0.01 LAS scale.
 _LAS_X = np.array(
