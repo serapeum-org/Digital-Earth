@@ -5,6 +5,7 @@ unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, 
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
 
+import logging
 import os
 from collections.abc import Callable, Sequence
 from functools import wraps
@@ -59,6 +60,8 @@ from digitalearth.static.render.renderer import DrawnLayer
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
+logger = logging.getLogger(__name__)
+
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 
 #: The reducer a quadtree uses when the caller names none, and the one a figure falls back to when it carries
@@ -1030,6 +1033,58 @@ def _placeable_triangles(
     return finite[triangles].all(axis=1)
 
 
+def _compacted_nodes(
+    x: np.ndarray, y: np.ndarray, triangles: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Drop the nodes no surviving triangle references, renumbering the triangles onto what is left.
+
+    Filtering triangles keeps the *indices* valid but leaves the dropped nodes in the coordinate arrays, and
+    matplotlib reads the extent from **all** of them. One node at infinity then poisons the data limits: the
+    surviving triangles are drawn correctly and framed in a view about a tenth of a unit wide, which reads as
+    a blank figure. Compacting removes the unreferenced coordinates, so the extent is computed over exactly
+    the nodes that are drawn.
+
+    Args:
+        x: The node x coordinates in the display CRS.
+        y: The node y coordinates.
+        triangles: The surviving ``(n_triangles, 3)`` node indices.
+
+    Returns:
+        tuple: the referenced x and y coordinates, and the triangles renumbered onto them.
+
+    Examples:
+        - The unreferenced third node goes, and the triangle is renumbered onto the two that remain:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _compacted_nodes
+            >>> x = np.array([0.0, 1.0, 0.5, np.inf])
+            >>> nodes_x, nodes_y, triangles = _compacted_nodes(
+            ...     x, np.zeros(4), np.array([[0, 1, 2]])
+            ... )
+            >>> nodes_x.tolist()
+            [0.0, 1.0, 0.5]
+            >>> triangles.tolist()
+            [[0, 1, 2]]
+
+            ```
+        - Nothing is renumbered when every node is already referenced:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _compacted_nodes
+            >>> nodes_x, _, triangles = _compacted_nodes(
+            ...     np.array([0.0, 1.0, 0.5]), np.zeros(3), np.array([[0, 1, 2]])
+            ... )
+            >>> nodes_x.tolist()
+            [0.0, 1.0, 0.5]
+            >>> triangles.tolist()
+            [[0, 1, 2]]
+
+            ```
+    """
+    used, renumbered = np.unique(triangles, return_inverse=True)
+    return x[used], y[used], renumbered.reshape(triangles.shape)
+
+
 def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Draw the render a described unstructured layer asks for, on its own faces or on a triangulation.
 
@@ -1089,10 +1144,21 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
                 f"{kind}: none of the mesh's {triangles.shape[0]} triangles keep all three nodes "
                 f"in {scene.crs!r}, so there is nothing on the view to draw"
             )
+        if not keep.all():
+            logger.warning(
+                "%s: %d of the mesh's %d triangles fall outside %r and are not drawn",
+                kind,
+                int((~keep).sum()),
+                int(triangles.shape[0]),
+                scene.crs,
+            )
         if location == "face":
             # One value per triangle, so the kept triangles take their own values with them.
             z = z[keep]
         triangles = triangles[keep]
+        # Compact after filtering: a dropped node left in `x`/`y` still counts towards the extent, which is
+        # how a partly off-limb mesh ended up drawn outside a collapsed view.
+        x, y, triangles = _compacted_nodes(x, y, triangles)
     glyph = MeshGlyph(x, y, triangles, ax=scene.ax, fig=scene.fig)
     # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
     if kind == "tripcolor":

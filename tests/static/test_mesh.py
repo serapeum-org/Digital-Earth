@@ -99,3 +99,23 @@ def test_tripcolor_skips_a_mesh_no_projection_can_place(ugrid_mesh, caplog):
     with caplog.at_level(logging.WARNING):
         scene.tripcolor(unplaceable)
     assert not scene.ax.collections, "an unplaceable mesh should have drawn nothing"
+
+
+def test_tripcolor_keeps_a_finite_view_when_part_of_the_mesh_is_unplaceable(ugrid_mesh):
+    """A partly unplaceable mesh still frames the triangles it did draw (#499 review H3).
+
+    Test scenario:
+        One node of the quad/triangle mesh is sent to infinity, which drops the one triangle leaning on it
+        and keeps the other two. Leaving the infinite node in the coordinate arrays poisoned the extent, so
+        the axes collapsed to about a tenth of a unit and the surviving triangles were drawn far outside the
+        view — a blank figure with no warning. The view must enclose what was drawn.
+    """
+    import numpy as np
+
+    partly = ugrid_mesh("face", node_x=np.array([0.0, 1.0, 1.0, 0.0, np.inf]))
+    scene = Map()
+    scene.tripcolor(partly)
+    (x0, y0), (x1, y1) = scene.ax.dataLim.get_points()
+    assert np.isfinite([x0, y0, x1, y1]).all(), f"the extent is not finite: {(x0, y0, x1, y1)}"
+    assert x1 - x0 >= 0.9, f"x extent collapsed to {x1 - x0}, so the drawn triangles are off-view"
+    assert y1 - y0 >= 0.9, f"y extent collapsed to {y1 - y0}, so the drawn triangles are off-view"
