@@ -624,6 +624,29 @@ def _netcdf_slice(z: np.ndarray, named: str, band: int) -> np.ndarray:
     Raises:
         ValueError: when ``band`` names a slice the variable does not carry. Silently drawing slice 0 for
             an out-of-range index would show the wrong field without saying so.
+
+    Examples:
+        - The band is 1-based, like the raster path's, so ``band=2`` is the second slice:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources.extractors import _netcdf_slice
+            >>> stack = np.stack([np.full((2, 2), float(step)) for step in range(3)])
+            >>> _netcdf_slice(stack, "variable 't2m'", 2).tolist()
+            [[1.0, 1.0], [1.0, 1.0]]
+
+            ```
+        - A slice the variable does not carry is named rather than rounded down to the first:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources.extractors import _netcdf_slice
+            >>> stack = np.stack([np.zeros((2, 2)), np.ones((2, 2))])
+            >>> try:
+            ...     _netcdf_slice(stack, "variable 't2m'", 4)
+            ... except ValueError as error:
+            ...     print(error)
+            band=4 is out of range for the variable 't2m', which carries 2 slice(s)
+
+            ```
     """
     slices = int(z.shape[0])
     if not 1 <= band <= slices:

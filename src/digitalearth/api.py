@@ -672,6 +672,23 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
     Raises:
         TypeError: when ``data`` is a ``UgridDataset`` and ``backend`` is not one of
             :data:`MESH_BACKENDS`.
+
+    Examples:
+        - The static tier is the one that draws a mesh, so it is the one this lets through:
+            ```python
+            >>> from digitalearth.api import MESH_BACKENDS
+            >>> sorted(MESH_BACKENDS)
+            ['matplotlib']
+
+            ```
+        - Only a mesh is refused: anything else passes on every backend, unexamined:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _reject_mesh_backend
+            >>> _reject_mesh_backend(np.zeros((2, 2)), "web") is None
+            True
+
+            ```
     """
     if backend in MESH_BACKENDS:
         return

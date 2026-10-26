@@ -1003,6 +1003,28 @@ def _placeable_triangles(
 
     Returns:
         np.ndarray: a boolean mask over the triangles, ``True`` where all three nodes are finite.
+
+    Examples:
+        - A triangle leaning on an unplaceable node is dropped, and the rest keep their node numbering:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _placeable_triangles
+            >>> triangles = np.array([[0, 1, 2], [1, 3, 2]])
+            >>> x = np.array([0.0, 1.0, 0.5, np.inf])
+            >>> _placeable_triangles(triangles, x, np.zeros(4)).tolist()
+            [True, False]
+
+            ```
+        - With every node placeable the whole mesh is kept:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _placeable_triangles
+            >>> triangles = np.array([[0, 1, 2], [1, 3, 2]])
+            >>> x = np.array([0.0, 1.0, 0.5, 1.5])
+            >>> _placeable_triangles(triangles, x, np.zeros(4)).all()
+            np.True_
+
+            ```
     """
     finite = np.isfinite(x) & np.isfinite(y)
     return finite[triangles].all(axis=1)
