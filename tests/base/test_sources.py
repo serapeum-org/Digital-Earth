@@ -1273,3 +1273,34 @@ def test_fan_values_refuses_triangles_not_grouped_by_face():
     reordered = np.array([[3, 4, 5], [0, 1, 2]])
     with pytest.raises(ValueError, match="not grouped by face index"):
         _fan_values(values, mesh, reordered)
+
+
+def test_mesh_step_refuses_a_flat_variable_of_the_wrong_length():
+    """A 1-D mesh variable that does not have one value per element is refused by name.
+
+    Test scenario:
+        The mesh says how many faces or nodes it has, so a variable of any other length cannot be matched
+        to it — colouring would be a guess about which element each value belongs to.
+    """
+    from digitalearth.base.sources.extractors import _mesh_step
+
+    values = np.arange(5.0)
+    with pytest.raises(ValueError, match="holds 5 values"):
+        _mesh_step(values, "variable 'depth'", None, 2)
+
+
+def test_mesh_step_refuses_a_shape_it_cannot_reduce():
+    """A variable whose last axis is not the element axis is refused, not reduced on a guess.
+
+    Test scenario:
+        ``(n_elements, n_time)`` is the transpose of what a step reduction expects, and a 3-D variable has
+        more axes than ``band`` can address. Both have to be named rather than silently indexed.
+    """
+    from digitalearth.base.sources.extractors import _mesh_step
+
+    transposed = np.zeros((2, 3))
+    with pytest.raises(ValueError, match="cannot "):
+        _mesh_step(transposed, "variable 'depth'", None, 5)
+    layered = np.zeros((3, 4, 2))
+    with pytest.raises(ValueError, match="cannot "):
+        _mesh_step(layered, "variable 'depth'", None, 2)
