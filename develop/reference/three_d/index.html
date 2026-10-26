@@ -7563,12 +7563,10 @@ with a warning.</p>
 <li>Read a LAS/LAZ survey from disk and colour it by ASPRS classification (needs the <code>3d</code> extra):
     <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3D</span>  <span class="c1"># doctest: +SKIP</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># doctest: +SKIP</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span>  <span class="c1"># doctest: +SKIP</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="o">...</span>     <span class="s2">&quot;survey.laz&quot;</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">&quot;classification&quot;</span><span class="p">,</span> <span class="n">scheme</span><span class="o">=</span><span class="s2">&quot;categorical&quot;</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="o">...</span> <span class="p">)</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">display_crs</span>  <span class="c1"># adopted from the file&#39;s header  # doctest: +SKIP</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="mi">28992</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>  <span class="c1"># doctest: +SKIP</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="s2">&quot;survey.laz&quot;</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s2">&quot;classification&quot;</span><span class="p">)</span>  <span class="c1"># doctest: +SKIP</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">display_crs</span>  <span class="c1"># adopted from the file&#39;s header  # doctest: +SKIP</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="mi">28992</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>  <span class="c1"># doctest: +SKIP</span>
 </code></pre></div></li>
 </ul>
 
@@ -7717,9 +7715,7 @@ with a warning.</p>
 <span class="normal"><a href="#__codelineno-0-334">334</a></span>
 <span class="normal"><a href="#__codelineno-0-335">335</a></span>
 <span class="normal"><a href="#__codelineno-0-336">336</a></span>
-<span class="normal"><a href="#__codelineno-0-337">337</a></span>
-<span class="normal"><a href="#__codelineno-0-338">338</a></span>
-<span class="normal"><a href="#__codelineno-0-339">339</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="k">def</span><span class="w"> </span><span class="nf">point_cloud</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="k">def</span><span class="w"> </span><span class="nf">point_cloud</span><span class="p">(</span>
 <a id="__codelineno-0-196" name="__codelineno-0-196"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-197" name="__codelineno-0-197"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-198" name="__codelineno-0-198"></a>    <span class="o">*</span><span class="p">,</span>
@@ -7822,48 +7818,46 @@ with a warning.</p>
 <a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">            ```python</span>
 <a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D  # doctest: +SKIP</span>
 <a id="__codelineno-0-297" name="__codelineno-0-297"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)  # doctest: +SKIP</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">            &gt;&gt;&gt; _ = scene.point_cloud(  # doctest: +SKIP</span>
-<a id="__codelineno-0-299" name="__codelineno-0-299"></a><span class="sd">            ...     &quot;survey.laz&quot;, value_column=&quot;classification&quot;, scheme=&quot;categorical&quot;</span>
-<a id="__codelineno-0-300" name="__codelineno-0-300"></a><span class="sd">            ... )</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">            &gt;&gt;&gt; scene.display_crs  # adopted from the file&#39;s header  # doctest: +SKIP</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">            28992</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">            &gt;&gt;&gt; scene.close()  # doctest: +SKIP</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">)):</span>
-<a id="__codelineno-0-308" name="__codelineno-0-308"></a>        <span class="c1"># A LAS/LAZ path is decoded by pointclouds into CRS-carrying coordinates plus the chosen field.</span>
-<a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="c1"># The field becomes an explicit `values` array (so the drawer never re-reads the file), while</span>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a>        <span class="c1"># `value_column` is kept only to title the colour key after the field.</span>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a>        <span class="k">if</span> <span class="n">values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a>            <span class="c1"># An explicit values= array colours the cloud and overrides any file field, so drop</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a>            <span class="c1"># value_column — otherwise the colour key is titled after a field that was never read (L3).</span>
-<a id="__codelineno-0-314" name="__codelineno-0-314"></a>            <span class="n">value_column</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a>        <span class="n">data</span><span class="p">,</span> <span class="n">las_values</span> <span class="o">=</span> <span class="n">_read_las_path</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">value_column</span><span class="p">)</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a>        <span class="k">if</span> <span class="n">values</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a>            <span class="n">values</span> <span class="o">=</span> <span class="n">las_values</span>
-<a id="__codelineno-0-318" name="__codelineno-0-318"></a>            <span class="c1"># Title the key by the field&#39;s canonical lower-case name, matching the field actually read,</span>
-<a id="__codelineno-0-319" name="__codelineno-0-319"></a>            <span class="c1"># since the lookup itself is case-insensitive (N2).</span>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a>            <span class="k">if</span> <span class="n">value_column</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-321" name="__codelineno-0-321"></a>                <span class="n">value_column</span> <span class="o">=</span> <span class="n">value_column</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-<a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_described_layer</span><span class="p">(</span>
-<a id="__codelineno-0-323" name="__codelineno-0-323"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;point_cloud&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="n">encodings</span><span class="o">=</span><span class="n">_color_encoding</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">value_column</span><span class="p">,</span> <span class="n">scheme</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">cmap</span><span class="p">),</span>
-<a id="__codelineno-0-327" name="__codelineno-0-327"></a>        <span class="n">values</span><span class="o">=</span><span class="n">values</span><span class="p">,</span>
-<a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="n">value_column</span><span class="o">=</span><span class="n">value_column</span><span class="p">,</span>
-<a id="__codelineno-0-329" name="__codelineno-0-329"></a>        <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="n">scheme</span><span class="o">=</span><span class="n">scheme</span><span class="p">,</span>
-<a id="__codelineno-0-331" name="__codelineno-0-331"></a>        <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">,</span>
-<a id="__codelineno-0-332" name="__codelineno-0-332"></a>        <span class="n">render_points_as_spheres</span><span class="o">=</span><span class="n">render_points_as_spheres</span><span class="p">,</span>
-<a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">eye_dome_lighting</span><span class="o">=</span><span class="n">eye_dome_lighting</span><span class="p">,</span>
-<a id="__codelineno-0-334" name="__codelineno-0-334"></a>        <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span>
-<a id="__codelineno-0-335" name="__codelineno-0-335"></a>        <span class="n">big_data_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_big_data_threshold</span><span class="p">(</span>
-<a id="__codelineno-0-336" name="__codelineno-0-336"></a>            <span class="n">big_data_threshold</span><span class="p">,</span> <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;Scene3D.point_cloud()&quot;</span>
-<a id="__codelineno-0-337" name="__codelineno-0-337"></a>        <span class="p">),</span>
-<a id="__codelineno-0-338" name="__codelineno-0-338"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-<a id="__codelineno-0-339" name="__codelineno-0-339"></a>    <span class="p">)</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">            &gt;&gt;&gt; _ = scene.point_cloud(&quot;survey.laz&quot;, value_column=&quot;classification&quot;)  # doctest: +SKIP</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a><span class="sd">            &gt;&gt;&gt; scene.display_crs  # adopted from the file&#39;s header  # doctest: +SKIP</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a><span class="sd">            28992</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">            &gt;&gt;&gt; scene.close()  # doctest: +SKIP</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">)):</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>        <span class="c1"># A LAS/LAZ path is decoded by pointclouds into CRS-carrying coordinates plus the chosen field.</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>        <span class="c1"># The field becomes an explicit `values` array (so the drawer never re-reads the file), while</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>        <span class="c1"># `value_column` is kept only to title the colour key after the field.</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="k">if</span> <span class="n">values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a>            <span class="c1"># An explicit values= array colours the cloud and overrides any file field, so drop</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a>            <span class="c1"># value_column — otherwise the colour key is titled after a field that was never read (L3).</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a>            <span class="n">value_column</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a>        <span class="n">data</span><span class="p">,</span> <span class="n">las_values</span> <span class="o">=</span> <span class="n">_read_las_path</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">value_column</span><span class="p">)</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a>        <span class="k">if</span> <span class="n">values</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a>            <span class="n">values</span> <span class="o">=</span> <span class="n">las_values</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>            <span class="c1"># Title the key by the field&#39;s canonical lower-case name, matching the field actually read,</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a>            <span class="c1"># since the lookup itself is case-insensitive (N2).</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>            <span class="k">if</span> <span class="n">value_column</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a>                <span class="n">value_column</span> <span class="o">=</span> <span class="n">value_column</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_described_layer</span><span class="p">(</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;point_cloud&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a>        <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="n">encodings</span><span class="o">=</span><span class="n">_color_encoding</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">value_column</span><span class="p">,</span> <span class="n">scheme</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">cmap</span><span class="p">),</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="n">values</span><span class="o">=</span><span class="n">values</span><span class="p">,</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="n">value_column</span><span class="o">=</span><span class="n">value_column</span><span class="p">,</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>        <span class="n">size</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="n">scheme</span><span class="o">=</span><span class="n">scheme</span><span class="p">,</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>        <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">,</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="n">render_points_as_spheres</span><span class="o">=</span><span class="n">render_points_as_spheres</span><span class="p">,</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>        <span class="n">eye_dome_lighting</span><span class="o">=</span><span class="n">eye_dome_lighting</span><span class="p">,</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>        <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">big_data_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_big_data_threshold</span><span class="p">(</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a>            <span class="n">big_data_threshold</span><span class="p">,</span> <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;Scene3D.point_cloud()&quot;</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a>        <span class="p">),</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<a id="__codelineno-0-337" name="__codelineno-0-337"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
