@@ -727,3 +727,28 @@ class TestLasPath:
             "intensity",
             "return_number",
         }, LAS_COLOUR_FIELDS
+
+    def test_explicit_values_override_the_las_fields(self):
+        """An explicit `values=` array colours a LAS cloud directly, bypassing the file's own fields.
+
+        Test scenario:
+            A LAS path passed together with an explicit per-point `values=` takes the `values is not None`
+            arm of the path branch: `value_column` is forced to `None` for the read (so no field is pulled
+            from the file) and the caller's array is what colours the cloud. On the continuous ramp the
+            bound scalar is the array itself, so it must match the given values element for element.
+        """
+        explicit = np.linspace(0.0, 7.0, len(_LAS_Z))
+        scene = Scene3D(off_screen=True)
+        try:
+            actor = scene.point_cloud(
+                _LAS_FIXTURE, values=explicit, eye_dome_lighting=False
+            )
+            assert actor is not None, (
+                "a LAS cloud coloured by an explicit array should render"
+            )
+            drawn = np.asarray(scene.layers[0][0][SCALAR], dtype="float64")
+        finally:
+            scene.close()
+        assert np.allclose(drawn, explicit), (
+            f"the explicit values must colour the cloud, got {drawn}"
+        )
