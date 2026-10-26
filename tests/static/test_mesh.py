@@ -164,3 +164,95 @@ def test_a_crs_carrying_mesh_refuses_a_display_crs_with_no_epsg_code(ugrid_mesh)
     scene = Map(crs="+proj=robin")
     with pytest.raises(ValueError, match="EPSG code"):
         scene.tripcolor(mesh)
+
+
+def _two_triangle_mesh(location="node", node_x=None):
+    """Build a mesh of two triangles sharing one node, with values on ``location``.
+
+    Faces ``[0, 1, 2]`` and ``[2, 3, 4]`` share only node 2, so making node 1 unplaceable drops the first
+    face and keeps the second — which is what makes a *shifted* renumbering observable.
+
+    Args:
+        location: ``"node"`` or ``"face"``.
+        node_x: Overrides the node x coordinates.
+
+    Returns:
+        The pyramids ``UgridDataset``.
+    """
+    import numpy as np
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    mesh = Mesh2d(
+        node_x=np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+        if node_x is None
+        else np.asarray(node_x),
+        node_y=np.array([0.0, 1.0, 0.0, 1.0, 0.0]),
+        face_node_connectivity=Connectivity(
+            data=np.array([[0, 1, 2], [2, 3, 4]], dtype=np.intp),
+            fill_value=-1,
+            cf_role="face_node_connectivity",
+            original_start_index=0,
+        ),
+    )
+    values = (
+        np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        if location == "node"
+        else np.array([10.0, 20.0])
+    )
+    name = "zs" if location == "node" else "depth"
+    return UgridDataset(
+        mesh=mesh,
+        data_variables={
+            name: MeshVariable(
+                name=name,
+                location=location,
+                mesh_name="m",
+                shape=values.shape,
+                _data=values,
+            )
+        },
+        global_attributes={},
+    )
+
+
+def test_node_located_values_follow_their_nodes_through_the_compaction():
+    """A node-located mesh keeps each node's own value when unplaceable nodes are dropped.
+
+    Test scenario:
+        Node 1 is unplaceable, so the face [0, 1, 2] goes and [2, 3, 4] stays. The surviving nodes are
+        2, 3 and 4, whose values are 30, 40 and 50 — mean 40. Compacting the coordinates without
+        compacting the values left the renumbered indices pointing at the *original* array, which drew
+        mean(10, 20, 30) = 20 instead: wrong colours, silently (round-2 H1).
+    """
+    import numpy as np
+
+    partly = _two_triangle_mesh("node", node_x=np.array([0.0, np.inf, 2.0, 3.0, 4.0]))
+    scene = Map()
+    scene.tripcolor(partly)
+    drawn = np.asarray(scene.ax.collections[-1].get_array()).tolist()
+    assert drawn == [40.0], f"expected the surviving nodes' mean 40.0, drew {drawn}"
+
+
+@pytest.mark.parametrize("kind", ["tricontourf", "tricontour"])
+def test_node_located_contours_survive_the_compaction(kind):
+    """A contour render of a partly unplaceable node-located mesh draws instead of failing raw.
+
+    Args:
+        kind: The contour verb under test.
+
+    Test scenario:
+        Leaving the values uncompacted handed matplotlib five values for three nodes, which it answered
+        with `ValueError: data length (5) does not match n_nodes (3)` — a message about an array the
+        caller never built.
+    """
+    import numpy as np
+
+    partly = _two_triangle_mesh("node", node_x=np.array([0.0, np.inf, 2.0, 3.0, 4.0]))
+    scene = Map()
+    getattr(scene, kind)(partly)
+    assert scene.ax.collections, (
+        f"{kind} drew nothing for a partly unplaceable node-located mesh"
+    )

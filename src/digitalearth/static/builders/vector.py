@@ -1034,56 +1034,53 @@ def _placeable_triangles(
     return finite[triangles].all(axis=1)
 
 
-def _compacted_nodes(
-    x: np.ndarray, y: np.ndarray, triangles: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Drop the nodes no surviving triangle references, renumbering the triangles onto what is left.
+def _compacted_nodes(triangles: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return which nodes the triangles still reference, and the triangles renumbered onto them.
 
     Filtering triangles keeps the *indices* valid but leaves the dropped nodes in the coordinate arrays, and
     matplotlib reads the extent from **all** of them. One node at infinity then poisons the data limits: the
     surviving triangles are drawn correctly and framed in a view about a tenth of a unit wide, which reads as
-    a blank figure. Compacting removes the unreferenced coordinates, so the extent is computed over exactly
-    the nodes that are drawn.
+    a blank figure. Compacting removes the unreferenced nodes, so the extent is computed over exactly the
+    nodes that are drawn.
+
+    The surviving indices are **returned rather than applied**, because more than the coordinates are keyed
+    by node: a node-located variable is too. Compacting ``x``/``y`` while leaving such values at their
+    original length pointed the renumbered indices into the wrong array, which drew the wrong colours
+    without a word (round-2 H1).
 
     Args:
-        x: The node x coordinates in the display CRS.
-        y: The node y coordinates.
         triangles: The surviving ``(n_triangles, 3)`` node indices.
 
     Returns:
-        tuple: the referenced x and y coordinates, and the triangles renumbered onto them.
+        tuple: the indices of the referenced nodes, in order, and the triangles renumbered onto them.
 
     Examples:
-        - The unreferenced third node goes, and the triangle is renumbered onto the two that remain:
+        - The unreferenced third node is not in the answer, and the triangle is renumbered onto the rest:
             ```python
             >>> import numpy as np
             >>> from digitalearth.static.builders.vector import _compacted_nodes
-            >>> x = np.array([0.0, 1.0, 0.5, np.inf])
-            >>> nodes_x, nodes_y, triangles = _compacted_nodes(
-            ...     x, np.zeros(4), np.array([[0, 1, 2]])
-            ... )
-            >>> nodes_x.tolist()
-            [0.0, 1.0, 0.5]
+            >>> used, triangles = _compacted_nodes(np.array([[0, 1, 2]]))
+            >>> used.tolist()
+            [0, 1, 2]
             >>> triangles.tolist()
             [[0, 1, 2]]
 
             ```
-        - Nothing is renumbered when every node is already referenced:
+        - Dropping a node in the middle shifts the ones after it, which is what every per-node array has
+          to follow:
             ```python
             >>> import numpy as np
             >>> from digitalearth.static.builders.vector import _compacted_nodes
-            >>> nodes_x, _, triangles = _compacted_nodes(
-            ...     np.array([0.0, 1.0, 0.5]), np.zeros(3), np.array([[0, 1, 2]])
-            ... )
-            >>> nodes_x.tolist()
-            [0.0, 1.0, 0.5]
+            >>> used, triangles = _compacted_nodes(np.array([[2, 3, 4]]))
+            >>> used.tolist()
+            [2, 3, 4]
             >>> triangles.tolist()
             [[0, 1, 2]]
 
             ```
     """
     used, renumbered = np.unique(triangles, return_inverse=True)
-    return x[used], y[used], renumbered.reshape(triangles.shape)
+    return used, renumbered.reshape(triangles.shape)
 
 
 @dataclass(frozen=True)
@@ -1191,7 +1188,12 @@ class _TriInput:
         triangles = triangles[keep]
         # Compact after filtering: a dropped node left in `x`/`y` still counts towards the extent, which is
         # how a partly off-limb mesh ended up drawn outside a collapsed view.
-        x, y, triangles = _compacted_nodes(x, y, triangles)
+        used, triangles = _compacted_nodes(triangles)
+        x, y = x[used], y[used]
+        if self.location == "node":
+            # Keyed by node, so the values follow the nodes they belong to — otherwise the renumbered
+            # indices read the original array and the mesh is coloured from the wrong nodes.
+            z = z[used]
         return _TriInput(x, y, z, self.field, triangles, self.location)
 
     def face_values(self) -> np.ndarray:
