@@ -23,6 +23,7 @@ from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colorbar import Colorbar
 from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
 
@@ -391,15 +392,17 @@ def shared_colorbars(
     *,
     label: str | None = None,
     **kwargs,
-) -> list[Any]:
+) -> list[Colorbar]:
     """Add one colorbar per distinct colour scale across ``maps``, each spanning the panels that share it.
 
     Where :func:`shared_colorbar` draws a single bar for a mappable the caller names, this reads each panel's
-    resolved :class:`~digitalearth.base.spec.scale.Scale` off what it drew, groups the panels by scale, and
-    draws one bar per distinct scale — spanning exactly the panels of that group. It is the "panels 0–2 share
-    a scale, panel 3 is a different variable" case: the three get one bar and the fourth its own, without the
-    caller nominating which mappable represents which group. A panel that drew nothing (an off-limb field, or
-    one never drawn on) contributes no scale and no bar.
+    resolved :class:`~digitalearth.base.spec.scale.Scale` off its **scale-bearing** layer (the field beneath any
+    decoration, not whatever is on top — so a panel with coastlines over it is still keyed), groups the panels by
+    *(scale, colormap)*, and draws one bar per distinct group — spanning exactly its panels. It is the "panels
+    0–2 share a scale, panel 3 is a different variable" case: the three get one bar and the fourth its own,
+    without the caller nominating which mappable represents which group. Two panels keyed the same but coloured
+    differently (viridis vs magma) are **not** merged — the colormap is part of what distinguishes a scale. A
+    panel that drew nothing that colours by a scale contributes no bar.
 
     Args:
         fig: The figure created by :func:`grid`.
@@ -408,12 +411,13 @@ def shared_colorbars(
         label: A label applied to every bar, or ``None`` (default) to leave them unlabelled. Distinct scales
             are usually distinct variables, for which one shared label rarely fits — label each panel's layer
             through its own guide instead; a single ``label`` is for the case the panels really share one
-            scale and you want it named once.
+            scale and you want it named once. (A per-group label is not offered because the groups are
+            discovered here, so the caller cannot know their order or count in advance.)
         **kwargs: Forwarded to each ``Figure.colorbar`` (e.g. ``orientation``, ``shrink``, ``fraction``).
 
     Returns:
-        One :class:`~matplotlib.colorbar.Colorbar` per distinct scale, in first-appearance order; an empty
-        list when no panel drew a colour scale.
+        One :class:`~matplotlib.colorbar.Colorbar` per distinct *(scale, colormap)*, in first-appearance order;
+        an empty list when no panel drew a colour scale.
 
     Examples:
         - A 2×2 grid where the first three panels share a scale and the fourth is a different variable gets
@@ -472,7 +476,7 @@ def shared_colorbars(
         shared_colorbar: a single bar for one mappable the caller names.
         facet: one shared scale over a whole stack, which needs only the single bar.
     """
-    bars: list[Any] = []
+    bars: list[Colorbar] = []
     for panels, mappable in _scale_groups(maps):
         cbar = fig.colorbar(mappable, ax=[panel.ax for panel in panels], **kwargs)
         if label is not None:
