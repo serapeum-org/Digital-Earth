@@ -594,6 +594,66 @@ def _renderer_for(table: dict, kind: str, kwargs: dict, caller: str) -> tuple:
     )
 
 
+def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData:
+    """Pin the NetCDF variable ``variable`` names, so every backend draws the field the caller asked for.
+
+    A NetCDF container holds several variables and the extractor draws the **first** unless told otherwise.
+    ``variable=`` is how a caller says which one, and it is answered here — once, before the backend
+    dispatch — rather than threaded through four tiers' builders, because the choice is about the *input*
+    and not about any renderer. Pinning is pyramids' own ``get_variable``, so the object handed on is the
+    same subset a caller could have pinned themselves (#499).
+
+    Args:
+        data: The input ``quickmap`` was given.
+        variable: The NetCDF variable to draw, or ``None`` to leave the input alone.
+
+    Returns:
+        PlottableData: the pinned variable subset, or ``data`` unchanged when no variable was named.
+
+    Raises:
+        ValueError: when ``variable`` is named for an input that is not a NetCDF, or names a variable the
+            container does not carry — either way the caller learns which, rather than seeing the first
+            variable drawn in silence.
+
+    Examples:
+        - Naming a variable on a non-NetCDF input is refused by name:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _pinned_variable
+            >>> try:
+            ...     _pinned_variable(np.zeros((2, 2)), "t2m")
+            ... except ValueError as error:
+            ...     print(error)
+            variable='t2m' selects a NetCDF variable, but the input is a ndarray
+
+            ```
+        - Asking for nothing leaves the input exactly as it came:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _pinned_variable
+            >>> grid = np.zeros((2, 2))
+            >>> _pinned_variable(grid, None) is grid
+            True
+
+            ```
+    """
+    if variable is None:
+        return data
+    from pyramids.netcdf import NetCDF
+
+    if not isinstance(data, NetCDF):
+        raise ValueError(
+            f"variable={variable!r} selects a NetCDF variable, but the input is a "
+            f"{type(data).__name__}"
+        )
+    carried = list(data.variable_names)
+    if variable not in carried:
+        raise ValueError(
+            f"variable={variable!r} is not in this NetCDF, which carries {carried}"
+        )
+    return data.get_variable(variable)
+
+
 def _input_kind(data: PlottableData, caller: str) -> str:
     """Classify a ``quickmap`` input into the base layer kind its geometry draws — the decision, made once.
 
@@ -706,6 +766,7 @@ def quickmap(
     *,
     crs: Any = _UNSET,
     kind: str = "auto",
+    variable: str | None = None,
     domain: Any = _UNSET,
     basemap: bool | str | Any = False,
     coastlines: Any = _UNSET,
@@ -725,6 +786,11 @@ def quickmap(
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
             nothing) is accepted anywhere.
+        variable: Which variable to draw from a NetCDF container, which otherwise draws its **first**.
+            Every backend honours it, because it selects the input rather than asking anything of a
+            renderer. Naming one for a non-NetCDF input, or one the container does not carry, is refused by
+            name. To choose a slice of a variable that carries a band/time dimension, pass ``band=`` (1-based)
+            alongside it; without one, the first slice is drawn and a warning says so.
         domain: Optional named region / bbox to set the extent. Honoured by ``backend="matplotlib"`` (its fixed
             extent) and by ``backend="3d"`` (it frames the camera on the region); the ``"interactive"`` and
             ``"web"`` tiers pan and zoom instead, so passing it to those is refused by name.
@@ -848,6 +914,9 @@ def quickmap(
         coastlines=coastlines,
         colorbar=colorbar,
     )
+    # Select the input before any backend is built: `variable=` is about which field is drawn, so it is
+    # answered the same way for all four tiers.
+    data = _pinned_variable(data, variable)
     # Past the gate, fill in the defaults the surviving backends expect.
     colorbar = True if colorbar is _UNSET else colorbar
     coastlines = False if coastlines is _UNSET else coastlines

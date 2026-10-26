@@ -1183,3 +1183,61 @@ class TestColumnOnPointsDiffersByTier:
             assert "size_column" in doc, (
                 f"{builder.__name__} must contrast with Map.points' size_column: {doc!r}"
             )
+
+
+def _two_variable_netcdf():
+    """Build a NetCDF carrying two variables whose values differ, so the drawn one is identifiable.
+
+    Returns:
+        The pyramids ``NetCDF`` container with variables ``"t2m"`` (ones) and ``"tp"`` (twos).
+    """
+    import numpy as np
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    nc = NetCDF.from_array(
+        np.full((1, 6, 6), 1.0, dtype="float32"), geo_ref=geo, variable_name="t2m"
+    )
+    # add_variable copies variables out of another container rather than taking a name and an array.
+    second = NetCDF.from_array(
+        np.full((1, 6, 6), 2.0, dtype="float32"), geo_ref=geo, variable_name="tp"
+    )
+    nc.add_variable(second)
+    return nc
+
+
+def test_quickmap_variable_draws_the_named_variable():
+    """``variable=`` draws the variable it names rather than the container's first one.
+
+    Test scenario:
+        The two variables hold different constants, so the drawn image's values say which was picked.
+        Without ``variable=`` the extractor takes the first, which is what #499 had no way to override.
+    """
+    import numpy as np
+
+    nc = _two_variable_netcdf()
+    drawn = digitalearth.quickmap(nc, variable="tp", backend="matplotlib")
+    values = np.unique(np.asarray(drawn.ax.images[0].get_array()).ravel()).tolist()
+    assert values == [2.0], f"expected the 'tp' variable (twos), drew {values}"
+
+
+def test_quickmap_variable_refuses_a_name_the_container_does_not_carry():
+    """An unknown variable name is refused by name, listing what the container does carry."""
+    nc = _two_variable_netcdf()
+    with pytest.raises(ValueError, match="is not in this NetCDF"):
+        digitalearth.quickmap(nc, variable="nope", backend="matplotlib")
+
+
+def test_quickmap_variable_refuses_a_non_netcdf_input():
+    """``variable=`` on an input with no variables to choose from is refused, not ignored."""
+    import numpy as np
+
+    with pytest.raises(ValueError, match="selects a NetCDF variable"):
+        digitalearth.quickmap(np.zeros((4, 4)), variable="t2m", backend="matplotlib")
+
+
+def test_quickmap_draws_a_pinned_netcdf_variable():
+    """A pinned ``get_variable`` subset is drawable through quickmap, which #499 reported it was not."""
+    pinned = _two_variable_netcdf().get_variable("t2m")
+    assert isinstance(digitalearth.quickmap(pinned, backend="matplotlib"), Map)
