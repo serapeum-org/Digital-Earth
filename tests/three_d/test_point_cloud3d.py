@@ -705,12 +705,10 @@ class TestLasPath:
         assert "survey.csv" in str(exc.value), exc.value
 
     def test_laz_suffix_is_accepted_by_the_guard(self):
-        """The suffix guard accepts `.laz` too (a missing file then fails later, not at the guard)."""
-        with pytest.raises(Exception) as exc:
+        """A `.laz` suffix passes the format guard, so a missing file fails on the read, not the guard."""
+        # FileNotFoundError (not the format ValueError) is itself the proof the .laz suffix was accepted.
+        with pytest.raises(FileNotFoundError):
             _read_las_path("nope.laz", None)
-        assert "reads a file only as LAS/LAZ" not in str(exc.value), (
-            "a .laz suffix must pass the format guard and fail only on the missing file"
-        )
 
     def test_missing_pointclouds_raises_an_actionable_error(self, monkeypatch):
         """Without `pointclouds` installed, the reader raises a clear ImportError naming the install."""
