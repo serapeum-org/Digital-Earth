@@ -38,7 +38,7 @@ from digitalearth.base.raster_classes import (
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.static.core.scene import Scene
-from digitalearth.static.legends.legend import drawn_scale
+from digitalearth.static.legends.legend import bar_refusal, drawn_scale
 from digitalearth.static.map import Map
 
 logger = logging.getLogger(__name__)
@@ -331,14 +331,22 @@ def _scale_bearing(panel: Map) -> tuple[Any, Scale | None]:
     that :func:`~digitalearth.static.legends.legend.drawn_scale` reads a scale off is taken: the field beneath
     the decoration, or the uppermost of several coloured layers.
 
+    A **categorical** layer is skipped: it colours by class code, so a colorbar over it would read the codes as
+    magnitudes — the tier draws it a swatch legend instead, exactly as
+    :meth:`~digitalearth.static.core.scene.Scene.colorbar` refuses the case
+    (:func:`~digitalearth.static.legends.legend.bar_refusal`). A panel whose only coloured layer is categorical
+    therefore bears no scale here and gets no shared bar.
+
     Args:
         panel: The map to read.
 
     Returns:
-        ``(artist, scale)`` of the topmost scale-bearing layer, or ``(None, None)`` when the panel drew nothing
-        that colours by a scale.
+        ``(artist, scale)`` of the topmost scale-bearing, non-categorical layer, or ``(None, None)`` when the
+        panel drew nothing a colorbar can describe.
     """
     for layer_id in reversed(panel.layer_ids):
+        if bar_refusal(panel.get_layer(layer_id)) is not None:
+            continue
         artist = panel.artist(layer_id)
         scale = drawn_scale(artist)
         if scale is not None:
