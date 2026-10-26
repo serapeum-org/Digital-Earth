@@ -6,7 +6,7 @@ name: Pure Wheel - Build & Test
 #
 # digitalearth ships no native code of its own, so there is nothing to compile
 # and no per-platform wheel — one pure-Python wheel serves every OS/Python. Its
-# native GDAL bits arrive transitively through the `pyramids-gis` and `pyogrio`
+# native GDAL bits arrive transitively through the `pyramids-core` and `pyogrio`
 # PyPI wheels (which vendor GDAL), so unlike pyramids' own pure-wheel-test this
 # job needs no conda-forge GDAL. The point is to catch packaging regressions the
 # pixi-based `tests.yml` cannot see: missing package data (the autostyle YAML
