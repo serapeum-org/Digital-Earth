@@ -1,0 +1,134 @@
+"""Scene bundles — save a 3-D scene to a versioned zip and open it back (#495).
+
+Whole scenes save and reload to a versioned bundle. This tier already has the hard half — a :class:`FigureSpec` that
+serializes to a dict and redraws from one — so a bundle is a small, versioned container around that: a zip
+holding one ``manifest.json`` with the figure description and the scene's drawn decoration (title styling, the
+coordinate frame, the cartographic furniture, the lighting). The camera and vertical exaggeration already
+travel inside the figure's description, so the manifest does not store them separately.
+
+A bundle stores a **description**, not the data: a layer drawn from a path or URL is re-opened from it on load,
+which is why :meth:`~digitalearth.three_d.core.base.Scene3DBase.save_bundle` refuses a scene whose layers were
+built from an in-memory array or object — there is nothing a description can point back at. Only the standard
+library is used here, so writing or reading a bundle needs no renderer.
+"""
+
+from __future__ import annotations
+
+import json
+import zipfile
+from pathlib import Path
+from typing import Any
+
+__all__ = ["BUNDLE_VERSION", "MANIFEST_NAME", "read_manifest", "write_bundle"]
+
+#: The bundle format version written into every manifest and checked on read, so a future reader can refuse —
+#: or migrate — a bundle it does not understand rather than failing on a missing field.
+BUNDLE_VERSION: int = 1
+
+#: The single JSON member every bundle zip carries.
+MANIFEST_NAME: str = "manifest.json"
+
+
+def write_bundle(
+    path: Any, *, figure_dict: dict[str, Any], decoration: dict[str, Any]
+) -> Path:
+    """Write a scene bundle zip holding the figure description and the scene's decoration.
+
+    Args:
+        path: The output file.
+        figure_dict: The scene's ``figure_spec.to_dict()`` — the description every layer redraws from.
+        decoration: The scene's drawn decoration state (title styling, axes, furniture, lighting).
+
+    Returns:
+        pathlib.Path: the file that was written.
+
+    Raises:
+        ValueError: when the manifest is not JSON-serialisable — a layer property or decoration value holds
+            something `json` cannot encode.
+
+    Examples:
+        - Write a bundle and read its manifest back:
+            ```python
+            >>> import os, tempfile
+            >>> from digitalearth.three_d.app.bundle import write_bundle, read_manifest
+            >>> folder = tempfile.mkdtemp()
+            >>> out = write_bundle(
+            ...     os.path.join(folder, "scene.dez"), figure_dict={"panels": []}, decoration={}
+            ... )
+            >>> out.name
+            'scene.dez'
+            >>> read_manifest(out)["figure"]
+            {'panels': []}
+
+            ```
+    """
+    manifest = {
+        "format_version": BUNDLE_VERSION,
+        "figure": figure_dict,
+        "decoration": decoration,
+    }
+    # Serialise before opening the file, so a non-JSON value anywhere in the manifest (a layer prop or a
+    # decoration value) is reported as a clear ValueError rather than a raw TypeError from deep in json — and
+    # no empty/partial zip is left behind. This is the catch-all over save_bundle's decoration-only guard.
+    try:
+        payload = json.dumps(manifest, indent=2)
+    except TypeError as error:
+        raise ValueError(
+            f"the scene could not be serialised to a bundle ({error}); a layer property or decoration value "
+            "is not JSON-serialisable"
+        ) from error
+    out = Path(str(path))
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr(MANIFEST_NAME, payload)
+    return out
+
+
+def read_manifest(path: Any) -> dict[str, Any]:
+    """Read and version-check a scene bundle's manifest.
+
+    Args:
+        path: The bundle file to read.
+
+    Returns:
+        The manifest dict, with its ``figure`` and ``decoration`` members.
+
+    Raises:
+        ValueError: when the file carries no manifest, a format version this release cannot read, or a
+            manifest missing its `figure` section.
+
+    Examples:
+        - Read back the version and decoration a bundle was written with:
+            ```python
+            >>> import os, tempfile
+            >>> from digitalearth.three_d.app.bundle import write_bundle, read_manifest
+            >>> out = write_bundle(
+            ...     os.path.join(tempfile.mkdtemp(), "scene.dez"),
+            ...     figure_dict={"panels": []},
+            ...     decoration={"title": {"font_size": 18}},
+            ... )
+            >>> manifest = read_manifest(out)
+            >>> manifest["format_version"]
+            1
+            >>> manifest["decoration"]["title"]["font_size"]
+            18
+
+            ```
+    """
+    with zipfile.ZipFile(str(path)) as bundle:
+        if MANIFEST_NAME not in bundle.namelist():
+            raise ValueError(
+                f"{path} is not a digitalearth scene bundle: it has no {MANIFEST_NAME}"
+            )
+        manifest: dict[str, Any] = json.loads(bundle.read(MANIFEST_NAME))
+    version = manifest.get("format_version")
+    if version != BUNDLE_VERSION:
+        raise ValueError(
+            f"the scene bundle at {path} is format version {version!r}, which this digitalearth cannot read "
+            f"(it writes and reads version {BUNDLE_VERSION})"
+        )
+    if "figure" not in manifest:
+        raise ValueError(
+            f"the scene bundle at {path} is missing its 'figure' section; the file is corrupt or not a "
+            "digitalearth scene bundle"
+        )
+    return manifest

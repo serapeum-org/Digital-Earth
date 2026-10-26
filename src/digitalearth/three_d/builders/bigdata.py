@@ -169,6 +169,18 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "the caller built the object and chose what it is made of, so reducing it here would overrule "
             "that silently; reduce it before handing it over"
         ),
+        "graticule": (
+            "a graticule is a handful of reference lines generated from the box and the step, not sampled "
+            "data; fewer lines come from a coarser step, not from thinning the geometry after the fact"
+        ),
+        "labels": (
+            "labels are one anchor point and one string each, so there is nothing to reduce; a scene with too "
+            "many labels to read is a composition the caller chose rather than data to thin"
+        ),
+        "bivariate": (
+            "a bivariate raster is one four-corner plane carrying a classified RGBA image, so its geometry is "
+            "already two triangles; detail is the raster's own resolution, chosen upstream, not mesh density"
+        ),
     }
 )
 
