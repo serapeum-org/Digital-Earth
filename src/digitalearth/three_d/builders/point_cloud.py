@@ -4,14 +4,17 @@ Turns a point table into a PyVista ``PolyData`` and renders it with optional per
 and **eye-dome lighting** (the depth-cueing shading that makes dense point clouds legible). Inputs come from
 pyramids — a numpy ``(N, 3)``/``(N, 2)`` table (e.g. ``Dataset.to_xyz()`` / LiDAR), or a GeoDataFrame of points
 (e.g. ``Dataset.to_geodataframe(geometry="point")`` or a pyramids ``FeatureCollection``, which *is* a
-GeoDataFrame).
+GeoDataFrame) — or a **LAS/LAZ file path**, read through the optional ``pointclouds`` dependency (#206).
 
 The GeoDataFrame is **duck-typed** (``hasattr(data, "geometry")``) and only its coordinates are read — so this
 module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competitor_imports`` guard); pyramids does
-all CRS work upstream.
+all CRS work upstream. A LAS/LAZ path is decoded by ``pointclouds`` (the stack's point-cloud engine) into a
+CRS-carrying :class:`~digitalearth.base.points.PointArrays` — this module never imports ``laspy`` itself, exactly
+as it never imports geopandas: reading a point-cloud file is point-cloud I/O, which lives upstream.
 """
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -72,6 +75,120 @@ def _coords_from_array(data: Any) -> np.ndarray:
     return arr
 
 
+def _placed_coords(
+    placed: Any, value_column: str | None
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Return ``(points, gdf_values)`` for a placed point source, dispatching on its shape.
+
+    The three inputs the draw step can receive after :meth:`Scene3DBase._place`: a GeoDataFrame of points
+    (duck-typed by ``geometry``, which also yields a value column), a CRS-carrying
+    :class:`~digitalearth.base.points.PointArrays` (e.g. a decoded LAS/LAZ file — its colour field rode along
+    as ``values``, so there is none here), or a bare ``(N, 2)``/``(N, 3)`` array.
+
+    Args:
+        placed: The placed source: a points GeoDataFrame, a `PointArrays`, or an array-like table.
+        value_column: The column to read off a GeoDataFrame; ignored for the other two shapes.
+
+    Returns:
+        tuple: ``(points, gdf_values)`` — an ``(N, 3)`` float coordinate array and the GeoDataFrame value
+        column (or ``None`` for the non-GeoDataFrame shapes).
+    """
+    if hasattr(placed, "geometry"):
+        return _coords_from_geodataframe(placed, value_column)
+    if isinstance(placed, PointArrays):
+        return placed.as_columns(), None
+    return _coords_from_array(placed), None
+
+
+#: LAS/LAZ per-point fields a cloud may be coloured by via ``value_column=`` (the `pointclouds` accessors).
+LAS_COLOUR_FIELDS = ("classification", "intensity", "return_number", "x", "y", "z")
+
+
+def _require_pointclouds():
+    """Import and return the `pointclouds` package, or raise a clear, actionable error when it is missing.
+
+    Returns:
+        module: the imported ``pointclouds`` package.
+
+    Raises:
+        ImportError: when ``pointclouds`` is not installed, naming the exact install command — the same shape
+            :func:`~digitalearth.three_d.builders.globe._require_geovista` uses, so a bare install fails loudly
+            at the call rather than at import time.
+    """
+    try:
+        import pointclouds
+    except ImportError as exc:
+        raise ImportError(
+            "Scene3D.point_cloud() needs the optional dependency 'pointclouds' to read a LAS/LAZ file. "
+            "Install it with:  pip install 'digitalearth[3d]'"
+        ) from exc
+    return pointclouds
+
+
+def _las_colour(cloud: Any, value_column: str) -> np.ndarray:
+    """Pull the per-point field a LAS/LAZ cloud is coloured by off a `pointclouds.PointCloud`.
+
+    Args:
+        cloud: A ``pointclouds.PointCloud``.
+        value_column: The field name to colour by, one of :data:`LAS_COLOUR_FIELDS` (case-insensitive).
+
+    Returns:
+        numpy.ndarray: the ``(N,)`` field as float64.
+
+    Raises:
+        ValueError: when ``value_column`` is not a field the reader exposes.
+    """
+    key = str(value_column).lower()
+    if key not in LAS_COLOUR_FIELDS:
+        raise ValueError(
+            f"point_cloud() cannot colour a LAS/LAZ cloud by {value_column!r}; "
+            f"choose one of {', '.join(LAS_COLOUR_FIELDS)}"
+        )
+    return np.asarray(getattr(cloud, key), dtype="float64")
+
+
+def _read_las_path(
+    path: str | Path, value_column: str | None
+) -> tuple[PointArrays, np.ndarray | None]:
+    """Read a LAS/LAZ file into CRS-carrying coordinates and an optional colour field, through `pointclouds`.
+
+    Reading a point-cloud file is point-cloud I/O, which lives in ``pointclouds`` (the stack's point-cloud
+    engine), not here: this consumes its public reader and never touches ``laspy``. The coordinates come back
+    scaled (``pointclouds`` applies the LAS scale/offset) and tagged with the file's CRS, so the scene adopts or
+    reprojects them exactly as it does a GeoDataFrame — all through :meth:`Scene3DBase._place`.
+
+    Args:
+        path: A ``.las`` or ``.laz`` file path.
+        value_column: A per-point field to colour by (see :data:`LAS_COLOUR_FIELDS`), or ``None`` for an
+            uncoloured cloud.
+
+    Returns:
+        tuple: ``(coords, values)`` — a :class:`~digitalearth.base.points.PointArrays` of the scaled ``x/y/z``
+        carrying the file's CRS, and the chosen colour field as a float array (or ``None``).
+
+    Raises:
+        ImportError: when ``pointclouds`` is not installed.
+        ValueError: when ``path`` is not a ``.las``/``.laz`` file, or ``value_column`` names an unknown field.
+    """
+    suffix = Path(path).suffix.lower()
+    if suffix not in (".las", ".laz"):
+        raise ValueError(
+            f"point_cloud() reads a file only as LAS/LAZ, got {Path(path).name!r}; pass a .las/.laz path, or "
+            "decode other formats to an (N, 3) array first"
+        )
+    pointclouds = _require_pointclouds()
+    cloud = pointclouds.PointCloud.read_file(str(path))
+    # `cloud.crs` is a pyproj.CRS; carry it as its EPSG code when it has one, so the scene's display CRS and any
+    # reproject-refusal message read as `28992` rather than the multi-line pyproj repr. A CRS with no authority
+    # code (rare for LAS) is carried verbatim — still correct, just verbose.
+    epsg = cloud.crs.to_epsg() if cloud.crs is not None else None
+    coords = PointArrays.of(
+        cloud.x, cloud.y, cloud.z, crs=epsg if epsg is not None else cloud.crs
+    )
+    values = _las_colour(cloud, value_column) if value_column else None
+    return coords, values
+
+
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
@@ -122,10 +239,15 @@ class PointCloudMixin(_MixinBase):
         through pyramids when it is in another. A numpy point table declares no CRS and is placed as given.
 
         Args:
-            data: A numpy ``(N, 3)``/``(N, 2)`` point table (e.g. ``Dataset.to_xyz()`` or LiDAR xyz), or a
-                GeoDataFrame of ``Point`` geometries (e.g. ``Dataset.to_geodataframe(geometry="point")``).
+            data: A numpy ``(N, 3)``/``(N, 2)`` point table (e.g. ``Dataset.to_xyz()`` or LiDAR xyz), a
+                GeoDataFrame of ``Point`` geometries (e.g. ``Dataset.to_geodataframe(geometry="point")``), or a
+                path to a **LAS/LAZ file** (``str``/``Path``), read through the optional ``pointclouds``
+                dependency: coordinates come back scaled (its LAS scale/offset applied) and the file's CRS sets
+                or reprojects the scene exactly as a GeoDataFrame's does.
             values: Explicit per-point scalar array to colour by (overrides ``value_column``).
-            value_column: Column name to colour by when ``data`` is a GeoDataFrame; ``None`` for no colour.
+            value_column: Column name to colour by when ``data`` is a GeoDataFrame; for a LAS/LAZ path, a
+                per-point field — one of ``classification``, ``intensity``, ``return_number`` (or ``x``/``y``/
+                ``z``). ``None`` for no colour.
             size: Marker size in pixels (default ``5.0``). Named ``size`` on every tier, so one number means
                 one visual marker size whichever backend drew it.
             scheme: How the colour values are classified, when the cloud is coloured at all. ``None`` (the
@@ -194,7 +316,34 @@ class PointCloudMixin(_MixinBase):
                 >>> scene.close()
 
                 ```
+            - Read a LAS/LAZ survey from disk and colour it by ASPRS classification (needs the `3d` extra):
+                ```python
+                >>> from digitalearth.three_d import Scene3D  # doctest: +SKIP
+                >>> scene = Scene3D(off_screen=True)  # doctest: +SKIP
+                >>> _ = scene.point_cloud(  # doctest: +SKIP
+                ...     "survey.laz", value_column="classification", scheme="categorical"
+                ... )
+                >>> scene.display_crs  # adopted from the file's header  # doctest: +SKIP
+                28992
+                >>> scene.close()  # doctest: +SKIP
+
+                ```
         """
+        if isinstance(data, (str, Path)):
+            # A LAS/LAZ path is decoded by pointclouds into CRS-carrying coordinates plus the chosen field.
+            # The field becomes an explicit `values` array (so the drawer never re-reads the file), while
+            # `value_column` is kept only to title the colour key after the field.
+            if values is not None:
+                # An explicit values= array colours the cloud and overrides any file field, so drop
+                # value_column — otherwise the colour key is titled after a field that was never read (L3).
+                value_column = None
+            data, las_values = _read_las_path(data, value_column)
+            if values is None:
+                values = las_values
+                # Title the key by the field's canonical lower-case name, matching the field actually read,
+                # since the lookup itself is case-insensitive (N2).
+                if value_column is not None:
+                    value_column = value_column.lower()
         return self._add_described_layer(
             kind="point_cloud",
             data=data,
@@ -360,10 +509,7 @@ def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
     _refuse_folded_marker_size(props)
     props["point_size"] = props.pop("size", None)
     placed = scene._place(data, layer="point_cloud")
-    if hasattr(placed, "geometry"):
-        points, gdf_values = _coords_from_geodataframe(placed, value_column)
-    else:
-        points, gdf_values = _coords_from_array(placed), None
+    points, gdf_values = _placed_coords(placed, value_column)
 
     scalar = np.asarray(values) if values is not None else gdf_values
     if len(points) == 0:
