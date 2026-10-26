@@ -161,3 +161,62 @@ def grib_collection():
 @pytest.fixture(scope="module")
 def points() -> GeoDataFrame:
     return gpd.read_file("tests/data/points.geojson")
+
+
+@pytest.fixture
+def ugrid_mesh():
+    """Return a factory for a two-face UGRID mesh: a quad and a triangle.
+
+    The quad fan-triangulates into two triangles and the triangle into one, so a face-located value that
+    is spread correctly reads back as ``[10, 10, 20]`` — the mesh's own faces rather than a Delaunay guess.
+    Shared by the base, static and quickmap suites, which all need the same mesh.
+
+    Returns:
+        Callable: ``build(location="face", node_x=None)`` → a pyramids ``UgridDataset``. ``location`` is
+        ``"face"`` or ``"node"``; ``node_x`` overrides the node x coordinates (pass non-finite ones to make
+        a mesh no projection can place).
+    """
+    import numpy as np
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    def build(location: str = "face", node_x=None):
+        mesh = Mesh2d(
+            node_x=(
+                np.array([0.0, 1.0, 1.0, 0.0, 2.0])
+                if node_x is None
+                else np.asarray(node_x)
+            ),
+            node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
+            face_node_connectivity=Connectivity(
+                data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
+                fill_value=-1,
+                cf_role="face_node_connectivity",
+                original_start_index=0,
+            ),
+        )
+        if location == "face":
+            held = {
+                "depth": MeshVariable(
+                    name="depth",
+                    location="face",
+                    mesh_name="m",
+                    shape=(2,),
+                    _data=np.array([10.0, 20.0]),
+                )
+            }
+        else:
+            held = {
+                "zs": MeshVariable(
+                    name="zs",
+                    location="node",
+                    mesh_name="m",
+                    shape=(5,),
+                    _data=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
+                )
+            }
+        return UgridDataset(mesh=mesh, data_variables=held, global_attributes={})
+
+    return build

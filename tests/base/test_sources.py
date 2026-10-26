@@ -913,58 +913,7 @@ class TestRequireDrawableRefusesByName:
             require_drawable({}, caller="Map.field()", accepts=())
 
 
-def _quad_and_triangle_mesh(location: str = "face"):
-    """Build a two-face UGRID mesh: a quad and a triangle, with values on ``location``.
-
-    The quad fan-triangulates into two triangles and the triangle into one, so a face-located value that
-    is spread correctly reads back as ``[10, 10, 20]`` — the mesh's own faces, not a Delaunay guess.
-
-    Args:
-        location: ``"face"`` or ``"node"`` — where the data variable sits.
-
-    Returns:
-        The pyramids ``UgridDataset``.
-    """
-    import numpy as np
-    from pyramids.netcdf.ugrid.connectivity import Connectivity
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
-    from pyramids.netcdf.ugrid.mesh import Mesh2d
-    from pyramids.netcdf.ugrid.models import MeshVariable
-
-    mesh = Mesh2d(
-        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
-        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
-        face_node_connectivity=Connectivity(
-            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
-            fill_value=-1,
-            cf_role="face_node_connectivity",
-            original_start_index=0,
-        ),
-    )
-    if location == "face":
-        held = {
-            "depth": MeshVariable(
-                name="depth",
-                location="face",
-                mesh_name="m",
-                shape=(2,),
-                _data=np.array([10.0, 20.0]),
-            )
-        }
-    else:
-        held = {
-            "zs": MeshVariable(
-                name="zs",
-                location="node",
-                mesh_name="m",
-                shape=(5,),
-                _data=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
-            )
-        }
-    return UgridDataset(mesh=mesh, data_variables=held, global_attributes={})
-
-
-def test_ugrid_face_values_spread_over_the_faces_own_triangles():
+def test_ugrid_face_values_spread_over_the_faces_own_triangles(ugrid_mesh):
     """A face-located variable keeps each face's value on that face's fan triangles (#499).
 
     Test scenario:
@@ -972,7 +921,7 @@ def test_ugrid_face_values_spread_over_the_faces_own_triangles():
         the mesh by a Delaunay triangulation of its nodes instead would invent faces the mesh does not
         have and paint these values onto the wrong ones.
     """
-    src = get_source(_quad_and_triangle_mesh("face"))
+    src = get_source(ugrid_mesh("face"))
     assert src.location == "face", f"expected face-located values, got {src.location!r}"
     assert src.n_triangles == 3, (
         f"a quad plus a triangle is three fan triangles, got {src.n_triangles}"
@@ -982,9 +931,9 @@ def test_ugrid_face_values_spread_over_the_faces_own_triangles():
     )
 
 
-def test_ugrid_node_values_stay_one_per_node():
+def test_ugrid_node_values_stay_one_per_node(ugrid_mesh):
     """A node-located variable keeps one value per node, with the node indices left untouched."""
-    src = get_source(_quad_and_triangle_mesh("node"))
+    src = get_source(ugrid_mesh("node"))
     assert src.location == "node"
     assert src.z.values.size == 5, (
         f"expected one value per node, got {src.z.values.size}"
@@ -992,9 +941,9 @@ def test_ugrid_node_values_stay_one_per_node():
     assert src.x.values.size == 5 and src.y.values.size == 5
 
 
-def test_ugrid_source_records_the_mesh_in_metadata():
+def test_ugrid_source_records_the_mesh_in_metadata(ugrid_mesh):
     """The mesh source describes itself as a mesh and records its face and node counts."""
-    src = get_source(_quad_and_triangle_mesh("face"))
+    src = get_source(ugrid_mesh("face"))
     recorded = (
         src.metadata("kind"),
         src.metadata("variable"),
@@ -1004,29 +953,30 @@ def test_ugrid_source_records_the_mesh_in_metadata():
     assert recorded == ("mesh", "depth", 2, 5), f"unexpected mesh metadata: {recorded}"
 
 
-def test_ugrid_variable_not_carried_is_refused():
+def test_ugrid_variable_not_carried_is_refused(ugrid_mesh):
     """Naming a variable the mesh does not carry is refused, listing the ones it does."""
+    mesh = ugrid_mesh("face")
     with pytest.raises(ValueError, match="is not in this UgridDataset"):
-        get_source(_quad_and_triangle_mesh("face"), variable="nope")
+        get_source(mesh, variable="nope")
 
 
-def test_ugrid_without_data_variables_is_refused():
+def test_ugrid_without_data_variables_is_refused(ugrid_mesh):
     """A mesh with no data variables is refused rather than drawn as a blank surface."""
     from pyramids.netcdf.ugrid.dataset import UgridDataset
 
-    mesh = _quad_and_triangle_mesh("face").mesh
+    mesh = ugrid_mesh("face").mesh
     empty = UgridDataset(mesh=mesh, data_variables={}, global_attributes={})
     with pytest.raises(ValueError, match="no data variables"):
         get_source(empty)
 
 
-def test_ugrid_variable_on_an_uncolourable_location_is_refused():
+def test_ugrid_variable_on_an_uncolourable_location_is_refused(ugrid_mesh):
     """A variable on an edge is refused: a surface render colours nodes or faces, nothing else."""
     import numpy as np
     from pyramids.netcdf.ugrid.dataset import UgridDataset
     from pyramids.netcdf.ugrid.models import MeshVariable
 
-    mesh = _quad_and_triangle_mesh("face").mesh
+    mesh = ugrid_mesh("face").mesh
     edged = UgridDataset(
         mesh=mesh,
         data_variables={
@@ -1042,3 +992,82 @@ def test_ugrid_variable_on_an_uncolourable_location_is_refused():
     )
     with pytest.raises(ValueError, match="colours node or face"):
         get_source(edged)
+
+
+def test_ugrid_explicit_variable_name_is_read(ugrid_mesh):
+    """Naming a variable the mesh does carry reads that one, not the first.
+
+    Test scenario:
+        The face-located and node-located variables differ in both length and location, so the one that
+        was read is identifiable from the result alone.
+    """
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    face = ugrid_mesh("face")
+    both = UgridDataset(
+        mesh=face.mesh,
+        data_variables={
+            "depth": face.data_vars["depth"],
+            "zs": MeshVariable(
+                name="zs",
+                location="node",
+                mesh_name="m",
+                shape=(5,),
+                _data=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
+            ),
+        },
+        global_attributes={},
+    )
+    picked = get_source(both, variable="zs")
+    assert picked.location == "node", (
+        f"expected the named node variable, got {picked.location!r}"
+    )
+    assert picked.metadata("variable") == "zs"
+
+
+def test_fan_values_refuses_a_spread_that_does_not_match_the_triangulation():
+    """``_fan_values`` refuses when the connectivity and the fan triangulation disagree.
+
+    Test scenario:
+        A defensive guard: a mesh reporting three nodes on its one face (so one fan triangle) while the
+        triangulation holds two would otherwise colour the second triangle from whatever numpy broadcast
+        left there. Exercised directly with a stub, because pyramids' own meshes cannot disagree.
+    """
+    from digitalearth.base.sources.extractors import _fan_values
+
+    class _StubConnectivity:
+        @staticmethod
+        def nodes_per_element():
+            return np.array([3])
+
+    class _StubMesh:
+        face_node_connectivity = _StubConnectivity()
+
+    with pytest.raises(ValueError, match="connectivity and triangulation disagree"):
+        _fan_values(np.array([10.0]), _StubMesh(), np.zeros((2, 3), dtype=int))
+
+
+def test_netcdf_two_dimensional_variable_needs_no_slicing():
+    """A variable already 2-D is carried through without the band-first slice step.
+
+    Test scenario:
+        Covers the other side of the ``z.ndim == 3`` branch: pyramids can hand back a plain ``(H, W)``
+        read, which must not be indexed as though it had a leading band axis.
+    """
+    from digitalearth.base.sources.extractors import _from_netcdf
+
+    class _StubNetCDF:
+        variable_names = ["flat"]
+        lon = np.array([0.0, 1.0])
+        lat = np.array([0.0, 1.0])
+
+        @staticmethod
+        def read_array(masked=True, variable=None):
+            return np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    src = _from_netcdf(_StubNetCDF(), None, None)
+    assert src.z.values.shape == (2, 2), (
+        f"a 2-D read was reshaped: {src.z.values.shape}"
+    )
+    assert src.z.values.tolist() == [[1.0, 2.0], [3.0, 4.0]]
