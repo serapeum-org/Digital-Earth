@@ -73,8 +73,9 @@ def test_contour_refuses_a_mesh_whose_values_sit_on_the_faces(ugrid_mesh, kind):
         Averaging the faces onto the nodes to make it work would invent data, so it is refused instead.
     """
     mesh = ugrid_mesh("face")
+    verb = getattr(Map(), kind)
     with pytest.raises(ValueError, match="values sit on its"):
-        getattr(Map(), kind)(mesh)
+        verb(mesh)
 
 
 def test_tripcolor_skips_a_mesh_no_projection_can_place(ugrid_mesh, caplog):

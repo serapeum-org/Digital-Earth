@@ -82,8 +82,9 @@ class TestMeshSource:
             is included because the comparison is deliberately case-sensitive.
         """
         x, y = _axes(3)
+        triangles = np.array([[0, 1, 2]])
         with pytest.raises(ValueError, match="is not one of"):
-            MeshSource(None, x, y, triangles=np.array([[0, 1, 2]]), location=location)
+            MeshSource(None, x, y, triangles=triangles, location=location)
 
     def test_n_triangles_is_zero_when_there_is_no_triangulation(self):
         """An empty or non-2-D triangulation reports no triangles instead of raising on ``.shape[0]``.

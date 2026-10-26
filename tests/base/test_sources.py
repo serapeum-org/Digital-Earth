@@ -1044,8 +1044,11 @@ def test_fan_values_refuses_a_spread_that_does_not_match_the_triangulation():
     class _StubMesh:
         face_node_connectivity = _StubConnectivity()
 
+    values = np.array([10.0])
+    stub = _StubMesh()
+    triangles = np.zeros((2, 3), dtype=int)
     with pytest.raises(ValueError, match="connectivity and triangulation disagree"):
-        _fan_values(np.array([10.0]), _StubMesh(), np.zeros((2, 3), dtype=int))
+        _fan_values(values, stub, triangles)
 
 
 def test_netcdf_two_dimensional_variable_needs_no_slicing():
