@@ -467,8 +467,8 @@ def fetch_basemap_image(
         provider: A cleopatra/xyzservices provider, or a dotted provider name such as `"CartoDB.Positron"`;
             `stitch_basemap` resolves a name itself and defaults to OpenStreetMap when `None`.
         zoom: The tile zoom level, or `None` to let cleopatra derive one from the box (`"auto"`). An explicit
-            high zoom over a large area is stepped down by `stitch_basemap` to stay within its 256-tile cap, so a
-            given level is an upper bound, not a guarantee.
+            high zoom over a large area is stepped down by `stitch_basemap` to stay within its default tile cap,
+            so a given level is an upper bound, not a guarantee.
 
     Returns:
         The stitched RGBA image `(H, W, 4)` and its `(west, south, east, north)` extent in EPSG:3857. The extent
