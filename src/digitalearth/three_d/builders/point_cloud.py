@@ -295,7 +295,9 @@ class PointCloudMixin(_MixinBase):
                 ```python
                 >>> from digitalearth.three_d import Scene3D  # doctest: +SKIP
                 >>> scene = Scene3D(off_screen=True)  # doctest: +SKIP
-                >>> _ = scene.point_cloud("survey.laz", value_column="classification")  # doctest: +SKIP
+                >>> _ = scene.point_cloud(  # doctest: +SKIP
+                ...     "survey.laz", value_column="classification", scheme="categorical"
+                ... )
                 >>> scene.display_crs  # adopted from the file's header  # doctest: +SKIP
                 28992
                 >>> scene.close()  # doctest: +SKIP
