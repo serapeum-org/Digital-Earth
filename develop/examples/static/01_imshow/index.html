@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://serapeum-org.github.io/Digital-Earth/develop/examples/static/01_imshow/">
       
       
-        <link rel="prev" href="../../threed/18_real_world_dem_earthlens/">
+        <link rel="prev" href="../../threed/19_cartographic_furniture/">
       
       
         <link rel="next" href="../02_contourf/">
@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -2459,6 +2459,34 @@
     
   
     Real-world terrains fetched with earthlens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../threed/19_cartographic_furniture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartographic furniture &amp; styling (3-D)
   
 
     
@@ -5504,8 +5532,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=e41ecd0a">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=e41ecd0a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -5546,6 +5574,20 @@ DEM = str(ROOT / "examples" / "data" / "LisbonElevation.tif")
 from pyramids.dataset import Dataset
 from digitalearth.static import Map
 ds = Dataset.read_file(DEM)</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/.pixi/envs/docs/lib/python3.13/site-packages/pyramids/__init__.py:54: FutureWarning: The 'pyramids-gis' distribution is deprecated and will be discontinued; install 'pyramids-core' instead (the import name stays 'pyramids').
+  _warn_if_legacy_distribution()
+</pre>
 </div>
 </div>
 </div>
@@ -5652,7 +5694,7 @@ m.fig;</div>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../../threed/18_real_world_dem_earthlens/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Real-world terrains fetched with earthlens">
+          <a href="../../threed/19_cartographic_furniture/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Cartographic furniture &amp;amp; styling (3-D)">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -5662,7 +5704,7 @@ m.fig;</div>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Real-world terrains fetched with earthlens
+                Cartographic furniture &amp; styling (3-D)
               </div>
             </div>
           </a>

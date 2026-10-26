@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -2541,6 +2541,34 @@
     
   
     Real-world terrains fetched with earthlens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../19_cartographic_furniture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartographic furniture &amp; styling (3-D)
   
 
     
@@ -5613,8 +5641,8 @@ engine), so nothing here is synthetic. Attributions are given per dataset.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=cell053">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=cell053">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -5711,6 +5739,20 @@ def show_image(img, title=''):
     plt.show()
 from digitalearth import quickmap
 from pyramids.feature import FeatureCollection</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/.pixi/envs/docs/lib/python3.13/site-packages/pyramids/__init__.py:54: FutureWarning: The 'pyramids-gis' distribution is deprecated and will be discontinued; install 'pyramids-core' instead (the import name stays 'pyramids').
+  _warn_if_legacy_distribution()
+</pre>
 </div>
 </div>
 </div>
@@ -5816,7 +5858,7 @@ scene.close()</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">pop_path</span> <span class="o">=</span> <span class="n">DATA</span> <span class="o">/</span> <span class="s1">'real_population.tif'</span>
 <span class="c1"># vectorize the real raster with pyramids, then wrap the GeoDataFrame as a pyramids FeatureCollection</span>
 <span class="n">pop_pts</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">pop_path</span><span class="p">))</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">'nearest neighbor'</span><span class="p">)</span>
-<span class="n">pt_gdf</span> <span class="o">=</span> <span class="n">pop_pts</span><span class="o">.</span><span class="n">to_feature_collection</span><span class="p">(</span><span class="n">add_geometry</span><span class="o">=</span><span class="s1">'Point'</span><span class="p">)</span>
+<span class="n">pt_gdf</span> <span class="o">=</span> <span class="n">pop_pts</span><span class="o">.</span><span class="n">to_geodataframe</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="s1">'point'</span><span class="p">)</span>
 <span class="n">pt_fc</span> <span class="o">=</span> <span class="n">FeatureCollection</span><span class="p">(</span><span class="n">pt_gdf</span><span class="p">[</span><span class="n">pt_gdf</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">])</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">quickmap</span><span class="p">(</span><span class="n">pt_fc</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s1">'3d'</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">12.0</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="s1">'isometric'</span><span class="p">)</span>
@@ -5824,7 +5866,7 @@ scene.close()</div>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 
 <span class="n">pop_cells</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">pop_path</span><span class="p">))</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="mf">0.03</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">'nearest neighbor'</span><span class="p">)</span>
-<span class="n">poly_gdf</span> <span class="o">=</span> <span class="n">pop_cells</span><span class="o">.</span><span class="n">to_feature_collection</span><span class="p">(</span><span class="n">add_geometry</span><span class="o">=</span><span class="s1">'Polygon'</span><span class="p">)</span>
+<span class="n">poly_gdf</span> <span class="o">=</span> <span class="n">pop_cells</span><span class="o">.</span><span class="n">to_geodataframe</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="s1">'polygon'</span><span class="p">)</span>
 <span class="n">poly_fc</span> <span class="o">=</span> <span class="n">FeatureCollection</span><span class="p">(</span><span class="n">poly_gdf</span><span class="p">[</span><span class="n">poly_gdf</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">])</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">quickmap</span><span class="p">(</span><span class="n">poly_fc</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s1">'3d'</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s1">'Band_1'</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="s1">'isometric'</span><span class="p">)</span>
@@ -5834,7 +5876,7 @@ scene.close()</div>
 <div class="clipboard-copy-txt" id="cell-3">pop_path = DATA / 'real_population.tif'
 # vectorize the real raster with pyramids, then wrap the GeoDataFrame as a pyramids FeatureCollection
 pop_pts = Dataset.read_file(str(pop_path)).resample(0.01, method='nearest neighbor')
-pt_gdf = pop_pts.to_feature_collection(add_geometry='Point')
+pt_gdf = pop_pts.to_geodataframe(geometry='point')
 pt_fc = FeatureCollection(pt_gdf[pt_gdf['Band_1'] &gt;= 0])
 scene = quickmap(pt_fc, backend='3d', size=12.0)
 scene.view('isometric')
@@ -5842,7 +5884,7 @@ show(scene, "quickmap(points, backend='3d') -&gt; point_cloud")
 scene.close()
 
 pop_cells = Dataset.read_file(str(pop_path)).resample(0.03, method='nearest neighbor')
-poly_gdf = pop_cells.to_feature_collection(add_geometry='Polygon')
+poly_gdf = pop_cells.to_geodataframe(geometry='polygon')
 poly_fc = FeatureCollection(poly_gdf[poly_gdf['Band_1'] &gt;= 0])
 scene = quickmap(poly_fc, backend='3d', height=0.01, column='Band_1')
 scene.view('isometric')
@@ -5940,19 +5982,19 @@ scene.close()</div>
 <div class="jp-OutputArea jp-Cell-outputArea">
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>screenshot array : (768, 1024, 3)
-png  bytes : 188308
-html bytes : 9248556
-gltf bytes : 14637295
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/src/digitalearth/three_d/core/base.py:2468: UserWarning: Plotter contains non-PolyData datasets. These have been overwritten with PolyData surfaces and are internally copies of the original datasets.
+  exporter(str(path), **kwargs)
 </pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>/home/runner/work/Digital-Earth/Digital-Earth/src/digitalearth/three_d/core/base.py:2384: UserWarning: Plotter contains non-PolyData datasets. These have been overwritten with PolyData surfaces and are internally copies of the original datasets.
-  exporter(str(path), **kwargs)
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>screenshot array : (768, 1024, 3)
+png  bytes : 188308
+html bytes : 9248572
+gltf bytes : 14637295
 </pre>
 </div>
 </div>
