@@ -1190,3 +1190,28 @@ def test_ugrid_step_out_of_range_is_refused(ugrid_mesh):
     mesh = ugrid_mesh("face", steps=3)
     with pytest.raises(ValueError, match="out of range"):
         get_source(mesh, band=9)
+
+
+def test_netcdf_four_dimensional_variable_is_refused():
+    """A variable with more than one extra axis is refused, not stored 4-D on a 2-D Source (review M5).
+
+    Test scenario:
+        pyramids keeps every band dimension, so a ``(time, level, lat, lon)`` variable — an ERA5
+        pressure-levels read — arrives 4-D. ``band`` addresses one leading axis, so it cannot name a field
+        in such an array; it used to be dropped without a word and the 4-D array stored as if it were a
+        field. Exercised with a stub, since the message is about the shape, not about any driver.
+    """
+    from digitalearth.base.sources.extractors import _from_netcdf
+
+    class _FourDimensional:
+        variable_names = ["t"]
+        lon = np.arange(6.0)
+        lat = np.arange(6.0)
+
+        @staticmethod
+        def read_array(masked=True, variable=None):
+            return np.zeros((2, 3, 6, 6))
+
+    stub = _FourDimensional()
+    with pytest.raises(ValueError, match="4-D array"):
+        _from_netcdf(stub, None, None, band=2)

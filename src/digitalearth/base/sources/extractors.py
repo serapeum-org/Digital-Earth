@@ -691,7 +691,8 @@ def _from_netcdf(
         nc: The pyramids ``NetCDF`` container to read, or a pinned ``Variable`` subset of one.
         variable: The variable to plot; ``None`` takes the first, or the pinned one.
         metadata: Extra metadata merged over the derived keys (the caller wins).
-        band: 1-based slice to draw from a variable carrying a band/time dimension.
+        band: 1-based slice to draw from a variable carrying **one** band/time dimension. A variable with
+            more than one extra axis is refused rather than silently reduced.
         crs: The CRS the container's coordinates are already in, stored verbatim; ``None`` derives it.
 
     Returns:
@@ -727,6 +728,16 @@ def _from_netcdf(
     # band axis: the one ``band`` names, on the same 1-based index the raster path's ``band`` uses.
     if z.ndim == 3:
         z = _netcdf_slice(z, named, band)
+    elif z.ndim > 3:
+        # pyramids keeps every band dimension since its #1241, so a (time, level, lat, lon) variable — an
+        # ERA5 pressure-levels read, say — arrives 4-D. `band` addresses one leading axis, so it cannot
+        # name a field in here; saying so beats storing a 4-D array on a Source documented to wrap a 2-D
+        # field and dropping `band` without a word (review M5).
+        raise ValueError(
+            f"{named} reads a {z.ndim}-D array {tuple(int(size) for size in z.shape)}; band= addresses a "
+            f"single leading axis, so select the extra dimensions first (e.g. NetCDF.sel(...)) and plot "
+            f"the 2-D or 3-D result"
+        )
     attributes = _variable_attributes(nc, variable)
     if pinned and not attributes:
         # A subset's metadata holds no per-variable entry for the variable it already is, so the CF
