@@ -5,12 +5,12 @@ path, per-point colouring, the GeoDataFrame (``get_cell_points``-style) path rea
 guard module imports no GIS competitor.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 pv = pytest.importorskip("pyvista")
-
-from pathlib import Path
 
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.builders.point_cloud import (
