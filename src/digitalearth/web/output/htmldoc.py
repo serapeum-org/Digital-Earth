@@ -53,7 +53,7 @@ def _asset(name: str) -> str:
     """Return the text of a shipped ``srcjs`` asset (cached for the process).
 
     Args:
-        name: The file name under ``web/srcjs`` (e.g. ``"de_maplibre.js"``).
+        name: The file name under ``web/output/srcjs`` (e.g. ``"de_maplibre.js"``).
 
     Returns:
         The file's text.
