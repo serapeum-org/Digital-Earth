@@ -1118,7 +1118,9 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
     kind = layer.symbology.props["via"]
     opts = drawing_style(scene, layer)
-    x, y, z, field, triangles, location = scene._unstructured(data)
+    x, y, z, field, triangles, location = scene._unstructured(
+        data, band=scene._layer_keys.get(layer.id, DEFAULT_BAND)
+    )
     x, y, z = np.asarray(x), np.asarray(y), np.asarray(z)
     if triangles is None:
         # drop far-side points on a globe (Triangulation needs finite)
@@ -2719,7 +2721,7 @@ class VectorMixin(_MixinBase):
             )
         return reproject(data, code)
 
-    def _unstructured(self, data: Any) -> tuple:
+    def _unstructured(self, data: Any, band: int = DEFAULT_BAND) -> tuple:
         """Return ``(x, y, z, field, triangles, location)`` for a triangulated render's input.
 
         The sixth value is what tells the drawer which kind of input it got. A **UGRID mesh** answers with
@@ -2728,6 +2730,8 @@ class VectorMixin(_MixinBase):
 
         Args:
             data: A pyramids ``Dataset``, ``FeatureCollection`` or ``UgridDataset``.
+            band: 1-based step to draw from a mesh variable carrying a time (or layer) axis. Ignored for
+                scattered input, whose value belongs to the point.
 
         Returns:
             The node/point x and y coordinates in the display CRS, the values, the **name** those values
@@ -2745,7 +2749,7 @@ class VectorMixin(_MixinBase):
         if isinstance(data, UgridDataset):
             # The mesh branch of the extractor answers with a MeshSource, which is what carries the
             # connectivity; `get_source` is typed to its base return.
-            src = cast(MeshSource, get_source(self._placed_mesh(data)))
+            src = cast(MeshSource, get_source(self._placed_mesh(data), band=band))
             return (
                 src.x.values,
                 src.y.values,
@@ -2762,6 +2766,7 @@ class VectorMixin(_MixinBase):
         data: Any,
         *,
         kind: str,
+        band: int = DEFAULT_BAND,
         name: str | None = None,
         visible: bool = True,
         **opts,
@@ -2774,6 +2779,9 @@ class VectorMixin(_MixinBase):
                 layer can be written down.
             kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
                 ``tripcolor``).
+            band: 1-based step to draw from a mesh variable carrying a time (or layer) axis. It reaches
+                the drawer on the layer's key channel, the way a clip boundary does; scattered input has
+                no step to choose.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2803,6 +2811,10 @@ class VectorMixin(_MixinBase):
             source=data,
             name=name,
             visible=visible,
+            # The band travels on the key channel, the way this module already hands a drawer a clip
+            # boundary or a reducer: `LayerRecord` carries no data selection, and the raster path resolves
+            # its own band in the builder rather than describing it.
+            key=band,
             symbology=Symbology(props={"via": kind}),
             opts=opts,
         )
@@ -2813,7 +2825,13 @@ class VectorMixin(_MixinBase):
             return None
 
     def tricontourf(
-        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
+        self,
+        data: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        name: str | None = None,
+        visible: bool = True,
+        **kwargs,
     ) -> Self:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
@@ -2841,11 +2859,19 @@ class VectorMixin(_MixinBase):
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        self._tri(data, kind="tricontourf", name=name, visible=visible, **kwargs)
+        self._tri(
+            data, kind="tricontourf", band=band, name=name, visible=visible, **kwargs
+        )
         return self
 
     def tricontour(
-        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
+        self,
+        data: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        name: str | None = None,
+        visible: bool = True,
+        **kwargs,
     ) -> Self:
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
@@ -2873,11 +2899,19 @@ class VectorMixin(_MixinBase):
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        self._tri(data, kind="tricontour", name=name, visible=visible, **kwargs)
+        self._tri(
+            data, kind="tricontour", band=band, name=name, visible=visible, **kwargs
+        )
         return self
 
     def tripcolor(
-        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
+        self,
+        data: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        name: str | None = None,
+        visible: bool = True,
+        **kwargs,
     ) -> Self:
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
 
@@ -2910,7 +2944,9 @@ class VectorMixin(_MixinBase):
                 numeric column to contour.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        self._tri(data, kind="tripcolor", name=name, visible=visible, **kwargs)
+        self._tri(
+            data, kind="tripcolor", band=band, name=name, visible=visible, **kwargs
+        )
         return self
 
     @staticmethod

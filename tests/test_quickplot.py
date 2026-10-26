@@ -1234,7 +1234,7 @@ def test_quickmap_variable_refuses_a_non_netcdf_input():
     import numpy as np
 
     grid = np.zeros((4, 4))
-    with pytest.raises(ValueError, match="selects a NetCDF variable"):
+    with pytest.raises(ValueError, match="selects a NetCDF or UgridDataset variable"):
         digitalearth.quickmap(grid, variable="t2m", backend="matplotlib")
 
 
@@ -1287,3 +1287,53 @@ def test_quickmap_refuses_a_mesh_on_a_backend_with_no_mesh_render(backend, ugrid
 def test_input_kind_calls_a_ugrid_dataset_a_mesh(ugrid_mesh):
     """The input gate classifies a UgridDataset as the ``mesh`` family the kind registry already names."""
     assert qp._input_kind(ugrid_mesh("face"), "quickmap") == "mesh"
+
+
+def test_quickmap_variable_selects_a_mesh_variable(ugrid_mesh):
+    """``variable=`` picks a mesh variable, not only a NetCDF one (review M4).
+
+    Test scenario:
+        A multi-variable mesh could previously only ever draw its first variable through the public entry
+        point, although the extractor supported naming one — the same complaint #499 raised for NetCDF.
+        The two variables hold different values, so the drawn one is identifiable.
+    """
+    import numpy as np
+
+    mesh = ugrid_mesh("face", second=True)
+    drawn = digitalearth.quickmap(mesh, variable="roughness", backend="matplotlib")
+    values = np.asarray(drawn.ax.collections[-1].get_array()).tolist()
+    assert values == [30.0, 30.0, 40.0], f"expected the 'roughness' variable, drew {values}"
+
+
+def test_quickmap_band_selects_a_mesh_step(ugrid_mesh):
+    """``band=`` picks the time step of a mesh variable instead of leaking into matplotlib (review M3)."""
+    import numpy as np
+
+    mesh = ugrid_mesh("face", steps=3)
+    drawn = digitalearth.quickmap(mesh, band=3, backend="matplotlib")
+    values = np.asarray(drawn.ax.collections[-1].get_array()).tolist()
+    assert values == [210.0, 210.0, 220.0], f"expected step 3, drew {values}"
+
+
+def test_quickmap_band_out_of_range_on_a_mesh_is_refused(ugrid_mesh):
+    """An out-of-range step is refused by name, not as an artist-property error from matplotlib."""
+    mesh = ugrid_mesh("face", steps=3)
+    with pytest.raises(ValueError, match="out of range"):
+        digitalearth.quickmap(mesh, band=9, backend="matplotlib")
+
+
+@pytest.mark.parametrize("kind", ["tricontourf", "imshow", "nonsense"])
+def test_quickmap_refuses_a_kind_the_mesh_render_cannot_honour(ugrid_mesh, kind):
+    """A ``kind`` other than the mesh render is refused rather than silently ignored (review M2).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        kind: A renderer the mesh family does not offer.
+
+    Test scenario:
+        All three used to be accepted and drew tripcolor regardless — the one behaviour this api refuses
+        to have anywhere else, where every other family routes ``kind`` through a renderer table.
+    """
+    mesh = ugrid_mesh("face")
+    with pytest.raises(ValueError, match="not a renderer for a mesh"):
+        digitalearth.quickmap(mesh, kind=kind, backend="matplotlib")

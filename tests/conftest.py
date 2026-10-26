@@ -176,7 +176,8 @@ def ugrid_mesh():
         ``UgridDataset``. ``location`` is ``"face"`` or ``"node"``; ``node_x`` overrides the node x
         coordinates (pass non-finite ones to make a mesh no projection can place); ``steps`` > 1 gives the
         variable a leading time axis, which is the shape UGRID model output normally has; ``epsg`` makes
-        the mesh declare a CRS, which is what puts it on the reprojecting path.
+        the mesh declare a CRS, which is what puts it on the reprojecting path; ``second`` adds a second
+        face variable, so a selection can be told apart from the default.
     """
     import numpy as np
     from pyramids.netcdf.ugrid.connectivity import Connectivity
@@ -184,7 +185,13 @@ def ugrid_mesh():
     from pyramids.netcdf.ugrid.mesh import Mesh2d
     from pyramids.netcdf.ugrid.models import MeshVariable
 
-    def build(location: str = "face", node_x=None, steps: int = 1, epsg=None):
+    def build(
+        location: str = "face",
+        node_x=None,
+        steps: int = 1,
+        epsg=None,
+        second: bool = False,
+    ):
         mesh = Mesh2d(
             node_x=(
                 np.array([0.0, 1.0, 1.0, 0.0, 2.0])
@@ -221,6 +228,15 @@ def ugrid_mesh():
                 _data=data,
             )
         }
+        if second:
+            # A second face variable with its own values, so the one drawn is identifiable.
+            held["roughness"] = MeshVariable(
+                name="roughness",
+                location="face",
+                mesh_name="m",
+                shape=(2,),
+                _data=np.array([30.0, 40.0]),
+            )
         wkt = None
         if epsg is not None:
             from pyramids.base.crs import crs_from_user_input

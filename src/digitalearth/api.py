@@ -605,15 +605,15 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
 
     Args:
         data: The input ``quickmap`` was given.
-        variable: The NetCDF variable to draw, or ``None`` to leave the input alone.
+        variable: The NetCDF or UGRID variable to draw, or ``None`` to leave the input alone.
 
     Returns:
-        PlottableData: the pinned variable subset, or ``data`` unchanged when no variable was named.
+        PlottableData: the narrowed input, or ``data`` unchanged when no variable was named.
 
     Raises:
-        ValueError: when ``variable`` is named for an input that is not a NetCDF, or names a variable the
-            container does not carry — either way the caller learns which, rather than seeing the first
-            variable drawn in silence.
+        ValueError: when ``variable`` is named for an input that holds no variables to choose from, or
+            names one the input does not carry — either way the caller learns which, rather than seeing
+            the first variable drawn in silence.
 
     Examples:
         - Naming a variable on a non-NetCDF input is refused by name:
@@ -624,7 +624,7 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
             ...     _pinned_variable(np.zeros((2, 2)), "t2m")
             ... except ValueError as error:
             ...     print(error)
-            variable='t2m' selects a NetCDF variable, but the input is a ndarray
+            variable='t2m' selects a NetCDF or UgridDataset variable, but the input is a ndarray
 
             ```
         - Asking for nothing leaves the input exactly as it came:
@@ -640,10 +640,22 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
     if variable is None:
         return data
     from pyramids.netcdf import NetCDF
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
 
+    if isinstance(data, UgridDataset):
+        # A mesh is narrowed by dropping the others rather than by pinning one: `_from_ugrid` draws the
+        # first variable, so a single-variable mesh *is* the selection, and it keeps the variable's name,
+        # units and standard name — which a pinned NetCDF subset cannot (review M4).
+        carried = list(data.data_variable_names)
+        if variable not in carried:
+            raise ValueError(
+                f"variable={variable!r} is not in this UgridDataset, which carries {carried}"
+            )
+        others = [held for held in carried if held != variable]
+        return data.drop_variables(others) if others else data
     if not isinstance(data, NetCDF):
         raise ValueError(
-            f"variable={variable!r} selects a NetCDF variable, but the input is a "
+            f"variable={variable!r} selects a NetCDF or UgridDataset variable, but the input is a "
             f"{type(data).__name__}"
         )
     carried = list(data.variable_names)
@@ -802,6 +814,11 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
     if family == "mesh":
         # `tripcolor` is the render that shades a face its own colour, which is what a mesh carrying
         # face-located values is; it also draws node-located values, by averaging each triangle's nodes.
+        if kind not in ("auto", "tripcolor"):
+            raise ValueError(
+                f"kind={kind!r} is not a renderer for a mesh; quickmap draws one with 'tripcolor', which "
+                f"shades each face. Contour a node-located mesh with Map.tricontourf() directly."
+            )
         scene.tripcolor(data, **kwargs)
         return
     if family == "polygons":
@@ -844,7 +861,8 @@ def quickmap(
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
             nothing) is accepted anywhere.
-        variable: Which variable to draw from a NetCDF container, which otherwise draws its **first**.
+        variable: Which variable to draw from a NetCDF container or a UGRID mesh, either of which
+            otherwise draws its **first**.
             Every backend honours it, because it selects the input rather than asking anything of a
             renderer. Naming one for a non-NetCDF input, or one the container does not carry, is refused by
             name. To choose a slice of a variable that carries a band/time dimension, pass ``band=`` (1-based)
