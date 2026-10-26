@@ -1302,7 +1302,9 @@ def test_quickmap_variable_selects_a_mesh_variable(ugrid_mesh):
     mesh = ugrid_mesh("face", second=True)
     drawn = digitalearth.quickmap(mesh, variable="roughness", backend="matplotlib")
     values = np.asarray(drawn.ax.collections[-1].get_array()).tolist()
-    assert values == [30.0, 30.0, 40.0], f"expected the 'roughness' variable, drew {values}"
+    assert values == [30.0, 30.0, 40.0], (
+        f"expected the 'roughness' variable, drew {values}"
+    )
 
 
 def test_quickmap_band_selects_a_mesh_step(ugrid_mesh):
@@ -1337,3 +1339,64 @@ def test_quickmap_refuses_a_kind_the_mesh_render_cannot_honour(ugrid_mesh, kind)
     mesh = ugrid_mesh("face")
     with pytest.raises(ValueError, match="not a renderer for a mesh"):
         digitalearth.quickmap(mesh, kind=kind, backend="matplotlib")
+
+
+def _single_variable_netcdf():
+    """Build a one-variable NetCDF container.
+
+    Returns:
+        The pyramids ``NetCDF`` carrying only ``"t2m"``.
+    """
+    import numpy as np
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    return NetCDF.from_array(
+        np.full((1, 6, 6), 1.0, dtype="float32"), geo_ref=geo, variable_name="t2m"
+    )
+
+
+def test_variable_naming_the_pinned_subsets_own_variable_is_a_no_op():
+    """Naming the variable a pinned subset already is asks for what is in hand (review L2)."""
+    pinned = _single_variable_netcdf().get_variable("t2m")
+    assert qp._pinned_variable(pinned, "t2m") is pinned
+
+
+def test_variable_naming_another_variable_on_a_pinned_subset_says_so():
+    """A different variable cannot be selected from a subset, and the message describes that.
+
+    Test scenario:
+        A ``Variable`` is a ``NetCDF`` subclass reporting no names of its own, so the container wording
+        used to answer "is not in this NetCDF, which carries []" — a true sentence about the wrong
+        situation.
+    """
+    pinned = _single_variable_netcdf().get_variable("t2m")
+    with pytest.raises(ValueError, match="already the variable 't2m'"):
+        qp._pinned_variable(pinned, "other")
+
+
+def test_variable_with_no_raster_plane_is_refused_by_name():
+    """A variable pyramids cannot expose as a raster plane is refused by name (review L3).
+
+    Test scenario:
+        ``NetCDF.get_variable`` answers a ``LabeledArray`` for a 1-D or non-numeric variable. That is
+        neither a Dataset nor a FeatureCollection, so the input gate used to complain about the *pinned*
+        type — a type the caller never named. Exercised with a container whose ``get_variable`` answers
+        one, since such a variable cannot be built through ``from_array`` here.
+    """
+    from pyramids.netcdf import NetCDF
+
+    class _NoRasterPlane(NetCDF):
+        def __init__(self):  # noqa: D107 - a stand-in for a container holding a 1-D variable
+            pass
+
+        variable_names = ["station_id"]
+
+        @staticmethod
+        def get_variable(name):
+            return object()
+
+    container = _NoRasterPlane()
+    with pytest.raises(ValueError, match="has no raster plane to draw"):
+        qp._pinned_variable(container, "station_id")

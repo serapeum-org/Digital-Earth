@@ -611,9 +611,10 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
         PlottableData: the narrowed input, or ``data`` unchanged when no variable was named.
 
     Raises:
-        ValueError: when ``variable`` is named for an input that holds no variables to choose from, or
-            names one the input does not carry — either way the caller learns which, rather than seeing
-            the first variable drawn in silence.
+        ValueError: when ``variable`` is named for an input that holds no variables to choose from, names
+            one the input does not carry, names a *different* variable on an already-pinned subset, or
+            names one pyramids cannot expose as a raster plane — a 1-D or non-numeric variable. Either way
+            the caller learns which, rather than seeing the first variable drawn in silence.
 
     Examples:
         - Naming a variable on a non-NetCDF input is refused by name:
@@ -658,12 +659,34 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
             f"variable={variable!r} selects a NetCDF or UgridDataset variable, but the input is a "
             f"{type(data).__name__}"
         )
+    from pyramids.netcdf import Variable
+
+    if isinstance(data, Variable):
+        # An already-pinned subset *is* one variable and reports no names of its own, so the container
+        # wording below would describe the wrong situation ("which carries []"). Naming the same variable
+        # asks for what is already in hand; naming another cannot be served from a subset (review L2).
+        held = getattr(data, "_source_var_name", None)
+        if held is not None and variable == held:
+            return data
+        raise ValueError(
+            f"this input is already the variable {held!r}, so variable={variable!r} cannot select "
+            f"another from it; pass the NetCDF container instead"
+        )
     carried = list(data.variable_names)
     if variable not in carried:
         raise ValueError(
             f"variable={variable!r} is not in this NetCDF, which carries {carried}"
         )
-    return data.get_variable(variable)
+    pinned = data.get_variable(variable)
+    if not isinstance(pinned, Dataset):
+        # pyramids answers a LabeledArray for a variable it cannot expose as a raster plane — a 1-D or
+        # non-numeric one. Refusing by name beats letting the input gate complain about the *pinned* type,
+        # which the caller never asked for (review L3).
+        raise ValueError(
+            f"variable={variable!r} has no raster plane to draw: pyramids answered a "
+            f"{type(pinned).__name__}, which a map cannot draw as a field"
+        )
+    return pinned
 
 
 #: The backends that can draw an unstructured mesh. The static tier shades each face through cleopatra's
