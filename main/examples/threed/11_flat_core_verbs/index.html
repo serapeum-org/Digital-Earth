@@ -2554,6 +2554,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../19_cartographic_furniture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartographic furniture &amp; styling (3-D)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5613,8 +5641,8 @@ engine), so nothing here is synthetic. Attributions are given per dataset.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=cell002">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=cell002">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -5711,6 +5739,20 @@ def show_image(img, title=''):
 </div>
 </div>
 </div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/.pixi/envs/docs/lib/python3.13/site-packages/pyramids/__init__.py:54: FutureWarning: The 'pyramids-gis' distribution is deprecated and will be discontinued; install 'pyramids-core' instead (the import name stays 'pyramids').
+  _warn_if_legacy_distribution()
+</pre>
+</div>
+</div>
+</div>
+</div>
 </div>
 </div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cell003">
@@ -5744,7 +5786,7 @@ def show_image(img, title=''):
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">pop</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s1">'real_population.tif'</span><span class="p">))</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="mf">0.006</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">'nearest neighbor'</span><span class="p">)</span>
-<span class="n">pts</span> <span class="o">=</span> <span class="n">pop</span><span class="o">.</span><span class="n">to_feature_collection</span><span class="p">(</span><span class="n">add_geometry</span><span class="o">=</span><span class="s1">'Point'</span><span class="p">)</span>
+<span class="n">pts</span> <span class="o">=</span> <span class="n">pop</span><span class="o">.</span><span class="n">to_geodataframe</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="s1">'point'</span><span class="p">)</span>
 <span class="n">pts</span> <span class="o">=</span> <span class="n">pts</span><span class="p">[</span><span class="n">pts</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">]</span>                       <span class="c1"># drop nodata cells</span>
 <span class="n">people</span> <span class="o">=</span> <span class="n">pts</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
 
@@ -5766,7 +5808,7 @@ def show_image(img, title=''):
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">pop = Dataset.read_file(str(DATA / 'real_population.tif')).resample(0.006, method='nearest neighbor')
-pts = pop.to_feature_collection(add_geometry='Point')
+pts = pop.to_geodataframe(geometry='point')
 pts = pts[pts['Band_1'] &gt;= 0]                       # drop nodata cells
 people = pts['Band_1'].to_numpy(dtype=float)
 
@@ -5841,7 +5883,7 @@ raises each by its population into a 3-D block field.</p>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">grid_pop</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s1">'real_population.tif'</span><span class="p">))</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="mf">0.03</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">'nearest neighbor'</span><span class="p">)</span>
-<span class="n">cells</span> <span class="o">=</span> <span class="n">grid_pop</span><span class="o">.</span><span class="n">to_feature_collection</span><span class="p">(</span><span class="n">add_geometry</span><span class="o">=</span><span class="s1">'Polygon'</span><span class="p">)</span>
+<span class="n">cells</span> <span class="o">=</span> <span class="n">grid_pop</span><span class="o">.</span><span class="n">to_geodataframe</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="s1">'polygon'</span><span class="p">)</span>
 <span class="n">cells</span> <span class="o">=</span> <span class="n">cells</span><span class="p">[</span><span class="n">cells</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">span</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">cells</span><span class="o">.</span><span class="n">total_bounds</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">cells</span><span class="o">.</span><span class="n">total_bounds</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">cells</span><span class="o">.</span><span class="n">total_bounds</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">-</span> <span class="n">cells</span><span class="o">.</span><span class="n">total_bounds</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
 <span class="n">cells</span><span class="p">[</span><span class="s1">'tower'</span><span class="p">]</span> <span class="o">=</span> <span class="n">cells</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span> <span class="o">/</span> <span class="p">(</span><span class="n">cells</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="ow">or</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.4</span> <span class="o">*</span> <span class="n">span</span>
@@ -5859,7 +5901,7 @@ raises each by its population into a 3-D block field.</p>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">grid_pop = Dataset.read_file(str(DATA / 'real_population.tif')).resample(0.03, method='nearest neighbor')
-cells = grid_pop.to_feature_collection(add_geometry='Polygon')
+cells = grid_pop.to_geodataframe(geometry='polygon')
 cells = cells[cells['Band_1'] &gt;= 0].reset_index(drop=True)
 span = max(cells.total_bounds[2] - cells.total_bounds[0], cells.total_bounds[3] - cells.total_bounds[1])
 cells['tower'] = cells['Band_1'] / (cells['Band_1'].max() or 1.0) * 0.4 * span

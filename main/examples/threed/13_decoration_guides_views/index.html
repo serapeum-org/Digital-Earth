@@ -2587,6 +2587,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../19_cartographic_furniture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartographic furniture &amp; styling (3-D)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5681,8 +5709,8 @@ engine), so nothing here is synthetic. Attributions are given per dataset.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=cell019">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=cell019">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -5779,6 +5807,20 @@ def show_image(img, title=''):
     plt.show()
 
 GRAND_CANYON = DATA / 'real_dem_grand_canyon.tif'</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/.pixi/envs/docs/lib/python3.13/site-packages/pyramids/__init__.py:54: FutureWarning: The 'pyramids-gis' distribution is deprecated and will be discontinued; install 'pyramids-core' instead (the import name stays 'pyramids').
+  _warn_if_legacy_distribution()
+</pre>
 </div>
 </div>
 </div>
@@ -6066,7 +6108,7 @@ scene.close()</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">cells</span> <span class="o">=</span> <span class="p">(</span><span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s1">'real_population.tif'</span><span class="p">))</span>
          <span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="mf">0.03</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">'nearest neighbor'</span><span class="p">)</span>
-         <span class="o">.</span><span class="n">to_feature_collection</span><span class="p">(</span><span class="n">add_geometry</span><span class="o">=</span><span class="s1">'Polygon'</span><span class="p">))</span>
+         <span class="o">.</span><span class="n">to_geodataframe</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="s1">'polygon'</span><span class="p">))</span>
 <span class="n">cells</span> <span class="o">=</span> <span class="n">cells</span><span class="p">[</span><span class="n">cells</span><span class="p">[</span><span class="s1">'Band_1'</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">]</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">choropleth</span><span class="p">(</span><span class="n">cells</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s1">'Band_1'</span><span class="p">,</span> <span class="n">scheme</span><span class="o">=</span><span class="s1">'quantiles'</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlOrRd'</span><span class="p">)</span>
@@ -6077,7 +6119,7 @@ scene.close()</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-6">cells = (Dataset.read_file(str(DATA / 'real_population.tif'))
          .resample(0.03, method='nearest neighbor')
-         .to_feature_collection(add_geometry='Polygon'))
+         .to_geodataframe(geometry='polygon'))
 cells = cells[cells['Band_1'] &gt;= 0]
 scene = Scene3D(off_screen=True)
 scene.choropleth(cells, column='Band_1', scheme='quantiles', k=4, cmap='YlOrRd')

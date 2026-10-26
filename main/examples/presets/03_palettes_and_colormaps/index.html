@@ -2565,6 +2565,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../threed/19_cartographic_furniture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartographic furniture &amp; styling (3-D)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5679,6 +5707,14 @@ available_palettes()</div>
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
 <div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/.pixi/envs/docs/lib/python3.13/site-packages/pyramids/__init__.py:54: FutureWarning: The 'pyramids-gis' distribution is deprecated and will be discontinued; install 'pyramids-core' instead (the import name stays 'pyramids').
+  _warn_if_legacy_distribution()
+</pre>
+</div>
+</div>
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
 <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[1]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
@@ -5915,7 +5951,7 @@ fig;</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 <span class="n">coarse</span> <span class="o">=</span> <span class="n">dem</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">dem</span><span class="o">.</span><span class="n">cell_size</span> <span class="o">*</span> <span class="mi">40</span><span class="p">)</span>
-<span class="n">cells</span> <span class="o">=</span> <span class="n">coarse</span><span class="o">.</span><span class="n">get_cell_polygons</span><span class="p">()</span>
+<span class="n">cells</span> <span class="o">=</span> <span class="n">coarse</span><span class="o">.</span><span class="n">to_geodataframe</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="s2">"polygon"</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="n">elev</span> <span class="o">=</span> <span class="n">coarse</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float64'</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
 <span class="n">cells</span><span class="p">[</span><span class="s1">'zone'</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">cut</span><span class="p">(</span><span class="n">elev</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">'zone </span><span class="si">%d</span><span class="s1">'</span> <span class="o">%</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">7</span><span class="p">)])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
 <span class="n">cmap</span> <span class="o">=</span> <span class="n">ListedColormap</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">get_palette</span><span class="p">(</span><span class="s1">'category12'</span><span class="p">)</span><span class="o">.</span><span class="n">colors</span><span class="p">))</span>
@@ -5925,7 +5961,7 @@ fig;</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-5">import pandas as pd
 coarse = dem.resample(dem.cell_size * 40)
-cells = coarse.get_cell_polygons()
+cells = coarse.to_geodataframe(geometry="polygon", values=False)
 elev = coarse.read_array(band=0).astype('float64').ravel()
 cells['zone'] = pd.cut(elev, bins=6, labels=['zone %d' % i for i in range(1, 7)]).astype(str)
 cmap = ListedColormap(list(get_palette('category12').colors))

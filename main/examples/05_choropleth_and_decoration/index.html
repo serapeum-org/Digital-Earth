@@ -2563,6 +2563,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threed/19_cartographic_furniture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartographic furniture &amp; styling (3-D)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5735,7 +5763,7 @@ print("DEM:", DEM)</div>
 <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">DEM</span><span class="p">)</span>
 <span class="n">coarse</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">cell_size</span> <span class="o">*</span> <span class="mi">12</span><span class="p">)</span>   <span class="c1"># coarse cells -&gt; polygon features</span>
 <span class="c1"># vectorise the cells (pyramids) and attach the per-cell elevation as the value column</span>
-<span class="n">cells</span> <span class="o">=</span> <span class="n">coarse</span><span class="o">.</span><span class="n">get_cell_polygons</span><span class="p">()</span>
+<span class="n">cells</span> <span class="o">=</span> <span class="n">coarse</span><span class="o">.</span><span class="n">to_geodataframe</span><span class="p">(</span><span class="n">geometry</span><span class="o">=</span><span class="s2">"polygon"</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="n">cells</span><span class="p">[</span><span class="s1">'elevation'</span><span class="p">]</span> <span class="o">=</span> <span class="n">coarse</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float64'</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'polygons:'</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">cells</span><span class="p">))</span>
 </pre></div>
@@ -5746,7 +5774,7 @@ from digitalearth.static import Map
 ds = Dataset.read_file(DEM)
 coarse = ds.resample(ds.cell_size * 12)   # coarse cells -&gt; polygon features
 # vectorise the cells (pyramids) and attach the per-cell elevation as the value column
-cells = coarse.get_cell_polygons()
+cells = coarse.to_geodataframe(geometry="polygon", values=False)
 cells['elevation'] = coarse.read_array(band=0).astype('float64').ravel()
 print('polygons:', len(cells))</div>
 </div>
@@ -5757,6 +5785,14 @@ print('polygons:', len(cells))</div>
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
 <div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>/home/runner/work/Digital-Earth/Digital-Earth/.pixi/envs/docs/lib/python3.13/site-packages/pyramids/__init__.py:54: FutureWarning: The 'pyramids-gis' distribution is deprecated and will be discontinued; install 'pyramids-core' instead (the import name stays 'pyramids').
+  _warn_if_legacy_distribution()
+</pre>
+</div>
+</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
