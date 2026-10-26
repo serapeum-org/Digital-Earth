@@ -296,11 +296,14 @@ class TestFetchBasemapImage:
         monkeypatch.setattr(cleo_tiles, "stitch_basemap", fake)
 
     def test_an_explicit_zoom_is_used_as_given(self, monkeypatch):
-        """A given `zoom` reaches `stitch_basemap` unchanged, not replaced by the ``"auto"`` sentinel."""
+        """A given `zoom` is coerced to int and reaches `stitch_basemap`, not the ``"auto"`` sentinel."""
         record: dict = {}
         self._stub_stitch_basemap(monkeypatch, record=record)
-        image, extent = deco.fetch_basemap_image((0.0, 0.0, 1.0, 1.0), "OSM", 9)
+        image, extent = deco.fetch_basemap_image((0, 0, 1, 1), "OSM", 9.0)
         assert record["zoom"] == 9, record
+        assert isinstance(record["zoom"], int), record
+        assert record["box"] == (0.0, 0.0, 1.0, 1.0), record
+        assert all(isinstance(v, float) for v in record["box"]), record
         assert record["provider"] == "OSM", record
         assert image.shape == (2, 2, 4), image.shape
         assert extent == (0.0, 0.0, 1.0, 1.0), extent
