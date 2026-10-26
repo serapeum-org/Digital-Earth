@@ -175,6 +175,44 @@ class TestSharedColorbars:
         assert len(bars) == 2, "the repeated scale rejoins its group, not a third bar"
         assert [bar.mappable.get_clim() for bar in bars] == [(0.0, 1.0), (5.0, 6.0)]
 
+    def test_a_decorated_panel_is_keyed_off_the_field_beneath_its_decoration(
+        self, dataset
+    ):
+        """A panel whose top layer is a decoration is keyed off the field below it, not dropped (review H2).
+
+        Test scenario:
+            The common map draws a field then coastlines on top, so the top layer (a non-mappable overlay)
+            carries no scale. Reading the top layer alone finds no scale and skips the panel, yielding no bar;
+            the representative must be the scale-bearing layer beneath it.
+        """
+        fig, maps = grid(1, 2, crs=dataset.epsg)
+        for panel in maps:
+            panel.field(dataset, vmin=0.0, vmax=100.0).coastlines(resolution="110m")
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 1, (
+            "the decorated panels share one scale and must still get a bar"
+        )
+        assert bars[0].mappable.get_clim() == (0.0, 100.0), (
+            "the bar keys the field's scale"
+        )
+
+    def test_panels_with_different_cmaps_do_not_merge(self, dataset):
+        """Same limits but different colormaps are different colour scales, so each gets its own bar (review H1).
+
+        Test scenario:
+            Two panels keyed 0–100, one viridis and one magma. The domain is identical but the colours are
+            not, so one bar keyed off the first would show a colormap the second never drew; the grouping must
+            split them on the colormap as well as the domain.
+        """
+        fig, maps = grid(1, 2, crs=dataset.epsg)
+        maps[0].field(dataset, vmin=0.0, vmax=100.0, cmap="viridis")
+        maps[1].field(dataset, vmin=0.0, vmax=100.0, cmap="magma")
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 2, "different colormaps are different scales, so two bars"
+        assert [bar.cmap.name for bar in bars] == ["viridis", "magma"], (
+            "each bar keeps its panel's cmap"
+        )
+
 
 def _x_group(panel):
     """Return the axes sharing ``panel``'s x axis, as a set of ids.

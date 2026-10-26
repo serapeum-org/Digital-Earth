@@ -319,40 +319,67 @@ def shared_colorbar(
     return cbar
 
 
+def _scale_bearing(panel: Map) -> tuple[Any, Scale | None]:
+    """Return the panel's scale-bearing artist and scale — the topmost layer that colours by a scale.
+
+    A panel's bar represents the field it drew, but the field is rarely the *top* layer: a map routinely draws
+    coastlines, borders or Natural-Earth overlays over it, and those register as layers of their own whose
+    artist (a ``LineCollection``, a ``PolyCollection``, the axes) carries no colour scale. Reading only
+    ``layer_ids[-1]`` would find such a decoration and report the panel as keying nothing, so a decorated map —
+    the common case — would get no bar at all. The layers are therefore scanned from the top down and the first
+    that :func:`~digitalearth.static.legends.legend.drawn_scale` reads a scale off is taken: the field beneath
+    the decoration, or the uppermost of several coloured layers.
+
+    Args:
+        panel: The map to read.
+
+    Returns:
+        ``(artist, scale)`` of the topmost scale-bearing layer, or ``(None, None)`` when the panel drew nothing
+        that colours by a scale.
+    """
+    for layer_id in reversed(panel.layer_ids):
+        artist = panel.artist(layer_id)
+        scale = drawn_scale(artist)
+        if scale is not None:
+            return artist, scale
+    return None, None
+
+
 def _scale_groups(maps: Sequence[Map]) -> list[tuple[list[Map], Any]]:
     """Group panels by the resolved colour scale each one drew, in first-appearance order.
 
-    Each panel's top layer is read through the public :meth:`~digitalearth.static.core.scene.Scene.artist`
-    accessor and its scale off that artist with
-    :func:`~digitalearth.static.legends.legend.drawn_scale` — the same answer the bar reads, so the grouping
-    cannot disagree with what the panels show. Panels are grouped by :class:`~digitalearth.base.spec.scale.Scale`
-    equality (a frozen dataclass), which is value equality over the whole scale — its limits, scheme, breaks
-    and categories — so two panels keyed the same land together and a panel on a different variable falls into
-    its own group. A panel that drew nothing (an off-limb field, or one never drawn on) carries no scale and
-    joins no group.
+    Each panel's scale-bearing layer — the topmost that colours by a scale, so the field beneath any
+    decoration, not whatever happens to be on top — is found by :func:`_scale_bearing`, and its scale is read
+    with :func:`~digitalearth.static.legends.legend.drawn_scale`. Panels are grouped by the pair
+    *(scale, colormap)*: equal :class:`~digitalearth.base.spec.scale.Scale` (a frozen dataclass — value equality
+    over its limits, scheme, breaks and categories) **and** equal colormap. The colormap is part of the key
+    because `Scale` captures the *domain* but not the colours, so grouping on it alone would merge two panels
+    keyed the same but coloured differently (viridis vs magma) into one bar showing only the first's colours —
+    so two panels land together only when they would draw the *same* bar. A panel that drew nothing that colours
+    by a scale carries no scale and joins no group.
 
     Args:
         maps: The panels to group, in the order a bar should encounter them.
 
     Returns:
-        One ``(panels, mappable)`` pair per distinct scale, in the order each scale first appears: the panels
-        that share it, and the first of their artists — a representative the colour scale is read from, since
-        every panel in the group drew the same scale. Empty when no panel drew a scale.
+        One ``(panels, mappable)`` pair per distinct *(scale, colormap)*, in the order each first appears: the
+        panels that share it, and the first of their scale-bearing artists — a representative the bar is drawn
+        from. Empty when no panel drew a scale.
     """
-    scales: list[Scale] = []
+    keys: list[tuple[Scale, Any]] = []
     groups: list[list[Map]] = []
     mappables: list[Any] = []
     for panel in maps:
-        artist = panel.artist(panel.layer_ids[-1]) if panel.layer_ids else None
-        scale = drawn_scale(artist) if artist is not None else None
+        artist, scale = _scale_bearing(panel)
         if scale is None:
             continue
-        for index, known in enumerate(scales):
-            if known == scale:
+        cmap = artist.get_cmap()
+        for index, (known_scale, known_cmap) in enumerate(keys):
+            if known_scale == scale and known_cmap == cmap:
                 groups[index].append(panel)
                 break
         else:
-            scales.append(scale)
+            keys.append((scale, cmap))
             groups.append([panel])
             mappables.append(artist)
     return list(zip(groups, mappables))
