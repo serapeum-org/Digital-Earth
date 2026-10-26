@@ -49,7 +49,7 @@ import pytest
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 
-from digitalearth.static import Map, grid, shared_colorbar
+from digitalearth.static import Map, grid, shared_colorbar, shared_colorbars
 from digitalearth.static.view import projections
 
 #: Every test in this module is an image test, selected with ``-m mpl`` and compared with ``--mpl``.
@@ -358,6 +358,26 @@ def test_field_with_colorbar(dataset):
 
 
 @pytest.mark.mpl_image_compare(**_BASELINE)
+def test_colorbar_follows_a_clim_change(dataset):
+    """A colorbar repaints to its layer's new range after ``set_clim`` (#219 — the bar follows its layer).
+
+    Test scenario:
+        The guide routes the bar through ``fig.colorbar``, which matplotlib wires to the mappable's
+        ``changed`` callback, so a later ``set_clim`` on the drawn artist moves the bar's ticks and range
+        without the figure being rebuilt. The field is drawn with limits 0–100, then re-clamped to 0–500, so
+        the baseline is the bar at the *new* range — a regression that left the bar on the old limits moves it.
+
+    Returns:
+        Figure: the rendered map, after the clim change.
+    """
+    m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
+    im = m.field(dataset, cmap="viridis", vmin=0.0, vmax=100.0).artist()
+    m.colorbar(label="flow accumulation")
+    im.set_clim(0.0, 500.0)
+    return m.fig
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
 def test_categorical_legend(dataset):
     """A swatch legend derived from the layer's own scale keeps its colours, order and placement.
 
@@ -593,6 +613,27 @@ def test_grid_panels_with_shared_colorbar(dataset):
     first = maps[0].field(dataset, cmap="viridis").artist()
     maps[1].contours(dataset, cmap="viridis", levels=6, filled=True)
     shared_colorbar(fig, first, maps, label="accumulation")
+    return fig
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
+def test_grid_panels_with_two_grouped_colorbars(dataset):
+    """A 2×2 grid where three panels share a scale and the fourth differs gets two grouped colorbars (#219).
+
+    Test scenario:
+        ``shared_colorbars`` reads each panel's resolved scale, groups the panels by it, and draws one bar per
+        distinct scale spanning its group — the layout a single ``shared_colorbar`` cannot produce. Three
+        panels keyed 0–100 share one bar; the fourth, keyed −50..50, gets its own. The baseline pins both bars
+        and the space they steal from the four panels, so a regression in the grouping or the span moves it.
+
+    Returns:
+        Figure: the shared figure.
+    """
+    fig, maps = grid(2, 2, crs=dataset.epsg, figsize=(6.0, 6.0))
+    for panel in maps[:3]:
+        panel.field(dataset, cmap="viridis", vmin=0.0, vmax=100.0)
+    maps[3].field(dataset, cmap="magma", vmin=-50.0, vmax=50.0)
+    shared_colorbars(fig, maps)
     return fig
 
 

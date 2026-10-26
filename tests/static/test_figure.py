@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from digitalearth.static import Map, facet, grid, shared_colorbar
+from digitalearth.static import Map, facet, grid, shared_colorbar, shared_colorbars
 from digitalearth.static.panels import figure
 
 #: The words ``plt.subplots`` reads for ``sharex``/``sharey``, as ``grid``'s docstring enumerates them.
@@ -120,6 +120,136 @@ class TestSharedColorbar:
             "a None mappable should add no bar rather than raising"
         )
         assert not fig.axes[0].collections, "no colorbar axes should have been added"
+
+
+class TestSharedColorbars:
+    """Tests for shared_colorbars() — one bar per distinct scale, grouped across panels."""
+
+    def test_groups_panels_by_scale(self, dataset):
+        """Panels sharing a scale get one bar; a panel on a different scale gets its own.
+
+        Test scenario:
+            The "panels 0-2 share a scale, panel 3 is a different variable" case the issue names — three
+            panels keyed 0-100 and one keyed -50..50 must yield two bars, in first-appearance order, without
+            the caller naming a mappable.
+        """
+        fig, maps = grid(2, 2, crs=dataset.epsg)
+        for panel in maps[:3]:
+            panel.field(dataset, vmin=0.0, vmax=100.0)
+        maps[3].field(dataset, vmin=-50.0, vmax=50.0)
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 2, "three panels share one scale, the fourth differs"
+        assert [bar.mappable.get_clim() for bar in bars] == [
+            (0.0, 100.0),
+            (-50.0, 50.0),
+        ]
+        assert len(fig.axes) == 6, "four panels + two colorbar axes"
+
+    def test_one_shared_scale_gives_one_spanning_bar(self, dataset):
+        """Every panel on one scale yields a single bar, labelled once, with no mappable nominated."""
+        fig, maps = grid(1, 3, crs=dataset.epsg)
+        for panel in maps:
+            panel.field(dataset, vmin=0.0, vmax=10.0)
+        bars = shared_colorbars(fig, maps, label="mm")
+        assert len(bars) == 1, "one scale across the panels is one bar"
+        assert bars[0].ax.get_ylabel() == "mm", "the shared label is applied"
+
+    def test_a_panel_that_drew_nothing_contributes_no_bar(self):
+        """Panels with no drawn layer carry no scale, so an empty grid yields no bars and no extra axes."""
+        fig, maps = grid(1, 2, figsize=(4, 4))
+        assert shared_colorbars(fig, maps) == [], "nothing drawn, nothing to key"
+        assert len(fig.axes) == 2, "no colorbar axes added"
+
+    def test_bars_come_in_first_appearance_order(self, dataset):
+        """A scale that recurs rejoins its group; the bars follow where each scale first appears.
+
+        Test scenario:
+            Panels keyed (0, 1), (5, 6), (0, 1) — the third repeats the first's scale, so it joins that
+            group rather than opening a third; two bars result, ordered by first appearance.
+        """
+        fig, maps = grid(1, 3, crs=dataset.epsg)
+        maps[0].field(dataset, vmin=0.0, vmax=1.0)
+        maps[1].field(dataset, vmin=5.0, vmax=6.0)
+        maps[2].field(dataset, vmin=0.0, vmax=1.0)
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 2, "the repeated scale rejoins its group, not a third bar"
+        assert [bar.mappable.get_clim() for bar in bars] == [(0.0, 1.0), (5.0, 6.0)]
+
+    def test_a_decorated_panel_is_keyed_off_the_field_beneath_its_decoration(
+        self, dataset
+    ):
+        """A panel whose top layer is a decoration is keyed off the field below it, not dropped (review H2).
+
+        Test scenario:
+            The common map draws a field then coastlines on top, so the top layer (a non-mappable overlay)
+            carries no scale. Reading the top layer alone finds no scale and skips the panel, yielding no bar;
+            the representative must be the scale-bearing layer beneath it.
+        """
+        fig, maps = grid(1, 2, crs=dataset.epsg)
+        for panel in maps:
+            panel.field(dataset, vmin=0.0, vmax=100.0).coastlines(resolution="110m")
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 1, (
+            "the decorated panels share one scale and must still get a bar"
+        )
+        assert bars[0].mappable.get_clim() == (0.0, 100.0), (
+            "the bar keys the field's scale"
+        )
+
+    def test_panels_with_different_cmaps_do_not_merge(self, dataset):
+        """Same limits but different colormaps are different colour scales, so each gets its own bar (review H1).
+
+        Test scenario:
+            Two panels keyed 0–100, one viridis and one magma. The domain is identical but the colours are
+            not, so one bar keyed off the first would show a colormap the second never drew; the grouping must
+            split them on the colormap as well as the domain.
+        """
+        fig, maps = grid(1, 2, crs=dataset.epsg)
+        maps[0].field(dataset, vmin=0.0, vmax=100.0, cmap="viridis")
+        maps[1].field(dataset, vmin=0.0, vmax=100.0, cmap="magma")
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 2, "different colormaps are different scales, so two bars"
+        assert [bar.cmap.name for bar in bars] == ["viridis", "magma"], (
+            "each bar keeps its panel's cmap"
+        )
+
+    def test_a_categorical_panel_gets_no_shared_bar(self):
+        """A categorical field publishes a swatch legend, not a colorbar, so it contributes no bar (review M1).
+
+        Test scenario:
+            A field drawn ``scheme="categorical"`` colours by class code; a colorbar over it would read the
+            codes as magnitudes. shared_colorbars must skip it (the panel keeps its own legend), matching
+            ``Scene.colorbar``'s refusal of the categorical case.
+        """
+        codes = np.array([[1.0, 2.0], [2.0, 3.0]])
+        fig, maps = grid(1, 2, crs=4326)
+        for panel in maps:
+            panel.field(codes, scheme="categorical")
+        bars = shared_colorbars(fig, maps)
+        assert bars == [], (
+            "a categorical panel is keyed by its swatch legend, not a shared colorbar"
+        )
+
+    def test_a_panel_with_two_coloured_layers_is_keyed_off_the_top_one(self, dataset):
+        """With two coloured data layers, the bar represents the topmost (review M2 — the documented rule).
+
+        Test scenario:
+            A field at 0–100 with filled contours at a different scale on top. The representative is the
+            uppermost coloured layer, so the bar keys the contours; the pick is deterministic and pinned here
+            so a future change to the rule is caught.
+        """
+        fig, maps = grid(1, 1, crs=dataset.epsg)
+        maps[0].field(dataset, vmin=0.0, vmax=100.0, cmap="viridis")
+        maps[0].contours(
+            dataset, vmin=200.0, vmax=300.0, cmap="magma", levels=4, filled=True
+        )
+        bars = shared_colorbars(fig, maps)
+        assert len(bars) == 1, (
+            "the two coloured layers share one bar, keyed off the top"
+        )
+        assert bars[0].mappable.get_clim() == (200.0, 300.0), (
+            "the top (contours) layer is represented"
+        )
 
 
 def _x_group(panel):

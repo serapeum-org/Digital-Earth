@@ -23,6 +23,7 @@ from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colorbar import Colorbar
 from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
 
@@ -37,11 +38,12 @@ from digitalearth.base.raster_classes import (
 from digitalearth.base.sources import get_source
 from digitalearth.base.spec import DEFAULT_BAND, Scale
 from digitalearth.static.core.scene import Scene
+from digitalearth.static.legends.legend import bar_refusal, drawn_scale
 from digitalearth.static.map import Map
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["facet", "grid", "quickpanels", "shared_colorbar"]
+__all__ = ["facet", "grid", "quickpanels", "shared_colorbar", "shared_colorbars"]
 
 #: The render each ``facet(kind=)`` names, as ``(Map method, keywords it is called with)``.
 _FACET_KINDS: dict[str, tuple[str, dict[str, Any]]] = {
@@ -316,6 +318,190 @@ def shared_colorbar(
     if label is not None:
         cbar.set_label(label)
     return cbar
+
+
+def _scale_bearing(panel: Map) -> tuple[Any, Scale | None]:
+    """Return the panel's scale-bearing artist and scale — the topmost layer that colours by a scale.
+
+    A panel's bar represents the field it drew, but the field is rarely the *top* layer: a map routinely draws
+    coastlines, borders or Natural-Earth overlays over it, and those register as layers of their own whose
+    artist (a ``LineCollection``, a ``PolyCollection``, the axes) carries no colour scale. Reading only
+    ``layer_ids[-1]`` would find such a decoration and report the panel as keying nothing, so a decorated map —
+    the common case — would get no bar at all. The layers are therefore scanned from the top down and the first
+    that :func:`~digitalearth.static.legends.legend.drawn_scale` reads a scale off is taken: the field beneath
+    the decoration, or the uppermost of several coloured layers.
+
+    A **categorical** layer is skipped: it colours by class code, so a colorbar over it would read the codes as
+    magnitudes — the tier draws it a swatch legend instead, exactly as
+    :meth:`~digitalearth.static.core.scene.Scene.colorbar` refuses the case
+    (:func:`~digitalearth.static.legends.legend.bar_refusal`). A panel whose only coloured layer is categorical
+    therefore bears no scale here and gets no shared bar.
+
+    Args:
+        panel: The map to read.
+
+    Returns:
+        ``(artist, scale)`` of the topmost scale-bearing, non-categorical layer, or ``(None, None)`` when the
+        panel drew nothing a colorbar can describe.
+    """
+    for layer_id in reversed(panel.layer_ids):
+        if bar_refusal(panel.get_layer(layer_id)) is not None:
+            continue
+        artist = panel.artist(layer_id)
+        scale = drawn_scale(artist)
+        if scale is not None:
+            return artist, scale
+    return None, None
+
+
+def _scale_groups(maps: Sequence[Map]) -> list[tuple[list[Map], Any]]:
+    """Group panels by the resolved colour scale each one drew, in first-appearance order.
+
+    Each panel's scale-bearing layer — the topmost that colours by a scale, so the field beneath any
+    decoration, not whatever happens to be on top — is found by :func:`_scale_bearing`, and its scale is read
+    with :func:`~digitalearth.static.legends.legend.drawn_scale`. Panels are grouped by the pair
+    *(scale, colormap)*: equal :class:`~digitalearth.base.spec.scale.Scale` (a frozen dataclass, compared by
+    value — the limits a continuous scale carries, plus the class breaks a graduated one adds) **and** equal
+    colormap. The colormap is part of the key
+    because `Scale` captures the *domain* but not the colours, so grouping on it alone would merge two panels
+    keyed the same but coloured differently (viridis vs magma) into one bar showing only the first's colours —
+    so two panels land together only when they would draw the *same* bar. A panel that drew nothing that colours
+    by a scale carries no scale and joins no group.
+
+    Args:
+        maps: The panels to group, in the order a bar should encounter them.
+
+    Returns:
+        One ``(panels, mappable)`` pair per distinct *(scale, colormap)*, in the order each first appears: the
+        panels that share it, and the first of their scale-bearing artists — a representative the bar is drawn
+        from. Empty when no panel drew a scale.
+    """
+    keys: list[tuple[Scale, Any]] = []
+    groups: list[list[Map]] = []
+    mappables: list[Any] = []
+    for panel in maps:
+        artist, scale = _scale_bearing(panel)
+        if scale is None:
+            continue
+        # Defensive: every artist `drawn_scale` reads a scale off is a ScalarMappable (it has a norm), which
+        # also has `get_cmap`; the fallback keeps the two predicates from diverging if that ever stops holding.
+        cmap = getattr(artist, "get_cmap", lambda: None)()
+        for index, (known_scale, known_cmap) in enumerate(keys):
+            if known_scale == scale and known_cmap == cmap:
+                groups[index].append(panel)
+                break
+        else:
+            keys.append((scale, cmap))
+            groups.append([panel])
+            mappables.append(artist)
+    return list(zip(groups, mappables))
+
+
+def shared_colorbars(
+    fig: Figure,
+    maps: Sequence[Map],
+    *,
+    label: str | None = None,
+    **kwargs,
+) -> list[Colorbar]:
+    """Add one colorbar per distinct colour scale across ``maps``, each spanning the panels that share it.
+
+    Where :func:`shared_colorbar` draws a single bar for a mappable the caller names, this reads each panel's
+    resolved :class:`~digitalearth.base.spec.scale.Scale` off its **scale-bearing** layer (the field beneath any
+    decoration, not whatever is on top — so a panel with coastlines over it is still keyed), groups the panels by
+    *(scale, colormap)*, and draws one bar per distinct group — spanning exactly its panels. It is the "panels
+    0–2 share a scale, panel 3 is a different variable" case: the three get one bar and the fourth its own,
+    without the caller nominating which mappable represents which group. Two panels keyed the same but coloured
+    differently (viridis vs magma) are **not** merged — the colormap is part of what distinguishes a scale. A
+    panel that drew nothing that colours by a scale contributes no bar.
+
+    Two cases to know. A panel with **several coloured data layers** (a field with filled contours over it, say)
+    is keyed off the *topmost* one — its bar represents the upper layer, not the base field; give the panels one
+    coloured layer each where every scale matters. A **categorical** panel is skipped: it colours by class code
+    and publishes its own swatch legend, which a colorbar cannot stand in for (as :meth:`Scene.colorbar` refuses
+    it). And since each bar spans its group's axes, a group whose panels are **not adjacent** (a scale that
+    recurs after an intervening one) steals space from non-contiguous panels, which matplotlib lays out but not
+    always tidily — keep a shared scale's panels together where the layout matters.
+
+    Args:
+        fig: The figure created by :func:`grid`.
+        maps: The panels to key. Draw order is preserved within each group, and the groups come in the order
+            their scale first appears across the panels.
+        label: A label applied to every bar, or ``None`` (default) to leave them unlabelled. Distinct scales
+            are usually distinct variables, for which one shared label rarely fits — label each panel's layer
+            through its own guide instead; a single ``label`` is for the case the panels really share one
+            scale and you want it named once. (A per-group label is not offered because the groups are
+            discovered here, so the caller cannot know their order or count in advance.)
+        **kwargs: Forwarded to each ``Figure.colorbar`` (e.g. ``orientation``, ``shrink``, ``fraction``).
+
+    Returns:
+        One :class:`~matplotlib.colorbar.Colorbar` per distinct *(scale, colormap)*, in first-appearance order;
+        an empty list when no panel drew a colour scale.
+
+    Examples:
+        - A 2×2 grid where the first three panels share a scale and the fourth is a different variable gets
+            two bars — one spanning the three, one over the fourth — so the figure gains two colorbar axes:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> import numpy as np
+            >>> from digitalearth.static import grid, shared_colorbars
+            >>> fig, maps = grid(2, 2, crs=4326)
+            >>> shared = np.arange(16.0).reshape(4, 4)
+            >>> for panel in maps[:3]:
+            ...     _ = panel.field(shared, vmin=0.0, vmax=15.0)
+            >>> _ = maps[3].field(shared, vmin=-50.0, vmax=50.0)
+            >>> bars = shared_colorbars(fig, maps)
+            >>> len(bars), [bar.mappable.get_clim() for bar in bars]
+            (2, [(0.0, 15.0), (-50.0, 50.0)])
+            >>> len(fig.axes)  # four panels + two colorbar axes
+            6
+            >>> plt.close(fig)
+
+            ```
+        - Panels that all share one scale get a single bar spanning them, with no mappable nominated:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> import numpy as np
+            >>> from digitalearth.static import grid, shared_colorbars
+            >>> fig, maps = grid(1, 2, crs=4326)
+            >>> for panel in maps:
+            ...     _ = panel.field(np.arange(16.0).reshape(4, 4), vmin=0.0, vmax=15.0)
+            >>> bars = shared_colorbars(fig, maps, label="mm/day")
+            >>> len(bars), bars[0].ax.get_ylabel()
+            (1, 'mm/day')
+            >>> plt.close(fig)
+
+            ```
+        - Panels that drew nothing key nothing, so an empty grid yields no bars and no extra axes:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> from digitalearth.static import grid, shared_colorbars
+            >>> fig, maps = grid(1, 2, crs=4326)
+            >>> shared_colorbars(fig, maps)
+            []
+            >>> len(fig.axes)
+            2
+            >>> plt.close(fig)
+
+            ```
+
+    See Also:
+        shared_colorbar: a single bar for one mappable the caller names.
+        facet: one shared scale over a whole stack, which needs only the single bar.
+    """
+    bars: list[Colorbar] = []
+    for panels, mappable in _scale_groups(maps):
+        cbar = fig.colorbar(mappable, ax=[panel.ax for panel in panels], **kwargs)
+        if label is not None:
+            cbar.set_label(label)
+        bars.append(cbar)
+    return bars
 
 
 def _frames_of(stack: Any) -> list[Any]:

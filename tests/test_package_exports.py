@@ -26,6 +26,7 @@ EXPECTED = [
     "facet",
     "grid",
     "shared_colorbar",
+    "shared_colorbars",
     "projections",
     "get_source",
     "Source",

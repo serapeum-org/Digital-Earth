@@ -14,7 +14,8 @@ and the module path it lives in is the one this ``__init__`` exists to hide. ``T
 cleopatra's textured sphere on a matplotlib ``Axes3D``.
 
 Several hosts at once are laid out by :mod:`~digitalearth.static.panels.figure`: ``grid`` builds the figure and
-axes grid and binds a ``Map`` to each axes, ``shared_colorbar`` puts one bar across the panels, and ``facet``
+axes grid and binds a ``Map`` to each axes, ``shared_colorbar`` puts one bar across the panels (and
+``shared_colorbars`` one bar per distinct scale), and ``facet``
 draws a raster stack as small multiples resolving the colour scale once over the whole stack.
 
 Alongside the scene hosts this backend owns its charts (:mod:`~digitalearth.static.charts.charts`), statistical
@@ -35,7 +36,13 @@ from digitalearth.static.builders.base import OffLimbError  # noqa: F401
 from digitalearth.static.core.scene import Pick, Scene
 from digitalearth.static.globe.textured_globe import TexturedGlobe
 from digitalearth.static.map import Map
-from digitalearth.static.panels.figure import facet, grid, quickpanels, shared_colorbar
+from digitalearth.static.panels.figure import (
+    facet,
+    grid,
+    quickpanels,
+    shared_colorbar,
+    shared_colorbars,
+)
 
 __all__ = [
     "Scene",
@@ -46,4 +53,5 @@ __all__ = [
     "grid",
     "quickpanels",
     "shared_colorbar",
+    "shared_colorbars",
 ]
