@@ -306,11 +306,17 @@ class PointCloudMixin(_MixinBase):
             # A LAS/LAZ path is decoded by pointclouds into CRS-carrying coordinates plus the chosen field.
             # The field becomes an explicit `values` array (so the drawer never re-reads the file), while
             # `value_column` is kept only to title the colour key after the field.
-            data, las_values = _read_las_path(
-                data, value_column if values is None else None
-            )
+            if values is not None:
+                # An explicit values= array colours the cloud and overrides any file field, so drop
+                # value_column — otherwise the colour key is titled after a field that was never read (L3).
+                value_column = None
+            data, las_values = _read_las_path(data, value_column)
             if values is None:
                 values = las_values
+                # Title the key by the field's canonical lower-case name, matching the field actually read,
+                # since the lookup itself is case-insensitive (N2).
+                if value_column is not None:
+                    value_column = value_column.lower()
         return self._add_described_layer(
             kind="point_cloud",
             data=data,

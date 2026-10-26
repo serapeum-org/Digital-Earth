@@ -752,3 +752,34 @@ class TestLasPath:
         assert np.allclose(drawn, explicit), (
             f"the explicit values must colour the cloud, got {drawn}"
         )
+
+    def test_explicit_values_do_not_title_the_key_by_an_unread_field(self):
+        """An explicit `values=` array overrides the file field, so the colour key is not titled after it."""
+        scene = Scene3D(off_screen=True)
+        scene.point_cloud(
+            _LAS_FIXTURE,
+            name="las",
+            values=np.arange(8.0),
+            value_column="classification",
+            eye_dome_lighting=False,
+        )
+        field = scene.get_layer("las").symbology.encoding("color").field
+        assert field == SCALAR, (
+            f"an unread file field must not title the key; got {field!r}"
+        )
+        scene.close()
+
+    def test_a_mixed_case_value_column_titles_the_key_canonically(self):
+        """A mixed-case `value_column` reads the field and titles the key by its canonical lower-case name."""
+        scene = Scene3D(off_screen=True)
+        scene.point_cloud(
+            _LAS_FIXTURE,
+            name="las",
+            value_column="Classification",
+            eye_dome_lighting=False,
+        )
+        field = scene.get_layer("las").symbology.encoding("color").field
+        assert field == "classification", (
+            f"expected the canonical lower-case field, got {field!r}"
+        )
+        scene.close()
