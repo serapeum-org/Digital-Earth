@@ -2707,6 +2707,11 @@ class VectorMixin(_MixinBase):
             ValueError: when the mesh declares a CRS but the display CRS carries no EPSG code — an
                 orthographic, Robinson or other projection pyramids' mesh warp cannot express. Drawing it
                 unprojected instead would put the mesh somewhere it does not belong, silently.
+
+        Note:
+            The restriction is upstream, not ours: `UgridDataset.to_crs` takes a bare EPSG integer while its
+            own source side already accepts a WKT. Reported as pyramids-core#1404; what to change here once
+            that lands is #507 — in short, hand `self.crs` straight to `reproject` and delete the refusal.
         """
         # A mesh with no declared CRS cannot be warped (pyramids refuses, rightly), so it is drawn in its
         # own coordinates — the same bargain a bare numpy array gets.
