@@ -1339,9 +1339,6 @@ def _quickmap_interactive(
 
     scene = InteractiveMap(crs=crs)
     family = _input_kind(data, "quickplot")
-    if family == "mesh":
-        # Reached only through `quickplot`; `quickmap` refuses before a scene exists.
-        _reject_mesh_backend(data, "interactive")
     if family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
     elif family == "polygons":
@@ -1507,9 +1504,6 @@ def _quickmap_web(
 
     scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
     family = _input_kind(data, "quickplot")
-    if family == "mesh":
-        # Reached only through `quickplot`; `quickmap` refuses before a scene exists.
-        _reject_mesh_backend(data, "web")
     if family == "raster":
         scene.field(data, **kwargs)
     elif family == "polygons":
@@ -1656,9 +1650,6 @@ def _quickmap_3d(
     # (which opens a VTK plotter) is constructed, or every error path leaks an open plotter. The families
     # this tier cannot draw — lines and mixed — are refused here, in this tier's own words.
     family = _input_kind(data, "quickplot")
-    if family == "mesh":
-        # Before `Scene3D` is constructed, like the geometry refusal below, so no VTK plotter leaks.
-        _reject_mesh_backend(data, "3d")
     if isinstance(data, FeatureCollection) and family in ("lines", "mixed"):
         # Only a FeatureCollection yields the `lines`/`mixed` families, so this is the geometry this tier has
         # no builder for; the isinstance also narrows `data` for the geom-type read in the message.
