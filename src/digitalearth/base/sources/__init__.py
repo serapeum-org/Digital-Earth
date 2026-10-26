@@ -26,7 +26,6 @@ from digitalearth.base.sources.extractors import (
 )
 from digitalearth.base.sources.mesh import MESH_LOCATIONS, MeshSource
 from digitalearth.base.sources.source import Source
-from digitalearth.base.spec import DEFAULT_BAND
 from digitalearth.base.types import PlottableData
 
 __all__ = [
@@ -46,7 +45,7 @@ __all__ = [
 def get_source(
     data: PlottableData,
     *,
-    band: int = DEFAULT_BAND,
+    band: int | None = None,
     variable: str | None = None,
     x: np.ndarray | None = None,
     y: np.ndarray | None = None,
@@ -57,7 +56,9 @@ def get_source(
 
     Args:
         data: A pyramids ``Dataset``/``NetCDF``/``DatasetCollection``/``FeatureCollection`` or numpy array.
-        band: 1-based band index for raster/collection inputs.
+        band: 1-based band index for raster/collection inputs, or the slice/step of a NetCDF or mesh
+            variable that carries one. ``None`` (the default) means the caller named none and reads as
+            band 1 — the distinction only decides whether a multi-slice read advises passing ``band=``.
         variable: Variable name for ``NetCDF`` inputs (defaults to the first variable).
         x: Optional x coordinates for a raw numpy array (defaults to pixel indices).
         y: Optional y coordinates for a raw numpy array (defaults to pixel indices).

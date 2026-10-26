@@ -1123,13 +1123,15 @@ def test_pinned_variable_keeps_the_identity_the_style_matcher_reads():
 
     geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
     nc = NetCDF.from_array(
-        np.full((1, 4, 4), 5.0, dtype="float32"), geo_ref=geo, variable_name="temperature"
+        np.full((1, 4, 4), 5.0, dtype="float32"),
+        geo_ref=geo,
+        variable_name="temperature",
     )
     threaded = get_source(nc, variable="temperature")
     pinned = get_source(nc.get_variable("temperature"))
-    assert pinned.metadata("variable") == threaded.metadata("variable") == "temperature", (
-        f"the pinned subset lost its name: {pinned.metadata('variable', None)!r}"
-    )
+    assert (
+        pinned.metadata("variable") == threaded.metadata("variable") == "temperature"
+    ), f"the pinned subset lost its name: {pinned.metadata('variable', None)!r}"
     assert auto_style(pinned).get("cmap") == auto_style(threaded).get("cmap"), (
         "the pinned subset styles differently from the same variable named on the container"
     )
@@ -1165,7 +1167,9 @@ def test_ugrid_temporal_variable_draws_one_step(ugrid_mesh, location):
         matplotlib.
     """
     src = get_source(ugrid_mesh(location, steps=3))
-    assert src.z.values.ndim == 1, f"expected one step, got z with shape {src.z.values.shape}"
+    assert src.z.values.ndim == 1, (
+        f"expected one step, got z with shape {src.z.values.shape}"
+    )
     expected = src.n_triangles if location == "face" else src.x.values.size
     assert src.z.values.size == expected, (
         f"expected {expected} values for {location}-located data, got {src.z.values.size}"
@@ -1215,3 +1219,57 @@ def test_netcdf_four_dimensional_variable_is_refused():
     stub = _FourDimensional()
     with pytest.raises(ValueError, match="4-D array"):
         _from_netcdf(stub, None, None, band=2)
+
+
+def test_netcdf_multislice_warning_is_only_for_a_caller_who_named_no_band(caplog):
+    """The "pass band=" advice is given only when no band was named (review L1).
+
+    Args:
+        caplog: pytest log capture.
+
+    Test scenario:
+        Advising someone to pass ``band=`` right after they passed ``band=1`` reads as though their request
+        had been ignored. The warning has to tell "asked for nothing" apart from "asked for the first".
+    """
+    import logging
+
+    nc = _slice_valued_netcdf()
+    with caplog.at_level(logging.WARNING):
+        get_source(nc)
+    assert "pass band=" in caplog.text, (
+        "a caller who named nothing should be told the default"
+    )
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        get_source(nc, band=1)
+    assert caplog.text == "", (
+        f"band=1 was named, so nothing should be advised: {caplog.text!r}"
+    )
+
+
+def test_fan_values_refuses_triangles_not_grouped_by_face():
+    """A fan triangulation that is not face-major is refused, not matched up by position (review L9).
+
+    Test scenario:
+        The count guard alone cannot see a reorder: the same number of triangles grouped differently would
+        paint every face with another face's value. Fan triangulation cuts from each face's first vertex,
+        so each group leads with its own face's first node — which is what this checks. Exercised with a
+        stub, because pyramids' own triangulation is face-major.
+    """
+    from digitalearth.base.sources.extractors import _fan_values
+
+    class _StubConnectivity:
+        data = np.array([[0, 1, 2], [3, 4, 5]])
+
+        @staticmethod
+        def nodes_per_element():
+            return np.array([3, 3])
+
+    class _ReorderedMesh:
+        face_node_connectivity = _StubConnectivity()
+
+    values = np.array([10.0, 20.0])
+    mesh = _ReorderedMesh()
+    reordered = np.array([[3, 4, 5], [0, 1, 2]])
+    with pytest.raises(ValueError, match="not grouped by face index"):
+        _fan_values(values, mesh, reordered)
