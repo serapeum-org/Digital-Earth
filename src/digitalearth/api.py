@@ -654,6 +654,36 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
     return data.get_variable(variable)
 
 
+#: The backends that can draw an unstructured mesh. The static tier shades each face through cleopatra's
+#: ``MeshGlyph``; the other three have no triangular render, which is stated rather than discovered.
+MESH_BACKENDS: frozenset[str] = frozenset({"matplotlib"})
+
+
+def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
+    """Refuse an unstructured mesh on a backend with no render for one, before any scene is built.
+
+    Answered here rather than inside each tier's dispatch so no half-built figure or VTK plotter is left
+    behind by the refusal, and so the message names the backend and the remedy once (#499).
+
+    Args:
+        data: The input ``quickmap`` was given, already normalised.
+        backend: The backend name, already validated.
+
+    Raises:
+        TypeError: when ``data`` is a ``UgridDataset`` and ``backend`` is not one of
+            :data:`MESH_BACKENDS`.
+    """
+    if backend in MESH_BACKENDS:
+        return
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    if isinstance(data, UgridDataset):
+        raise TypeError(
+            f"backend={backend!r} has no unstructured-mesh render; draw a UgridDataset with "
+            f"backend='matplotlib', which shades each of its faces (tripcolor)"
+        )
+
+
 def _input_kind(data: PlottableData, caller: str) -> str:
     """Classify a ``quickmap`` input into the base layer kind its geometry draws — the decision, made once.
 
@@ -673,14 +703,20 @@ def _input_kind(data: PlottableData, caller: str) -> str:
         caller: Public function name to blame in a refusal — ``"quickmap"`` or ``"quickplot"``.
 
     Returns:
-        ``"raster"`` for a ``Dataset``; ``"points"``, ``"lines"`` or ``"polygons"`` for a uniform
-        ``FeatureCollection``; ``"mixed"`` for one whose geometry types disagree.
+        ``"raster"`` for a ``Dataset``; ``"mesh"`` for a ``UgridDataset``; ``"points"``, ``"lines"`` or
+        ``"polygons"`` for a uniform ``FeatureCollection``; ``"mixed"`` for one whose geometry types
+        disagree.
 
     Raises:
         ValueError: when a ``FeatureCollection`` is empty. Without this guard the all-``True`` result of an
             empty ``geom_type`` check reads as polygons and the map draws nothing, silently.
-        TypeError: when ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
+        TypeError: when ``data`` is none of a ``Dataset``, a ``UgridDataset`` or a ``FeatureCollection``.
     """
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    # Before the Dataset branch for clarity only — a UgridDataset is not a Dataset subclass, unlike NetCDF.
+    if isinstance(data, UgridDataset):
+        return "mesh"
     if isinstance(data, Dataset):
         return "raster"
     if isinstance(data, FeatureCollection):
@@ -745,6 +781,11 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
     if family == "raster":
         method, picked = _renderer_for(_STATIC_RASTER_KINDS, kind, kwargs, "quickmap")
         getattr(scene, method)(data, **picked, **kwargs)
+        return
+    if family == "mesh":
+        # `tripcolor` is the render that shades a face its own colour, which is what a mesh carrying
+        # face-located values is; it also draws node-located values, by averaging each triangle's nodes.
+        scene.tripcolor(data, **kwargs)
         return
     if family == "polygons":
         _draw_polygons(scene, data, kwargs)
@@ -917,6 +958,7 @@ def quickmap(
     # Select the input before any backend is built: `variable=` is about which field is drawn, so it is
     # answered the same way for all four tiers.
     data = _pinned_variable(data, variable)
+    _reject_mesh_backend(data, backend)
     # Past the gate, fill in the defaults the surviving backends expect.
     colorbar = True if colorbar is _UNSET else colorbar
     coastlines = False if coastlines is _UNSET else coastlines
@@ -1280,6 +1322,9 @@ def _quickmap_interactive(
 
     scene = InteractiveMap(crs=crs)
     family = _input_kind(data, "quickplot")
+    if family == "mesh":
+        # Reached only through `quickplot`; `quickmap` refuses before a scene exists.
+        _reject_mesh_backend(data, "interactive")
     if family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
     elif family == "polygons":
@@ -1445,6 +1490,9 @@ def _quickmap_web(
 
     scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
     family = _input_kind(data, "quickplot")
+    if family == "mesh":
+        # Reached only through `quickplot`; `quickmap` refuses before a scene exists.
+        _reject_mesh_backend(data, "web")
     if family == "raster":
         scene.field(data, **kwargs)
     elif family == "polygons":
@@ -1591,6 +1639,9 @@ def _quickmap_3d(
     # (which opens a VTK plotter) is constructed, or every error path leaks an open plotter. The families
     # this tier cannot draw — lines and mixed — are refused here, in this tier's own words.
     family = _input_kind(data, "quickplot")
+    if family == "mesh":
+        # Before `Scene3D` is constructed, like the geometry refusal below, so no VTK plotter leaks.
+        _reject_mesh_backend(data, "3d")
     if isinstance(data, FeatureCollection) and family in ("lines", "mixed"):
         # Only a FeatureCollection yields the `lines`/`mixed` families, so this is the geometry this tier has
         # no builder for; the isinstance also narrows `data` for the geom-type read in the message.

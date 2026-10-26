@@ -1241,3 +1241,98 @@ def test_quickmap_draws_a_pinned_netcdf_variable():
     """A pinned ``get_variable`` subset is drawable through quickmap, which #499 reported it was not."""
     pinned = _two_variable_netcdf().get_variable("t2m")
     assert isinstance(digitalearth.quickmap(pinned, backend="matplotlib"), Map)
+
+
+def _quad_and_triangle_mesh(location: str = "face"):
+    """Build a two-face UGRID mesh: a quad and a triangle, with values on ``location``.
+
+    The quad fan-triangulates into two triangles and the triangle into one, so a face-located value that
+    is spread correctly reads back as ``[10, 10, 20]`` — the mesh's own faces, not a Delaunay guess.
+
+    Args:
+        location: ``"face"`` or ``"node"`` — where the data variable sits.
+
+    Returns:
+        The pyramids ``UgridDataset``.
+    """
+    import numpy as np
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    mesh = Mesh2d(
+        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
+        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
+        face_node_connectivity=Connectivity(
+            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
+            fill_value=-1,
+            cf_role="face_node_connectivity",
+            original_start_index=0,
+        ),
+    )
+    if location == "face":
+        held = {
+            "depth": MeshVariable(
+                name="depth",
+                location="face",
+                mesh_name="m",
+                shape=(2,),
+                _data=np.array([10.0, 20.0]),
+            )
+        }
+    else:
+        held = {
+            "zs": MeshVariable(
+                name="zs",
+                location="node",
+                mesh_name="m",
+                shape=(5,),
+                _data=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
+            )
+        }
+    return UgridDataset(mesh=mesh, data_variables=held, global_attributes={})
+
+
+def test_quickmap_draws_a_ugrid_mesh_on_the_static_tier():
+    """``quickmap`` draws a UgridDataset, shading each of the mesh's own faces (#499 gap 2).
+
+    Test scenario:
+        The drawn collection's values are read back: the quad's 10 appears on both of its fan triangles
+        and the triangle keeps its 20, which is the mesh's own connectivity rather than a re-triangulation.
+    """
+    import numpy as np
+
+    drawn = digitalearth.quickmap(_quad_and_triangle_mesh("face"), backend="matplotlib")
+    assert isinstance(drawn, Map)
+    values = np.asarray(drawn.ax.collections[-1].get_array()).tolist()
+    assert values == [10.0, 10.0, 20.0], (
+        f"the mesh was not shaded on its own faces: {values}"
+    )
+
+
+def test_quickmap_draws_a_node_located_ugrid_mesh():
+    """A node-located mesh variable is drawn too, each triangle taking its nodes' mean."""
+    drawn = digitalearth.quickmap(_quad_and_triangle_mesh("node"), backend="matplotlib")
+    assert isinstance(drawn, Map)
+
+
+@pytest.mark.parametrize("backend", ["interactive", "3d", "web"])
+def test_quickmap_refuses_a_mesh_on_a_backend_with_no_mesh_render(backend):
+    """The three engine tiers state they cannot draw a mesh, and name the one that can.
+
+    Args:
+        backend: A backend with no triangular render.
+
+    Test scenario:
+        The refusal must arrive before a scene is built — an opened VTK plotter or a half-made figure left
+        behind by a refusal is the defect this ordering avoids. It is also why the message is raised from
+        ``quickmap`` rather than from inside the tier.
+    """
+    with pytest.raises(TypeError, match="has no unstructured-mesh render"):
+        digitalearth.quickmap(_quad_and_triangle_mesh("face"), backend=backend)
+
+
+def test_input_kind_calls_a_ugrid_dataset_a_mesh():
+    """The input gate classifies a UgridDataset as the ``mesh`` family the kind registry already names."""
+    assert qp._input_kind(_quad_and_triangle_mesh("face"), "quickmap") == "mesh"
