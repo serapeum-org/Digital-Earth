@@ -8,10 +8,11 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 import logging
 import os
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from functools import wraps
 from math import isfinite
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 from cleopatra.glyphs.base.glyph import ColorScaling
@@ -1085,6 +1086,126 @@ def _compacted_nodes(
     return x[used], y[used], renumbered.reshape(triangles.shape)
 
 
+@dataclass(frozen=True)
+class _TriInput:
+    """What a triangulated render draws: the coordinates, the values, and how they are connected.
+
+    These six are born together in :meth:`VectorMixin._unstructured`, travel together into the glyph and
+    die together when the layer is drawn, which is what makes them one object rather than a six-tuple
+    threaded through a drawer — the house idiom ``PointArrays`` and ``BandClasses`` already follow. The
+    behaviour that touches nothing else lives here with them: refusing a render the values cannot feed,
+    triangulating, and reducing the values to one per face.
+
+    Attributes:
+        x: Node (or point) x coordinates in the display CRS.
+        y: Node (or point) y coordinates.
+        z: The values — one per node, or one per triangle when ``location`` is ``"face"``.
+        field: The name the values are known by, for the layer's colour encoding.
+        triangles: The connectivity, or ``None`` for scattered input that must be triangulated here.
+        location: ``"node"`` or ``"face"`` — which of the two ``z`` is aligned with.
+    """
+
+    x: np.ndarray
+    y: np.ndarray
+    z: np.ndarray
+    field: Any
+    triangles: np.ndarray | None
+    location: str
+
+    def refuse_unless_drawable(self, kind: str) -> None:
+        """Refuse a render these values cannot feed, before anything is placed or drawn.
+
+        Asked first, so a face-located mesh handed to a contour render is told the truth. Checked after the
+        placement instead, an off-limb mesh reached the generic off-limb warning and the caller was told
+        their data was outside the view when the real answer was that contours need node values (review L5).
+
+        Args:
+            kind: The render the layer asks for.
+
+        Raises:
+            ValueError: when ``kind`` interpolates between node values and the values sit on the faces.
+        """
+        if kind != "tripcolor" and self.location == "face":
+            raise ValueError(
+                f"{kind}() interpolates between values at the nodes, but this mesh's values sit on its "
+                f"faces; draw it with tripcolor(), which shades each face"
+            )
+
+    def triangulated(self, kind: str, crs: Any) -> "_TriInput":
+        """Return this input with a triangulation, placed in the display CRS.
+
+        Scattered points are Delaunay-triangulated after the ones a projection could not place are dropped.
+        A mesh keeps its **own** connectivity: its nodes are indices, so the unplaceable *triangles* go and
+        the nodes are then compacted, which keeps the indices valid and the extent finite.
+
+        Args:
+            kind: The render the layer asks for, named in any refusal.
+            crs: The display CRS, named in any refusal.
+
+        Returns:
+            _TriInput: the same values with ``triangles`` filled in.
+
+        Raises:
+            ValueError: when fewer than three points were supplied, which no projection can fix.
+            OffLimbError: when too little survives the warp to draw — too few points to triangulate, or no
+                triangle keeping all three of its nodes.
+        """
+        from matplotlib.tri import Triangulation
+
+        x, y, z = np.asarray(self.x), np.asarray(self.y), np.asarray(self.z)
+        if self.triangles is None:
+            # drop far-side points on a globe (Triangulation needs finite)
+            finite = np.isfinite(x) & np.isfinite(y)
+            supplied = x.size
+            x, y, z = x[finite], y[finite], z[finite]
+            if x.size < 3:
+                if supplied < 3:
+                    # Never enough points to triangulate, whatever the projection — a caller error, and
+                    # the accurate complaint is the one matplotlib would give.
+                    raise ValueError(
+                        f"{kind}() needs at least three points to triangulate, got {supplied}"
+                    )
+                raise OffLimbError(
+                    f"{kind}: only {x.size} of {supplied} points survive the warp into "
+                    f"{crs!r}, which is too few to triangulate"
+                )
+            return _TriInput(x, y, z, self.field, Triangulation(x, y).triangles, "node")
+        triangles = np.asarray(self.triangles)
+        keep = _placeable_triangles(triangles, x, y)
+        if not keep.any():
+            raise OffLimbError(
+                f"{kind}: none of the mesh's {triangles.shape[0]} triangles keep all three nodes "
+                f"in {crs!r}, so there is nothing on the view to draw"
+            )
+        if not keep.all():
+            logger.warning(
+                "%s: %d of the mesh's %d triangles fall outside %r and are not drawn",
+                kind,
+                int((~keep).sum()),
+                int(triangles.shape[0]),
+                crs,
+            )
+        if self.location == "face":
+            # One value per triangle, so the kept triangles take their own values with them.
+            z = z[keep]
+        triangles = triangles[keep]
+        # Compact after filtering: a dropped node left in `x`/`y` still counts towards the extent, which is
+        # how a partly off-limb mesh ended up drawn outside a collapsed view.
+        x, y, triangles = _compacted_nodes(x, y, triangles)
+        return _TriInput(x, y, z, self.field, triangles, self.location)
+
+    def face_values(self) -> np.ndarray:
+        """The values as one per triangle, which is what a flat-shaded render colours.
+
+        Returns:
+            np.ndarray: ``z`` itself when it already sits on the faces, else the mean of each triangle's
+            three node values.
+        """
+        if self.location == "face":
+            return np.asarray(self.z)
+        return np.asarray(self.z)[self.triangles].mean(axis=1)
+
+
 def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     """Draw the render a described unstructured layer asks for, on its own faces or on a triangulation.
 
@@ -1114,75 +1235,32 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
             fix, or when a contour render is asked for a mesh whose values sit on the faces — contours are
             interpolated between node values, which such a mesh does not have.
     """
-    from matplotlib.tri import Triangulation
-
     kind = layer.symbology.props["via"]
     opts = drawing_style(scene, layer)
-    x, y, z, field, triangles, location = scene._unstructured(
+    asked = scene._unstructured(
         data, band=scene._layer_keys.get(layer.id, DEFAULT_BAND)
     )
-    x, y, z = np.asarray(x), np.asarray(y), np.asarray(z)
-    if triangles is None:
-        # drop far-side points on a globe (Triangulation needs finite)
-        finite = np.isfinite(x) & np.isfinite(y)
-        supplied = x.size
-        x, y, z = x[finite], y[finite], z[finite]
-        if x.size < 3:
-            if supplied < 3:
-                # Never enough points to triangulate, whatever the projection — a caller error, and the
-                # accurate complaint is the one matplotlib would give.
-                raise ValueError(
-                    f"{kind}() needs at least three points to triangulate, got {supplied}"
-                )
-            raise OffLimbError(
-                f"{kind}: only {x.size} of {supplied} points survive the warp into "
-                f"{scene.crs!r}, which is too few to triangulate"
-            )
-        triangles = Triangulation(x, y).triangles
-    else:
-        keep = _placeable_triangles(triangles, x, y)
-        if not keep.any():
-            raise OffLimbError(
-                f"{kind}: none of the mesh's {triangles.shape[0]} triangles keep all three nodes "
-                f"in {scene.crs!r}, so there is nothing on the view to draw"
-            )
-        if not keep.all():
-            logger.warning(
-                "%s: %d of the mesh's %d triangles fall outside %r and are not drawn",
-                kind,
-                int((~keep).sum()),
-                int(triangles.shape[0]),
-                scene.crs,
-            )
-        if location == "face":
-            # One value per triangle, so the kept triangles take their own values with them.
-            z = z[keep]
-        triangles = triangles[keep]
-        # Compact after filtering: a dropped node left in `x`/`y` still counts towards the extent, which is
-        # how a partly off-limb mesh ended up drawn outside a collapsed view.
-        x, y, triangles = _compacted_nodes(x, y, triangles)
-    glyph = MeshGlyph(x, y, triangles, ax=scene.ax, fig=scene.fig)
+    # Before placing anything: a render the values cannot feed is a caller error, not an empty view.
+    asked.refuse_unless_drawable(kind)
+    drawing = asked.triangulated(kind, scene.crs)
+    glyph = MeshGlyph(
+        drawing.x, drawing.y, drawing.triangles, ax=scene.ax, fig=scene.fig
+    )
     # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
     if kind == "tripcolor":
-        face_values = z if location == "face" else z[triangles].mean(axis=1)
         drawn = scene._render_glyph(
-            glyph, face_values, location="face", colorbar=False, **opts
+            glyph, drawing.face_values(), location="face", colorbar=False, **opts
         )
     else:
-        if location == "face":
-            raise ValueError(
-                f"{kind}() interpolates between values at the nodes, but this mesh's values sit on its "
-                f"faces; draw it with tripcolor(), which shades each face"
-            )
         drawn = scene._render_glyph(
             glyph,
-            z,
+            drawing.z,
             location="node",
             filled=(kind == "tricontourf"),
             colorbar=False,
             **opts,
         )
-    return drawn.colored_by(field)
+    return drawn.colored_by(drawing.field)
 
 
 def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -2726,11 +2804,11 @@ class VectorMixin(_MixinBase):
             )
         return reproject(data, code)
 
-    def _unstructured(self, data: Any, band: int = DEFAULT_BAND) -> tuple:
+    def _unstructured(self, data: Any, band: int = DEFAULT_BAND) -> "_TriInput":
         """Return ``(x, y, z, field, triangles, location)`` for a triangulated render's input.
 
-        The sixth value is what tells the drawer which kind of input it got. A **UGRID mesh** answers with
-        its own connectivity and with where its values sit; anything scattered answers ``None``, meaning
+        ``triangles`` is what tells the drawer which kind of input it got. A **UGRID mesh** answers with its
+        own connectivity and with where its values sit; anything scattered answers ``None``, meaning
         "triangulate these points yourself".
 
         Args:
@@ -2739,10 +2817,10 @@ class VectorMixin(_MixinBase):
                 scattered input, whose value belongs to the point.
 
         Returns:
-            The node/point x and y coordinates in the display CRS, the values, the **name** those values
-            are known by, the mesh's triangles (or ``None`` for scattered input) and the location the
-            values sit on (``"node"`` or ``"face"``; ``"node"`` for scattered input, whose value belongs
-            to the point).
+            _TriInput: the coordinates in the display CRS, the values, the **name** those values are known
+            by, the mesh's triangles (``None`` for scattered input, which the drawer triangulates itself)
+            and the location the values sit on — ``"node"`` for scattered input, whose value belongs to
+            the point.
 
         Raises:
             ValueError: for the reasons :meth:`_scattered` and the mesh extractor give — no numeric column
@@ -2752,10 +2830,15 @@ class VectorMixin(_MixinBase):
         from pyramids.netcdf.ugrid.dataset import UgridDataset
 
         if isinstance(data, UgridDataset):
-            # The mesh branch of the extractor answers with a MeshSource, which is what carries the
-            # connectivity; `get_source` is typed to its base return.
-            src = cast(MeshSource, get_source(self._placed_mesh(data), band=band))
-            return (
+            src = get_source(self._placed_mesh(data), band=band)
+            if not isinstance(src, MeshSource):
+                # The mesh branch of the extractor answers with a MeshSource, which is what carries the
+                # connectivity. Checked rather than cast: a narrowing that cannot be wrong is still worth
+                # one line when being wrong would surface as a missing attribute three frames later.
+                raise TypeError(
+                    f"the mesh extractor answered a {type(src).__name__}, not a MeshSource"
+                )
+            return _TriInput(
                 src.x.values,
                 src.y.values,
                 src.z.values,
@@ -2764,7 +2847,7 @@ class VectorMixin(_MixinBase):
                 src.location,
             )
         x, y, z, field = self._scattered(data)
-        return x, y, z, field, None, "node"
+        return _TriInput(x, y, z, field, None, "node")
 
     def _tri(
         self,
