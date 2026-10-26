@@ -30,7 +30,7 @@ from shapely import MultiPoint, box, voronoi_polygons
 from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
-from digitalearth.base.crs import declared_crs, reproject
+from digitalearth.base.crs import authority_code, declared_crs, reproject
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import MeshSource, get_source, require_drawable
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Symbology
@@ -2686,6 +2686,39 @@ class VectorMixin(_MixinBase):
             raise ValueError("FeatureCollection has no numeric value column to contour")
         return src.x.values, src.y.values, src.z.values, source_field(src)
 
+    def _placed_mesh(self, data: Any) -> Any:
+        """Put a UGRID mesh into the display CRS, or say why it cannot go there.
+
+        pyramids warps a mesh with ``UgridDataset.to_crs``, which takes an EPSG **code** and builds its own
+        target from it — so handing it the display CRS as written produced ``EPSG:EPSG:3857`` and let a raw
+        ``CRSError`` out of a visualization call for three of the four CRS spellings the ``Source`` contract
+        documents (review H2). The code is resolved here instead, and a display CRS carrying none is
+        refused in this repo's words.
+
+        Args:
+            data: The pyramids ``UgridDataset`` to place.
+
+        Returns:
+            The mesh in the display CRS, or the mesh untouched when it declares no CRS of its own.
+
+        Raises:
+            ValueError: when the mesh declares a CRS but the display CRS carries no EPSG code — an
+                orthographic, Robinson or other projection pyramids' mesh warp cannot express. Drawing it
+                unprojected instead would put the mesh somewhere it does not belong, silently.
+        """
+        # A mesh with no declared CRS cannot be warped (pyramids refuses, rightly), so it is drawn in its
+        # own coordinates — the same bargain a bare numpy array gets.
+        if declared_crs(data) is None:
+            return data
+        code = authority_code(self.crs)
+        if code is None:
+            raise ValueError(
+                f"a UGRID mesh cannot be drawn in {self.crs!r}: pyramids warps a mesh to an EPSG code and "
+                f"this display CRS carries none. Draw the mesh in a CRS that names a code, or reproject "
+                f"it yourself before passing it."
+            )
+        return reproject(data, code)
+
     def _unstructured(self, data: Any) -> tuple:
         """Return ``(x, y, z, field, triangles, location)`` for a triangulated render's input.
 
@@ -2710,14 +2743,9 @@ class VectorMixin(_MixinBase):
         from pyramids.netcdf.ugrid.dataset import UgridDataset
 
         if isinstance(data, UgridDataset):
-            # A mesh with no declared CRS cannot be warped (pyramids refuses, rightly), so it is drawn in
-            # its own coordinates — the same bargain a bare numpy array gets.
-            placed = (
-                reproject(data, self.crs) if declared_crs(data) is not None else data
-            )
             # The mesh branch of the extractor answers with a MeshSource, which is what carries the
             # connectivity; `get_source` is typed to its base return.
-            src = cast(MeshSource, get_source(placed))
+            src = cast(MeshSource, get_source(self._placed_mesh(data)))
             return (
                 src.x.values,
                 src.y.values,

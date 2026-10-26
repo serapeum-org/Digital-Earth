@@ -119,3 +119,36 @@ def test_tripcolor_keeps_a_finite_view_when_part_of_the_mesh_is_unplaceable(ugri
     assert np.isfinite([x0, y0, x1, y1]).all(), f"the extent is not finite: {(x0, y0, x1, y1)}"
     assert x1 - x0 >= 0.9, f"x extent collapsed to {x1 - x0}, so the drawn triangles are off-view"
     assert y1 - y0 >= 0.9, f"y extent collapsed to {y1 - y0}, so the drawn triangles are off-view"
+
+
+@pytest.mark.parametrize("display", [3857, "EPSG:3857"])
+def test_a_crs_carrying_mesh_draws_in_a_coded_display_crs(ugrid_mesh, display):
+    """A mesh that declares a CRS is reprojected for any display CRS that names an EPSG code (review H2).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        display: The display CRS, as an int and as the `"EPSG:<code>"` spelling the Source contract allows.
+
+    Test scenario:
+        pyramids' `UgridDataset.to_crs` takes an EPSG **code** and builds its target as `f"EPSG:{code}"`,
+        so handing it the string spelling produced `EPSG:EPSG:3857` and a raw pyproj CRSError escaped a
+        visualization call. Both spellings must reach the same place.
+    """
+    mesh = ugrid_mesh("face", epsg=4326)
+    scene = Map(crs=display)
+    scene.tripcolor(mesh)
+    assert scene.ax.collections, "a CRS-carrying mesh drew nothing"
+
+
+def test_a_crs_carrying_mesh_refuses_a_display_crs_with_no_epsg_code(ugrid_mesh):
+    """A projection with no authority code is refused in this repo's words, not pyproj's.
+
+    Test scenario:
+        An orthographic or Robinson display CRS carries no EPSG code, and pyramids' mesh warp can only take
+        one. The caller should learn that from a message naming the CRS and the limit — not from
+        `CRSError: could not interpret 'EPSG:+proj=robin'`.
+    """
+    mesh = ugrid_mesh("face", epsg=4326)
+    scene = Map(crs="+proj=robin")
+    with pytest.raises(ValueError, match="EPSG code"):
+        scene.tripcolor(mesh)

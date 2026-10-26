@@ -172,10 +172,11 @@ def ugrid_mesh():
     Shared by the base, static and quickmap suites, which all need the same mesh.
 
     Returns:
-        Callable: ``build(location="face", node_x=None, steps=1)`` → a pyramids ``UgridDataset``.
-        ``location`` is ``"face"`` or ``"node"``; ``node_x`` overrides the node x coordinates (pass
-        non-finite ones to make a mesh no projection can place); ``steps`` > 1 gives the variable a leading
-        time axis, which is the shape UGRID model output normally has.
+        Callable: ``build(location="face", node_x=None, steps=1, epsg=None)`` → a pyramids
+        ``UgridDataset``. ``location`` is ``"face"`` or ``"node"``; ``node_x`` overrides the node x
+        coordinates (pass non-finite ones to make a mesh no projection can place); ``steps`` > 1 gives the
+        variable a leading time axis, which is the shape UGRID model output normally has; ``epsg`` makes
+        the mesh declare a CRS, which is what puts it on the reprojecting path.
     """
     import numpy as np
     from pyramids.netcdf.ugrid.connectivity import Connectivity
@@ -183,7 +184,7 @@ def ugrid_mesh():
     from pyramids.netcdf.ugrid.mesh import Mesh2d
     from pyramids.netcdf.ugrid.models import MeshVariable
 
-    def build(location: str = "face", node_x=None, steps: int = 1):
+    def build(location: str = "face", node_x=None, steps: int = 1, epsg=None):
         mesh = Mesh2d(
             node_x=(
                 np.array([0.0, 1.0, 1.0, 0.0, 2.0])
@@ -220,6 +221,13 @@ def ugrid_mesh():
                 _data=data,
             )
         }
-        return UgridDataset(mesh=mesh, data_variables=held, global_attributes={})
+        wkt = None
+        if epsg is not None:
+            from pyramids.base.crs import crs_from_user_input
+
+            wkt = crs_from_user_input(epsg).to_wkt()
+        return UgridDataset(
+            mesh=mesh, data_variables=held, global_attributes={}, crs_wkt=wkt
+        )
 
     return build
