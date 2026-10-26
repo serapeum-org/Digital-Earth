@@ -456,35 +456,26 @@ def fetch_basemap_image(
 ) -> tuple[np.ndarray, tuple[float, float, float, float]]:
     """Return a stitched web-map image and its EPSG:3857 extent for a lon/lat box, through cleopatra.
 
-    The headless seam :func:`draw_basemap` fetches tiles through. It composes cleopatra's tile helpers —
-    `get_provider`, `auto_zoom`, the bbox→tiles enumerator, `fetch_tiles` and `stitch_tiles` — which is **image
-    I/O, not GIS** (the tier's one carve-out, as for the Natural-Earth reference layers). Isolated as one
-    function so a test can replace it with a synthetic image and never touch the network, exactly as
-    `FeatureCollection._fetch_vectortileserver_tile` is isolated upstream.
-
-    Note:
-        cleopatra exposes tile fetching only bound to a matplotlib axes (`add_tiles`); there is no public
-        "give me the stitched image for this box" call, so this reaches one private helper
-        (`_tiles_for_bbox`). A public headless-stitch entry point is tracked upstream as cleopatra#401; the
-        swap to make here once it lands is tracked as Digital-Earth#483. Until then this seam keeps the private
-        reach isolated to this one call.
+    The headless seam :func:`draw_basemap` fetches tiles through. It calls cleopatra's public
+    `stitch_basemap`, the axes-free core of `add_tiles`, which fetches the XYZ tiles covering the box and
+    stitches them into one image — **image I/O, not GIS** (the tier's one carve-out, as for the Natural-Earth
+    reference layers). Isolated as one function so a test can replace it with a synthetic image and never touch
+    the network, exactly as `FeatureCollection._fetch_vectortileserver_tile` is isolated upstream.
 
     Args:
         bbox_4326: The area to cover, ``(west, south, east, north)`` in EPSG:4326 degrees.
-        provider: A cleopatra/xyzservices provider, or a dotted provider name such as ``"CartoDB.Positron"``.
-        zoom: The tile zoom level, or ``None`` to derive one from the box with cleopatra's `auto_zoom`.
+        provider: A cleopatra/xyzservices provider, or a dotted provider name such as ``"CartoDB.Positron"``;
+            ``stitch_basemap`` resolves a name itself and defaults to OpenStreetMap when ``None``.
+        zoom: The tile zoom level, or ``None`` to let cleopatra derive one from the box (``"auto"``).
 
     Returns:
         The stitched RGBA image ``(H, W, 4)`` and its ``(west, south, east, north)`` extent in EPSG:3857.
     """
     from cleopatra.basemap import tiles as cleo_tiles
 
-    resolved = cleo_tiles.get_provider(provider)
     box = tuple(float(v) for v in bbox_4326)
-    level = int(zoom) if zoom is not None else cleo_tiles.auto_zoom(box)
-    grid = cleo_tiles._tiles_for_bbox(box, level)
-    data = cleo_tiles.fetch_tiles(grid, resolved)
-    image, extent = cleo_tiles.stitch_tiles(data, grid, level)
+    level: Any = int(zoom) if zoom is not None else "auto"
+    image, extent = cleo_tiles.stitch_basemap(box, provider, zoom=level)
     west, south, east, north = extent
     return np.asarray(image), (float(west), float(south), float(east), float(north))
 

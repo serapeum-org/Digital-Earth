@@ -278,53 +278,39 @@ class TestBasemap:
 class TestFetchBasemapImage:
     """`fetch_basemap_image` composes cleopatra's tile helpers — exercised with those helpers stubbed."""
 
-    def _stub_cleopatra(self, monkeypatch, *, record):
-        """Replace cleopatra's tile functions with fakes that record what they were called with.
+    def _stub_stitch_basemap(self, monkeypatch, *, record):
+        """Replace cleopatra's public `stitch_basemap` with a fake that records its args and returns an image.
 
         Args:
             monkeypatch: pytest's patcher.
-            record: A dict the fakes write their call arguments into.
+            record: A dict the fake writes its call arguments into.
         """
         from cleopatra.basemap import tiles as cleo_tiles
 
-        monkeypatch.setattr(cleo_tiles, "get_provider", lambda name: f"provider:{name}")
-        monkeypatch.setattr(
-            cleo_tiles, "auto_zoom", lambda box: record.setdefault("auto", 6)
-        )
-        monkeypatch.setattr(
-            cleo_tiles,
-            "_tiles_for_bbox",
-            lambda box, level: record.update(level=level) or ["t"],
-        )
-        monkeypatch.setattr(
-            cleo_tiles, "fetch_tiles", lambda grid, provider: {"t": b"bytes"}
-        )
-        monkeypatch.setattr(
-            cleo_tiles,
-            "stitch_tiles",
-            lambda data, grid, level: (
-                np.zeros((2, 2, 4), dtype="uint8"),
-                (0.0, 0.0, 1.0, 1.0),
-            ),
-        )
+        def fake(box, provider=None, *, zoom="auto", **kwargs):
+            record["box"] = box
+            record["provider"] = provider
+            record["zoom"] = zoom
+            return np.zeros((2, 2, 4), dtype="uint8"), (0.0, 0.0, 1.0, 1.0)
+
+        monkeypatch.setattr(cleo_tiles, "stitch_basemap", fake)
 
     def test_an_explicit_zoom_is_used_as_given(self, monkeypatch):
-        """A given `zoom` reaches the tile enumerator unchanged, and `auto_zoom` is not consulted."""
+        """A given `zoom` reaches `stitch_basemap` unchanged, not replaced by the ``"auto"`` sentinel."""
         record: dict = {}
-        self._stub_cleopatra(monkeypatch, record=record)
+        self._stub_stitch_basemap(monkeypatch, record=record)
         image, extent = deco.fetch_basemap_image((0.0, 0.0, 1.0, 1.0), "OSM", 9)
-        assert record["level"] == 9, record
-        assert "auto" not in record, "auto_zoom must not run when a zoom is given"
+        assert record["zoom"] == 9, record
+        assert record["provider"] == "OSM", record
         assert image.shape == (2, 2, 4), image.shape
         assert extent == (0.0, 0.0, 1.0, 1.0), extent
 
-    def test_a_missing_zoom_is_derived_with_auto_zoom(self, monkeypatch):
-        """`zoom=None` derives the level from the box through cleopatra's `auto_zoom`."""
+    def test_a_missing_zoom_is_passed_as_auto(self, monkeypatch):
+        """`zoom=None` is handed to `stitch_basemap` as ``"auto"``, which derives the level itself."""
         record: dict = {}
-        self._stub_cleopatra(monkeypatch, record=record)
+        self._stub_stitch_basemap(monkeypatch, record=record)
         _image, _extent = deco.fetch_basemap_image((0.0, 0.0, 1.0, 1.0), "OSM", None)
-        assert record["auto"] == 6, record
-        assert record["level"] == 6, "the derived zoom must reach the tile enumerator"
+        assert record["zoom"] == "auto", record
 
 
 def _terrain_3857(scene: Scene3D) -> Scene3D:
