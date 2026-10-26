@@ -156,6 +156,29 @@ side of the world.
 
 ::: digitalearth.base.points.PointArrays
 
+## `MeshSource` — an unstructured mesh, with its own connectivity
+
+A raster `Source` carries a grid and two axis vectors; a point `Source` carries three parallel arrays. A UGRID
+mesh is neither: its cells are listed rather than implied, so the geometry only exists once the connectivity
+travels with the coordinates — together with **where** on it the values sit, since a variable may be given per
+node or per face.
+
+The triangles come from pyramids (`Mesh2d.fan_triangles`, which cuts every face — triangle, quad or larger
+polygon — with pure numpy), not from a triangulation computed here. Re-triangulating the nodes would invent
+faces the mesh does not have and paint face-located values onto them.
+
+**Which backends draw one.** A `UgridDataset` is accepted by `quickmap(backend="matplotlib")`, which draws it
+with `tripcolor` — each face shaded its own colour. The interactive, web and 3-D tiers have no triangular
+render, so they refuse a mesh by name rather than drawing it as something else. Note this is about the mesh
+*input*: the `unstructured` row of the [support matrix](support-matrix.md) is about the triangulated **verbs**
+(`tricontourf` / `tricontour` / `tripcolor`), which the interactive tier does have for scattered points.
+
+A mesh that declares a CRS can only be drawn in a display CRS that names an EPSG code, because pyramids warps a
+mesh to a code; an orthographic or Robinson display CRS is refused by name. That limit is upstream
+(serapeum-org/pyramids-core#1404), and #507 tracks what changes here once it lifts.
+
+::: digitalearth.base.sources.MeshSource
+
 ## Getting data into the display CRS
 
 The three helpers each tier used to define for itself.

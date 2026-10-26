@@ -110,7 +110,7 @@ CAPABILITIES = Capabilities(
         "vectors": "MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier",
         "streamlines": "there is no streamline primitive to trace a field with in a browser",
         "mesh": "a raster is drawn as an image rather than as cells, which is what a tile pipeline expects",
-        "unstructured": "a UGRID mesh has no MapLibre layer type; it is drawn on the static tier",
+        "unstructured": "triangulated data has no MapLibre layer type, so neither the scattered-points renders nor a UGRID mesh input can be drawn here; both go to the static tier",
         "north_arrow": (
             "the navigation control's compass already shows the bearing, and turns the map back to north when "
             "it is clicked"
