@@ -358,6 +358,26 @@ def test_field_with_colorbar(dataset):
 
 
 @pytest.mark.mpl_image_compare(**_BASELINE)
+def test_colorbar_follows_a_clim_change(dataset):
+    """A colorbar repaints to its layer's new range after ``set_clim`` (#219 — the bar follows its layer).
+
+    Test scenario:
+        The guide routes the bar through ``fig.colorbar``, which matplotlib wires to the mappable's
+        ``changed`` callback, so a later ``set_clim`` on the drawn artist moves the bar's ticks and range
+        without the figure being rebuilt. The field is drawn with limits 0–100, then re-clamped to 0–500, so
+        the baseline is the bar at the *new* range — a regression that left the bar on the old limits moves it.
+
+    Returns:
+        Figure: the rendered map, after the clim change.
+    """
+    m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
+    im = m.field(dataset, cmap="viridis", vmin=0.0, vmax=100.0).artist()
+    m.colorbar(label="flow accumulation")
+    im.set_clim(0.0, 500.0)
+    return m.fig
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
 def test_categorical_legend(dataset):
     """A swatch legend derived from the layer's own scale keeps its colours, order and placement.
 
