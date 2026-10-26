@@ -2781,10 +2781,11 @@ class VectorMixin(_MixinBase):
             data: The pyramids ``UgridDataset`` to place.
 
         Returns:
-            The mesh in the display CRS, or the mesh untouched when it declares no CRS of its own.
+            The mesh in the display CRS, or the mesh untouched when it declares no CRS of its own or is
+            already in the display one.
 
         Raises:
-            ValueError: when the mesh declares a CRS but the display CRS carries no EPSG code — an
+            ValueError: when the mesh declares a *different* CRS and the display CRS carries no EPSG code — an
                 orthographic, Robinson or other projection pyramids' mesh warp cannot express. Drawing it
                 unprojected instead would put the mesh somewhere it does not belong, silently.
 
@@ -2795,7 +2796,13 @@ class VectorMixin(_MixinBase):
         """
         # A mesh with no declared CRS cannot be warped (pyramids refuses, rightly), so it is drawn in its
         # own coordinates — the same bargain a bare numpy array gets.
-        if declared_crs(data) is None:
+        held = declared_crs(data)
+        if held is None:
+            return data
+        if same_crs(held, self.crs):
+            # Already where it belongs: no warp is required, so neither the round-trip through pyramids nor
+            # the EPSG-code restriction applies. Refusing here was round-2 M3 — a mesh in '+proj=robin'
+            # drawn on a '+proj=robin' map was turned away for a reprojection it never needed.
             return data
         code = authority_code(self.crs)
         if code is None:

@@ -256,3 +256,26 @@ def test_node_located_contours_survive_the_compaction(kind):
     assert scene.ax.collections, (
         f"{kind} drew nothing for a partly unplaceable node-located mesh"
     )
+
+
+def test_a_mesh_already_in_the_display_crs_needs_no_epsg_code(ugrid_mesh):
+    """A mesh already in the display CRS is drawn, even where that CRS has no EPSG code (round-2 M3).
+
+    Test scenario:
+        The upstream restriction is about *warping* a mesh, so it cannot apply when no warp is required.
+        A mesh whose own CRS is the display CRS was nevertheless refused, because the guard resolved the
+        code before asking whether a reprojection was needed at all.
+    """
+    from pyramids.base.crs import crs_from_user_input
+
+    robinson = crs_from_user_input("+proj=robin").to_wkt()
+    mesh = ugrid_mesh("face")
+    mesh = mesh.__class__(
+        mesh=mesh.mesh,
+        data_variables=dict(mesh.data_vars),
+        global_attributes={},
+        crs_wkt=robinson,
+    )
+    scene = Map(crs="+proj=robin")
+    scene.tripcolor(mesh)
+    assert scene.ax.collections, "a mesh already in the display CRS should draw"
