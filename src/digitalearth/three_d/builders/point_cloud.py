@@ -153,7 +153,13 @@ def _read_las_path(
         )
     pointclouds = _require_pointclouds()
     cloud = pointclouds.PointCloud.read_file(str(path))
-    coords = PointArrays.of(cloud.x, cloud.y, cloud.z, crs=cloud.crs)
+    # `cloud.crs` is a pyproj.CRS; carry it as its EPSG code when it has one, so the scene's display CRS and any
+    # reproject-refusal message read as `28992` rather than the multi-line pyproj repr. A CRS with no authority
+    # code (rare for LAS) is carried verbatim — still correct, just verbose.
+    epsg = cloud.crs.to_epsg() if cloud.crs is not None else None
+    coords = PointArrays.of(
+        cloud.x, cloud.y, cloud.z, crs=epsg if epsg is not None else cloud.crs
+    )
     values = _las_colour(cloud, value_column) if value_column else None
     return coords, values
 
