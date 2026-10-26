@@ -783,3 +783,13 @@ class TestLasPath:
             f"expected the canonical lower-case field, got {field!r}"
         )
         scene.close()
+
+    def test_a_conflicting_scene_crs_is_refused(self):
+        """A LAS file whose CRS differs from the scene's is refused by code (PointArrays is not reprojectable)."""
+        scene = Scene3D(off_screen=True, crs=4326)
+        with pytest.raises(ValueError, match="cannot be reprojected") as exc:
+            scene.point_cloud(_LAS_FIXTURE, eye_dome_lighting=False)
+        assert "28992" in str(exc.value), (
+            f"the refusal should name the file CRS by code, got: {exc.value}"
+        )
+        scene.close()
