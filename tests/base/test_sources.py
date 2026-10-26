@@ -1221,29 +1221,35 @@ def test_netcdf_four_dimensional_variable_is_refused():
         _from_netcdf(stub, None, None, band=2)
 
 
-def test_netcdf_multislice_warning_is_only_for_a_caller_who_named_no_band(caplog):
-    """The "pass band=" advice is given only when no band was named (review L1).
+def test_netcdf_multislice_notice_names_the_count_when_the_first_is_drawn(caplog):
+    """Drawing the first of several slices is noted with the count; naming another is not.
 
     Args:
         caplog: pytest log capture.
 
     Test scenario:
-        Advising someone to pass ``band=`` right after they passed ``band=1`` reads as though their request
-        had been ignored. The warning has to tell "asked for nothing" apart from "asked for the first".
+        The notice is keyed on the slice *drawn*, not on whether the caller named it. Keyed on "named
+        nothing" it could not fire from any public entry point — every tier builder forwards an int
+        default — so a 24-step forecast drew step 1 in silence (round-2 M1). It is worded as a statement
+        rather than advice, which is what round-1 L1 objected to: a caller who passed ``band=1`` is told
+        how many slices there are, not told to pass what they just passed.
     """
     import logging
 
     nc = _slice_valued_netcdf()
     with caplog.at_level(logging.WARNING):
         get_source(nc)
-    assert "pass band=" in caplog.text, (
-        "a caller who named nothing should be told the default"
+    assert "carries 3 slices" in caplog.text, (
+        f"the slice count should be named: {caplog.text!r}"
+    )
+    assert "pass band=" not in caplog.text, (
+        "the notice states a fact; it does not advise"
     )
     caplog.clear()
     with caplog.at_level(logging.WARNING):
-        get_source(nc, band=1)
+        get_source(nc, band=3)
     assert caplog.text == "", (
-        f"band=1 was named, so nothing should be advised: {caplog.text!r}"
+        f"another slice was named, so there is nothing to note: {caplog.text!r}"
     )
 
 

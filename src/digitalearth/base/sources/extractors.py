@@ -243,7 +243,7 @@ def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:
 def extract(
     data: PlottableData,
     *,
-    band: int | None = None,
+    band: int = DEFAULT_BAND,
     variable: str | None = None,
     x: np.ndarray | None = None,
     y: np.ndarray | None = None,
@@ -256,8 +256,8 @@ def extract(
         data: A pyramids ``Dataset``, ``NetCDF``, ``DatasetCollection`` or ``FeatureCollection``, or a numpy
             array.
         band: 1-based band index for raster/collection inputs, or the slice/step for a NetCDF or mesh
-            variable that carries one. ``None`` means the caller named none, which is the only case the
-            multi-slice warning advises passing it.
+            variable that carries one. Drawing the first of several is noted at WARNING, so a multi-step
+            variable never reduces to one field in silence.
         variable: Variable name for ``NetCDF`` inputs (defaults to the first variable).
         x: Optional x coordinates for a raw numpy array (defaults to pixel indices).
         y: Optional y coordinates for a raw numpy array (defaults to pixel indices).
@@ -336,11 +336,10 @@ def extract(
     # NetCDF subclasses Dataset, so it MUST be checked before the Dataset branch.
     if isinstance(data, NetCDF):
         return _from_netcdf(data, variable, metadata, band=band, crs=crs)
-    chosen = DEFAULT_BAND if band is None else band
     if isinstance(data, Dataset):
-        return _from_raster(data, chosen, metadata, crs=crs)
+        return _from_raster(data, band, metadata, crs=crs)
     if isinstance(data, DatasetCollection):
-        return _from_collection(data, chosen, metadata, crs=crs)
+        return _from_collection(data, band, metadata, crs=crs)
     if isinstance(data, FeatureCollection):
         return _from_feature(data, metadata, crs=crs)
     if isinstance(data, np.ndarray):
@@ -615,14 +614,13 @@ def _variable_attributes(nc: Any, variable: str | None) -> dict:
     return {}
 
 
-def _netcdf_slice(z: np.ndarray, named: str, band: int | None) -> np.ndarray:
+def _netcdf_slice(z: np.ndarray, named: str, band: int) -> np.ndarray:
     """Take the 1-based ``band`` slice off a band-first NetCDF read.
 
     Args:
         z: The 3-D ``(slices, rows, columns)`` array pyramids read.
         named: How the variable reads in a message — ``"variable 't2m'"``, or ``"pinned variable"``.
-        band: 1-based index of the slice to draw, or ``None`` when the caller named none — which is the
-            only case the "pass band=" advice is worth giving.
+        band: 1-based index of the slice to draw.
 
     Returns:
         np.ndarray: the 2-D slice ``band`` names.
@@ -655,21 +653,20 @@ def _netcdf_slice(z: np.ndarray, named: str, band: int | None) -> np.ndarray:
             ```
     """
     slices = int(z.shape[0])
-    asked = DEFAULT_BAND if band is None else band
-    if not 1 <= asked <= slices:
+    if not 1 <= band <= slices:
         raise ValueError(
-            f"band={asked} is out of range for the {named}, which carries {slices} slice(s)"
+            f"band={band} is out of range for the {named}, which carries {slices} slice(s)"
         )
-    if slices > 1 and band is None:
-        # Only when the caller named nothing: advising "pass band=" to someone who just passed it reads
-        # as though their request was ignored (review L1).
+    if slices > 1 and band == DEFAULT_BAND:
+        # Keyed on the slice *drawn*, not on whether the caller named it: every tier builder forwards an
+        # int default, so a condition on "named nothing" could not fire from any public entry point and a
+        # 24-step forecast drew step 1 in silence (round-2 M1). Worded as a statement for the same reason
+        # the old wording was wrong (round-1 L1): a caller who did pass band=1 is being told the slice
+        # count, not advised to do what they just did.
         logger.warning(
-            "The %s has %d slices; the Source draws band=%d (pass band= to choose another)",
-            named,
-            slices,
-            DEFAULT_BAND,
+            "The %s carries %d slices; band=%d is drawn", named, slices, band
         )
-    taken: np.ndarray = z[asked - 1]
+    taken: np.ndarray = z[band - 1]
     return taken
 
 
@@ -678,7 +675,7 @@ def _from_netcdf(
     variable: str | None,
     metadata: dict | None,
     *,
-    band: int | None = None,
+    band: int = DEFAULT_BAND,
     crs: Any = None,
 ) -> Source:
     """Build a raster :class:`Source` from a pyramids ``NetCDF`` variable (defaults to the first).
@@ -819,9 +816,7 @@ def _fan_values(values: np.ndarray, mesh: Any, triangles: np.ndarray) -> np.ndar
     return spread
 
 
-def _mesh_step(
-    values: np.ndarray, named: str, band: int | None, expected: int
-) -> np.ndarray:
+def _mesh_step(values: np.ndarray, named: str, band: int, expected: int) -> np.ndarray:
     """Reduce a temporal or layered mesh variable to the single step ``band`` names.
 
     ``UgridDataset.masked_values`` keeps a variable's full shape, and UGRID model output normally carries a
@@ -833,7 +828,7 @@ def _mesh_step(
     Args:
         values: The variable as read — 1-D, or ``(n_steps, n_elements)``.
         named: How the variable reads in a message.
-        band: 1-based index of the step to draw, or ``None`` when the caller named none.
+        band: 1-based index of the step to draw.
         expected: How many elements the mesh has at this variable's location.
 
     Returns:
@@ -855,19 +850,14 @@ def _mesh_step(
             f"reduce to one value per element ({expected} expected on the last axis)"
         )
     steps = int(values.shape[0])
-    asked = DEFAULT_BAND if band is None else band
-    if not 1 <= asked <= steps:
+    if not 1 <= band <= steps:
         raise ValueError(
-            f"band={asked} is out of range for {named}, which carries {steps} step(s)"
+            f"band={band} is out of range for {named}, which carries {steps} step(s)"
         )
-    if steps > 1 and band is None:
-        logger.warning(
-            "The %s has %d steps; the Source draws band=%d (pass band= to choose another)",
-            named,
-            steps,
-            DEFAULT_BAND,
-        )
-    taken: np.ndarray = values[asked - 1]
+    if steps > 1 and band == DEFAULT_BAND:
+        # Reachable from every entry point, for the reason given in `_netcdf_slice`.
+        logger.warning("The %s carries %d steps; band=%d is drawn", named, steps, band)
+    taken: np.ndarray = values[band - 1]
     return taken
 
 
@@ -876,7 +866,7 @@ def _from_ugrid(
     variable: str | None,
     metadata: dict | None,
     *,
-    band: int | None = None,
+    band: int = DEFAULT_BAND,
     crs: Any = None,
 ) -> MeshSource:
     """Build a :class:`MeshSource` from a pyramids ``UgridDataset`` variable (defaults to the first).

@@ -889,7 +889,7 @@ def quickmap(
             Every backend honours it, because it selects the input rather than asking anything of a
             renderer. Naming one for a non-NetCDF input, or one the container does not carry, is refused by
             name. To choose a slice of a variable that carries a band/time dimension, pass ``band=`` (1-based)
-            alongside it; without one, the first slice is drawn and a warning says so.
+            alongside it; without one, the first slice is drawn and a warning names how many there were.
         domain: Optional named region / bbox to set the extent. Honoured by ``backend="matplotlib"`` (its fixed
             extent) and by ``backend="3d"`` (it frames the camera on the region); the ``"interactive"`` and
             ``"web"`` tiers pan and zoom instead, so passing it to those is refused by name.

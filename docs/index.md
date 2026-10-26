@@ -55,7 +55,7 @@ m.set_title("Flow Accumulation")
 
 A NetCDF holds several variables and a variable may carry a band or time dimension, so both
 can be named — `variable=` picks the field, `band=` the slice (1-based; without one the first
-is drawn and a warning says so):
+is drawn and a warning names how many there were):
 
 ```python
 from pyramids.netcdf import NetCDF
