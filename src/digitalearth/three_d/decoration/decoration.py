@@ -463,13 +463,13 @@ def fetch_basemap_image(
     the network, exactly as `FeatureCollection._fetch_vectortileserver_tile` is isolated upstream.
 
     Args:
-        bbox_4326: The area to cover, ``(west, south, east, north)`` in EPSG:4326 degrees.
-        provider: A cleopatra/xyzservices provider, or a dotted provider name such as ``"CartoDB.Positron"``;
-            ``stitch_basemap`` resolves a name itself and defaults to OpenStreetMap when ``None``.
-        zoom: The tile zoom level, or ``None`` to let cleopatra derive one from the box (``"auto"``).
+        bbox_4326: The area to cover, `(west, south, east, north)` in EPSG:4326 degrees.
+        provider: A cleopatra/xyzservices provider, or a dotted provider name such as `"CartoDB.Positron"`;
+            `stitch_basemap` resolves a name itself and defaults to OpenStreetMap when `None`.
+        zoom: The tile zoom level, or `None` to let cleopatra derive one from the box (`"auto"`).
 
     Returns:
-        The stitched RGBA image ``(H, W, 4)`` and its ``(west, south, east, north)`` extent in EPSG:3857.
+        The stitched RGBA image `(H, W, 4)` and its `(west, south, east, north)` extent in EPSG:3857.
     """
     from cleopatra.basemap import tiles as cleo_tiles
 
