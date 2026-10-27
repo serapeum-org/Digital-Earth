@@ -2,10 +2,11 @@
 
 digitalearth is the renderer pyramids reaches for a non-matplotlib ``plot(backend=…)``. Before this
 module it was reached by *name* — pyramids imported ``digitalearth`` and called ``quickmap``
-directly — which forwarded the facade's vocabulary verbatim. Three of those keywords then died in
-cleopatra's words, one arrived off by one, and two were accepted and ignored. These tests pin the
-registration (so discovery finds the backends rather than importing us by name) and every
-translation and refusal that sits between the two vocabularies.
+directly — which forwarded the facade's vocabulary verbatim. The facade's first band then arrived
+off by one, a ``title`` raised from the tier's raster builder (and from PyVista's parser on the 3-D
+tier), and an animation had no route at all. These tests pin the registration (so discovery finds
+the backends rather than importing us by name) and every translation and refusal that sits between
+the two vocabularies.
 
 Nothing here needs a drawing engine: ``quickmap`` is replaced where the delegation itself is under
 test, so the whole file runs in the ``dev`` env. The tiers' own rendering is covered in
@@ -265,13 +266,19 @@ class TestUnserved:
 
         Test scenario:
             pyramids drops defaulted arguments before forwarding, so anything arriving here was set
-            deliberately — dropping it silently would let a caller believe it applied. Before this
-            adapter, ``rgb_options`` and friends surfaced as cleopatra's "The given keyword
-            argument:… is not correct, possible parameters are, ['figsize', …]".
+            deliberately. Left to the tier each of these is refused too, but for the builder it
+            reached — ``RasterMixin.field() got an unexpected keyword argument 'rgb_options'`` on
+            web, ``'rgb_options' is not an option Image takes on the bokeh backend`` on interactive,
+            and PyVista's own ``invalid keyword argument for `_common_arg_parser``` on 3-D. Refusing
+            here names the pyramids-side keyword and where the capability lives, which is what
+            ``names_alternative`` pins (round-1 H5, N1).
         """
         forwarded = {name: value}
-        with pytest.raises(ValueError, match=name):
+        with pytest.raises(ValueError, match=name) as raised:
             _Forwarded.from_facade("web", forwarded)
+        assert names_alternative in str(raised.value), (
+            f"the refusal should point at {names_alternative!r}: {raised.value}"
+        )
 
     @pytest.mark.parametrize(
         "name, value",
@@ -494,3 +501,69 @@ class TestImportWeight:
         )
         pulled = [name for name in done.stdout.strip().split(",") if name]
         assert pulled == [], f"importing the backend module pulled in {pulled}"
+
+
+class TestWhatTheSeamNeedsToDraw:
+    """The object shapes each path needs, refused in terms of the call that was made."""
+
+    class _Single:
+        """Stands in for a single raster: no members to step through."""
+
+    class _Stack:
+        """Stands in for a collection: members to step through."""
+
+        datasets = ("a", "b", "c")
+
+    def test_animating_something_with_no_steps_is_refused_by_name(self):
+        """An animation of a single raster says so, instead of failing inside the stack builder.
+
+        Test scenario:
+            ``Dataset.animate(backend=…)`` forwards a single ``Dataset``, and both tiers' temporal
+            builders step through a collection's members — so it reached ``timecube`` and raised
+            ``AttributeError: 'Dataset' object has no attribute 'datasets'`` (round-1 H3).
+        """
+        single = self._Single()
+        with pytest.raises(ValueError, match="carries no steps to animate"):
+            interactive(single, backend="interactive", animate=True)
+
+    def test_the_refusal_names_the_matplotlib_route_for_a_single_rasters_bands(self):
+        """The refusal points at the backend that does animate one raster's bands.
+
+        Test scenario:
+            A caller who wanted a band animation is not stuck: the matplotlib tier's ``animate``
+            takes a stack of bands. Naming it is the difference between a refusal and a dead end.
+        """
+        single = self._Single()
+        try:
+            web(single, backend="web", animate=True, path="out.gif")
+        except ValueError as exc:
+            message = str(exc)
+        assert "backend='matplotlib'" in message, f"no route offered: {message}"
+
+    def test_a_still_plot_of_a_stack_is_refused_in_terms_of_the_call_made(self):
+        """A still plot of a collection is refused without naming an unrelated function.
+
+        Test scenario:
+            ``DatasetCollection.plot(backend=…)`` is one of the facades, and ``quickmap`` cannot
+            draw a collection — it answered ``TypeError: quickplot cannot draw a DatasetCollection``,
+            naming ``quickplot``, which the caller never used (round-1 M5).
+        """
+        stack = self._Stack()
+        with pytest.raises(ValueError, match=r"plot\(backend='web'\) draws one field"):
+            web(stack, backend="web")
+
+    def test_the_still_refusal_offers_the_animation_route(self):
+        """The refusal names ``animate`` as the way to show every member.
+
+        Test scenario:
+            A collection passed to a still plot is usually a caller wanting the series; pointing at
+            the animate call answers what they were reaching for.
+        """
+        stack = self._Stack()
+        try:
+            interactive(stack, backend="interactive")
+        except ValueError as exc:
+            message = str(exc)
+        assert "animate(backend='interactive')" in message, (
+            f"no route offered: {message}"
+        )

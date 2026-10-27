@@ -8,10 +8,23 @@ registered end of that seam — one callable per tier, each matching the contrac
 
 Registering it is not merely cosmetic. Without an entry point pyramids falls back to *importing*
 ``digitalearth`` by name and calling ``quickmap`` directly, which forwards its own vocabulary
-verbatim; three of those keywords then reach cleopatra and are refused in cleopatra's words, naming
-cleopatra's allowlist to someone who only ever wrote ``ds.plot(backend="web")``. The adapter exists
-to translate between the two vocabularies, and to refuse what digitalearth cannot honour **by name**
-rather than leaking a lower layer's complaint or silently dropping the argument.
+verbatim. Each tier then answers in its own terms, naming its internal builder rather than the call
+the caller made — and on one tier the complaint is not even digitalearth's:
+
+    ds.plot(backend="web", title="DEM")
+    TypeError: RasterMixin.field() got an unexpected keyword argument 'title'. Did you mean 'tiles'?
+
+    ds.plot(backend="interactive", rgb_options={})
+    ValueError: 'rgb_options' is not an option Image takes on the bokeh backend; did you mean
+    ['xrotation', 'yrotation']?
+
+    ds.plot(backend="3d", title="DEM")
+    TypeError: "title" is an invalid keyword argument for `_common_arg_parser`
+
+The last is PyVista's own argument parser, surfacing to someone who wrote ``ds.plot(backend="3d",
+title=…)``. So the adapter's job is to translate between the two vocabularies, to apply a frame
+keyword through the route that tier actually has, and to refuse the rest **by name**, before a
+scene is half-built — not to convert silence into a message, since the tiers were never silent.
 
 Three translations are genuinely necessary, because the facade and this package count and spell
 things differently:
@@ -56,12 +69,15 @@ BAND_ORIGIN_SHIFT = 1
 ANIMATION_BACKENDS: frozenset[str] = frozenset({"interactive", "web"})
 
 #: Forwarded keywords digitalearth has no way to honour, each with the reason given in the refusal.
-#: Silence is the alternative this avoids: pyramids drops a defaulted argument before forwarding, so
-#: anything arriving here was set deliberately and must not be ignored.
+#: pyramids drops a defaulted argument before forwarding, so anything arriving here was set
+#: deliberately. Refusing it here names the pyramids-side keyword and what to do instead; left to
+#: the tier it is still refused, but in terms of whichever builder it reached — or, on the 3-D tier,
+#: in PyVista's terms.
 _UNSERVED: Mapping[str, str] = {
     "exclude_value": (
-        "digitalearth masks a raster through its own nodata handling and passes its own "
-        "exclude_value to the renderer"
+        "no digitalearth entry point takes a nodata value — the matplotlib path sets its own and "
+        "answers a caller's with `got multiple values for keyword argument 'exclude_value'` — so "
+        "mask the raster in pyramids before plotting"
     ),
     "rgb_options": (
         "a three-band composite is built with Map.rgb_composite on the static tier, which this "
@@ -75,9 +91,11 @@ _UNSERVED: Mapping[str, str] = {
     ),
 }
 
-#: Keywords that only mean something in an animation call; passed to a still plot they would be
-#: accepted and ignored, which is the silent failure this names instead. `path` is here because a
-#: still render has nothing to write — only the animation verbs take a destination.
+#: Keywords that only mean something in an animation call. Refused on a still plot in terms of the
+#: call that was made, rather than left to the tier, which answers for the builder they reached
+#: (`RasterMixin.field() … 'interval'` on web, `'interval' is not an option Image takes on the bokeh
+#: backend` on interactive). `path` is here because a still render has nothing to write — only the
+#: animation verbs take a destination.
 _ANIMATION_ONLY = ("bands", "animation_axis_values", "interval", "path")
 
 #: Keywords this module routes itself rather than handing to a builder: the scene frame. They are
@@ -586,6 +604,69 @@ def _refuse_unanimatable(plan: _Forwarded) -> None:
         )
 
 
+def _is_stack(obj: Any) -> bool:
+    """Whether ``obj`` carries the members a temporal builder steps through.
+
+    A ``DatasetCollection`` holds its members on ``datasets``; a single ``Dataset`` does not, which
+    is the difference the stack builders depend on. Asked by attribute rather than by type so this
+    module keeps importing nothing from pyramids — discovery imports it on every
+    ``import pyramids``.
+
+    Args:
+        obj: The object the facade was called on.
+
+    Returns:
+        bool: ``True`` when it exposes members to step through.
+
+    Examples:
+        - An object holding members reads as a stack; a bare one does not:
+            ```python
+            >>> from digitalearth.pyramids_backend import _is_stack
+            >>> class Stack:
+            ...     datasets = ["a", "b"]
+            >>> class Single:
+            ...     pass
+            >>> _is_stack(Stack()), _is_stack(Single())
+            (True, False)
+
+            ```
+    """
+    return hasattr(obj, "datasets")
+
+
+def _refuse_unstacked(obj: Any, plan: _Forwarded) -> None:
+    """Refuse an animation of something with no steps, naming what this seam animates.
+
+    Args:
+        obj: The object the facade was called on.
+        plan: The translated call.
+
+    Raises:
+        ValueError: when ``obj`` carries no members to step through.
+
+    Examples:
+        - A single raster has nothing to step through, and is told so:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _refuse_unstacked
+            >>> plan = _Forwarded.from_facade("interactive", {"animate": True})
+            >>> class Single:
+            ...     pass
+            >>> try:
+            ...     _refuse_unstacked(Single(), plan)
+            ... except ValueError as exc:
+            ...     print(str(exc).split(":")[1].split(".")[0].strip())
+            a Single carries no steps to animate
+
+            ```
+    """
+    if not _is_stack(obj):
+        raise ValueError(
+            f"animate(backend={plan.backend!r}): a {type(obj).__name__} carries no steps to "
+            f"animate. Pass a DatasetCollection of the steps, or animate on "
+            f"backend='matplotlib', which animates a single raster's bands"
+        )
+
+
 def _animated(obj: Any, plan: _Forwarded) -> Any:
     """Build the tier's temporal scene and return its animation.
 
@@ -599,14 +680,19 @@ def _animated(obj: Any, plan: _Forwarded) -> Any:
 
     Raises:
         ValueError: propagated from :func:`_refuse_unanimatable` for a tier with no verb to drive,
-            or a web animation with no destination.
+            from :func:`_refuse_unstacked` for an object with no steps, or from
+            :meth:`_Forwarded.destination` for a web animation with no destination.
     """
     _refuse_unanimatable(plan)
     if plan.backend == "interactive":
+        _refuse_unstacked(obj, plan)
         return _animated_interactive(obj, plan)
-    # Resolved before the tier is imported and before any scene is built: this tier animates only to
-    # a file, so a call with no destination can never succeed and should not pay for the engine.
-    return _animated_web(obj, plan, plan.destination())
+    # The destination is resolved first, before the tier is imported and before the payload is
+    # examined: it is a property of the call rather than of the data, so a pathless animation is
+    # answered the same way whatever was passed, and never pays for the engine.
+    destination = plan.destination()
+    _refuse_unstacked(obj, plan)
+    return _animated_web(obj, plan, destination)
 
 
 def _animated_interactive(obj: Any, plan: _Forwarded) -> Any:
@@ -769,7 +855,8 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
         The tier's own object — a scene, a player, or a written animation path.
 
     Raises:
-        ValueError: for a keyword this seam cannot serve, or an animation the tier cannot drive.
+        ValueError: for a keyword this seam cannot serve, an animation the tier cannot drive, or a
+            still plot of a multi-member stack, which draws one field.
     """
     plan = _Forwarded.from_facade(backend, forwarded)
     if plan.animate:
@@ -778,6 +865,16 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
     # tier packages, whose engines must not be pulled into a bare `import pyramids`.
     from digitalearth import quickmap
 
+    if _is_stack(obj):
+        # `DatasetCollection.plot(backend=…)` is one of the facades, and `quickmap` cannot draw a
+        # collection — it answered with `TypeError: quickplot cannot draw a DatasetCollection`,
+        # naming a function the caller never called. Said here in terms of the call they did make
+        # (round-1 M5).
+        raise ValueError(
+            f"plot(backend={backend!r}) draws one field, and a "
+            f"{type(obj).__name__} carries several. Select one member and plot that, or call "
+            f"animate(backend={backend!r}) to step through them"
+        )
     draw = dict(plan.draw)
     # `title` is a frame keyword, not a data one: the web tier's raster builder answers it with
     # `RasterMixin.field() got an unexpected keyword argument 'title'` and the 3-D tier leaks
