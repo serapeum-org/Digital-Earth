@@ -5778,7 +5778,8 @@ omissions with no positive counterpart on any backend, so they appear only in th
 <li><strong><code>raster_renderer</code></strong> — a raster is drawn as an image and contours are their own builder, so there is no
   choice of renderer to make on top of one</li>
 <li><strong><code>streamlines</code></strong> — there is no streamline primitive to trace a field with in a browser</li>
-<li><strong><code>unstructured</code></strong> — a UGRID mesh has no MapLibre layer type; it is drawn on the static tier</li>
+<li><strong><code>unstructured</code></strong> — triangulated data has no MapLibre layer type, so neither the scattered-points renders nor
+  a UGRID mesh input can be drawn here; both go to the static tier</li>
 <li><strong><code>vectors</code></strong> — MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier</li>
 </ul>
 <h3 id="interactive"><a class="toclink" href="#interactive">interactive</a><a class="headerlink" href="#interactive" title="Permanent link">#</a></h3>

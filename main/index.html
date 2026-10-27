@@ -4926,6 +4926,10 @@ vector data, built on top of <a href="https://github.com/serapeum-org/cleopatra"
 <li>Static raster plotting via <code>quickmap</code> / <code>Map</code>, with rich, customizable
   styling (color scales, color bars, cell-value annotations).</li>
 <li>Overlay vector points on raster maps with configurable size, color, and labels.</li>
+<li>Draw a NetCDF variable, choosing which one with <code>variable=</code> and which slice of a
+  band/time dimension with <code>band=</code> (1-based).</li>
+<li>Draw an unstructured <strong>UGRID mesh</strong> (<code>pyramids.netcdf.ugrid.UgridDataset</code>) on its own
+  faces — see <a href="reference/vocabulary/"><code>MeshSource</code></a> for which backends take one.</li>
 </ul>
 <h2 id="installation"><a class="toclink" href="#installation">Installation</a><a class="headerlink" href="#installation" title="Permanent link">#</a></h2>
 <ul>
@@ -4951,6 +4955,22 @@ vector data, built on top of <a href="https://github.com/serapeum-org/cleopatra"
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">)</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">m</span> <span class="o">=</span> <span class="n">quickmap</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Flow Accumulation&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>A NetCDF holds several variables and a variable may carry a band or time dimension, so both
+can be named — <code>variable=</code> picks the field, <code>band=</code> the slice (1-based; without one the first
+is drawn and a warning names how many there were):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.netcdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">NetCDF</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">quickmap</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">nc</span> <span class="o">=</span> <span class="n">NetCDF</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;forecast.nc&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">m</span> <span class="o">=</span> <span class="n">quickmap</span><span class="p">(</span><span class="n">nc</span><span class="p">,</span> <span class="n">variable</span><span class="o">=</span><span class="s2">&quot;t2m&quot;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</code></pre></div>
+<p>An unstructured mesh is drawn the same way, shaded face by face:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.netcdf.ugrid.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">UgridDataset</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">quickmap</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">mesh</span> <span class="o">=</span> <span class="n">UgridDataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;river_channel_ugrid.nc&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">m</span> <span class="o">=</span> <span class="n">quickmap</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">variable</span><span class="o">=</span><span class="s2">&quot;bathymetry&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="next-steps"><a class="toclink" href="#next-steps">Next steps</a><a class="headerlink" href="#next-steps" title="Permanent link">#</a></h2>
 <ul>
