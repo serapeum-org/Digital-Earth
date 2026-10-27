@@ -217,7 +217,7 @@ class TestPhotorealMeshes:
         surf = SimpleNamespace(faces=np.empty(0, dtype="int32"))
         tri = SimpleNamespace(compute_normals=lambda **_kwargs: surf)
         extract = SimpleNamespace(triangulate=lambda: tri)
-        mesh = SimpleNamespace(n_points=5, extract_surface=lambda: extract)
+        mesh = SimpleNamespace(n_points=5, extract_surface=lambda **_kwargs: extract)
         fake = SimpleNamespace(layers=[(mesh, None)])
         shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0), tmp_path)
         assert shapes == {}, shapes

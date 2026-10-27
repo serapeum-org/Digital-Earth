@@ -39,21 +39,19 @@ def _require_photoreal():
             :func:`~digitalearth.three_d.builders.globe._require_geovista` uses.
     """
     try:
-        import mitsuba  # noqa: F401
-        import oidn  # noqa: F401
+        import mitsuba
+        import oidn  # noqa: F401 - imported only to confirm the denoiser is installed; used in _denoise
     except ImportError as exc:
         raise ImportError(
             "Scene3D.photoreal() needs the optional photorealistic-rendering dependencies 'mitsuba' and 'oidn'. "
             "Install them with:  pip install 'digitalearth[photoreal]'"
         ) from exc
-    import mitsuba
-
     return mitsuba
 
 
 def _triangulated_surface(mesh: Any) -> Any:
     """Return the triangulated outer surface of a PyVista mesh, with per-vertex normals computed."""
-    surf = mesh.extract_surface().triangulate()
+    surf = mesh.extract_surface(algorithm="dataset_surface").triangulate()
     return surf.compute_normals(
         point_normals=True, cell_normals=False, auto_orient_normals=True
     )
@@ -162,13 +160,10 @@ def _write_colored_ply(
         fh.write(fbuf.tobytes())
 
 
-def _denoise(
-    mi: Any, beauty: np.ndarray, albedo: np.ndarray, normal: np.ndarray
-) -> np.ndarray:
+def _denoise(beauty: np.ndarray, albedo: np.ndarray, normal: np.ndarray) -> np.ndarray:
     """Denoise a path-traced frame with Intel OIDN, guided by albedo and shading-normal AOVs.
 
     Args:
-        mi: The imported ``mitsuba`` module (unused except to keep the call-site symmetric).
         beauty: ``(H, W, 3)`` linear HDR colour.
         albedo: ``(H, W, 3)`` surface albedo AOV.
         normal: ``(H, W, 3)`` shading-normal AOV.
@@ -336,7 +331,7 @@ class PhotorealMixin(_MixinBase):
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
             beauty, albedo, normal = _split_aovs(arr)
             color = (
-                _denoise(mi, beauty, albedo, normal)
+                _denoise(beauty, albedo, normal)
                 if denoise
                 else np.clip(beauty, 0.0, 1.0)
             )
