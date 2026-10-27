@@ -1312,3 +1312,25 @@ def test_mesh_step_refuses_a_shape_it_cannot_reduce():
     layered = np.zeros((3, 4, 2))
     with pytest.raises(ValueError, match="cannot reduce to one value per element"):
         _mesh_step(layered, "variable 'depth'", DEFAULT_BAND, 2)
+
+
+def test_pinned_variable_units_come_from_its_band_when_its_metadata_has_none():
+    """A pinned subset's unit is read off its band, as the container path reads its resolved ``unit``.
+
+    Test scenario:
+        A subset carries no per-variable metadata entry for the variable it already is, so the CF
+        attributes come from the subset itself — and the unit pyramids resolves onto the band was being
+        skipped on that path, leaving a pinned variable unitless where a named one is not (round-2 L2).
+        Exercised with a stub, because a unit cannot be attached to a synthetic variable here.
+    """
+    from digitalearth.base.sources.extractors import _netcdf_attributes
+
+    class _SubsetWithBandUnit:
+        attrs: dict = {}
+        band_units = ["K"]
+        meta_data = None
+
+    attributes = _netcdf_attributes(_SubsetWithBandUnit(), "t2m", True)
+    assert attributes.get("units") == "K", (
+        f"the band's unit should be folded in: {attributes}"
+    )
