@@ -4347,10 +4347,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-refused-and-why-it-is-refused-here" class="md-nav__link">
+  <a href="#what-is-refused-and-why-it-is-not-ignored" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is refused, and why it is refused here
+        What is refused, and why it is not ignored
       
     </span>
   </a>
@@ -4362,17 +4362,6 @@
     <span class="md-ellipsis">
       
         Animation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#a-mesh-is-not-drawn-on-these-tiers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A mesh is not drawn on these tiers
       
     </span>
   </a>
@@ -4943,10 +4932,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-refused-and-why-it-is-refused-here" class="md-nav__link">
+  <a href="#what-is-refused-and-why-it-is-not-ignored" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is refused, and why it is refused here
+        What is refused, and why it is not ignored
       
     </span>
   </a>
@@ -4958,17 +4947,6 @@
     <span class="md-ellipsis">
       
         Animation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#a-mesh-is-not-drawn-on-these-tiers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A mesh is not drawn on these tiers
       
     </span>
   </a>
@@ -5116,7 +5094,7 @@ in. Everything else passes through untouched.</p>
 <tr>
 <td><code>variable_name=</code></td>
 <td><code>variable=</code></td>
-<td>The <code>UgridDataset</code> facade's spelling.<br>Inert today — see below.</td>
+<td>The <code>UgridDataset</code> facade's spelling of<br>the mesh selector.</td>
 </tr>
 <tr>
 <td><code>interval=200</code> (ms/frame)</td>
@@ -5125,27 +5103,12 @@ in. Everything else passes through untouched.</p>
 </tr>
 </tbody>
 </table>
-<p><code>cmap</code>, <code>variable</code>, a bool <code>colorbar</code> and <code>band</code> (once shifted) are forwarded to the builder as they
-arrive. Three others are not simply passed along, because the tiers differ:</p>
-<ul>
-<li><strong><code>title</code></strong> is applied through the scene, not the builder. The web and 3-D raster builders refuse
-  it (<code>RasterMixin.field() got an unexpected keyword argument 'title'</code>, and on 3-D PyVista's own
-  <code>"title" is an invalid keyword argument</code>), so it is set with <code>set_title</code> after the scene is built.
-  The HoloViz tier has no <code>set_title</code> and does accept <code>title</code>, so there it stays with the builder.</li>
-<li><strong><code>basemap</code></strong> is a verb on the scene in every tier that has one, never a constructor argument.</li>
-<li><strong><code>kind</code></strong> reaches the builder, but only the HoloViz tier has alternative raster renderers. On web
-  and 3-D a non-default <code>kind</code> is refused by that tier: <code>kind= is not supported by backend='web'</code>.</li>
-</ul>
-<p>A <code>column</code> is forwarded, and is accepted only where that tier's render takes one — on a still raster
-plot it is refused by the tier (<code>'column' is not an option Image takes on the bokeh backend</code>).</p>
-<h2 id="what-is-refused-and-why-it-is-refused-here"><a class="toclink" href="#what-is-refused-and-why-it-is-refused-here">What is refused, and why it is refused here</a><a class="headerlink" href="#what-is-refused-and-why-it-is-refused-here" title="Permanent link">#</a></h2>
+<p><code>title</code>, <code>basemap</code>, a bool <code>colorbar</code>, <code>kind</code>, <code>cmap</code>, <code>column</code> and <code>variable</code> need no translation and
+are forwarded as they arrive.</p>
+<h2 id="what-is-refused-and-why-it-is-not-ignored"><a class="toclink" href="#what-is-refused-and-why-it-is-not-ignored">What is refused, and why it is not ignored</a><a class="headerlink" href="#what-is-refused-and-why-it-is-not-ignored" title="Permanent link">#</a></h2>
 <p>pyramids drops defaulted arguments before forwarding, so anything that arrives was set deliberately.
-An argument this seam cannot honour is refused <strong>by name</strong>, in terms of the call you made. Left to
-the tier it is still refused — but for the builder it happened to reach, and on the 3-D tier in
-PyVista's terms rather than digitalearth's:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ds.plot(backend=&quot;3d&quot;, title=&quot;DEM&quot;)
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>TypeError: &quot;title&quot; is an invalid keyword argument for `_common_arg_parser`
-</code></pre></div>
+An argument this seam cannot honour is therefore refused <strong>by name</strong> rather than dropped — a
+silently-ignored argument is indistinguishable from an applied one.</p>
 <table>
 <thead>
 <tr>
@@ -5156,7 +5119,7 @@ PyVista's terms rather than digitalearth's:</p>
 <tbody>
 <tr>
 <td><code>exclude_value</code></td>
-<td>No entry point here takes a nodata value;<br>mask the raster in pyramids before plotting.</td>
+<td>digitalearth applies its own nodata handling; mask upstream, or plot on <code>backend="matplotlib"</code>.</td>
 </tr>
 <tr>
 <td><code>rgb_options</code></td>
@@ -5177,22 +5140,14 @@ groups, the <code>points</code> overlay and a <code>ColorBar</code> <em>instance
 rejects those before dispatch.</p>
 <h2 id="animation"><a class="toclink" href="#animation">Animation</a><a class="headerlink" href="#animation" title="Permanent link">#</a></h2>
 <p><code>Dataset.animate(backend=…)</code> and friends forward <code>animate=True</code>. Two of the three tiers can serve it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">stack</span> <span class="o">=</span> <span class="n">DatasetCollection</span><span class="o">.</span><span class="n">from_files</span><span class="p">([</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">)</span>                     <span class="c1"># a Panel player</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>   <span class="c1"># written to a file</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>           <span class="c1"># written to a file</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">stack</span> <span class="o">=</span> <span class="n">DatasetCollection</span><span class="o">.</span><span class="n">from_files</span><span class="p">([</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>                     <span class="c1"># a Panel player</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>   <span class="c1"># written to a file</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>           <span class="c1"># written to a file</span>
 </code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Leave <code>interval</code> out and the speed is digitalearth's, not pyramids'</p>
-<p><code>interval=200</code> is pyramids' own default, and a facade <strong>drops</strong> a defaulted argument before
-forwarding it — so the backend cannot tell "the caller asked for 200 ms" from "the caller said
-nothing". With nothing forwarded, the tier uses digitalearth's shared <code>DEFAULT_FPS</code> of <code>3.0</code>,
-which is <strong>333 ms</strong> a frame, where a plain <code>stack.animate()</code> on matplotlib runs at pyramids'
-200 ms. Pass a non-default <code>interval</code> when the speed matters.</p>
-</div>
 <ul>
 <li><strong>interactive</strong> builds a time cube and returns a Panel player, or writes a GIF/MP4 when you pass a
   <code>path</code>.</li>
@@ -5201,32 +5156,18 @@ which is <strong>333 ms</strong> a frame, where a plain <code>stack.animate()</c
   <code>Scene3D.orbit</code> sweeps the camera over a static scene, so neither can be driven from a plot call's
   keywords. Build the scene with digitalearth and call one of them directly.</li>
 </ul>
-<h2 id="a-mesh-is-not-drawn-on-these-tiers"><a class="toclink" href="#a-mesh-is-not-drawn-on-these-tiers">A mesh is not drawn on these tiers</a><a class="headerlink" href="#a-mesh-is-not-drawn-on-these-tiers" title="Permanent link">#</a></h2>
-<p><code>UgridDataset.plot(backend=…)</code> is refused before any keyword is read: only the matplotlib tier has a
-triangular render, which <code>digitalearth.api.MESH_BACKENDS</code> states. That is why the <code>variable_name</code>
-translation above is inert today — the call carrying it never gets that far:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>UgridDataset.plot(backend=&quot;web&quot;)
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>TypeError: backend=&#39;web&#39; has no unstructured-mesh render; draw a UgridDataset with
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>backend=&#39;matplotlib&#39;, which shades each of its faces (tripcolor)
-</code></pre></div>
 <h2 id="checking-what-is-registered"><a class="toclink" href="#checking-what-is-registered">Checking what is registered</a><a class="headerlink" href="#checking-what-is-registered" title="Permanent link">#</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>              <span class="c1"># [&#39;3d&#39;, &#39;interactive&#39;, &#39;web&#39;]</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>  <span class="c1"># the callable itself, loaded from the entry point</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>            <span class="c1"># [&#39;3d&#39;, &#39;interactive&#39;, &#39;web&#39;]</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>  <span class="c1"># digitalearth.pyramids_backend:interactive</span>
 </code></pre></div>
-<p>A registered entry point resolves to the <strong>callable</strong> — not to its <code>module:attr</code> string, and not to
-the <code>functools.partial</code> over <code>quickmap</code> that the fallback would hand back. That difference is how you
-tell the two apart.</p>
 <div class="admonition warning">
 <p class="admonition-title">Needs a pyramids-core that ships the seam</p>
-<p>The <code>pyramids.plot_backends</code> group is resolved by pyramids-core's plot-backend seam, which merged
-after <code>0.72.0</code> was cut and is therefore <strong>in no release yet</strong>: the installed <code>0.72.0</code> carries
-neither <code>pyramids.base._plot_backends</code> nor the conformance kit, and <code>Dataset.plot</code> has no
-<code>backend=</code> keyword. Until a release ships it, the entry points are registered and nothing reads
-them — inert, not conflicting, and <code>plot()</code> behaves exactly as before. The declared floor of
-<code>pyramids-core &gt;=0.72.0</code> is simply the current release; it will need raising to whichever
-release first carries the seam, at which point the two skipped tests here start guarding.</p>
+<p>The <code>pyramids.plot_backends</code> group is resolved by pyramids-core's plot-backend seam. Until a
+pyramids-core release carries it, the entry points are registered but nothing reads them, and
+<code>plot(backend=…)</code> behaves as it did before. Nothing breaks in the meantime — the registration is
+inert, not conflicting.</p>
 </div>
 
 
