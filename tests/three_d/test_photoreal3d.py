@@ -75,6 +75,86 @@ class TestVertexRgb:
         )
         scene.close()
 
+    def test_no_scalars_falls_back_to_the_actor_solid_colour(self):
+        """A surface with no active scalars is tiled with the actor's own flat colour."""
+        from types import SimpleNamespace
+
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _triangulated_surface, _vertex_rgb
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        actor = SimpleNamespace(prop=SimpleNamespace(color=(0.2, 0.4, 0.6)))
+        rgb = _vertex_rgb(surf, actor)
+        assert rgb.shape == (surf.n_points, 3), rgb.shape
+        assert np.allclose(rgb, [0.2, 0.4, 0.6]), rgb[0]
+
+    def test_lut_failure_falls_back_to_the_actor_solid_colour(self):
+        """A LUT that raises while mapping scalars is swallowed and the flat actor colour is used instead."""
+        from types import SimpleNamespace
+
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _triangulated_surface, _vertex_rgb
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        surf.point_data["elev"] = np.linspace(0.0, 1.0, surf.n_points)
+        surf.set_active_scalars("elev")
+
+        def _raise(*_args, **_kwargs):
+            raise RuntimeError("lut boom")
+
+        actor = SimpleNamespace(
+            mapper=SimpleNamespace(lookup_table=SimpleNamespace(MapScalars=_raise)),
+            prop=SimpleNamespace(color=(0.1, 0.2, 0.3)),
+        )
+        rgb = _vertex_rgb(surf, actor)
+        assert np.allclose(rgb, [0.1, 0.2, 0.3]), rgb[0]
+
+    def test_missing_prop_falls_back_to_the_default_solid_colour(self):
+        """When even the actor's colour is unreadable, the module default solid RGB is used."""
+        from types import SimpleNamespace
+
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import (
+            _DEFAULT_SOLID_RGB,
+            _triangulated_surface,
+            _vertex_rgb,
+        )
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        rgb = _vertex_rgb(surf, SimpleNamespace())
+        assert np.allclose(rgb, _DEFAULT_SOLID_RGB), rgb[0]
+
+
+class TestPhotorealMeshes:
+    """`PhotorealMixin._photoreal_meshes` skips layers that carry no renderable triangles."""
+
+    def test_skips_layers_without_geometry(self):
+        """A ``(None, None)`` layer (or an empty mesh) contributes no Mitsuba shape."""
+        from types import SimpleNamespace
+
+        from digitalearth.three_d.photoreal import PhotorealMixin
+
+        fake = SimpleNamespace(layers=[(None, None)])
+        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0))
+        assert shapes == {}, shapes
+
+    def test_skips_meshes_with_no_faces(self):
+        """A mesh whose triangulated surface carries zero faces is skipped rather than written as a shape."""
+        from types import SimpleNamespace
+
+        from digitalearth.three_d.photoreal import PhotorealMixin
+
+        surf = SimpleNamespace(faces=np.empty(0, dtype="int32"))
+        tri = SimpleNamespace(compute_normals=lambda **_kwargs: surf)
+        extract = SimpleNamespace(triangulate=lambda: tri)
+        mesh = SimpleNamespace(n_points=5, extract_surface=lambda: extract)
+        fake = SimpleNamespace(layers=[(mesh, None)])
+        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0))
+        assert shapes == {}, shapes
+
 
 class TestPhotorealRender:
     """`Scene3D.photoreal` renders a headless path-traced still of the scene's geometry."""
