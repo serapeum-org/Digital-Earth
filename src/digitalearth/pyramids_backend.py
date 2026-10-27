@@ -47,8 +47,10 @@ registered entry point, so a heavy import here would pull a drawing stack into a
 from __future__ import annotations
 
 import inspect
+import numbers
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 __all__ = [
@@ -266,7 +268,7 @@ def _shifted_band(band: Any) -> int:
         int: the same band as a 1-based index.
 
     Raises:
-        ValueError: when ``band`` is not a non-negative integer, which no 0-based index is.
+        ValueError: when ``band`` is not a non-negative integer — a 0-based index is always one.
 
     Examples:
         - The facade's first band is this package's band 1:
@@ -274,6 +276,15 @@ def _shifted_band(band: Any) -> int:
             >>> from digitalearth.pyramids_backend import _shifted_band
             >>> _shifted_band(0), _shifted_band(3)
             (1, 4)
+
+            ```
+        - A NumPy integer is a band index too, and comes back as a plain ``int``:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _shifted_band
+            >>> shifted = _shifted_band(np.int64(0))
+            >>> shifted, type(shifted).__name__
+            (1, 'int')
 
             ```
         - A negative index is refused rather than silently reaching the reader:
@@ -286,8 +297,11 @@ def _shifted_band(band: Any) -> int:
 
             ```
     """
-    # bool is an int subclass, and `band=True` is a mistake worth naming rather than reading as 1.
-    if isinstance(band, bool) or not isinstance(band, int):
+    # `numbers.Integral`, not `int`: a NumPy-native stack hands out `np.int64` everywhere — a band
+    # read off an array's shape or an index is one — and refusing those made the seam unusable with
+    # the arrays it exists to draw (round-1 M4). `bool` is an Integral too, and `band=True` is a
+    # mistake worth naming rather than reading as band 1.
+    if isinstance(band, bool) or not isinstance(band, numbers.Integral):
         raise ValueError(
             f"band={band!r} is not a 0-based band index; pass an integer, where the first band "
             f"is 0"
@@ -297,7 +311,9 @@ def _shifted_band(band: Any) -> int:
             f"band={band} is not a 0-based band index; the first band is 0, so there is no "
             f"negative band"
         )
-    return band + BAND_ORIGIN_SHIFT
+    # `int()` so a NumPy scalar leaves here as a plain int: it is handed to a builder that may put
+    # it in a message or a dict key, and `np.int64(1)` prints as `np.int64(1)` in both.
+    return int(band) + BAND_ORIGIN_SHIFT
 
 
 def _rate(interval: Any) -> float:
@@ -320,6 +336,14 @@ def _rate(interval: Any) -> float:
             5.0
 
             ```
+        - A NumPy number is a frame interval too:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _rate
+            >>> _rate(np.int64(200))
+            5.0
+
+            ```
         - A non-positive interval is refused rather than dividing by zero:
             ```python
             >>> try:
@@ -330,7 +354,7 @@ def _rate(interval: Any) -> float:
 
             ```
     """
-    if isinstance(interval, bool) or not isinstance(interval, (int, float)):
+    if isinstance(interval, bool) or not isinstance(interval, numbers.Real):
         raise ValueError(
             f"interval={interval!r} is not a frame interval in milliseconds; pass a number"
         )
@@ -355,6 +379,7 @@ class _Forwarded:
         backend: The backend name the facade selected, as the seam passes it.
         animate: Whether this is an animation call (the facade forwards ``animate=True``).
         draw: The keywords to hand ``quickmap`` — translated, with the animation-only ones removed.
+            A read-only mapping, so the record really is the fixed record it claims to be.
         fps: Playback rate in frames per second, or ``None`` when the call named no ``interval``.
         path: Where to write the animation, or ``None`` when the caller named no ``path``.
         labels: The per-step labels the facade forwarded as ``animation_axis_values``.
@@ -367,7 +392,7 @@ class _Forwarded:
             ```python
             >>> from digitalearth.pyramids_backend import _Forwarded
             >>> plan = _Forwarded.from_facade("web", {"band": 0, "title": "DEM"})
-            >>> plan.animate, plan.title, plan.draw["band"]
+            >>> plan.animate, plan.title, dict(plan.draw)["band"]
             (False, 'DEM', 1)
 
             ```
@@ -377,7 +402,7 @@ class _Forwarded:
             >>> plan = _Forwarded.from_facade(
             ...     "interactive", {"animate": True, "interval": 200, "cmap": "viridis"}
             ... )
-            >>> plan.animate, plan.fps, plan.draw
+            >>> plan.animate, plan.fps, dict(plan.draw)
             (True, 5.0, {'cmap': 'viridis'})
 
             ```
@@ -389,7 +414,10 @@ class _Forwarded:
 
     backend: str
     animate: bool
-    draw: Mapping[str, Any] = field(default_factory=dict)
+    # A read-only view, not a bare dict: `frozen=True` stops the field being rebound but says
+    # nothing about what it points at, so a plain dict left this record mutable through it after
+    # every translation had been applied (round-1 L5).
+    draw: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     fps: float | None = None
     path: str | None = None
     labels: Any = None
@@ -489,7 +517,7 @@ class _Forwarded:
                 ```python
                 >>> from digitalearth.pyramids_backend import _Forwarded
                 >>> plan = _Forwarded.from_facade("web", {"band": 0, "title": "DEM"})
-                >>> plan.animate, sorted(plan.draw.items())
+                >>> plan.animate, sorted(dict(plan.draw).items())
                 (False, [('band', 1), ('title', 'DEM')])
 
                 ```
@@ -498,7 +526,7 @@ class _Forwarded:
                 >>> plan = _Forwarded.from_facade(
                 ...     "interactive", {"animate": True, "interval": 250, "path": "out.gif"}
                 ... )
-                >>> plan.animate, plan.fps, plan.path, plan.draw
+                >>> plan.animate, plan.fps, plan.path, dict(plan.draw)
                 (True, 4.0, 'out.gif', {})
 
                 ```
@@ -523,8 +551,8 @@ class _Forwarded:
                 >>> try:
                 ...     _Forwarded.from_facade("web", {"interval": 200})
                 ... except ValueError as exc:
-                ...     print("only applies to an animation" in str(exc))
-                True
+                ...     print(str(exc).split(". ")[0])
+                interval= only applies to an animation; this is a still plot on backend='web'
 
                 ```
         """
@@ -538,8 +566,11 @@ class _Forwarded:
         if not animate:
             for name in _ANIMATION_ONLY:
                 if name in rest:
+                    # Worded as the keyword alone, not `plot(path=…)`: no facade offers a
+                    # `path` argument to `plot`, so quoting that call shape would describe a call
+                    # the caller could not have made (round-1 N3).
                     raise ValueError(
-                        f"plot({name}=…) only applies to an animation; this is a still plot on "
+                        f"{name}= only applies to an animation; this is a still plot on "
                         f"backend={backend!r}. Call animate(backend={backend!r}) instead, or drop "
                         f"it."
                     )
@@ -556,6 +587,11 @@ class _Forwarded:
         labels = rest.pop("animation_axis_values", None)
         path = rest.pop("path", None)
         # The mesh facade spells the selector `variable_name`; `quickmap` spells it `variable`.
+        # Inert as things stand, and kept deliberately: only `digitalearth.api.MESH_BACKENDS`
+        # ({"matplotlib"}) has a triangular render, so `quickmap` refuses a `UgridDataset` on all
+        # three of these tiers before any keyword is read — executed on each through the repo's mesh
+        # fixture (round-1 M1). It is the right translation the moment a tier gains that render, and
+        # `test_no_plugin_backend_draws_a_mesh_yet` fails here if one does.
         if "variable_name" in rest:
             rest["variable"] = rest.pop("variable_name")
         if "band" in rest:
@@ -563,7 +599,7 @@ class _Forwarded:
         return cls(
             backend=backend,
             animate=animate,
-            draw=rest,
+            draw=MappingProxyType(rest),
             fps=None if interval is None else _rate(interval),
             path=path,
             labels=labels,
@@ -933,7 +969,7 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
             ...     interactive("a-dataset", backend="interactive", interval=200)
             ... except ValueError as exc:
             ...     print(str(exc).split(". ")[0])
-            plot(interval=…) only applies to an animation; this is a still plot on backend='interactive'
+            interval= only applies to an animation; this is a still plot on backend='interactive'
 
             ```
 

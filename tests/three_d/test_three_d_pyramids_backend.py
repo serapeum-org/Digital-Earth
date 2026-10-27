@@ -33,13 +33,24 @@ class TestStillPlotThroughTheSeam:
         out = three_d(ds, backend="3d", band=0)
         assert isinstance(out, Scene3D), f"expected a Scene3D, got {type(out)}"
 
-    def test_an_animation_is_refused_with_the_engine_installed_too(self):
-        """The animation refusal holds in the real environment, not only without the engine.
+    def test_the_refusal_names_verbs_this_tier_actually_has(self):
+        """The two verbs the refusal sends a caller to exist on the real ``Scene3D``.
 
         Test scenario:
-            A by-name refusal that only fires because an import failed would be an accident rather
-            than a decision. With PyVista present the refusal must still be the ``ValueError`` that
-            names the two verbs to use directly.
+            The refusal is pinned engine-free elsewhere; what needs the engine, and is checked here,
+            is that ``record`` and ``orbit`` are real methods. A refusal that points at verbs this
+            tier does not have would be a dead end that no engine-free test could catch — and the
+            previous version of this test only repeated the dev-env case, since the refusal imports
+            nothing (round-1 L7).
         """
-        with pytest.raises(ValueError, match="Scene3D.record"):
+        from digitalearth.three_d import Scene3D
+
+        try:
             three_d("a-dataset", backend="3d", animate=True)
+        except ValueError as exc:
+            message = str(exc)
+        for verb in ("record", "orbit"):
+            assert verb in message, f"the refusal should name {verb}: {message}"
+            assert callable(getattr(Scene3D, verb, None)), (
+                f"the refusal names Scene3D.{verb}, which this tier must actually have"
+            )

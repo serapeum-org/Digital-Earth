@@ -18,6 +18,7 @@ import inspect
 import subprocess
 import sys
 
+import numpy as np
 import pytest
 
 import digitalearth
@@ -190,6 +191,40 @@ class TestBandOrigin:
         forwarded = {"band": band}
         with pytest.raises(ValueError, match="0-based band index"):
             _Forwarded.from_facade("web", forwarded)
+
+    @pytest.mark.parametrize("band, expected", [(0, 1), (3, 4)])
+    def test_a_numpy_integer_is_a_band_index_too(self, band, expected):
+        """A NumPy integer shifts like a Python one, and arrives as a plain ``int``.
+
+        Args:
+            band: The 0-based index, passed as ``np.int64``.
+            expected: The 1-based index it should become.
+
+        Test scenario:
+            This is a NumPy-native stack: a band read off an array's shape or an index comes back as
+            ``np.int64``, and refusing those made the seam unusable with the very arrays it draws
+            (round-1 M4). The result is converted because a builder may put it in a message, where
+            ``np.int64(1)`` reads as ``np.int64(1)``.
+        """
+        plan = _Forwarded.from_facade("web", {"band": np.int64(band)})
+        assert plan.draw["band"] == expected, (
+            f"expected {expected}, got {plan.draw['band']}"
+        )
+        assert type(plan.draw["band"]) is int, (
+            f"expected a plain int, got {type(plan.draw['band']).__name__}"
+        )
+
+    def test_a_numpy_interval_is_a_frame_interval_too(self):
+        """A NumPy number is accepted as a frame interval and converted to a rate.
+
+        Test scenario:
+            The same NumPy-native reasoning as the band index: an interval computed from an array of
+            timestamps is a NumPy scalar.
+        """
+        plan = _Forwarded.from_facade(
+            "web", {"animate": True, "interval": np.int64(200)}
+        )
+        assert plan.fps == 5.0, f"200 ms a frame is 5 fps, got {plan.fps}"
 
     @pytest.mark.parametrize("band", [True, "0", 1.5, None])
     def test_a_band_that_is_not_an_integer_index_is_refused(self, band):
@@ -566,4 +601,27 @@ class TestWhatTheSeamNeedsToDraw:
             message = str(exc)
         assert "animate(backend='interactive')" in message, (
             f"no route offered: {message}"
+        )
+
+
+class TestMeshIsNotDrawnHereYet:
+    """Why the ``variable_name`` translation is inert, pinned so it stops being inert loudly."""
+
+    def test_no_plugin_backend_draws_a_mesh_yet(self):
+        """None of the three registered backends has a mesh render, so a mesh never reaches them.
+
+        Test scenario:
+            ``variable_name`` is forwarded only by the ``UgridDataset`` facades, and ``quickmap``
+            refuses a mesh on every backend outside ``MESH_BACKENDS`` before reading any keyword —
+            executed on all three tiers through the repo's mesh fixture. That is what makes the
+            translation unreachable today (round-1 M1). If a tier gains a triangular render, this
+            fails, which is the signal to cover that translation for real.
+        """
+        from digitalearth.api import MESH_BACKENDS
+
+        registered = {name for name, _fn, _declared in REGISTERED}
+        overlap = registered & set(MESH_BACKENDS)
+        assert overlap == set(), (
+            f"{sorted(overlap)} now draws a mesh, so variable_name is reachable and needs a test "
+            f"that exercises it through that tier"
         )
