@@ -131,17 +131,17 @@ class TestVertexRgb:
 class TestPhotorealMeshes:
     """`PhotorealMixin._photoreal_meshes` skips layers that carry no renderable triangles."""
 
-    def test_skips_layers_without_geometry(self):
+    def test_skips_layers_without_geometry(self, tmp_path):
         """A ``(None, None)`` layer (or an empty mesh) contributes no Mitsuba shape."""
         from types import SimpleNamespace
 
         from digitalearth.three_d.photoreal import PhotorealMixin
 
         fake = SimpleNamespace(layers=[(None, None)])
-        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0))
+        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0), tmp_path)
         assert shapes == {}, shapes
 
-    def test_skips_meshes_with_no_faces(self):
+    def test_skips_meshes_with_no_faces(self, tmp_path):
         """A mesh whose triangulated surface carries zero faces is skipped rather than written as a shape."""
         from types import SimpleNamespace
 
@@ -152,7 +152,7 @@ class TestPhotorealMeshes:
         extract = SimpleNamespace(triangulate=lambda: tri)
         mesh = SimpleNamespace(n_points=5, extract_surface=lambda: extract)
         fake = SimpleNamespace(layers=[(mesh, None)])
-        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0))
+        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0), tmp_path)
         assert shapes == {}, shapes
 
 
@@ -183,3 +183,17 @@ class TestPhotorealRender:
         with pytest.raises(ValueError, match="no renderable geometry"):
             scene.photoreal(spp=2, width=32, height=32)
         scene.close()
+
+    def test_the_temp_directory_is_cleaned_up(self):
+        """photoreal() removes its per-call temp directory, leaking none (M1)."""
+        import glob
+        import tempfile
+        from pathlib import Path
+
+        pattern = str(Path(tempfile.gettempdir()) / "digitalearth-photoreal-*")
+        before = set(glob.glob(pattern))
+        scene = _small_terrain_scene()
+        scene.photoreal(spp=2, width=48, height=32, denoise=False)
+        scene.close()
+        leaked = set(glob.glob(pattern)) - before
+        assert leaked == set(), f"photoreal() leaked temp directories: {leaked}"

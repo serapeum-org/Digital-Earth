@@ -14,6 +14,7 @@ boundaries: it only translates meshes the tier already built into a Mitsuba scen
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -229,60 +230,66 @@ class PhotorealMixin(_MixinBase):
         mi.set_variant("scalar_rgb")
 
         center = self._photoreal_center()
-        meshes = self._photoreal_meshes(center)
-        if not meshes:
-            raise ValueError(
-                "photoreal() has no renderable geometry; add a layer (e.g. terrain) before rendering"
+        tmpdir = Path(tempfile.mkdtemp(prefix="digitalearth-photoreal-"))
+        try:
+            meshes = self._photoreal_meshes(center, tmpdir)
+            if not meshes:
+                raise ValueError(
+                    "photoreal() has no renderable geometry; add a layer (e.g. terrain) before rendering"
+                )
+
+            cam = self.plotter.camera
+            sensor = {
+                "type": "perspective",
+                "fov": float(cam.view_angle),
+                "fov_axis": "y",
+                "to_world": mi.ScalarTransform4f().look_at(
+                    origin=[float(p) - float(c) for p, c in zip(cam.position, center)],
+                    target=[
+                        float(p) - float(c) for p, c in zip(cam.focal_point, center)
+                    ],
+                    up=[float(v) for v in cam.up],
+                ),
+                "sampler": {"type": "independent", "sample_count": int(spp)},
+                "film": {"type": "hdrfilm", "width": int(width), "height": int(height)},
+            }
+            scene_dict: dict[str, Any] = {
+                "type": "scene",
+                "integrator": {
+                    "type": "aov",
+                    "aovs": "albedo:albedo,normals:sh_normal",
+                    "img": {"type": "path", "max_depth": int(max_depth)},
+                },
+                "sensor": sensor,
+                "sun": {
+                    "type": "directional",
+                    "direction": [float(v) for v in sun_direction],
+                    "irradiance": {"type": "rgb", "value": float(sun_irradiance)},
+                },
+                "sky": {
+                    "type": "constant",
+                    "radiance": {"type": "rgb", "value": [float(v) for v in sky]},
+                },
+            }
+            scene_dict.update(meshes)
+
+            arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
+            beauty, albedo, normal = arr[..., 0:3], arr[..., 3:6], arr[..., 6:9]
+            color = (
+                _denoise(mi, beauty, albedo, normal)
+                if denoise
+                else np.clip(beauty, 0.0, 1.0)
             )
 
-        cam = self.plotter.camera
-        sensor = {
-            "type": "perspective",
-            "fov": float(cam.view_angle),
-            "fov_axis": "y",
-            "to_world": mi.ScalarTransform4f().look_at(
-                origin=[float(p) - float(c) for p, c in zip(cam.position, center)],
-                target=[float(p) - float(c) for p, c in zip(cam.focal_point, center)],
-                up=[float(v) for v in cam.up],
-            ),
-            "sampler": {"type": "independent", "sample_count": int(spp)},
-            "film": {"type": "hdrfilm", "width": int(width), "height": int(height)},
-        }
-        scene_dict: dict[str, Any] = {
-            "type": "scene",
-            "integrator": {
-                "type": "aov",
-                "aovs": "albedo:albedo,normals:sh_normal",
-                "img": {"type": "path", "max_depth": int(max_depth)},
-            },
-            "sensor": sensor,
-            "sun": {
-                "type": "directional",
-                "direction": [float(v) for v in sun_direction],
-                "irradiance": {"type": "rgb", "value": float(sun_irradiance)},
-            },
-            "sky": {
-                "type": "constant",
-                "radiance": {"type": "rgb", "value": [float(v) for v in sky]},
-            },
-        }
-        scene_dict.update(meshes)
-
-        arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
-        beauty, albedo, normal = arr[..., 0:3], arr[..., 3:6], arr[..., 6:9]
-        color = (
-            _denoise(mi, beauty, albedo, normal)
-            if denoise
-            else np.clip(beauty, 0.0, 1.0)
-        )
-
-        bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
-            mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
-        )
-        out = np.array(bmp)
-        if path is not None:
-            bmp.write(str(path))
-        return out
+            bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
+                mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
+            )
+            out = np.array(bmp)
+            if path is not None:
+                bmp.write(str(path))
+            return out
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     def _photoreal_center(self) -> tuple[float, float, float]:
         """Return the scene bounding-box centre ``(x, y, z)``, used to recenter geometry and camera."""
@@ -293,20 +300,23 @@ class PhotorealMixin(_MixinBase):
             float(b[4] + b[5]) / 2.0,
         )
 
-    def _photoreal_meshes(self, center: tuple[float, float, float]) -> dict[str, Any]:
+    def _photoreal_meshes(
+        self, center: tuple[float, float, float], tmpdir: Path
+    ) -> dict[str, Any]:
         """Translate every registered layer's mesh into a Mitsuba PLY shape with per-vertex colours.
 
         Each mesh is recentered by subtracting ``center`` so large projected-CRS coordinates do not lose float
-        precision in the renderer; :meth:`photoreal` subtracts the same ``center`` from the camera to match.
+        precision in the renderer; :meth:`photoreal` subtracts the same ``center`` from the camera to match. The
+        PLYs are written into ``tmpdir``, whose lifetime :meth:`photoreal` owns (it removes it after the render).
 
         Args:
             center: The scene bounding-box centre to subtract from every vertex (see :meth:`_photoreal_center`).
+            tmpdir: A directory to write the per-layer PLY files into, cleaned up by the caller.
 
         Returns:
             dict: ``{layer_name: shape_dict}`` for :func:`mitsuba.load_dict`, each a ``ply`` shape with a diffuse
             BSDF reading its ``vertex_color`` attribute. Empty when the scene has no geometry.
         """
-        tmpdir = Path(tempfile.mkdtemp(prefix="digitalearth-photoreal-"))
         offset = np.asarray(center, dtype="float64")
         shapes: dict[str, Any] = {}
         for index, (mesh, actor) in enumerate(self.layers):
