@@ -76,7 +76,8 @@ def _point_scalars(surf: Any) -> np.ndarray | None:
     if name and name in surf.cell_data:
         try:
             converted = surf.cell_data_to_point_data().point_data.get(name)
-        except Exception:  # noqa: BLE001 - a VTK conversion failure falls back to solid, never aborts the render
+        except Exception:  # noqa: BLE001
+            # A VTK cell->point conversion failure degrades to the solid colour, never aborts the render.
             return None
         if (
             converted is not None
@@ -114,7 +115,8 @@ def _vertex_rgb(surf: Any, actor: Any, layer: str = "") -> np.ndarray:
             mapped = lut.MapScalars(varr, 0, -1)
             rgb = vtk_to_numpy(mapped)[:, :3].astype("float32") / 255.0
             return np.ascontiguousarray(rgb)
-        except Exception:  # noqa: BLE001 - any LUT/VTK hiccup falls back to a solid colour, never fails the render
+        except Exception:  # noqa: BLE001
+            # Any LUT/VTK hiccup falls back to the solid colour below, never failing the render.
             pass
     # Name the layer so each fallback warns distinctly: identical messages are de-duplicated under Python's
     # default warning filter, which would otherwise hide every fallback layer after the first.
