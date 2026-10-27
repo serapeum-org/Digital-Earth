@@ -161,6 +161,30 @@ def _denoise(
     return np.clip(out, 0.0, 1.0)
 
 
+def _split_aovs(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Split an `aov`-integrator render tensor into ``(beauty, albedo, normal)``, failing loud on a layout change.
+
+    The scene's `aov` integrator yields 9 channels — the nested path integrator's RGB beauty (its alpha dropped
+    at develop), then the ``albedo`` and shading-``normal`` AOVs. If a future Mitsuba kept the alpha (10 channels)
+    the fixed slices would silently misalign, so this raises instead.
+
+    Args:
+        arr: The ``(H, W, C)`` render tensor from :func:`mitsuba.render`.
+
+    Returns:
+        tuple: the ``(H, W, 3)`` beauty, albedo and normal slices.
+
+    Raises:
+        RuntimeError: when ``arr`` does not have exactly 9 channels.
+    """
+    if arr.shape[-1] != 9:
+        raise RuntimeError(
+            f"photoreal() expected 9 render channels (beauty + albedo + normals), got {arr.shape[-1]}; "
+            "the Mitsuba AOV channel layout changed"
+        )
+    return arr[..., 0:3], arr[..., 3:6], arr[..., 6:9]
+
+
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.three_d.core.base import Scene3DBase as _MixinBase
 else:
@@ -274,7 +298,7 @@ class PhotorealMixin(_MixinBase):
             scene_dict.update(meshes)
 
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
-            beauty, albedo, normal = arr[..., 0:3], arr[..., 3:6], arr[..., 6:9]
+            beauty, albedo, normal = _split_aovs(arr)
             color = (
                 _denoise(mi, beauty, albedo, normal)
                 if denoise

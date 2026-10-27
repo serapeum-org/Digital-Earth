@@ -58,6 +58,28 @@ class TestColoredPly:
         assert "property float red" in head, head
 
 
+class TestSplitAovs:
+    """`_split_aovs` splits the 9-channel render tensor and rejects a changed channel layout."""
+
+    def test_nine_channels_split_into_three_triples(self):
+        """A 9-channel tensor yields beauty/albedo/normal as (H, W, 3) slices in order."""
+        from digitalearth.three_d.photoreal import _split_aovs
+
+        arr = np.arange(2 * 2 * 9, dtype="float32").reshape(2, 2, 9)
+        beauty, albedo, normal = _split_aovs(arr)
+        assert beauty.shape == (2, 2, 3), beauty.shape
+        assert float(normal[0, 0, 0]) == float(arr[0, 0, 6]), (
+            "normal must come from channels 6:9"
+        )
+
+    def test_a_wrong_channel_count_raises(self):
+        """A tensor without exactly 9 channels raises, so a Mitsuba layout change fails loud, not silent."""
+        from digitalearth.three_d.photoreal import _split_aovs
+
+        with pytest.raises(RuntimeError, match="9 render channels"):
+            _split_aovs(np.zeros((2, 2, 10), dtype="float32"))
+
+
 class TestVertexRgb:
     """`_vertex_rgb` maps scalars through the actor LUT, or falls back to a solid colour."""
 
