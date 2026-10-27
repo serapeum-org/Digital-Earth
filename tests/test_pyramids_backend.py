@@ -40,6 +40,27 @@ REGISTERED = (
 )
 
 
+class _FakeScene:
+    """A stand-in for a tier scene, recording the titles set on it."""
+
+    def __init__(self):
+        """Start with no title recorded."""
+        self.titles: list[str] = []
+
+    def set_title(self, heading, **kwargs):
+        """Record a title the adapter sets, as the web and 3-D scenes do.
+
+        Args:
+            heading: The title text.
+            **kwargs: The tiers' further styling arguments, unused here.
+
+        Returns:
+            _FakeScene: self, as the real verbs return.
+        """
+        self.titles.append(heading)
+        return self
+
+
 class TestRegistration:
     """The entry points pyramids discovers."""
 
@@ -335,10 +356,10 @@ class TestDelegation:
     """What actually reaches ``quickmap`` for a still plot."""
 
     @pytest.mark.parametrize("name, fn, _declared", REGISTERED)
-    def test_the_backend_name_and_translated_kwargs_reach_quickmap(
+    def test_the_backend_name_and_translated_band_reach_quickmap(
         self, name, fn, _declared, monkeypatch
     ):
-        """A still plot calls ``quickmap`` once, with the backend name and the translated keywords.
+        """A still plot calls ``quickmap`` once, with the backend name and the shifted band.
 
         Args:
             name: The backend name the seam passes.
@@ -347,28 +368,83 @@ class TestDelegation:
             monkeypatch: pytest's patcher.
 
         Test scenario:
-            The adapter's whole still-plot job is this delegation, so it is asserted directly rather
-            than inferred from a drawn figure — which would need three engines. ``quickmap`` is
-            looked up on the package at call time, so replacing the attribute is enough.
+            The adapter's still-plot job is this delegation, asserted directly rather than inferred
+            from a drawn figure, which would need three engines. ``quickmap`` is looked up on the
+            package at call time, so replacing the attribute is enough.
         """
         seen = {}
 
         def fake_quickmap(data, **kwargs):
             seen["data"] = data
             seen["kwargs"] = kwargs
-            return "rendered"
+            return _FakeScene()
 
         monkeypatch.setattr(digitalearth, "quickmap", fake_quickmap)
-        out = fn("a-dataset", backend=name, band=0, title="DEM")
-        assert out == "rendered", (
-            f"the tier's own object should be returned, got {out!r}"
-        )
+        fn("a-dataset", backend=name, band=0)
         assert seen["data"] == "a-dataset", (
             "the object must be passed through untouched"
         )
-        assert seen["kwargs"] == {"backend": name, "band": 1, "title": "DEM"}, (
+        assert seen["kwargs"] == {"backend": name, "band": 1}, (
             f"quickmap received {seen['kwargs']}"
         )
+
+    @pytest.mark.parametrize("name, fn", [("web", web), ("3d", three_d)])
+    def test_a_title_is_set_on_the_scene_where_the_builder_refuses_it(
+        self, name, fn, monkeypatch
+    ):
+        """On web and 3-D, ``title`` is applied after the build, not handed to the builder.
+
+        Args:
+            name: The backend name.
+            fn: The render callable.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            Forwarded to the builder, ``title`` raised ``RasterMixin.field() got an unexpected
+            keyword argument 'title'`` on the web tier and leaked PyVista's ``"title" is an invalid
+            keyword argument for `_common_arg_parser``` on the 3-D one. Both tiers own ``set_title``,
+            so the title is set on the finished scene instead (round-1 H2).
+        """
+        scene = _FakeScene()
+        seen = {}
+
+        def fake_quickmap(data, **kwargs):
+            seen["kwargs"] = kwargs
+            return scene
+
+        monkeypatch.setattr(digitalearth, "quickmap", fake_quickmap)
+        fn("a-dataset", backend=name, title="DEM")
+        assert "title" not in seen["kwargs"], (
+            f"the builder must not be offered the title: {seen['kwargs']}"
+        )
+        assert scene.titles == ["DEM"], (
+            f"the scene should carry the title, got {scene.titles}"
+        )
+
+    def test_the_holoviz_tier_keeps_the_title_as_a_builder_keyword(self, monkeypatch):
+        """On the interactive tier ``title`` stays with the builder, which is its working route.
+
+        Args:
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            That tier has no ``set_title``, and its builder does accept ``title`` — executed on all
+            three tiers. Routing it per tier rather than uniformly is therefore deliberate, and this
+            pins the half that differs.
+        """
+        scene = _FakeScene()
+        seen = {}
+
+        def fake_quickmap(data, **kwargs):
+            seen["kwargs"] = kwargs
+            return scene
+
+        monkeypatch.setattr(digitalearth, "quickmap", fake_quickmap)
+        interactive("a-dataset", backend="interactive", title="DEM")
+        assert seen["kwargs"].get("title") == "DEM", (
+            f"the builder should receive the title here: {seen['kwargs']}"
+        )
+        assert scene.titles == [], f"set_title must not also be called: {scene.titles}"
 
     def test_the_default_backend_name_matches_the_registered_name(self):
         """Each callable's default ``backend`` is the name it is registered under.

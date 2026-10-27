@@ -208,3 +208,60 @@ class TestWhatTheAdapterDrivesOnThisTier:
         )
         interactive(stack, backend="interactive", animate=True, path="out.gif")
         assert calls == [("out.gif", {})], f"fps should not be invented, got {calls}"
+
+
+class TestKeywordsTheBuilderAccepts:
+    """Keywords ``timecube`` takes must reach it, not be dropped on the way."""
+
+    def test_a_keyword_the_builder_accepts_is_passed_on(self, stack, monkeypatch):
+        """``clim`` and a named axis reach ``timecube`` instead of being silently discarded.
+
+        Args:
+            stack: A three-step collection.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            The adapter used to keep a hand-written list of four names and drop everything else, so
+            ``clim`` and ``kdim`` — both real ``timecube`` parameters — were accepted from the caller
+            and thrown away. That is the defect class this seam exists to remove (round-1 H4).
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        seen = {}
+        real = InteractiveMap.timecube
+
+        def spy(self, collection, **kwargs):
+            seen.update(kwargs)
+            return real(self, collection, **kwargs)
+
+        monkeypatch.setattr(InteractiveMap, "timecube", spy)
+        interactive(
+            stack, backend="interactive", animate=True, clim=(0.0, 1.0), kdim="step"
+        )
+        assert seen.get("clim") == (0.0, 1.0), f"clim should reach the builder: {seen}"
+        assert seen.get("kdim") == "step", f"kdim should reach the builder: {seen}"
+
+    def test_a_named_animation_axis_becomes_the_builders_kdim(self, stack, monkeypatch):
+        """``animate="time"`` names the axis to step along, and reaches the builder as ``kdim``.
+
+        Args:
+            stack: A three-step collection.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            ``NetCDF.plot`` forwards ``animate`` as an axis *name*, not only as a flag. Read as a
+            bool alone, the name was lost and the builder stepped along its default dimension
+            (round-1 M3).
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        seen = {}
+        real = InteractiveMap.timecube
+
+        def spy(self, collection, **kwargs):
+            seen.update(kwargs)
+            return real(self, collection, **kwargs)
+
+        monkeypatch.setattr(InteractiveMap, "timecube", spy)
+        interactive(stack, backend="interactive", animate="time")
+        assert seen.get("kdim") == "time", f"the named axis should become kdim: {seen}"

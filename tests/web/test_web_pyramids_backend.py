@@ -44,23 +44,65 @@ class TestStillPlotThroughTheSeam:
 class TestAnimateThroughTheSeam:
     """The animation call, which this tier serves only as a file."""
 
-    def test_the_time_slider_is_built_from_the_forwarded_stack(self, stack):
-        """The adapter builds a temporal layer, which is what the export needs to exist at all.
+    def test_the_time_slider_is_built_through_the_adapter(self, stack, monkeypatch):
+        """The adapter really builds this tier's temporal layer, with the data it was handed.
+
+        Args:
+            stack: A three-step collection.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            Previously this called ``WebMap().timeslider(stack)`` directly, which exercised the tier
+            and not the adapter — so it could not have caught the adapter handing ``timeslider`` a
+            keyword it has no parameter for (round-1 M6). The export is stubbed because it needs a
+            headless browser, but the slider is built for real.
+        """
+        from digitalearth.web import WebMap
+
+        built = []
+        real = WebMap.timeslider
+
+        def spy(self, features, **kwargs):
+            built.append(kwargs)
+            return real(self, features, **kwargs)
+
+        monkeypatch.setattr(WebMap, "timeslider", spy)
+        monkeypatch.setattr(WebMap, "save_animation", lambda self, path, **k: path)
+        web(stack, backend="web", animate=True, path="out.gif")
+        assert len(built) == 1, (
+            f"the slider should be built once, got {len(built)} times"
+        )
+
+    def test_a_colorbar_on_an_animation_is_refused_by_name(self, stack):
+        """``colorbar`` is forwarded by the facades but this tier's slider has no such parameter.
 
         Args:
             stack: A three-step collection.
 
         Test scenario:
-            Asserted on the built scene rather than the written file, because the export itself needs
-            a headless browser that may not be present. If the slider is absent the export could only
-            ever fail, so this is the part worth pinning here.
+            Passed straight through it raised ``TemporalMixin.timeslider() got an unexpected keyword
+            argument 'colorbar'`` from inside the tier. The adapter now checks the builder's real
+            signature and refuses by name, listing what the render does accept (round-1 H1).
         """
+        with pytest.raises(ValueError, match="cannot apply colorbar"):
+            web(stack, backend="web", animate=True, path="out.gif", colorbar=True)
+
+    def test_a_still_plots_title_reaches_the_scene_not_the_builder(self):
+        """``title`` is set on the finished scene, where the raster builder would have refused it.
+
+        Test scenario:
+            ``quickmap(ds, backend="web", title="DEM")`` raises ``RasterMixin.field() got an
+            unexpected keyword argument 'title'. Did you mean 'tiles'?`` — executed. Four of the six
+            facades forward a title, so routing it through ``set_title`` is what makes them work
+            (round-1 H2).
+        """
+        from pyramids.dataset import Dataset
+
         from digitalearth.web import WebMap
 
-        scene = WebMap().timeslider(stack)
-        assert isinstance(scene, WebMap), (
-            f"timeslider should return the scene, got {type(scene)}"
-        )
+        ds = Dataset.read_file("examples/data/acc4000.tif")
+        scene = web(ds, backend="web", title="DEM")
+        assert isinstance(scene, WebMap), f"expected a WebMap, got {type(scene)}"
 
     def test_an_animation_without_a_destination_is_refused_before_any_scene_is_built(
         self, stack
