@@ -351,6 +351,7 @@ class TestComposedClassMro:
                     "InteractionMixin",
                     "ServeMixin",
                     "AnimationMixin",
+                    "PhotorealMixin",
                     "Scene3DBase",
                     "object",
                 ],
