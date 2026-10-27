@@ -208,8 +208,9 @@ class TestVertexRgb:
         )
 
         surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        actor = SimpleNamespace()
         with pytest.warns(UserWarning, match="solid colour"):
-            rgb = _vertex_rgb(surf, SimpleNamespace())
+            rgb = _vertex_rgb(surf, actor)
         assert np.allclose(rgb, _DEFAULT_SOLID_RGB), rgb[0]
 
     def test_the_fallback_warning_names_the_layer(self):
@@ -221,8 +222,9 @@ class TestVertexRgb:
         from digitalearth.three_d.photoreal import _triangulated_surface, _vertex_rgb
 
         surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        actor = SimpleNamespace()
         with pytest.warns(UserWarning, match=r"layer_7"):
-            _vertex_rgb(surf, SimpleNamespace(), layer="layer_7")
+            _vertex_rgb(surf, actor, layer="layer_7")
 
 
 class TestPhotorealMeshes:
