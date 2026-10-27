@@ -4347,10 +4347,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-refused-and-why-it-is-not-ignored" class="md-nav__link">
+  <a href="#what-is-refused-and-why-it-is-refused-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is refused, and why it is not ignored
+        What is refused, and why it is refused here
       
     </span>
   </a>
@@ -4362,6 +4362,17 @@
     <span class="md-ellipsis">
       
         Animation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-mesh-is-not-drawn-on-these-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A mesh is not drawn on these tiers
       
     </span>
   </a>
@@ -4932,10 +4943,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-refused-and-why-it-is-not-ignored" class="md-nav__link">
+  <a href="#what-is-refused-and-why-it-is-refused-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is refused, and why it is not ignored
+        What is refused, and why it is refused here
       
     </span>
   </a>
@@ -4947,6 +4958,17 @@
     <span class="md-ellipsis">
       
         Animation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-mesh-is-not-drawn-on-these-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A mesh is not drawn on these tiers
       
     </span>
   </a>
@@ -5094,7 +5116,7 @@ in. Everything else passes through untouched.</p>
 <tr>
 <td><code>variable_name=</code></td>
 <td><code>variable=</code></td>
-<td>The <code>UgridDataset</code> facade's spelling of<br>the mesh selector.</td>
+<td>The <code>UgridDataset</code> facade's spelling.<br>Inert today — see below.</td>
 </tr>
 <tr>
 <td><code>interval=200</code> (ms/frame)</td>
@@ -5103,12 +5125,27 @@ in. Everything else passes through untouched.</p>
 </tr>
 </tbody>
 </table>
-<p><code>title</code>, <code>basemap</code>, a bool <code>colorbar</code>, <code>kind</code>, <code>cmap</code>, <code>column</code> and <code>variable</code> need no translation and
-are forwarded as they arrive.</p>
-<h2 id="what-is-refused-and-why-it-is-not-ignored"><a class="toclink" href="#what-is-refused-and-why-it-is-not-ignored">What is refused, and why it is not ignored</a><a class="headerlink" href="#what-is-refused-and-why-it-is-not-ignored" title="Permanent link">#</a></h2>
+<p><code>cmap</code>, <code>variable</code>, a bool <code>colorbar</code> and <code>band</code> (once shifted) are forwarded to the builder as they
+arrive. Three others are not simply passed along, because the tiers differ:</p>
+<ul>
+<li><strong><code>title</code></strong> is applied through the scene, not the builder. The web and 3-D raster builders refuse
+  it (<code>RasterMixin.field() got an unexpected keyword argument 'title'</code>, and on 3-D PyVista's own
+  <code>"title" is an invalid keyword argument</code>), so it is set with <code>set_title</code> after the scene is built.
+  The HoloViz tier has no <code>set_title</code> and does accept <code>title</code>, so there it stays with the builder.</li>
+<li><strong><code>basemap</code></strong> is a verb on the scene in every tier that has one, never a constructor argument.</li>
+<li><strong><code>kind</code></strong> reaches the builder, but only the HoloViz tier has alternative raster renderers. On web
+  and 3-D a non-default <code>kind</code> is refused by that tier: <code>kind= is not supported by backend='web'</code>.</li>
+</ul>
+<p>A <code>column</code> is forwarded, and is accepted only where that tier's render takes one — on a still raster
+plot it is refused by the tier (<code>'column' is not an option Image takes on the bokeh backend</code>).</p>
+<h2 id="what-is-refused-and-why-it-is-refused-here"><a class="toclink" href="#what-is-refused-and-why-it-is-refused-here">What is refused, and why it is refused here</a><a class="headerlink" href="#what-is-refused-and-why-it-is-refused-here" title="Permanent link">#</a></h2>
 <p>pyramids drops defaulted arguments before forwarding, so anything that arrives was set deliberately.
-An argument this seam cannot honour is therefore refused <strong>by name</strong> rather than dropped — a
-silently-ignored argument is indistinguishable from an applied one.</p>
+An argument this seam cannot honour is refused <strong>by name</strong>, in terms of the call you made. Left to
+the tier it is still refused — but for the builder it happened to reach, and on the 3-D tier in
+PyVista's terms rather than digitalearth's:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ds.plot(backend=&quot;3d&quot;, title=&quot;DEM&quot;)
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>TypeError: &quot;title&quot; is an invalid keyword argument for `_common_arg_parser`
+</code></pre></div>
 <table>
 <thead>
 <tr>
@@ -5119,7 +5156,7 @@ silently-ignored argument is indistinguishable from an applied one.</p>
 <tbody>
 <tr>
 <td><code>exclude_value</code></td>
-<td>digitalearth applies its own nodata handling; mask upstream, or plot on <code>backend="matplotlib"</code>.</td>
+<td>No entry point here takes a nodata value;<br>mask the raster in pyramids before plotting.</td>
 </tr>
 <tr>
 <td><code>rgb_options</code></td>
@@ -5140,14 +5177,22 @@ groups, the <code>points</code> overlay and a <code>ColorBar</code> <em>instance
 rejects those before dispatch.</p>
 <h2 id="animation"><a class="toclink" href="#animation">Animation</a><a class="headerlink" href="#animation" title="Permanent link">#</a></h2>
 <p><code>Dataset.animate(backend=…)</code> and friends forward <code>animate=True</code>. Two of the three tiers can serve it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">stack</span> <span class="o">=</span> <span class="n">DatasetCollection</span><span class="o">.</span><span class="n">from_files</span><span class="p">([</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>                     <span class="c1"># a Panel player</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>   <span class="c1"># written to a file</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>           <span class="c1"># written to a file</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">stack</span> <span class="o">=</span> <span class="n">DatasetCollection</span><span class="o">.</span><span class="n">from_files</span><span class="p">([</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">)</span>                     <span class="c1"># a Panel player</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>   <span class="c1"># written to a file</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>           <span class="c1"># written to a file</span>
 </code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Leave <code>interval</code> out and the speed is digitalearth's, not pyramids'</p>
+<p><code>interval=200</code> is pyramids' own default, and a facade <strong>drops</strong> a defaulted argument before
+forwarding it — so the backend cannot tell "the caller asked for 200 ms" from "the caller said
+nothing". With nothing forwarded, the tier uses digitalearth's shared <code>DEFAULT_FPS</code> of <code>3.0</code>,
+which is <strong>333 ms</strong> a frame, where a plain <code>stack.animate()</code> on matplotlib runs at pyramids'
+200 ms. Pass a non-default <code>interval</code> when the speed matters.</p>
+</div>
 <ul>
 <li><strong>interactive</strong> builds a time cube and returns a Panel player, or writes a GIF/MP4 when you pass a
   <code>path</code>.</li>
@@ -5156,18 +5201,32 @@ rejects those before dispatch.</p>
   <code>Scene3D.orbit</code> sweeps the camera over a static scene, so neither can be driven from a plot call's
   keywords. Build the scene with digitalearth and call one of them directly.</li>
 </ul>
-<h2 id="checking-what-is-registered"><a class="toclink" href="#checking-what-is-registered">Checking what is registered</a><a class="headerlink" href="#checking-what-is-registered" title="Permanent link">#</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>            <span class="c1"># [&#39;3d&#39;, &#39;interactive&#39;, &#39;web&#39;]</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>  <span class="c1"># digitalearth.pyramids_backend:interactive</span>
+<h2 id="a-mesh-is-not-drawn-on-these-tiers"><a class="toclink" href="#a-mesh-is-not-drawn-on-these-tiers">A mesh is not drawn on these tiers</a><a class="headerlink" href="#a-mesh-is-not-drawn-on-these-tiers" title="Permanent link">#</a></h2>
+<p><code>UgridDataset.plot(backend=…)</code> is refused before any keyword is read: only the matplotlib tier has a
+triangular render, which <code>digitalearth.api.MESH_BACKENDS</code> states. That is why the <code>variable_name</code>
+translation above is inert today — the call carrying it never gets that far:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>UgridDataset.plot(backend=&quot;web&quot;)
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>TypeError: backend=&#39;web&#39; has no unstructured-mesh render; draw a UgridDataset with
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>backend=&#39;matplotlib&#39;, which shades each of its faces (tripcolor)
 </code></pre></div>
+<h2 id="checking-what-is-registered"><a class="toclink" href="#checking-what-is-registered">Checking what is registered</a><a class="headerlink" href="#checking-what-is-registered" title="Permanent link">#</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>              <span class="c1"># [&#39;3d&#39;, &#39;interactive&#39;, &#39;web&#39;]</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>  <span class="c1"># the callable itself, loaded from the entry point</span>
+</code></pre></div>
+<p>A registered entry point resolves to the <strong>callable</strong> — not to its <code>module:attr</code> string, and not to
+the <code>functools.partial</code> over <code>quickmap</code> that the fallback would hand back. That difference is how you
+tell the two apart.</p>
 <div class="admonition warning">
 <p class="admonition-title">Needs a pyramids-core that ships the seam</p>
-<p>The <code>pyramids.plot_backends</code> group is resolved by pyramids-core's plot-backend seam. Until a
-pyramids-core release carries it, the entry points are registered but nothing reads them, and
-<code>plot(backend=…)</code> behaves as it did before. Nothing breaks in the meantime — the registration is
-inert, not conflicting.</p>
+<p>The <code>pyramids.plot_backends</code> group is resolved by pyramids-core's plot-backend seam, which merged
+after <code>0.72.0</code> was cut and is therefore <strong>in no release yet</strong>: the installed <code>0.72.0</code> carries
+neither <code>pyramids.base._plot_backends</code> nor the conformance kit, and <code>Dataset.plot</code> has no
+<code>backend=</code> keyword. Until a release ships it, the entry points are registered and nothing reads
+them — inert, not conflicting, and <code>plot()</code> behaves exactly as before. The declared floor of
+<code>pyramids-core &gt;=0.72.0</code> is simply the current release; it will need raising to whichever
+release first carries the seam, at which point the two skipped tests here start guarding.</p>
 </div>
 
 
@@ -5191,10 +5250,22 @@ registered end of that seam — one callable per tier, each matching the contrac
 <code>fn(obj, *, backend, **kwargs)</code>.</p>
 <p>Registering it is not merely cosmetic. Without an entry point pyramids falls back to <em>importing</em>
 <code>digitalearth</code> by name and calling <code>quickmap</code> directly, which forwards its own vocabulary
-verbatim; three of those keywords then reach cleopatra and are refused in cleopatra's words, naming
-cleopatra's allowlist to someone who only ever wrote <code>ds.plot(backend="web")</code>. The adapter exists
-to translate between the two vocabularies, and to refuse what digitalearth cannot honour <strong>by name</strong>
-rather than leaking a lower layer's complaint or silently dropping the argument.</p>
+verbatim. Each tier then answers in its own terms, naming its internal builder rather than the call
+the caller made — and on one tier the complaint is not even digitalearth's:</p>
+<div class="highlight"><pre><span></span><code>ds.plot(backend=&quot;web&quot;, title=&quot;DEM&quot;)
+TypeError: RasterMixin.field() got an unexpected keyword argument &#39;title&#39;. Did you mean &#39;tiles&#39;?
+
+ds.plot(backend=&quot;interactive&quot;, rgb_options={})
+ValueError: &#39;rgb_options&#39; is not an option Image takes on the bokeh backend; did you mean
+[&#39;xrotation&#39;, &#39;yrotation&#39;]?
+
+ds.plot(backend=&quot;3d&quot;, title=&quot;DEM&quot;)
+TypeError: &quot;title&quot; is an invalid keyword argument for `_common_arg_parser`
+</code></pre></div>
+<p>The last is PyVista's own argument parser, surfacing to someone who wrote <code>ds.plot(backend="3d",
+title=…)</code>. So the adapter's job is to translate between the two vocabularies, to apply a frame
+keyword through the route that tier actually has, and to refuse the rest <strong>by name</strong>, before a
+scene is half-built — not to convert silence into a message, since the tiers were never silent.</p>
 <p>Three translations are genuinely necessary, because the facade and this package count and spell
 things differently:</p>
 <ul>
@@ -5405,113 +5476,113 @@ ANIMATION_BACKENDS: Which tiers serve an <code>animate</code> call.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/pyramids_backend.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-795">795</a></span>
-<span class="normal"><a href="#__codelineno-0-796">796</a></span>
-<span class="normal"><a href="#__codelineno-0-797">797</a></span>
-<span class="normal"><a href="#__codelineno-0-798">798</a></span>
-<span class="normal"><a href="#__codelineno-0-799">799</a></span>
-<span class="normal"><a href="#__codelineno-0-800">800</a></span>
-<span class="normal"><a href="#__codelineno-0-801">801</a></span>
-<span class="normal"><a href="#__codelineno-0-802">802</a></span>
-<span class="normal"><a href="#__codelineno-0-803">803</a></span>
-<span class="normal"><a href="#__codelineno-0-804">804</a></span>
-<span class="normal"><a href="#__codelineno-0-805">805</a></span>
-<span class="normal"><a href="#__codelineno-0-806">806</a></span>
-<span class="normal"><a href="#__codelineno-0-807">807</a></span>
-<span class="normal"><a href="#__codelineno-0-808">808</a></span>
-<span class="normal"><a href="#__codelineno-0-809">809</a></span>
-<span class="normal"><a href="#__codelineno-0-810">810</a></span>
-<span class="normal"><a href="#__codelineno-0-811">811</a></span>
-<span class="normal"><a href="#__codelineno-0-812">812</a></span>
-<span class="normal"><a href="#__codelineno-0-813">813</a></span>
-<span class="normal"><a href="#__codelineno-0-814">814</a></span>
-<span class="normal"><a href="#__codelineno-0-815">815</a></span>
-<span class="normal"><a href="#__codelineno-0-816">816</a></span>
-<span class="normal"><a href="#__codelineno-0-817">817</a></span>
-<span class="normal"><a href="#__codelineno-0-818">818</a></span>
-<span class="normal"><a href="#__codelineno-0-819">819</a></span>
-<span class="normal"><a href="#__codelineno-0-820">820</a></span>
-<span class="normal"><a href="#__codelineno-0-821">821</a></span>
-<span class="normal"><a href="#__codelineno-0-822">822</a></span>
-<span class="normal"><a href="#__codelineno-0-823">823</a></span>
-<span class="normal"><a href="#__codelineno-0-824">824</a></span>
-<span class="normal"><a href="#__codelineno-0-825">825</a></span>
-<span class="normal"><a href="#__codelineno-0-826">826</a></span>
-<span class="normal"><a href="#__codelineno-0-827">827</a></span>
-<span class="normal"><a href="#__codelineno-0-828">828</a></span>
-<span class="normal"><a href="#__codelineno-0-829">829</a></span>
-<span class="normal"><a href="#__codelineno-0-830">830</a></span>
-<span class="normal"><a href="#__codelineno-0-831">831</a></span>
-<span class="normal"><a href="#__codelineno-0-832">832</a></span>
-<span class="normal"><a href="#__codelineno-0-833">833</a></span>
-<span class="normal"><a href="#__codelineno-0-834">834</a></span>
-<span class="normal"><a href="#__codelineno-0-835">835</a></span>
-<span class="normal"><a href="#__codelineno-0-836">836</a></span>
-<span class="normal"><a href="#__codelineno-0-837">837</a></span>
-<span class="normal"><a href="#__codelineno-0-838">838</a></span>
-<span class="normal"><a href="#__codelineno-0-839">839</a></span>
-<span class="normal"><a href="#__codelineno-0-840">840</a></span>
-<span class="normal"><a href="#__codelineno-0-841">841</a></span>
-<span class="normal"><a href="#__codelineno-0-842">842</a></span>
-<span class="normal"><a href="#__codelineno-0-843">843</a></span>
-<span class="normal"><a href="#__codelineno-0-844">844</a></span>
-<span class="normal"><a href="#__codelineno-0-845">845</a></span>
-<span class="normal"><a href="#__codelineno-0-846">846</a></span>
-<span class="normal"><a href="#__codelineno-0-847">847</a></span>
-<span class="normal"><a href="#__codelineno-0-848">848</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="k">def</span><span class="w"> </span><span class="nf">interactive</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the HoloViz tier, for ``plot(backend=&quot;interactive&quot;)``.</span>
-<a id="__codelineno-0-797" name="__codelineno-0-797"></a>
-<a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">        obj: The ``Dataset`` / ``NetCDF`` / ``FeatureCollection`` / ``UgridDataset`` the facade was</span>
-<a id="__codelineno-0-800" name="__codelineno-0-800"></a><span class="sd">            called on.</span>
-<a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
-<a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
-<a id="__codelineno-0-803" name="__codelineno-0-803"></a>
-<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="sd">        An :class:`~digitalearth.interactive.InteractiveMap`, or — for an animation call — its</span>
-<a id="__codelineno-0-806" name="__codelineno-0-806"></a><span class="sd">        player, or the path the animation was written to.</span>
-<a id="__codelineno-0-807" name="__codelineno-0-807"></a>
-<a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-809" name="__codelineno-0-809"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, or an unusable band/interval.</span>
-<a id="__codelineno-0-810" name="__codelineno-0-810"></a>
-<a id="__codelineno-0-811" name="__codelineno-0-811"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-812" name="__codelineno-0-812"></a><span class="sd">        - Reached through pyramids, which forwards its own keywords (needs the ``interactive``</span>
-<a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="sd">          extra, so this one is shown rather than run):</span>
-<a id="__codelineno-0-814" name="__codelineno-0-814"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">            from pyramids.dataset import Dataset</span>
-<a id="__codelineno-0-816" name="__codelineno-0-816"></a>
-<a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-818" name="__codelineno-0-818"></a><span class="sd">            scene = ds.plot(backend=&quot;interactive&quot;, band=0, title=&quot;DEM&quot;)</span>
-<a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-820" name="__codelineno-0-820"></a><span class="sd">        - A keyword this seam cannot serve is refused in digitalearth&#39;s own words, before any</span>
-<a id="__codelineno-0-821" name="__codelineno-0-821"></a><span class="sd">          engine is imported, and says where the capability does live:</span>
-<a id="__codelineno-0-822" name="__codelineno-0-822"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-823" name="__codelineno-0-823"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import interactive</span>
-<a id="__codelineno-0-824" name="__codelineno-0-824"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-825" name="__codelineno-0-825"></a><span class="sd">            ...     interactive(&quot;a-dataset&quot;, backend=&quot;interactive&quot;, rgb_options={})</span>
-<a id="__codelineno-0-826" name="__codelineno-0-826"></a><span class="sd">            ... except ValueError as exc:</span>
-<a id="__codelineno-0-827" name="__codelineno-0-827"></a><span class="sd">            ...     print(str(exc).split(&quot;: &quot;)[1].split(&quot;. Drop&quot;)[0])</span>
-<a id="__codelineno-0-828" name="__codelineno-0-828"></a><span class="sd">            a three-band composite is built with Map.rgb_composite on the static tier, which this seam does not reach</span>
-<a id="__codelineno-0-829" name="__codelineno-0-829"></a>
-<a id="__codelineno-0-830" name="__codelineno-0-830"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-831" name="__codelineno-0-831"></a><span class="sd">        - An animation keyword on a still plot is named rather than ignored, which is what it used</span>
-<a id="__codelineno-0-832" name="__codelineno-0-832"></a><span class="sd">          to be:</span>
-<a id="__codelineno-0-833" name="__codelineno-0-833"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-834" name="__codelineno-0-834"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import interactive</span>
-<a id="__codelineno-0-835" name="__codelineno-0-835"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-836" name="__codelineno-0-836"></a><span class="sd">            ...     interactive(&quot;a-dataset&quot;, backend=&quot;interactive&quot;, interval=200)</span>
-<a id="__codelineno-0-837" name="__codelineno-0-837"></a><span class="sd">            ... except ValueError as exc:</span>
-<a id="__codelineno-0-838" name="__codelineno-0-838"></a><span class="sd">            ...     print(str(exc).split(&quot;. &quot;)[0])</span>
-<a id="__codelineno-0-839" name="__codelineno-0-839"></a><span class="sd">            plot(interval=…) only applies to an animation; this is a still plot on backend=&#39;interactive&#39;</span>
-<a id="__codelineno-0-840" name="__codelineno-0-840"></a>
-<a id="__codelineno-0-841" name="__codelineno-0-841"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-842" name="__codelineno-0-842"></a>
-<a id="__codelineno-0-843" name="__codelineno-0-843"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="sd">        three_d: The same seam on the PyVista tier.</span>
-<a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="sd">        web: The same seam on the MapLibre tier.</span>
-<a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="sd">        ANIMATION_BACKENDS: Which tiers serve an ``animate`` call.</span>
-<a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-848" name="__codelineno-0-848"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-892">892</a></span>
+<span class="normal"><a href="#__codelineno-0-893">893</a></span>
+<span class="normal"><a href="#__codelineno-0-894">894</a></span>
+<span class="normal"><a href="#__codelineno-0-895">895</a></span>
+<span class="normal"><a href="#__codelineno-0-896">896</a></span>
+<span class="normal"><a href="#__codelineno-0-897">897</a></span>
+<span class="normal"><a href="#__codelineno-0-898">898</a></span>
+<span class="normal"><a href="#__codelineno-0-899">899</a></span>
+<span class="normal"><a href="#__codelineno-0-900">900</a></span>
+<span class="normal"><a href="#__codelineno-0-901">901</a></span>
+<span class="normal"><a href="#__codelineno-0-902">902</a></span>
+<span class="normal"><a href="#__codelineno-0-903">903</a></span>
+<span class="normal"><a href="#__codelineno-0-904">904</a></span>
+<span class="normal"><a href="#__codelineno-0-905">905</a></span>
+<span class="normal"><a href="#__codelineno-0-906">906</a></span>
+<span class="normal"><a href="#__codelineno-0-907">907</a></span>
+<span class="normal"><a href="#__codelineno-0-908">908</a></span>
+<span class="normal"><a href="#__codelineno-0-909">909</a></span>
+<span class="normal"><a href="#__codelineno-0-910">910</a></span>
+<span class="normal"><a href="#__codelineno-0-911">911</a></span>
+<span class="normal"><a href="#__codelineno-0-912">912</a></span>
+<span class="normal"><a href="#__codelineno-0-913">913</a></span>
+<span class="normal"><a href="#__codelineno-0-914">914</a></span>
+<span class="normal"><a href="#__codelineno-0-915">915</a></span>
+<span class="normal"><a href="#__codelineno-0-916">916</a></span>
+<span class="normal"><a href="#__codelineno-0-917">917</a></span>
+<span class="normal"><a href="#__codelineno-0-918">918</a></span>
+<span class="normal"><a href="#__codelineno-0-919">919</a></span>
+<span class="normal"><a href="#__codelineno-0-920">920</a></span>
+<span class="normal"><a href="#__codelineno-0-921">921</a></span>
+<span class="normal"><a href="#__codelineno-0-922">922</a></span>
+<span class="normal"><a href="#__codelineno-0-923">923</a></span>
+<span class="normal"><a href="#__codelineno-0-924">924</a></span>
+<span class="normal"><a href="#__codelineno-0-925">925</a></span>
+<span class="normal"><a href="#__codelineno-0-926">926</a></span>
+<span class="normal"><a href="#__codelineno-0-927">927</a></span>
+<span class="normal"><a href="#__codelineno-0-928">928</a></span>
+<span class="normal"><a href="#__codelineno-0-929">929</a></span>
+<span class="normal"><a href="#__codelineno-0-930">930</a></span>
+<span class="normal"><a href="#__codelineno-0-931">931</a></span>
+<span class="normal"><a href="#__codelineno-0-932">932</a></span>
+<span class="normal"><a href="#__codelineno-0-933">933</a></span>
+<span class="normal"><a href="#__codelineno-0-934">934</a></span>
+<span class="normal"><a href="#__codelineno-0-935">935</a></span>
+<span class="normal"><a href="#__codelineno-0-936">936</a></span>
+<span class="normal"><a href="#__codelineno-0-937">937</a></span>
+<span class="normal"><a href="#__codelineno-0-938">938</a></span>
+<span class="normal"><a href="#__codelineno-0-939">939</a></span>
+<span class="normal"><a href="#__codelineno-0-940">940</a></span>
+<span class="normal"><a href="#__codelineno-0-941">941</a></span>
+<span class="normal"><a href="#__codelineno-0-942">942</a></span>
+<span class="normal"><a href="#__codelineno-0-943">943</a></span>
+<span class="normal"><a href="#__codelineno-0-944">944</a></span>
+<span class="normal"><a href="#__codelineno-0-945">945</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-892" name="__codelineno-0-892"></a><span class="k">def</span><span class="w"> </span><span class="nf">interactive</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-893" name="__codelineno-0-893"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the HoloViz tier, for ``plot(backend=&quot;interactive&quot;)``.</span>
+<a id="__codelineno-0-894" name="__codelineno-0-894"></a>
+<a id="__codelineno-0-895" name="__codelineno-0-895"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">        obj: The ``Dataset`` / ``NetCDF`` / ``FeatureCollection`` / ``UgridDataset`` the facade was</span>
+<a id="__codelineno-0-897" name="__codelineno-0-897"></a><span class="sd">            called on.</span>
+<a id="__codelineno-0-898" name="__codelineno-0-898"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
+<a id="__codelineno-0-899" name="__codelineno-0-899"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
+<a id="__codelineno-0-900" name="__codelineno-0-900"></a>
+<a id="__codelineno-0-901" name="__codelineno-0-901"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-902" name="__codelineno-0-902"></a><span class="sd">        An :class:`~digitalearth.interactive.InteractiveMap`, or — for an animation call — its</span>
+<a id="__codelineno-0-903" name="__codelineno-0-903"></a><span class="sd">        player, or the path the animation was written to.</span>
+<a id="__codelineno-0-904" name="__codelineno-0-904"></a>
+<a id="__codelineno-0-905" name="__codelineno-0-905"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-906" name="__codelineno-0-906"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, or an unusable band/interval.</span>
+<a id="__codelineno-0-907" name="__codelineno-0-907"></a>
+<a id="__codelineno-0-908" name="__codelineno-0-908"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-909" name="__codelineno-0-909"></a><span class="sd">        - Reached through pyramids, which forwards its own keywords (needs the ``interactive``</span>
+<a id="__codelineno-0-910" name="__codelineno-0-910"></a><span class="sd">          extra, so this one is shown rather than run):</span>
+<a id="__codelineno-0-911" name="__codelineno-0-911"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-912" name="__codelineno-0-912"></a><span class="sd">            from pyramids.dataset import Dataset</span>
+<a id="__codelineno-0-913" name="__codelineno-0-913"></a>
+<a id="__codelineno-0-914" name="__codelineno-0-914"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-915" name="__codelineno-0-915"></a><span class="sd">            scene = ds.plot(backend=&quot;interactive&quot;, band=0, title=&quot;DEM&quot;)</span>
+<a id="__codelineno-0-916" name="__codelineno-0-916"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-917" name="__codelineno-0-917"></a><span class="sd">        - A keyword this seam cannot serve is refused in digitalearth&#39;s own words, before any</span>
+<a id="__codelineno-0-918" name="__codelineno-0-918"></a><span class="sd">          engine is imported, and says where the capability does live:</span>
+<a id="__codelineno-0-919" name="__codelineno-0-919"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-920" name="__codelineno-0-920"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import interactive</span>
+<a id="__codelineno-0-921" name="__codelineno-0-921"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-922" name="__codelineno-0-922"></a><span class="sd">            ...     interactive(&quot;a-dataset&quot;, backend=&quot;interactive&quot;, rgb_options={})</span>
+<a id="__codelineno-0-923" name="__codelineno-0-923"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-924" name="__codelineno-0-924"></a><span class="sd">            ...     print(str(exc).split(&quot;: &quot;)[1].split(&quot;. Drop&quot;)[0])</span>
+<a id="__codelineno-0-925" name="__codelineno-0-925"></a><span class="sd">            a three-band composite is built with Map.rgb_composite on the static tier, which this seam does not reach</span>
+<a id="__codelineno-0-926" name="__codelineno-0-926"></a>
+<a id="__codelineno-0-927" name="__codelineno-0-927"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-928" name="__codelineno-0-928"></a><span class="sd">        - An animation keyword on a still plot is named rather than ignored, which is what it used</span>
+<a id="__codelineno-0-929" name="__codelineno-0-929"></a><span class="sd">          to be:</span>
+<a id="__codelineno-0-930" name="__codelineno-0-930"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-931" name="__codelineno-0-931"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import interactive</span>
+<a id="__codelineno-0-932" name="__codelineno-0-932"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-933" name="__codelineno-0-933"></a><span class="sd">            ...     interactive(&quot;a-dataset&quot;, backend=&quot;interactive&quot;, interval=200)</span>
+<a id="__codelineno-0-934" name="__codelineno-0-934"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-935" name="__codelineno-0-935"></a><span class="sd">            ...     print(str(exc).split(&quot;. &quot;)[0])</span>
+<a id="__codelineno-0-936" name="__codelineno-0-936"></a><span class="sd">            plot(interval=…) only applies to an animation; this is a still plot on backend=&#39;interactive&#39;</span>
+<a id="__codelineno-0-937" name="__codelineno-0-937"></a>
+<a id="__codelineno-0-938" name="__codelineno-0-938"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-939" name="__codelineno-0-939"></a>
+<a id="__codelineno-0-940" name="__codelineno-0-940"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-941" name="__codelineno-0-941"></a><span class="sd">        three_d: The same seam on the PyVista tier.</span>
+<a id="__codelineno-0-942" name="__codelineno-0-942"></a><span class="sd">        web: The same seam on the MapLibre tier.</span>
+<a id="__codelineno-0-943" name="__codelineno-0-943"></a><span class="sd">        ANIMATION_BACKENDS: Which tiers serve an ``animate`` call.</span>
+<a id="__codelineno-0-944" name="__codelineno-0-944"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-945" name="__codelineno-0-945"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -5679,107 +5750,107 @@ ANIMATION_BACKENDS: Why this tier is absent from it.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/pyramids_backend.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-851">851</a></span>
-<span class="normal"><a href="#__codelineno-0-852">852</a></span>
-<span class="normal"><a href="#__codelineno-0-853">853</a></span>
-<span class="normal"><a href="#__codelineno-0-854">854</a></span>
-<span class="normal"><a href="#__codelineno-0-855">855</a></span>
-<span class="normal"><a href="#__codelineno-0-856">856</a></span>
-<span class="normal"><a href="#__codelineno-0-857">857</a></span>
-<span class="normal"><a href="#__codelineno-0-858">858</a></span>
-<span class="normal"><a href="#__codelineno-0-859">859</a></span>
-<span class="normal"><a href="#__codelineno-0-860">860</a></span>
-<span class="normal"><a href="#__codelineno-0-861">861</a></span>
-<span class="normal"><a href="#__codelineno-0-862">862</a></span>
-<span class="normal"><a href="#__codelineno-0-863">863</a></span>
-<span class="normal"><a href="#__codelineno-0-864">864</a></span>
-<span class="normal"><a href="#__codelineno-0-865">865</a></span>
-<span class="normal"><a href="#__codelineno-0-866">866</a></span>
-<span class="normal"><a href="#__codelineno-0-867">867</a></span>
-<span class="normal"><a href="#__codelineno-0-868">868</a></span>
-<span class="normal"><a href="#__codelineno-0-869">869</a></span>
-<span class="normal"><a href="#__codelineno-0-870">870</a></span>
-<span class="normal"><a href="#__codelineno-0-871">871</a></span>
-<span class="normal"><a href="#__codelineno-0-872">872</a></span>
-<span class="normal"><a href="#__codelineno-0-873">873</a></span>
-<span class="normal"><a href="#__codelineno-0-874">874</a></span>
-<span class="normal"><a href="#__codelineno-0-875">875</a></span>
-<span class="normal"><a href="#__codelineno-0-876">876</a></span>
-<span class="normal"><a href="#__codelineno-0-877">877</a></span>
-<span class="normal"><a href="#__codelineno-0-878">878</a></span>
-<span class="normal"><a href="#__codelineno-0-879">879</a></span>
-<span class="normal"><a href="#__codelineno-0-880">880</a></span>
-<span class="normal"><a href="#__codelineno-0-881">881</a></span>
-<span class="normal"><a href="#__codelineno-0-882">882</a></span>
-<span class="normal"><a href="#__codelineno-0-883">883</a></span>
-<span class="normal"><a href="#__codelineno-0-884">884</a></span>
-<span class="normal"><a href="#__codelineno-0-885">885</a></span>
-<span class="normal"><a href="#__codelineno-0-886">886</a></span>
-<span class="normal"><a href="#__codelineno-0-887">887</a></span>
-<span class="normal"><a href="#__codelineno-0-888">888</a></span>
-<span class="normal"><a href="#__codelineno-0-889">889</a></span>
-<span class="normal"><a href="#__codelineno-0-890">890</a></span>
-<span class="normal"><a href="#__codelineno-0-891">891</a></span>
-<span class="normal"><a href="#__codelineno-0-892">892</a></span>
-<span class="normal"><a href="#__codelineno-0-893">893</a></span>
-<span class="normal"><a href="#__codelineno-0-894">894</a></span>
-<span class="normal"><a href="#__codelineno-0-895">895</a></span>
-<span class="normal"><a href="#__codelineno-0-896">896</a></span>
-<span class="normal"><a href="#__codelineno-0-897">897</a></span>
-<span class="normal"><a href="#__codelineno-0-898">898</a></span>
-<span class="normal"><a href="#__codelineno-0-899">899</a></span>
-<span class="normal"><a href="#__codelineno-0-900">900</a></span>
-<span class="normal"><a href="#__codelineno-0-901">901</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="k">def</span><span class="w"> </span><span class="nf">three_d</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;3d&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the PyVista tier, for ``plot(backend=&quot;3d&quot;)``.</span>
-<a id="__codelineno-0-853" name="__codelineno-0-853"></a>
-<a id="__codelineno-0-854" name="__codelineno-0-854"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">        obj: The pyramids object the facade was called on.</span>
-<a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
-<a id="__codelineno-0-858" name="__codelineno-0-858"></a>
-<a id="__codelineno-0-859" name="__codelineno-0-859"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-860" name="__codelineno-0-860"></a><span class="sd">        A :class:`~digitalearth.three_d.Scene3D`.</span>
-<a id="__codelineno-0-861" name="__codelineno-0-861"></a>
-<a id="__codelineno-0-862" name="__codelineno-0-862"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-863" name="__codelineno-0-863"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an</span>
-<a id="__codelineno-0-864" name="__codelineno-0-864"></a><span class="sd">            animation request — the 3-D tier&#39;s animation verbs cannot be driven from a plot call</span>
-<a id="__codelineno-0-865" name="__codelineno-0-865"></a><span class="sd">            (see :data:`ANIMATION_BACKENDS`).</span>
-<a id="__codelineno-0-866" name="__codelineno-0-866"></a>
-<a id="__codelineno-0-867" name="__codelineno-0-867"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-868" name="__codelineno-0-868"></a><span class="sd">        - Reached through pyramids (needs the ``3d`` extra, so this one is shown rather than run):</span>
-<a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="sd">            from pyramids.dataset import Dataset</span>
-<a id="__codelineno-0-871" name="__codelineno-0-871"></a>
-<a id="__codelineno-0-872" name="__codelineno-0-872"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">            scene = ds.plot(backend=&quot;3d&quot;, band=0)</span>
-<a id="__codelineno-0-874" name="__codelineno-0-874"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">        - An animation request is refused by name, and names the two verbs that do animate a scene:</span>
-<a id="__codelineno-0-876" name="__codelineno-0-876"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-877" name="__codelineno-0-877"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import three_d</span>
-<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">            ...     three_d(&quot;a-dataset&quot;, backend=&quot;3d&quot;, animate=True)</span>
-<a id="__codelineno-0-880" name="__codelineno-0-880"></a><span class="sd">            ... except ValueError as exc:</span>
-<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">            ...     print(str(exc).split(&quot;:&quot;)[0])</span>
-<a id="__codelineno-0-882" name="__codelineno-0-882"></a><span class="sd">            animate(backend=&#39;3d&#39;) is not served through the pyramids plot-backend seam</span>
-<a id="__codelineno-0-883" name="__codelineno-0-883"></a>
-<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-885" name="__codelineno-0-885"></a><span class="sd">        - A band that is not a 0-based index is refused here rather than by the reader, far away:</span>
-<a id="__codelineno-0-886" name="__codelineno-0-886"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-887" name="__codelineno-0-887"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import three_d</span>
-<a id="__codelineno-0-888" name="__codelineno-0-888"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-889" name="__codelineno-0-889"></a><span class="sd">            ...     three_d(&quot;a-dataset&quot;, backend=&quot;3d&quot;, band=1.5)</span>
-<a id="__codelineno-0-890" name="__codelineno-0-890"></a><span class="sd">            ... except ValueError as exc:</span>
-<a id="__codelineno-0-891" name="__codelineno-0-891"></a><span class="sd">            ...     print(exc)</span>
-<a id="__codelineno-0-892" name="__codelineno-0-892"></a><span class="sd">            band=1.5 is not a 0-based band index; pass an integer, where the first band is 0</span>
-<a id="__codelineno-0-893" name="__codelineno-0-893"></a>
-<a id="__codelineno-0-894" name="__codelineno-0-894"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-895" name="__codelineno-0-895"></a>
-<a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-897" name="__codelineno-0-897"></a><span class="sd">        interactive: The same seam on the HoloViz tier, which does serve an animation.</span>
-<a id="__codelineno-0-898" name="__codelineno-0-898"></a><span class="sd">        web: The same seam on the MapLibre tier.</span>
-<a id="__codelineno-0-899" name="__codelineno-0-899"></a><span class="sd">        ANIMATION_BACKENDS: Why this tier is absent from it.</span>
-<a id="__codelineno-0-900" name="__codelineno-0-900"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-901" name="__codelineno-0-901"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-948">948</a></span>
+<span class="normal"><a href="#__codelineno-0-949">949</a></span>
+<span class="normal"><a href="#__codelineno-0-950">950</a></span>
+<span class="normal"><a href="#__codelineno-0-951">951</a></span>
+<span class="normal"><a href="#__codelineno-0-952">952</a></span>
+<span class="normal"><a href="#__codelineno-0-953">953</a></span>
+<span class="normal"><a href="#__codelineno-0-954">954</a></span>
+<span class="normal"><a href="#__codelineno-0-955">955</a></span>
+<span class="normal"><a href="#__codelineno-0-956">956</a></span>
+<span class="normal"><a href="#__codelineno-0-957">957</a></span>
+<span class="normal"><a href="#__codelineno-0-958">958</a></span>
+<span class="normal"><a href="#__codelineno-0-959">959</a></span>
+<span class="normal"><a href="#__codelineno-0-960">960</a></span>
+<span class="normal"><a href="#__codelineno-0-961">961</a></span>
+<span class="normal"><a href="#__codelineno-0-962">962</a></span>
+<span class="normal"><a href="#__codelineno-0-963">963</a></span>
+<span class="normal"><a href="#__codelineno-0-964">964</a></span>
+<span class="normal"><a href="#__codelineno-0-965">965</a></span>
+<span class="normal"><a href="#__codelineno-0-966">966</a></span>
+<span class="normal"><a href="#__codelineno-0-967">967</a></span>
+<span class="normal"><a href="#__codelineno-0-968">968</a></span>
+<span class="normal"><a href="#__codelineno-0-969">969</a></span>
+<span class="normal"><a href="#__codelineno-0-970">970</a></span>
+<span class="normal"><a href="#__codelineno-0-971">971</a></span>
+<span class="normal"><a href="#__codelineno-0-972">972</a></span>
+<span class="normal"><a href="#__codelineno-0-973">973</a></span>
+<span class="normal"><a href="#__codelineno-0-974">974</a></span>
+<span class="normal"><a href="#__codelineno-0-975">975</a></span>
+<span class="normal"><a href="#__codelineno-0-976">976</a></span>
+<span class="normal"><a href="#__codelineno-0-977">977</a></span>
+<span class="normal"><a href="#__codelineno-0-978">978</a></span>
+<span class="normal"><a href="#__codelineno-0-979">979</a></span>
+<span class="normal"><a href="#__codelineno-0-980">980</a></span>
+<span class="normal"><a href="#__codelineno-0-981">981</a></span>
+<span class="normal"><a href="#__codelineno-0-982">982</a></span>
+<span class="normal"><a href="#__codelineno-0-983">983</a></span>
+<span class="normal"><a href="#__codelineno-0-984">984</a></span>
+<span class="normal"><a href="#__codelineno-0-985">985</a></span>
+<span class="normal"><a href="#__codelineno-0-986">986</a></span>
+<span class="normal"><a href="#__codelineno-0-987">987</a></span>
+<span class="normal"><a href="#__codelineno-0-988">988</a></span>
+<span class="normal"><a href="#__codelineno-0-989">989</a></span>
+<span class="normal"><a href="#__codelineno-0-990">990</a></span>
+<span class="normal"><a href="#__codelineno-0-991">991</a></span>
+<span class="normal"><a href="#__codelineno-0-992">992</a></span>
+<span class="normal"><a href="#__codelineno-0-993">993</a></span>
+<span class="normal"><a href="#__codelineno-0-994">994</a></span>
+<span class="normal"><a href="#__codelineno-0-995">995</a></span>
+<span class="normal"><a href="#__codelineno-0-996">996</a></span>
+<span class="normal"><a href="#__codelineno-0-997">997</a></span>
+<span class="normal"><a href="#__codelineno-0-998">998</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-948" name="__codelineno-0-948"></a><span class="k">def</span><span class="w"> </span><span class="nf">three_d</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;3d&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-949" name="__codelineno-0-949"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the PyVista tier, for ``plot(backend=&quot;3d&quot;)``.</span>
+<a id="__codelineno-0-950" name="__codelineno-0-950"></a>
+<a id="__codelineno-0-951" name="__codelineno-0-951"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-952" name="__codelineno-0-952"></a><span class="sd">        obj: The pyramids object the facade was called on.</span>
+<a id="__codelineno-0-953" name="__codelineno-0-953"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
+<a id="__codelineno-0-954" name="__codelineno-0-954"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
+<a id="__codelineno-0-955" name="__codelineno-0-955"></a>
+<a id="__codelineno-0-956" name="__codelineno-0-956"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-957" name="__codelineno-0-957"></a><span class="sd">        A :class:`~digitalearth.three_d.Scene3D`.</span>
+<a id="__codelineno-0-958" name="__codelineno-0-958"></a>
+<a id="__codelineno-0-959" name="__codelineno-0-959"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-960" name="__codelineno-0-960"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an</span>
+<a id="__codelineno-0-961" name="__codelineno-0-961"></a><span class="sd">            animation request — the 3-D tier&#39;s animation verbs cannot be driven from a plot call</span>
+<a id="__codelineno-0-962" name="__codelineno-0-962"></a><span class="sd">            (see :data:`ANIMATION_BACKENDS`).</span>
+<a id="__codelineno-0-963" name="__codelineno-0-963"></a>
+<a id="__codelineno-0-964" name="__codelineno-0-964"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-965" name="__codelineno-0-965"></a><span class="sd">        - Reached through pyramids (needs the ``3d`` extra, so this one is shown rather than run):</span>
+<a id="__codelineno-0-966" name="__codelineno-0-966"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-967" name="__codelineno-0-967"></a><span class="sd">            from pyramids.dataset import Dataset</span>
+<a id="__codelineno-0-968" name="__codelineno-0-968"></a>
+<a id="__codelineno-0-969" name="__codelineno-0-969"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-970" name="__codelineno-0-970"></a><span class="sd">            scene = ds.plot(backend=&quot;3d&quot;, band=0)</span>
+<a id="__codelineno-0-971" name="__codelineno-0-971"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-972" name="__codelineno-0-972"></a><span class="sd">        - An animation request is refused by name, and names the two verbs that do animate a scene:</span>
+<a id="__codelineno-0-973" name="__codelineno-0-973"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-974" name="__codelineno-0-974"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import three_d</span>
+<a id="__codelineno-0-975" name="__codelineno-0-975"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-976" name="__codelineno-0-976"></a><span class="sd">            ...     three_d(&quot;a-dataset&quot;, backend=&quot;3d&quot;, animate=True)</span>
+<a id="__codelineno-0-977" name="__codelineno-0-977"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-978" name="__codelineno-0-978"></a><span class="sd">            ...     print(str(exc).split(&quot;:&quot;)[0])</span>
+<a id="__codelineno-0-979" name="__codelineno-0-979"></a><span class="sd">            animate(backend=&#39;3d&#39;) is not served through the pyramids plot-backend seam</span>
+<a id="__codelineno-0-980" name="__codelineno-0-980"></a>
+<a id="__codelineno-0-981" name="__codelineno-0-981"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-982" name="__codelineno-0-982"></a><span class="sd">        - A band that is not a 0-based index is refused here rather than by the reader, far away:</span>
+<a id="__codelineno-0-983" name="__codelineno-0-983"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-984" name="__codelineno-0-984"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import three_d</span>
+<a id="__codelineno-0-985" name="__codelineno-0-985"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-986" name="__codelineno-0-986"></a><span class="sd">            ...     three_d(&quot;a-dataset&quot;, backend=&quot;3d&quot;, band=1.5)</span>
+<a id="__codelineno-0-987" name="__codelineno-0-987"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-988" name="__codelineno-0-988"></a><span class="sd">            ...     print(exc)</span>
+<a id="__codelineno-0-989" name="__codelineno-0-989"></a><span class="sd">            band=1.5 is not a 0-based band index; pass an integer, where the first band is 0</span>
+<a id="__codelineno-0-990" name="__codelineno-0-990"></a>
+<a id="__codelineno-0-991" name="__codelineno-0-991"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-992" name="__codelineno-0-992"></a>
+<a id="__codelineno-0-993" name="__codelineno-0-993"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-994" name="__codelineno-0-994"></a><span class="sd">        interactive: The same seam on the HoloViz tier, which does serve an animation.</span>
+<a id="__codelineno-0-995" name="__codelineno-0-995"></a><span class="sd">        web: The same seam on the MapLibre tier.</span>
+<a id="__codelineno-0-996" name="__codelineno-0-996"></a><span class="sd">        ANIMATION_BACKENDS: Why this tier is absent from it.</span>
+<a id="__codelineno-0-997" name="__codelineno-0-997"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-998" name="__codelineno-0-998"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -5956,107 +6027,107 @@ BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/pyramids_backend.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-904">904</a></span>
-<span class="normal"><a href="#__codelineno-0-905">905</a></span>
-<span class="normal"><a href="#__codelineno-0-906">906</a></span>
-<span class="normal"><a href="#__codelineno-0-907">907</a></span>
-<span class="normal"><a href="#__codelineno-0-908">908</a></span>
-<span class="normal"><a href="#__codelineno-0-909">909</a></span>
-<span class="normal"><a href="#__codelineno-0-910">910</a></span>
-<span class="normal"><a href="#__codelineno-0-911">911</a></span>
-<span class="normal"><a href="#__codelineno-0-912">912</a></span>
-<span class="normal"><a href="#__codelineno-0-913">913</a></span>
-<span class="normal"><a href="#__codelineno-0-914">914</a></span>
-<span class="normal"><a href="#__codelineno-0-915">915</a></span>
-<span class="normal"><a href="#__codelineno-0-916">916</a></span>
-<span class="normal"><a href="#__codelineno-0-917">917</a></span>
-<span class="normal"><a href="#__codelineno-0-918">918</a></span>
-<span class="normal"><a href="#__codelineno-0-919">919</a></span>
-<span class="normal"><a href="#__codelineno-0-920">920</a></span>
-<span class="normal"><a href="#__codelineno-0-921">921</a></span>
-<span class="normal"><a href="#__codelineno-0-922">922</a></span>
-<span class="normal"><a href="#__codelineno-0-923">923</a></span>
-<span class="normal"><a href="#__codelineno-0-924">924</a></span>
-<span class="normal"><a href="#__codelineno-0-925">925</a></span>
-<span class="normal"><a href="#__codelineno-0-926">926</a></span>
-<span class="normal"><a href="#__codelineno-0-927">927</a></span>
-<span class="normal"><a href="#__codelineno-0-928">928</a></span>
-<span class="normal"><a href="#__codelineno-0-929">929</a></span>
-<span class="normal"><a href="#__codelineno-0-930">930</a></span>
-<span class="normal"><a href="#__codelineno-0-931">931</a></span>
-<span class="normal"><a href="#__codelineno-0-932">932</a></span>
-<span class="normal"><a href="#__codelineno-0-933">933</a></span>
-<span class="normal"><a href="#__codelineno-0-934">934</a></span>
-<span class="normal"><a href="#__codelineno-0-935">935</a></span>
-<span class="normal"><a href="#__codelineno-0-936">936</a></span>
-<span class="normal"><a href="#__codelineno-0-937">937</a></span>
-<span class="normal"><a href="#__codelineno-0-938">938</a></span>
-<span class="normal"><a href="#__codelineno-0-939">939</a></span>
-<span class="normal"><a href="#__codelineno-0-940">940</a></span>
-<span class="normal"><a href="#__codelineno-0-941">941</a></span>
-<span class="normal"><a href="#__codelineno-0-942">942</a></span>
-<span class="normal"><a href="#__codelineno-0-943">943</a></span>
-<span class="normal"><a href="#__codelineno-0-944">944</a></span>
-<span class="normal"><a href="#__codelineno-0-945">945</a></span>
-<span class="normal"><a href="#__codelineno-0-946">946</a></span>
-<span class="normal"><a href="#__codelineno-0-947">947</a></span>
-<span class="normal"><a href="#__codelineno-0-948">948</a></span>
-<span class="normal"><a href="#__codelineno-0-949">949</a></span>
-<span class="normal"><a href="#__codelineno-0-950">950</a></span>
-<span class="normal"><a href="#__codelineno-0-951">951</a></span>
-<span class="normal"><a href="#__codelineno-0-952">952</a></span>
-<span class="normal"><a href="#__codelineno-0-953">953</a></span>
-<span class="normal"><a href="#__codelineno-0-954">954</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-904" name="__codelineno-0-904"></a><span class="k">def</span><span class="w"> </span><span class="nf">web</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<a id="__codelineno-0-905" name="__codelineno-0-905"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the MapLibre tier, for ``plot(backend=&quot;web&quot;)``.</span>
-<a id="__codelineno-0-906" name="__codelineno-0-906"></a>
-<a id="__codelineno-0-907" name="__codelineno-0-907"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-908" name="__codelineno-0-908"></a><span class="sd">        obj: The pyramids object the facade was called on.</span>
-<a id="__codelineno-0-909" name="__codelineno-0-909"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
-<a id="__codelineno-0-910" name="__codelineno-0-910"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
-<a id="__codelineno-0-911" name="__codelineno-0-911"></a>
-<a id="__codelineno-0-912" name="__codelineno-0-912"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-913" name="__codelineno-0-913"></a><span class="sd">        A :class:`~digitalearth.web.WebMap`, or — for an animation call — the path the animation</span>
-<a id="__codelineno-0-914" name="__codelineno-0-914"></a><span class="sd">        was written to.</span>
-<a id="__codelineno-0-915" name="__codelineno-0-915"></a>
-<a id="__codelineno-0-916" name="__codelineno-0-916"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-917" name="__codelineno-0-917"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an</span>
-<a id="__codelineno-0-918" name="__codelineno-0-918"></a><span class="sd">            animation call that named no ``path`` (the web tier animates only to a file).</span>
-<a id="__codelineno-0-919" name="__codelineno-0-919"></a>
-<a id="__codelineno-0-920" name="__codelineno-0-920"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-921" name="__codelineno-0-921"></a><span class="sd">        - Reached through pyramids (needs the ``web`` extra, so this one is shown rather than run):</span>
-<a id="__codelineno-0-922" name="__codelineno-0-922"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-923" name="__codelineno-0-923"></a><span class="sd">            from pyramids.dataset import Dataset</span>
-<a id="__codelineno-0-924" name="__codelineno-0-924"></a>
-<a id="__codelineno-0-925" name="__codelineno-0-925"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
-<a id="__codelineno-0-926" name="__codelineno-0-926"></a><span class="sd">            scene = ds.plot(backend=&quot;web&quot;, band=0, colorbar=True)</span>
-<a id="__codelineno-0-927" name="__codelineno-0-927"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-928" name="__codelineno-0-928"></a><span class="sd">        - This tier animates only to a file, so an animation with no destination says what to pass:</span>
-<a id="__codelineno-0-929" name="__codelineno-0-929"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-930" name="__codelineno-0-930"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import web</span>
-<a id="__codelineno-0-931" name="__codelineno-0-931"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-932" name="__codelineno-0-932"></a><span class="sd">            ...     web(&quot;a-stack&quot;, backend=&quot;web&quot;, animate=True)</span>
-<a id="__codelineno-0-933" name="__codelineno-0-933"></a><span class="sd">            ... except ValueError as exc:</span>
-<a id="__codelineno-0-934" name="__codelineno-0-934"></a><span class="sd">            ...     print(str(exc).split(&quot;;&quot;)[0])</span>
-<a id="__codelineno-0-935" name="__codelineno-0-935"></a><span class="sd">            animate(backend=&#39;web&#39;) writes the animation to a file, so it needs a path</span>
-<a id="__codelineno-0-936" name="__codelineno-0-936"></a>
-<a id="__codelineno-0-937" name="__codelineno-0-937"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-938" name="__codelineno-0-938"></a><span class="sd">        - Animating a single raster&#39;s bands is refused: this seam steps through a stack&#39;s members:</span>
-<a id="__codelineno-0-939" name="__codelineno-0-939"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-940" name="__codelineno-0-940"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import web</span>
-<a id="__codelineno-0-941" name="__codelineno-0-941"></a><span class="sd">            &gt;&gt;&gt; try:</span>
-<a id="__codelineno-0-942" name="__codelineno-0-942"></a><span class="sd">            ...     web(&quot;a-dataset&quot;, backend=&quot;web&quot;, animate=True, bands=[0, 1])</span>
-<a id="__codelineno-0-943" name="__codelineno-0-943"></a><span class="sd">            ... except ValueError as exc:</span>
-<a id="__codelineno-0-944" name="__codelineno-0-944"></a><span class="sd">            ...     print(str(exc).split(&quot;: &quot;)[1].split(&quot;.&quot;)[0])</span>
-<a id="__codelineno-0-945" name="__codelineno-0-945"></a><span class="sd">            this seam animates a stack, stepping through its members</span>
-<a id="__codelineno-0-946" name="__codelineno-0-946"></a>
-<a id="__codelineno-0-947" name="__codelineno-0-947"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-948" name="__codelineno-0-948"></a>
-<a id="__codelineno-0-949" name="__codelineno-0-949"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-950" name="__codelineno-0-950"></a><span class="sd">        interactive: The same seam on the HoloViz tier, whose animation needs no destination.</span>
-<a id="__codelineno-0-951" name="__codelineno-0-951"></a><span class="sd">        three_d: The same seam on the PyVista tier.</span>
-<a id="__codelineno-0-952" name="__codelineno-0-952"></a><span class="sd">        BAND_ORIGIN_SHIFT: The offset between the facade&#39;s band index and this package&#39;s.</span>
-<a id="__codelineno-0-953" name="__codelineno-0-953"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-954" name="__codelineno-0-954"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1001">1001</a></span>
+<span class="normal"><a href="#__codelineno-0-1002">1002</a></span>
+<span class="normal"><a href="#__codelineno-0-1003">1003</a></span>
+<span class="normal"><a href="#__codelineno-0-1004">1004</a></span>
+<span class="normal"><a href="#__codelineno-0-1005">1005</a></span>
+<span class="normal"><a href="#__codelineno-0-1006">1006</a></span>
+<span class="normal"><a href="#__codelineno-0-1007">1007</a></span>
+<span class="normal"><a href="#__codelineno-0-1008">1008</a></span>
+<span class="normal"><a href="#__codelineno-0-1009">1009</a></span>
+<span class="normal"><a href="#__codelineno-0-1010">1010</a></span>
+<span class="normal"><a href="#__codelineno-0-1011">1011</a></span>
+<span class="normal"><a href="#__codelineno-0-1012">1012</a></span>
+<span class="normal"><a href="#__codelineno-0-1013">1013</a></span>
+<span class="normal"><a href="#__codelineno-0-1014">1014</a></span>
+<span class="normal"><a href="#__codelineno-0-1015">1015</a></span>
+<span class="normal"><a href="#__codelineno-0-1016">1016</a></span>
+<span class="normal"><a href="#__codelineno-0-1017">1017</a></span>
+<span class="normal"><a href="#__codelineno-0-1018">1018</a></span>
+<span class="normal"><a href="#__codelineno-0-1019">1019</a></span>
+<span class="normal"><a href="#__codelineno-0-1020">1020</a></span>
+<span class="normal"><a href="#__codelineno-0-1021">1021</a></span>
+<span class="normal"><a href="#__codelineno-0-1022">1022</a></span>
+<span class="normal"><a href="#__codelineno-0-1023">1023</a></span>
+<span class="normal"><a href="#__codelineno-0-1024">1024</a></span>
+<span class="normal"><a href="#__codelineno-0-1025">1025</a></span>
+<span class="normal"><a href="#__codelineno-0-1026">1026</a></span>
+<span class="normal"><a href="#__codelineno-0-1027">1027</a></span>
+<span class="normal"><a href="#__codelineno-0-1028">1028</a></span>
+<span class="normal"><a href="#__codelineno-0-1029">1029</a></span>
+<span class="normal"><a href="#__codelineno-0-1030">1030</a></span>
+<span class="normal"><a href="#__codelineno-0-1031">1031</a></span>
+<span class="normal"><a href="#__codelineno-0-1032">1032</a></span>
+<span class="normal"><a href="#__codelineno-0-1033">1033</a></span>
+<span class="normal"><a href="#__codelineno-0-1034">1034</a></span>
+<span class="normal"><a href="#__codelineno-0-1035">1035</a></span>
+<span class="normal"><a href="#__codelineno-0-1036">1036</a></span>
+<span class="normal"><a href="#__codelineno-0-1037">1037</a></span>
+<span class="normal"><a href="#__codelineno-0-1038">1038</a></span>
+<span class="normal"><a href="#__codelineno-0-1039">1039</a></span>
+<span class="normal"><a href="#__codelineno-0-1040">1040</a></span>
+<span class="normal"><a href="#__codelineno-0-1041">1041</a></span>
+<span class="normal"><a href="#__codelineno-0-1042">1042</a></span>
+<span class="normal"><a href="#__codelineno-0-1043">1043</a></span>
+<span class="normal"><a href="#__codelineno-0-1044">1044</a></span>
+<span class="normal"><a href="#__codelineno-0-1045">1045</a></span>
+<span class="normal"><a href="#__codelineno-0-1046">1046</a></span>
+<span class="normal"><a href="#__codelineno-0-1047">1047</a></span>
+<span class="normal"><a href="#__codelineno-0-1048">1048</a></span>
+<span class="normal"><a href="#__codelineno-0-1049">1049</a></span>
+<span class="normal"><a href="#__codelineno-0-1050">1050</a></span>
+<span class="normal"><a href="#__codelineno-0-1051">1051</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1001" name="__codelineno-0-1001"></a><span class="k">def</span><span class="w"> </span><span class="nf">web</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-1002" name="__codelineno-0-1002"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the MapLibre tier, for ``plot(backend=&quot;web&quot;)``.</span>
+<a id="__codelineno-0-1003" name="__codelineno-0-1003"></a>
+<a id="__codelineno-0-1004" name="__codelineno-0-1004"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1005" name="__codelineno-0-1005"></a><span class="sd">        obj: The pyramids object the facade was called on.</span>
+<a id="__codelineno-0-1006" name="__codelineno-0-1006"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
+<a id="__codelineno-0-1007" name="__codelineno-0-1007"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
+<a id="__codelineno-0-1008" name="__codelineno-0-1008"></a>
+<a id="__codelineno-0-1009" name="__codelineno-0-1009"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1010" name="__codelineno-0-1010"></a><span class="sd">        A :class:`~digitalearth.web.WebMap`, or — for an animation call — the path the animation</span>
+<a id="__codelineno-0-1011" name="__codelineno-0-1011"></a><span class="sd">        was written to.</span>
+<a id="__codelineno-0-1012" name="__codelineno-0-1012"></a>
+<a id="__codelineno-0-1013" name="__codelineno-0-1013"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1014" name="__codelineno-0-1014"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an</span>
+<a id="__codelineno-0-1015" name="__codelineno-0-1015"></a><span class="sd">            animation call that named no ``path`` (the web tier animates only to a file).</span>
+<a id="__codelineno-0-1016" name="__codelineno-0-1016"></a>
+<a id="__codelineno-0-1017" name="__codelineno-0-1017"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1018" name="__codelineno-0-1018"></a><span class="sd">        - Reached through pyramids (needs the ``web`` extra, so this one is shown rather than run):</span>
+<a id="__codelineno-0-1019" name="__codelineno-0-1019"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1020" name="__codelineno-0-1020"></a><span class="sd">            from pyramids.dataset import Dataset</span>
+<a id="__codelineno-0-1021" name="__codelineno-0-1021"></a>
+<a id="__codelineno-0-1022" name="__codelineno-0-1022"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-1023" name="__codelineno-0-1023"></a><span class="sd">            scene = ds.plot(backend=&quot;web&quot;, band=0, colorbar=True)</span>
+<a id="__codelineno-0-1024" name="__codelineno-0-1024"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1025" name="__codelineno-0-1025"></a><span class="sd">        - This tier animates only to a file, so an animation with no destination says what to pass:</span>
+<a id="__codelineno-0-1026" name="__codelineno-0-1026"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1027" name="__codelineno-0-1027"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import web</span>
+<a id="__codelineno-0-1028" name="__codelineno-0-1028"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1029" name="__codelineno-0-1029"></a><span class="sd">            ...     web(&quot;a-stack&quot;, backend=&quot;web&quot;, animate=True)</span>
+<a id="__codelineno-0-1030" name="__codelineno-0-1030"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1031" name="__codelineno-0-1031"></a><span class="sd">            ...     print(str(exc).split(&quot;;&quot;)[0])</span>
+<a id="__codelineno-0-1032" name="__codelineno-0-1032"></a><span class="sd">            animate(backend=&#39;web&#39;) writes the animation to a file, so it needs a path</span>
+<a id="__codelineno-0-1033" name="__codelineno-0-1033"></a>
+<a id="__codelineno-0-1034" name="__codelineno-0-1034"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1035" name="__codelineno-0-1035"></a><span class="sd">        - Animating a single raster&#39;s bands is refused: this seam steps through a stack&#39;s members:</span>
+<a id="__codelineno-0-1036" name="__codelineno-0-1036"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1037" name="__codelineno-0-1037"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import web</span>
+<a id="__codelineno-0-1038" name="__codelineno-0-1038"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1039" name="__codelineno-0-1039"></a><span class="sd">            ...     web(&quot;a-dataset&quot;, backend=&quot;web&quot;, animate=True, bands=[0, 1])</span>
+<a id="__codelineno-0-1040" name="__codelineno-0-1040"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1041" name="__codelineno-0-1041"></a><span class="sd">            ...     print(str(exc).split(&quot;: &quot;)[1].split(&quot;.&quot;)[0])</span>
+<a id="__codelineno-0-1042" name="__codelineno-0-1042"></a><span class="sd">            this seam animates a stack, stepping through its members</span>
+<a id="__codelineno-0-1043" name="__codelineno-0-1043"></a>
+<a id="__codelineno-0-1044" name="__codelineno-0-1044"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1045" name="__codelineno-0-1045"></a>
+<a id="__codelineno-0-1046" name="__codelineno-0-1046"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-1047" name="__codelineno-0-1047"></a><span class="sd">        interactive: The same seam on the HoloViz tier, whose animation needs no destination.</span>
+<a id="__codelineno-0-1048" name="__codelineno-0-1048"></a><span class="sd">        three_d: The same seam on the PyVista tier.</span>
+<a id="__codelineno-0-1049" name="__codelineno-0-1049"></a><span class="sd">        BAND_ORIGIN_SHIFT: The offset between the facade&#39;s band index and this package&#39;s.</span>
+<a id="__codelineno-0-1050" name="__codelineno-0-1050"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1051" name="__codelineno-0-1051"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
