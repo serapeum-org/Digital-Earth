@@ -233,6 +233,30 @@ class _Forwarded:
         fps: Playback rate in frames per second, or ``None`` when the call named no ``interval``.
         path: Where to write the animation, or ``None`` when the caller named no ``path``.
         labels: The per-step labels the facade forwarded as ``animation_axis_values``.
+
+    Examples:
+        - A still plot's record carries the translated draw keywords and nothing else:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded
+            >>> plan = _Forwarded.from_facade("web", {"band": 0, "title": "DEM"})
+            >>> plan.animate, plan.title, plan.draw["band"]
+            (False, 'DEM', 1)
+
+            ```
+        - An animation's record separates the frame keywords from the draw ones:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded
+            >>> plan = _Forwarded.from_facade(
+            ...     "interactive", {"animate": True, "interval": 200, "cmap": "viridis"}
+            ... )
+            >>> plan.animate, plan.fps, plan.draw
+            (True, 5.0, {'cmap': 'viridis'})
+
+            ```
+
+    See Also:
+        _Forwarded.from_facade: Builds one from a facade call, applying every translation.
+        _Forwarded.destination: The resolved animation path, for the tiers that write one.
     """
 
     backend: str
@@ -623,15 +647,41 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
         ValueError: for a forwarded keyword this seam cannot serve, or an unusable band/interval.
 
     Examples:
-        - The callable conforms to the seam's render shape, so discovery never skips it:
+        - Reached through pyramids, which forwards its own keywords (needs the ``interactive``
+          extra, so this one is shown rather than run):
             ```python
-            >>> import inspect
+            from pyramids.dataset import Dataset
+
+            ds = Dataset.read_file("examples/data/acc4000.tif")
+            scene = ds.plot(backend="interactive", band=0, title="DEM")
+            ```
+        - A keyword this seam cannot serve is refused in digitalearth's own words, before any
+          engine is imported, and says where the capability does live:
+            ```python
             >>> from digitalearth.pyramids_backend import interactive
-            >>> bound = inspect.signature(interactive).bind("a-dataset", backend="interactive")
-            >>> sorted(bound.arguments)
-            ['backend', 'obj']
+            >>> try:
+            ...     interactive("a-dataset", backend="interactive", rgb_options={})
+            ... except ValueError as exc:
+            ...     print(str(exc).split(": ")[1].split(". Drop")[0])
+            a three-band composite is built with Map.rgb_composite on the static tier, which this seam does not reach
 
             ```
+        - An animation keyword on a still plot is named rather than ignored, which is what it used
+          to be:
+            ```python
+            >>> from digitalearth.pyramids_backend import interactive
+            >>> try:
+            ...     interactive("a-dataset", backend="interactive", interval=200)
+            ... except ValueError as exc:
+            ...     print(str(exc).split(". ")[0])
+            plot(interval=…) only applies to an animation; this is a still plot on backend='interactive'
+
+            ```
+
+    See Also:
+        three_d: The same seam on the PyVista tier.
+        web: The same seam on the MapLibre tier.
+        ANIMATION_BACKENDS: Which tiers serve an ``animate`` call.
     """
     return _render(obj, backend, kwargs)
 
@@ -653,15 +703,38 @@ def three_d(obj: Any, *, backend: str = "3d", **kwargs: Any) -> Any:
             (see :data:`ANIMATION_BACKENDS`).
 
     Examples:
-        - The callable conforms to the seam's render shape:
+        - Reached through pyramids (needs the ``3d`` extra, so this one is shown rather than run):
             ```python
-            >>> import inspect
+            from pyramids.dataset import Dataset
+
+            ds = Dataset.read_file("examples/data/acc4000.tif")
+            scene = ds.plot(backend="3d", band=0)
+            ```
+        - An animation request is refused by name, and names the two verbs that do animate a scene:
+            ```python
             >>> from digitalearth.pyramids_backend import three_d
-            >>> bound = inspect.signature(three_d).bind("a-dataset", backend="3d")
-            >>> sorted(bound.arguments)
-            ['backend', 'obj']
+            >>> try:
+            ...     three_d("a-dataset", backend="3d", animate=True)
+            ... except ValueError as exc:
+            ...     print(str(exc).split(":")[0])
+            animate(backend='3d') is not served through the pyramids plot-backend seam
 
             ```
+        - A band that is not a 0-based index is refused here rather than by the reader, far away:
+            ```python
+            >>> from digitalearth.pyramids_backend import three_d
+            >>> try:
+            ...     three_d("a-dataset", backend="3d", band=1.5)
+            ... except ValueError as exc:
+            ...     print(exc)
+            band=1.5 is not a 0-based band index; pass an integer, where the first band is 0
+
+            ```
+
+    See Also:
+        interactive: The same seam on the HoloViz tier, which does serve an animation.
+        web: The same seam on the MapLibre tier.
+        ANIMATION_BACKENDS: Why this tier is absent from it.
     """
     return _render(obj, backend, kwargs)
 
@@ -683,14 +756,37 @@ def web(obj: Any, *, backend: str = "web", **kwargs: Any) -> Any:
             animation call that named no ``path`` (the web tier animates only to a file).
 
     Examples:
-        - The callable conforms to the seam's render shape:
+        - Reached through pyramids (needs the ``web`` extra, so this one is shown rather than run):
             ```python
-            >>> import inspect
+            from pyramids.dataset import Dataset
+
+            ds = Dataset.read_file("examples/data/acc4000.tif")
+            scene = ds.plot(backend="web", band=0, colorbar=True)
+            ```
+        - This tier animates only to a file, so an animation with no destination says what to pass:
+            ```python
             >>> from digitalearth.pyramids_backend import web
-            >>> bound = inspect.signature(web).bind("a-dataset", backend="web")
-            >>> sorted(bound.arguments)
-            ['backend', 'obj']
+            >>> try:
+            ...     web("a-stack", backend="web", animate=True)
+            ... except ValueError as exc:
+            ...     print(str(exc).split(";")[0])
+            animate(backend='web') writes the animation to a file, so it needs a path
 
             ```
+        - Animating a single raster's bands is refused: this seam steps through a stack's members:
+            ```python
+            >>> from digitalearth.pyramids_backend import web
+            >>> try:
+            ...     web("a-dataset", backend="web", animate=True, bands=[0, 1])
+            ... except ValueError as exc:
+            ...     print(str(exc).split(": ")[1].split(".")[0])
+            this seam animates a stack, stepping through its members
+
+            ```
+
+    See Also:
+        interactive: The same seam on the HoloViz tier, whose animation needs no destination.
+        three_d: The same seam on the PyVista tier.
+        BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's.
     """
     return _render(obj, backend, kwargs)
