@@ -263,6 +263,7 @@ nav:
   - Reference:
     - Figure vocabulary: reference/vocabulary.md
     - Backend support matrix: reference/support-matrix.md
+    - pyramids plot backend (plugin): reference/pyramids-plot-backend.md
     - Maps (matplotlib): reference/static_map.md
     - Scenes & multi-panel figures (matplotlib): reference/static_scene.md
     - Interactive maps (HoloViz): reference/interactive_map.md
