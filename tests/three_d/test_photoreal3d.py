@@ -241,7 +241,8 @@ class TestPhotorealRender:
         """denoise=False skips OIDN and still returns a non-blank frame."""
         scene = _small_terrain_scene()
         img = scene.photoreal(spp=4, width=80, height=60, denoise=False)
-        assert img.shape == (60, 80, 3) and int(img.max()) > 0, img.shape
+        assert img.shape == (60, 80, 3), img.shape
+        assert int(img.max()) > 0, "the undenoised render must not be entirely black"
         scene.close()
 
     def test_an_empty_scene_is_refused(self):
