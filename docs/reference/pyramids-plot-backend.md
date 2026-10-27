@@ -39,21 +39,38 @@ in. Everything else passes through untouched.
 | pyramids forwards | digitalearth takes | Why |
 |---|---|---|
 | `band=0` (0-based) | `band=1` (1-based) | 0-based upstream, 1-based here. Unshifted,<br>`band=0` read as index `-1`. |
-| `variable_name=` | `variable=` | The `UgridDataset` facade's spelling of<br>the mesh selector. |
+| `variable_name=` | `variable=` | The `UgridDataset` facade's spelling.<br>Inert today — see below. |
 | `interval=200` (ms/frame) | `fps=5.0` | The facades describe an interval; the<br>tier verbs take a rate. |
 
-`title`, `basemap`, a bool `colorbar`, `kind`, `cmap`, `column` and `variable` need no translation and
-are forwarded as they arrive.
+`cmap`, `variable`, a bool `colorbar` and `band` (once shifted) are forwarded to the builder as they
+arrive. Three others are not simply passed along, because the tiers differ:
 
-## What is refused, and why it is not ignored
+- **`title`** is applied through the scene, not the builder. The web and 3-D raster builders refuse
+  it (`RasterMixin.field() got an unexpected keyword argument 'title'`, and on 3-D PyVista's own
+  `"title" is an invalid keyword argument`), so it is set with `set_title` after the scene is built.
+  The HoloViz tier has no `set_title` and does accept `title`, so there it stays with the builder.
+- **`basemap`** is a verb on the scene in every tier that has one, never a constructor argument.
+- **`kind`** reaches the builder, but only the HoloViz tier has alternative raster renderers. On web
+  and 3-D a non-default `kind` is refused by that tier: `kind= is not supported by backend='web'`.
+
+A `column` is forwarded, and is accepted only where that tier's render takes one — on a still raster
+plot it is refused by the tier (`'column' is not an option Image takes on the bokeh backend`).
+
+## What is refused, and why it is refused here
 
 pyramids drops defaulted arguments before forwarding, so anything that arrives was set deliberately.
-An argument this seam cannot honour is therefore refused **by name** rather than dropped — a
-silently-ignored argument is indistinguishable from an applied one.
+An argument this seam cannot honour is refused **by name**, in terms of the call you made. Left to
+the tier it is still refused — but for the builder it happened to reach, and on the 3-D tier in
+PyVista's terms rather than digitalearth's:
+
+```text
+ds.plot(backend="3d", title="DEM")
+TypeError: "title" is an invalid keyword argument for `_common_arg_parser`
+```
 
 | Refused | Do this instead |
 |---|---|
-| `exclude_value` | digitalearth applies its own nodata handling; mask upstream, or plot on `backend="matplotlib"`. |
+| `exclude_value` | No entry point here takes a nodata value;<br>mask the raster in pyramids before plotting. |
 | `rgb_options` | Build the composite with `Map.rgb_composite` on the static tier. |
 | `selectors`, `axes` | Choose a NetCDF slice with `variable=` and `band=`. |
 | `bands`, `animation_axis_values`, `interval`<br>on a **still** plot | Call `animate(backend=…)` instead. |
@@ -71,10 +88,17 @@ from pyramids.dataset.collection import DatasetCollection
 
 stack = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
 
-stack.animate(backend="interactive", interval=200)                     # a Panel player
-stack.animate(backend="interactive", interval=200, path="flood.gif")   # written to a file
-stack.animate(backend="web", interval=200, path="flood.gif")           # written to a file
+stack.animate(backend="interactive", interval=120)                     # a Panel player
+stack.animate(backend="interactive", interval=120, path="flood.gif")   # written to a file
+stack.animate(backend="web", interval=120, path="flood.gif")           # written to a file
 ```
+
+!!! note "Leave `interval` out and the speed is digitalearth's, not pyramids'"
+    `interval=200` is pyramids' own default, and a facade **drops** a defaulted argument before
+    forwarding it — so the backend cannot tell "the caller asked for 200 ms" from "the caller said
+    nothing". With nothing forwarded, the tier uses digitalearth's shared `DEFAULT_FPS` of `3.0`,
+    which is **333 ms** a frame, where a plain `stack.animate()` on matplotlib runs at pyramids'
+    200 ms. Pass a non-default `interval` when the speed matters.
 
 - **interactive** builds a time cube and returns a Panel player, or writes a GIF/MP4 when you pass a
   `path`.
@@ -83,19 +107,38 @@ stack.animate(backend="web", interval=200, path="flood.gif")           # written
   `Scene3D.orbit` sweeps the camera over a static scene, so neither can be driven from a plot call's
   keywords. Build the scene with digitalearth and call one of them directly.
 
+## A mesh is not drawn on these tiers
+
+`UgridDataset.plot(backend=…)` is refused before any keyword is read: only the matplotlib tier has a
+triangular render, which `digitalearth.api.MESH_BACKENDS` states. That is why the `variable_name`
+translation above is inert today — the call carrying it never gets that far:
+
+```text
+UgridDataset.plot(backend="web")
+TypeError: backend='web' has no unstructured-mesh render; draw a UgridDataset with
+backend='matplotlib', which shades each of its faces (tripcolor)
+```
+
 ## Checking what is registered
 
 ```python
 from pyramids.base._plot_backends import plot_backends, resolve_plot_backend
 
-sorted(plot_backends())            # ['3d', 'interactive', 'web']
-resolve_plot_backend("interactive")  # digitalearth.pyramids_backend:interactive
+sorted(plot_backends())              # ['3d', 'interactive', 'web']
+resolve_plot_backend("interactive")  # the callable itself, loaded from the entry point
 ```
 
+A registered entry point resolves to the **callable** — not to its `module:attr` string, and not to
+the `functools.partial` over `quickmap` that the fallback would hand back. That difference is how you
+tell the two apart.
+
 !!! warning "Needs a pyramids-core that ships the seam"
-    The `pyramids.plot_backends` group is resolved by pyramids-core's plot-backend seam. Until a
-    pyramids-core release carries it, the entry points are registered but nothing reads them, and
-    `plot(backend=…)` behaves as it did before. Nothing breaks in the meantime — the registration is
-    inert, not conflicting.
+    The `pyramids.plot_backends` group is resolved by pyramids-core's plot-backend seam, which merged
+    after `0.72.0` was cut and is therefore **in no release yet**: the installed `0.72.0` carries
+    neither `pyramids.base._plot_backends` nor the conformance kit, and `Dataset.plot` has no
+    `backend=` keyword. Until a release ships it, the entry points are registered and nothing reads
+    them — inert, not conflicting, and `plot()` behaves exactly as before. The declared floor of
+    `pyramids-core >=0.72.0` is simply the current release; it will need raising to whichever
+    release first carries the seam, at which point the two skipped tests here start guarding.
 
 ::: digitalearth.pyramids_backend
