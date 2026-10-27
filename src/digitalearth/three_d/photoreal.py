@@ -74,7 +74,10 @@ def _point_scalars(surf: Any) -> np.ndarray | None:
     # it to the points (same geometry, same value range, so the actor's LUT still applies) keeps its colouring.
     name = surf.active_scalars_name
     if name and name in surf.cell_data:
-        converted = surf.cell_data_to_point_data().point_data.get(name)
+        try:
+            converted = surf.cell_data_to_point_data().point_data.get(name)
+        except Exception:  # noqa: BLE001 - a VTK conversion failure falls back to solid, never aborts the render
+            return None
         if (
             converted is not None
             and np.ndim(converted) == 1

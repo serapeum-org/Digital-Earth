@@ -120,6 +120,24 @@ class TestPointScalars:
         surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
         assert _point_scalars(surf) is None, "a scalar-less surface must map to None"
 
+    def test_a_failing_cell_conversion_returns_none(self, monkeypatch):
+        """A VTK cell->point conversion that raises returns None, so the render degrades, not aborts (L1)."""
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _point_scalars, _triangulated_surface
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=3, j_resolution=3))
+        surf.cell_data["c"] = np.arange(surf.n_cells, dtype="float64")
+        surf.set_active_scalars("c", preference="cell")
+
+        def _boom():
+            raise RuntimeError("vtk cell->point boom")
+
+        monkeypatch.setattr(surf, "cell_data_to_point_data", _boom)
+        assert _point_scalars(surf) is None, (
+            "a failing conversion must degrade to solid, not raise"
+        )
+
 
 class TestVertexRgb:
     """`_vertex_rgb` maps scalars through the actor LUT, or falls back to a solid colour with a warning."""
