@@ -77,3 +77,101 @@ class TestAnimateThroughTheSeam:
         """
         with pytest.raises(ValueError, match="needs a path"):
             web(stack, backend="web", animate=True)
+
+
+class TestWhatTheAdapterDrivesOnThisTier:
+    """The tier verbs the adapter calls. The export itself needs a headless browser, so it is stubbed.
+
+    ``WebMap.save_animation`` raises ``ImportError`` without Playwright, which ``digitalearth[web]``
+    does not install — so the adapter's own wiring is asserted by capturing the call it makes.
+    """
+
+    @pytest.fixture
+    def captured(self, monkeypatch):
+        """Replace the tier's animation verbs, recording what the adapter asks of them.
+
+        Args:
+            monkeypatch: pytest's patcher.
+
+        Returns:
+            dict: ``save`` (path and kwargs), ``basemap`` and ``title`` call records.
+        """
+        from digitalearth.web import WebMap
+
+        record = {"save": [], "basemap": [], "title": []}
+        monkeypatch.setattr(
+            WebMap,
+            "save_animation",
+            lambda self, path, **k: record["save"].append((path, k)) or path,
+        )
+        monkeypatch.setattr(
+            WebMap, "basemap", lambda self, *a, **k: record["basemap"].append(a) or self
+        )
+        monkeypatch.setattr(
+            WebMap, "set_title", lambda self, *a, **k: record["title"].append(a) or self
+        )
+        return record
+
+    def test_the_destination_and_translated_rate_reach_the_export(
+        self, stack, captured
+    ):
+        """The written path and the rate converted from ``interval`` reach ``save_animation``.
+
+        Args:
+            stack: A three-step collection.
+            captured: The recorded tier calls.
+
+        Test scenario:
+            200 ms a frame is five frames a second. Forwarding the interval unchanged would ask this
+            tier for 200 fps.
+        """
+        web(stack, backend="web", animate=True, path="flood.gif", interval=200)
+        assert captured["save"] == [("flood.gif", {"fps": 5.0})], (
+            f"the export received {captured['save']}"
+        )
+
+    def test_an_export_without_an_interval_leaves_the_rate_to_the_tier(
+        self, stack, captured
+    ):
+        """With no ``interval``, ``save_animation`` is called without ``fps``.
+
+        Args:
+            stack: A three-step collection.
+            captured: The recorded tier calls.
+
+        Test scenario:
+            The shared ``DEFAULT_FPS`` is the one rate every tier reads; inventing a rate here would
+            override it for a caller who asked for nothing.
+        """
+        web(stack, backend="web", animate=True, path="flood.gif")
+        assert captured["save"] == [("flood.gif", {})], (
+            f"fps should not be invented: {captured['save']}"
+        )
+
+    def test_the_basemap_and_title_go_through_this_tiers_own_verbs(
+        self, stack, captured
+    ):
+        """``basemap`` and ``title`` are applied to the built scene, not to the constructor.
+
+        Args:
+            stack: A three-step collection.
+            captured: The recorded tier calls.
+
+        Test scenario:
+            ``WebMapBase.__init__`` takes neither, and has no ``**kwargs`` — so passing either to the
+            constructor is a ``TypeError``. The title in particular has to be set on the scene.
+        """
+        web(
+            stack,
+            backend="web",
+            animate=True,
+            path="f.gif",
+            basemap=True,
+            title="Flood",
+        )
+        assert captured["basemap"] == [()], (
+            f"the default basemap should be asked for: {captured}"
+        )
+        assert captured["title"] == [("Flood",)], (
+            f"the title should be set on the scene: {captured}"
+        )

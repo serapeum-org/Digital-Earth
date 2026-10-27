@@ -124,3 +124,87 @@ class TestStillPlotThroughTheSeam:
         assert isinstance(out, InteractiveMap), (
             f"expected an InteractiveMap, got {type(out)}"
         )
+
+
+class TestWhatTheAdapterDrivesOnThisTier:
+    """The tier verbs the adapter calls, stubbed so the wiring is asserted rather than the export."""
+
+    def test_a_forwarded_basemap_is_applied_through_the_tiers_own_verb(
+        self, stack, monkeypatch
+    ):
+        """``basemap=True`` reaches ``InteractiveMap.basemap``, not the constructor.
+
+        Args:
+            stack: A three-step collection.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            This tier's constructor takes only the frame (``crs``/``title``); a basemap is a verb on
+            the built scene, exactly as ``_quickmap_interactive`` applies it. Passing it to the
+            constructor would raise ``TypeError``, so the route matters.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        asked = []
+        monkeypatch.setattr(
+            InteractiveMap,
+            "basemap",
+            lambda self, *a, **k: asked.append((a, k)) or self,
+        )
+        interactive(stack, backend="interactive", animate=True, basemap=True)
+        assert asked == [((), {})], (
+            f"the default basemap should be asked for once, got {asked}"
+        )
+
+    def test_a_named_basemap_is_passed_on_rather_than_defaulted(
+        self, stack, monkeypatch
+    ):
+        """A basemap *source* is forwarded to the verb, instead of being read as "the default".
+
+        Args:
+            stack: A three-step collection.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            ``basemap`` is ``bool | str | Any`` upstream, so ``True`` and a provider name travel the
+            same keyword and must not be conflated.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        asked = []
+        monkeypatch.setattr(
+            InteractiveMap,
+            "basemap",
+            lambda self, *a, **k: asked.append((a, k)) or self,
+        )
+        interactive(
+            stack, backend="interactive", animate=True, basemap="CartoDB.Positron"
+        )
+        assert asked == [(("CartoDB.Positron",), {})], (
+            f"the source should be passed on, got {asked}"
+        )
+
+    def test_an_export_without_an_interval_leaves_the_rate_to_the_tier(
+        self, stack, monkeypatch
+    ):
+        """With no ``interval``, ``save_animation`` is called without ``fps``.
+
+        Args:
+            stack: A three-step collection.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            The tier's default rate is shared across backends (``DEFAULT_FPS``), so passing a
+            computed rate when the caller named none would silently override that one default with
+            this module's own guess.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        calls = []
+        monkeypatch.setattr(
+            InteractiveMap,
+            "save_animation",
+            lambda self, path, **k: calls.append((path, k)) or path,
+        )
+        interactive(stack, backend="interactive", animate=True, path="out.gif")
+        assert calls == [("out.gif", {})], f"fps should not be invented, got {calls}"
