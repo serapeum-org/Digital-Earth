@@ -87,6 +87,17 @@ dependencies = [
     "imageio >=2.34",
     "imageio-ffmpeg >=0.5",
 ]
+# Photorealistic path-traced stills for the 3-D tier (spike #496, option B): Mitsuba 3's CPU path tracer plus
+# the Intel OIDN denoiser — both pure-PyPI wheels — imported lazily via `_require_photoreal` so the rest of the
+# tier (and the [3d] extra) works without them. This is a SECOND renderer for the PyVista tier, not a
+# GIS/point-cloud/matplotlib engine, so it does not touch the pyramids/cleopatra/pointclouds boundaries. It
+# exists because an OSPRay-enabled VTK is not installable on any channel (see #496); Mitsuba is the installable,
+# CI-viable path tracer. NOTE: pixi exposes this extra as a feature named `photoreal`, used by the `photoreal`
+# env — do NOT also declare a `[tool.pixi.feature.photoreal.pypi-dependencies]` table.
+photoreal = [
+    "mitsuba >=3.9",
+    "oidn >=0.2",
+]
 # Interactive-2D tier (HoloViz: GeoViews -> HoloViews -> Bokeh, + Datashader + Panel). cartopy/pyproj arrive
 # transitively under geoviews as *its* deps and are never imported by us — pyramids stays the only GIS engine
 # (enforced by tests/test_no_competitor_imports.py).
@@ -606,6 +617,9 @@ web = { features = ["dev", "web"], solve-group = "web" }
 # live. Deliberately its own solve-group: it is the only env where VTK, the HoloViz stack and MapLibre
 # are resolved together, and it must not be able to move the single-backend envs' versions.
 all = { features = ["dev", "3d", "interactive", "web", "numba-numpy"], solve-group = "all" }
+# Photorealistic path tracing (Mitsuba + OIDN) on top of the 3-D tier. Its own solve-group so the heavy
+# path-tracer wheels stay out of viz3d/default/dev. Run: pixi run -e photoreal test-photoreal
+photoreal = { features = ["dev", "3d", "photoreal"], solve-group = "photoreal" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
 py312 = { features = ["py312", "dev"], solve-group = "py312" }
 py313 = { features = ["py313", "dev"], solve-group = "py313" }
