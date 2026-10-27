@@ -146,6 +146,9 @@ def _accepted_by(verb: Callable[..., Any]) -> tuple[frozenset[str], bool]:
             (['band'], True)
 
             ```
+
+    See Also:
+        _for_builder: Splits a forwarded set against what this reports.
     """
     parameters = inspect.signature(verb).parameters.values()
     # Only parameters with a default: the one without is the data itself, and listing it in a
@@ -202,6 +205,10 @@ def _for_builder(
             animate(backend='web') cannot apply colorbar=…; this render accepts band, cmap
 
             ```
+
+    See Also:
+        _accepted_by: Reads the signature this checks against.
+        _refuse_unserved: The earlier gate, for keywords no tier could serve.
     """
     accepted, absorbs = _accepted_by(verb)
     if absorbs:
@@ -798,6 +805,35 @@ def _animation_kwargs(plan: _Forwarded, verb: Callable[..., Any]) -> dict[str, A
 
     Raises:
         ValueError: for a forwarded keyword the builder cannot apply.
+
+    Examples:
+        - The frame keywords are held back and the step labels folded in:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _animation_kwargs
+            >>> def timecube(collection, *, band=1, labels=None, cmap=None):
+            ...     ...
+            >>> plan = _Forwarded.from_facade(
+            ...     "interactive",
+            ...     {"animate": True, "title": "T", "cmap": "magma", "animation_axis_values": [1, 2]},
+            ... )
+            >>> sorted(_animation_kwargs(plan, timecube).items())
+            [('cmap', 'magma'), ('labels', [1, 2])]
+
+            ```
+        - A named animation axis arrives as the builder's ``kdim``:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _animation_kwargs
+            >>> def timecube(collection, *, kdim="time", band=1):
+            ...     ...
+            >>> plan = _Forwarded.from_facade("interactive", {"animate": "step"})
+            >>> _animation_kwargs(plan, timecube)
+            {'kdim': 'step'}
+
+            ```
+
+    See Also:
+        _for_builder: Checks these against what the builder accepts.
+        _scene_kwargs: The frame half, which this one deliberately leaves out.
     """
     candidates = {
         name: value for name, value in plan.draw.items() if name not in _FRAME_KWARGS
@@ -861,6 +897,39 @@ def _framed(scene: Any, plan: _Forwarded, applied: Mapping[str, Any]) -> None:
     Raises:
         ValueError: when a frame keyword has no route at all on this tier — named rather than
             dropped.
+
+    Examples:
+        - A requested basemap is applied through the scene's own verb:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _framed
+            >>> class Scene:
+            ...     def __init__(self):
+            ...         self.asked = []
+            ...     def basemap(self, source=None):
+            ...         self.asked.append(source)
+            >>> scene = Scene()
+            >>> plan = _Forwarded.from_facade("web", {"animate": True, "basemap": "CartoDB"})
+            >>> _framed(scene, plan, {})
+            >>> scene.asked
+            ['CartoDB']
+
+            ```
+        - A scene with no route for a frame keyword is told, not quietly skipped:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _framed
+            >>> class Bare:
+            ...     pass
+            >>> plan = _Forwarded.from_facade("web", {"animate": True, "title": "Flood"})
+            >>> try:
+            ...     _framed(Bare(), plan, {})
+            ... except ValueError as exc:
+            ...     print(str(exc).split(": ")[1])
+            this tier has neither a title argument nor a set_title verb
+
+            ```
+
+    See Also:
+        _scene_kwargs: The frame keywords the constructor took, which this one skips.
     """
     if plan.basemap:
         basemap = getattr(scene, "basemap", None)
