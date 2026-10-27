@@ -212,7 +212,7 @@ class PhotorealMixin(_MixinBase):
             ValueError: when the scene has no renderable geometry.
 
         Examples:
-            - Render a terrain scene to a photorealistic still (needs the `photoreal` extra):
+            - Render a terrain scene to a photorealistic still (needs the ``photoreal`` extra):
                 ```python
                 >>> from pyramids.dataset import Dataset  # doctest: +SKIP
                 >>> from digitalearth.base.sources import get_source  # doctest: +SKIP
