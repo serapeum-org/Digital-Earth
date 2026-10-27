@@ -87,16 +87,17 @@ def _point_scalars(surf: Any) -> np.ndarray | None:
     return None
 
 
-def _vertex_rgb(surf: Any, actor: Any) -> np.ndarray:
+def _vertex_rgb(surf: Any, actor: Any, layer: str = "") -> np.ndarray:
     """Per-vertex float RGB in ``[0, 1]`` for a surface, mapped through the actor's LUT (solid colour otherwise).
 
     Point scalars map directly; cell scalars are interpolated to the points first (see :func:`_point_scalars`).
-    A surface with no mappable scalars falls back to the actor's solid colour and **warns**, so the fallback is
-    observable rather than a silently grey layer.
+    A surface with no mappable scalars falls back to the actor's solid colour and **warns** (naming ``layer`` so
+    each fallback layer warns distinctly), so the fallback is observable rather than a silently grey layer.
 
     Args:
         surf: A triangulated PyVista surface (``n_points`` vertices).
         actor: The PyVista actor the tier drew it with, whose mapper carries the colour lookup table.
+        layer: The layer's name, named in the fallback warning so per-layer warnings are not de-duplicated.
 
     Returns:
         numpy.ndarray: an ``(n_points, 3)`` float32 array of RGB in ``[0, 1]``.
@@ -115,8 +116,11 @@ def _vertex_rgb(surf: Any, actor: Any) -> np.ndarray:
             return np.ascontiguousarray(rgb)
         except Exception:  # noqa: BLE001 - any LUT/VTK hiccup falls back to a solid colour, never fails the render
             pass
+    # Name the layer so each fallback warns distinctly: identical messages are de-duplicated under Python's
+    # default warning filter, which would otherwise hide every fallback layer after the first.
+    where = f" ({layer})" if layer else ""
     warnings.warn(
-        "photoreal(): a layer has no point-mappable scalars; rendering it in a solid colour",
+        f"photoreal(): a layer{where} has no point-mappable scalars; rendering it in a solid colour",
         stacklevel=2,
     )
     try:
@@ -388,7 +392,7 @@ class PhotorealMixin(_MixinBase):
                 "float32"
             )
             normals = np.asarray(surf.point_data["Normals"], dtype="float32")
-            rgb = _vertex_rgb(surf, actor)
+            rgb = _vertex_rgb(surf, actor, layer=f"layer_{index}")
             ply = str(tmpdir / f"layer_{index}.ply")
             _write_colored_ply(ply, verts, faces, normals, rgb)
             shapes[f"layer_{index}"] = {

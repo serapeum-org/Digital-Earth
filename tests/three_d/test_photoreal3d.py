@@ -212,6 +212,18 @@ class TestVertexRgb:
             rgb = _vertex_rgb(surf, SimpleNamespace())
         assert np.allclose(rgb, _DEFAULT_SOLID_RGB), rgb[0]
 
+    def test_the_fallback_warning_names_the_layer(self):
+        """The fallback warning names the layer, so several fallback layers each warn (not de-duplicated) (N1)."""
+        from types import SimpleNamespace
+
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _triangulated_surface, _vertex_rgb
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        with pytest.warns(UserWarning, match=r"layer_7"):
+            _vertex_rgb(surf, SimpleNamespace(), layer="layer_7")
+
 
 class TestPhotorealMeshes:
     """`PhotorealMixin._photoreal_meshes` skips layers that carry no renderable triangles."""
