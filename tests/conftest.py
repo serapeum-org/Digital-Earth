@@ -161,3 +161,89 @@ def grib_collection():
 @pytest.fixture(scope="module")
 def points() -> GeoDataFrame:
     return gpd.read_file("tests/data/points.geojson")
+
+
+@pytest.fixture
+def ugrid_mesh():
+    """Return a factory for a two-face UGRID mesh: a quad and a triangle.
+
+    The quad fan-triangulates into two triangles and the triangle into one, so a face-located value that
+    is spread correctly reads back as ``[10, 10, 20]`` — the mesh's own faces rather than a Delaunay guess.
+    Shared by the base, static and quickmap suites, which all need the same mesh.
+
+    Returns:
+        Callable: ``build(location="face", node_x=None, steps=1, epsg=None)`` → a pyramids
+        ``UgridDataset``. ``location`` is ``"face"`` or ``"node"``; ``node_x`` overrides the node x
+        coordinates (pass non-finite ones to make a mesh no projection can place); ``steps`` > 1 gives the
+        variable a leading time axis, which is the shape UGRID model output normally has; ``epsg`` makes
+        the mesh declare a CRS, which is what puts it on the reprojecting path; ``second`` adds a second
+        face variable, so a selection can be told apart from the default.
+    """
+    import numpy as np
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    def build(
+        location: str = "face",
+        node_x=None,
+        steps: int = 1,
+        epsg=None,
+        second: bool = False,
+    ):
+        mesh = Mesh2d(
+            node_x=(
+                np.array([0.0, 1.0, 1.0, 0.0, 2.0])
+                if node_x is None
+                else np.asarray(node_x)
+            ),
+            node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
+            face_node_connectivity=Connectivity(
+                data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
+                fill_value=-1,
+                cf_role="face_node_connectivity",
+                original_start_index=0,
+            ),
+        )
+        name = "depth" if location == "face" else "zs"
+        per_step = (
+            np.array([10.0, 20.0])
+            if location == "face"
+            else np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        )
+        # steps > 1 gives the variable the leading time axis real UGRID output carries, each step offset
+        # by 100 so the step that was drawn is identifiable from its values alone.
+        data = (
+            per_step
+            if steps == 1
+            else np.stack([per_step + 100.0 * step for step in range(steps)])
+        )
+        held = {
+            name: MeshVariable(
+                name=name,
+                location=location,
+                mesh_name="m",
+                shape=data.shape,
+                _data=data,
+            )
+        }
+        if second:
+            # A second face variable with its own values, so the one drawn is identifiable.
+            held["roughness"] = MeshVariable(
+                name="roughness",
+                location="face",
+                mesh_name="m",
+                shape=(2,),
+                _data=np.array([30.0, 40.0]),
+            )
+        wkt = None
+        if epsg is not None:
+            from pyramids.base.crs import crs_from_user_input
+
+            wkt = crs_from_user_input(epsg).to_wkt()
+        return UgridDataset(
+            mesh=mesh, data_variables=held, global_attributes={}, crs_wkt=wkt
+        )
+
+    return build

@@ -1183,3 +1183,220 @@ class TestColumnOnPointsDiffersByTier:
             assert "size_column" in doc, (
                 f"{builder.__name__} must contrast with Map.points' size_column: {doc!r}"
             )
+
+
+def _two_variable_netcdf():
+    """Build a NetCDF carrying two variables whose values differ, so the drawn one is identifiable.
+
+    Returns:
+        The pyramids ``NetCDF`` container with variables ``"t2m"`` (ones) and ``"tp"`` (twos).
+    """
+    import numpy as np
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    nc = NetCDF.from_array(
+        np.full((1, 6, 6), 1.0, dtype="float32"), geo_ref=geo, variable_name="t2m"
+    )
+    # add_variable copies variables out of another container rather than taking a name and an array.
+    second = NetCDF.from_array(
+        np.full((1, 6, 6), 2.0, dtype="float32"), geo_ref=geo, variable_name="tp"
+    )
+    nc.add_variable(second)
+    return nc
+
+
+def test_quickmap_variable_draws_the_named_variable():
+    """``variable=`` draws the variable it names rather than the container's first one.
+
+    Test scenario:
+        The two variables hold different constants, so the drawn image's values say which was picked.
+        Without ``variable=`` the extractor takes the first, which is what #499 had no way to override.
+    """
+    import numpy as np
+
+    nc = _two_variable_netcdf()
+    drawn = digitalearth.quickmap(nc, variable="tp", backend="matplotlib")
+    values = np.unique(np.asarray(drawn.ax.images[0].get_array()).ravel()).tolist()
+    assert values == [2.0], f"expected the 'tp' variable (twos), drew {values}"
+
+
+def test_quickmap_variable_refuses_a_name_the_container_does_not_carry():
+    """An unknown variable name is refused by name, listing what the container does carry."""
+    nc = _two_variable_netcdf()
+    with pytest.raises(ValueError, match="is not in this NetCDF"):
+        digitalearth.quickmap(nc, variable="nope", backend="matplotlib")
+
+
+def test_quickmap_variable_refuses_a_non_netcdf_input():
+    """``variable=`` on an input with no variables to choose from is refused, not ignored."""
+    import numpy as np
+
+    grid = np.zeros((4, 4))
+    with pytest.raises(ValueError, match="selects a NetCDF or UgridDataset variable"):
+        digitalearth.quickmap(grid, variable="t2m", backend="matplotlib")
+
+
+def test_quickmap_draws_a_pinned_netcdf_variable():
+    """A pinned ``get_variable`` subset is drawable through quickmap, which #499 reported it was not."""
+    pinned = _two_variable_netcdf().get_variable("t2m")
+    assert isinstance(digitalearth.quickmap(pinned, backend="matplotlib"), Map)
+
+
+def test_quickmap_draws_a_ugrid_mesh_on_the_static_tier(ugrid_mesh):
+    """``quickmap`` draws a UgridDataset, shading each of the mesh's own faces (#499 gap 2).
+
+    Test scenario:
+        The drawn collection's values are read back: the quad's 10 appears on both of its fan triangles
+        and the triangle keeps its 20, which is the mesh's own connectivity rather than a re-triangulation.
+    """
+    import numpy as np
+
+    drawn = digitalearth.quickmap(ugrid_mesh("face"), backend="matplotlib")
+    assert isinstance(drawn, Map)
+    values = np.asarray(drawn.ax.collections[-1].get_array()).tolist()
+    assert values == [10.0, 10.0, 20.0], (
+        f"the mesh was not shaded on its own faces: {values}"
+    )
+
+
+def test_quickmap_draws_a_node_located_ugrid_mesh(ugrid_mesh):
+    """A node-located mesh variable is drawn too, each triangle taking its nodes' mean."""
+    drawn = digitalearth.quickmap(ugrid_mesh("node"), backend="matplotlib")
+    assert isinstance(drawn, Map)
+
+
+@pytest.mark.parametrize("backend", ["interactive", "3d", "web"])
+def test_quickmap_refuses_a_mesh_on_a_backend_with_no_mesh_render(backend, ugrid_mesh):
+    """The three engine tiers state they cannot draw a mesh, and name the one that can.
+
+    Args:
+        backend: A backend with no triangular render.
+
+    Test scenario:
+        The refusal must arrive before a scene is built — an opened VTK plotter or a half-made figure left
+        behind by a refusal is the defect this ordering avoids. It is also why the message is raised from
+        ``quickmap`` rather than from inside the tier.
+    """
+    mesh = ugrid_mesh("face")
+    with pytest.raises(TypeError, match="has no unstructured-mesh render"):
+        digitalearth.quickmap(mesh, backend=backend)
+
+
+def test_input_kind_calls_a_ugrid_dataset_a_mesh(ugrid_mesh):
+    """The input gate classifies a UgridDataset as the ``mesh`` family the kind registry already names."""
+    assert qp._input_kind(ugrid_mesh("face"), "quickmap") == "mesh"
+
+
+def test_quickmap_variable_selects_a_mesh_variable(ugrid_mesh):
+    """``variable=`` picks a mesh variable, not only a NetCDF one (review M4).
+
+    Test scenario:
+        A multi-variable mesh could previously only ever draw its first variable through the public entry
+        point, although the extractor supported naming one — the same complaint #499 raised for NetCDF.
+        The two variables hold different values, so the drawn one is identifiable.
+    """
+    import numpy as np
+
+    mesh = ugrid_mesh("face", second=True)
+    drawn = digitalearth.quickmap(mesh, variable="roughness", backend="matplotlib")
+    values = np.asarray(drawn.ax.collections[-1].get_array()).tolist()
+    assert values == [30.0, 30.0, 40.0], (
+        f"expected the 'roughness' variable, drew {values}"
+    )
+
+
+def test_quickmap_band_selects_a_mesh_step(ugrid_mesh):
+    """``band=`` picks the time step of a mesh variable instead of leaking into matplotlib (review M3)."""
+    import numpy as np
+
+    mesh = ugrid_mesh("face", steps=3)
+    drawn = digitalearth.quickmap(mesh, band=3, backend="matplotlib")
+    values = np.asarray(drawn.ax.collections[-1].get_array()).tolist()
+    assert values == [210.0, 210.0, 220.0], f"expected step 3, drew {values}"
+
+
+def test_quickmap_band_out_of_range_on_a_mesh_is_refused(ugrid_mesh):
+    """An out-of-range step is refused by name, not as an artist-property error from matplotlib."""
+    mesh = ugrid_mesh("face", steps=3)
+    with pytest.raises(ValueError, match="out of range"):
+        digitalearth.quickmap(mesh, band=9, backend="matplotlib")
+
+
+@pytest.mark.parametrize("kind", ["tricontourf", "imshow", "nonsense"])
+def test_quickmap_refuses_a_kind_the_mesh_render_cannot_honour(ugrid_mesh, kind):
+    """A ``kind`` other than the mesh render is refused rather than silently ignored (review M2).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        kind: A renderer the mesh family does not offer.
+
+    Test scenario:
+        All three used to be accepted and drew tripcolor regardless — the one behaviour this api refuses
+        to have anywhere else, where every other family routes ``kind`` through a renderer table.
+    """
+    mesh = ugrid_mesh("face")
+    with pytest.raises(ValueError, match="not a renderer for a mesh"):
+        digitalearth.quickmap(mesh, kind=kind, backend="matplotlib")
+
+
+def _single_variable_netcdf():
+    """Build a one-variable NetCDF container.
+
+    Returns:
+        The pyramids ``NetCDF`` carrying only ``"t2m"``.
+    """
+    import numpy as np
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    return NetCDF.from_array(
+        np.full((1, 6, 6), 1.0, dtype="float32"), geo_ref=geo, variable_name="t2m"
+    )
+
+
+def test_variable_naming_the_pinned_subsets_own_variable_is_a_no_op():
+    """Naming the variable a pinned subset already is asks for what is in hand (review L2)."""
+    pinned = _single_variable_netcdf().get_variable("t2m")
+    assert qp._pinned_variable(pinned, "t2m") is pinned
+
+
+def test_variable_naming_another_variable_on_a_pinned_subset_says_so():
+    """A different variable cannot be selected from a subset, and the message describes that.
+
+    Test scenario:
+        A ``Variable`` is a ``NetCDF`` subclass reporting no names of its own, so the container wording
+        used to answer "is not in this NetCDF, which carries []" — a true sentence about the wrong
+        situation.
+    """
+    pinned = _single_variable_netcdf().get_variable("t2m")
+    with pytest.raises(ValueError, match="already the variable 't2m'"):
+        qp._pinned_variable(pinned, "other")
+
+
+def test_variable_with_no_raster_plane_is_refused_by_name():
+    """A variable pyramids cannot expose as a raster plane is refused by name (review L3).
+
+    Test scenario:
+        ``NetCDF.get_variable`` answers a ``LabeledArray`` for a 1-D or non-numeric variable. That is
+        neither a Dataset nor a FeatureCollection, so the input gate used to complain about the *pinned*
+        type — a type the caller never named. Exercised with a container whose ``get_variable`` answers
+        one, since such a variable cannot be built through ``from_array`` here.
+    """
+    from pyramids.netcdf import NetCDF
+
+    class _NoRasterPlane(NetCDF):
+        def __init__(self):  # noqa: D107 - a stand-in for a container holding a 1-D variable
+            pass
+
+        variable_names = ["station_id"]
+
+        @staticmethod
+        def get_variable(name):
+            return object()
+
+    container = _NoRasterPlane()
+    with pytest.raises(ValueError, match="has no raster plane to draw"):
+        qp._pinned_variable(container, "station_id")

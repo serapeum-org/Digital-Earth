@@ -5,8 +5,10 @@ unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, 
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
 
+import logging
 import os
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from functools import wraps
 from math import isfinite
 from numbers import Integral
@@ -29,9 +31,9 @@ from shapely import MultiPoint, box, voronoi_polygons
 from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
-from digitalearth.base.crs import reproject
+from digitalearth.base.crs import authority_code, declared_crs, reproject
 from digitalearth.base.points import PointArrays
-from digitalearth.base.sources import get_source, require_drawable
+from digitalearth.base.sources import MeshSource, get_source, require_drawable
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Symbology
 from digitalearth.base.spec._serial import crs_to_json
 from digitalearth.base.spec.bounds import same_crs
@@ -59,6 +61,8 @@ from digitalearth.static.render.renderer import DrawnLayer
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
+logger = logging.getLogger(__name__)
+
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 
 #: The reducer a quadtree uses when the caller names none, and the one a figure falls back to when it carries
@@ -986,12 +990,248 @@ def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
     return drawn.colored_by(MAGNITUDE_FIELD)
 
 
+def _placeable_triangles(
+    triangles: np.ndarray, x: np.ndarray, y: np.ndarray
+) -> np.ndarray:
+    """Which triangles have all three of their nodes placeable in the display CRS.
+
+    Scattered input can simply drop the points a projection could not place, because the triangulation is
+    built afterwards. A mesh cannot: its triangles are **node indices**, so removing a node renumbers
+    every triangle that referenced a later one. The nodes are therefore left as they are and the affected
+    triangles are dropped instead, which keeps the indices meaning what the mesh said they meant.
+
+    Args:
+        triangles: The ``(n_triangles, 3)`` node indices.
+        x: The node x coordinates in the display CRS, non-finite where a node could not be placed.
+        y: The node y coordinates in the display CRS.
+
+    Returns:
+        np.ndarray: a boolean mask over the triangles, ``True`` where all three nodes are finite.
+
+    Examples:
+        - A triangle leaning on an unplaceable node is dropped, and the rest keep their node numbering:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _placeable_triangles
+            >>> triangles = np.array([[0, 1, 2], [1, 3, 2]])
+            >>> x = np.array([0.0, 1.0, 0.5, np.inf])
+            >>> _placeable_triangles(triangles, x, np.zeros(4)).tolist()
+            [True, False]
+
+            ```
+        - With every node placeable the whole mesh is kept:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _placeable_triangles
+            >>> triangles = np.array([[0, 1, 2], [1, 3, 2]])
+            >>> x = np.array([0.0, 1.0, 0.5, 1.5])
+            >>> _placeable_triangles(triangles, x, np.zeros(4)).all()
+            np.True_
+
+            ```
+    """
+    finite = np.isfinite(x) & np.isfinite(y)
+    return finite[triangles].all(axis=1)
+
+
+def _compacted_nodes(triangles: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return which nodes the triangles still reference, and the triangles renumbered onto them.
+
+    Filtering triangles keeps the *indices* valid but leaves the dropped nodes in the coordinate arrays, and
+    matplotlib reads the extent from **all** of them. One node at infinity then poisons the data limits: the
+    surviving triangles are drawn correctly and framed in a view about a tenth of a unit wide, which reads as
+    a blank figure. Compacting removes the unreferenced nodes, so the extent is computed over exactly the
+    nodes that are drawn.
+
+    The surviving indices are **returned rather than applied**, because more than the coordinates are keyed
+    by node: a node-located variable is too. Compacting ``x``/``y`` while leaving such values at their
+    original length pointed the renumbered indices into the wrong array, which drew the wrong colours
+    without a word (round-2 H1).
+
+    Args:
+        triangles: The surviving ``(n_triangles, 3)`` node indices.
+
+    Returns:
+        tuple: the indices of the referenced nodes, in order, and the triangles renumbered onto them.
+
+    Examples:
+        - The unreferenced third node is not in the answer, and the triangle is renumbered onto the rest:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _compacted_nodes
+            >>> used, triangles = _compacted_nodes(np.array([[0, 1, 2]]))
+            >>> used.tolist()
+            [0, 1, 2]
+            >>> triangles.tolist()
+            [[0, 1, 2]]
+
+            ```
+        - Dropping a node in the middle shifts the ones after it, which is what every per-node array has
+          to follow:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.builders.vector import _compacted_nodes
+            >>> used, triangles = _compacted_nodes(np.array([[2, 3, 4]]))
+            >>> used.tolist()
+            [2, 3, 4]
+            >>> triangles.tolist()
+            [[0, 1, 2]]
+
+            ```
+    """
+    used, renumbered = np.unique(triangles, return_inverse=True)
+    return used, renumbered.reshape(triangles.shape)
+
+
+@dataclass(frozen=True)
+class _TriInput:
+    """What a triangulated render draws: the coordinates, the values, and how they are connected.
+
+    These six are born together in :meth:`VectorMixin._unstructured`, travel together into the glyph and
+    die together when the layer is drawn, which is what makes them one object rather than a six-tuple
+    threaded through a drawer — the house idiom ``PointArrays`` and ``BandClasses`` already follow. The
+    behaviour that touches nothing else lives here with them: refusing a render the values cannot feed,
+    triangulating, and reducing the values to one per face.
+
+    Attributes:
+        x: Node (or point) x coordinates in the display CRS.
+        y: Node (or point) y coordinates.
+        z: The values — one per node, or one per triangle when ``location`` is ``"face"``.
+        field: The name the values are known by, for the layer's colour encoding.
+        triangles: The connectivity, or ``None`` for scattered input that must be triangulated here.
+        location: ``"node"`` or ``"face"`` — which of the two ``z`` is aligned with.
+    """
+
+    x: np.ndarray
+    y: np.ndarray
+    z: np.ndarray
+    field: Any
+    triangles: np.ndarray | None
+    location: str
+
+    def refuse_unless_drawable(self, kind: str) -> None:
+        """Refuse a render these values cannot feed, before anything is placed or drawn.
+
+        Asked first, so a face-located mesh handed to a contour render is told the truth. Checked after the
+        placement instead, an off-limb mesh reached the generic off-limb warning and the caller was told
+        their data was outside the view when the real answer was that contours need node values (review L5).
+
+        Args:
+            kind: The render the layer asks for.
+
+        Raises:
+            ValueError: when ``kind`` interpolates between node values and the values sit on the faces.
+        """
+        if kind != "tripcolor" and self.location == "face":
+            raise ValueError(
+                f"{kind}() interpolates between values at the nodes, but this mesh's values sit on its "
+                f"faces; draw it with tripcolor(), which shades each face"
+            )
+
+    def triangulated(self, kind: str, crs: Any) -> "_TriInput":
+        """Return this input with a triangulation, placed in the display CRS.
+
+        Scattered points are Delaunay-triangulated after the ones a projection could not place are dropped.
+        A mesh keeps its **own** connectivity: its nodes are indices, so the unplaceable *triangles* go and
+        the nodes are then compacted, which keeps the indices valid and the extent finite.
+
+        Args:
+            kind: The render the layer asks for, named in any refusal.
+            crs: The display CRS, named in any refusal.
+
+        Returns:
+            _TriInput: the same values with ``triangles`` filled in.
+
+        Raises:
+            ValueError: when fewer than three points were supplied, which no projection can fix.
+            OffLimbError: when too little survives the warp to draw — too few points to triangulate, or no
+                triangle keeping all three of its nodes.
+        """
+        from matplotlib.tri import Triangulation
+
+        x, y, z = np.asarray(self.x), np.asarray(self.y), np.asarray(self.z)
+        if self.triangles is None:
+            # drop far-side points on a globe (Triangulation needs finite)
+            finite = np.isfinite(x) & np.isfinite(y)
+            supplied = x.size
+            x, y, z = x[finite], y[finite], z[finite]
+            if x.size < 3:
+                if supplied < 3:
+                    # Never enough points to triangulate, whatever the projection — a caller error, and
+                    # the accurate complaint is the one matplotlib would give.
+                    raise ValueError(
+                        f"{kind}() needs at least three points to triangulate, got {supplied}"
+                    )
+                raise OffLimbError(
+                    f"{kind}: only {x.size} of {supplied} points survive the warp into "
+                    f"{crs!r}, which is too few to triangulate"
+                )
+            return _TriInput(x, y, z, self.field, Triangulation(x, y).triangles, "node")
+        triangles = np.asarray(self.triangles)
+        keep = _placeable_triangles(triangles, x, y)
+        if not keep.any():
+            # Logged as well as raised: `_tri` answers an OffLimbError with the scene's own generic skip
+            # message, so this detail — that it was *every* triangle, and how many — would otherwise be
+            # built and thrown away (round-2 N1).
+            logger.warning(
+                "%s: none of the mesh's %d triangles keep all three nodes in %r",
+                kind,
+                int(triangles.shape[0]),
+                crs,
+            )
+            raise OffLimbError(
+                f"{kind}: none of the mesh's {triangles.shape[0]} triangles keep all three nodes "
+                f"in {crs!r}, so there is nothing on the view to draw"
+            )
+        if not keep.all():
+            logger.warning(
+                "%s: %d of the mesh's %d triangles fall outside %r and are not drawn",
+                kind,
+                int((~keep).sum()),
+                int(triangles.shape[0]),
+                crs,
+            )
+        if self.location == "face":
+            # One value per triangle, so the kept triangles take their own values with them.
+            z = z[keep]
+        triangles = triangles[keep]
+        # Compact after filtering: a dropped node left in `x`/`y` still counts towards the extent, which is
+        # how a partly off-limb mesh ended up drawn outside a collapsed view.
+        used, triangles = _compacted_nodes(triangles)
+        x, y = x[used], y[used]
+        if self.location == "node":
+            # Keyed by node, so the values follow the nodes they belong to — otherwise the renumbered
+            # indices read the original array and the mesh is coloured from the wrong nodes.
+            z = z[used]
+        return _TriInput(x, y, z, self.field, triangles, self.location)
+
+    def face_values(self) -> np.ndarray:
+        """The values as one per triangle, which is what a flat-shaded render colours.
+
+        Returns:
+            np.ndarray: ``z`` itself when it already sits on the faces, else the mean of each triangle's
+            three node values.
+        """
+        if self.location == "face":
+            return np.asarray(self.z)
+        return np.asarray(self.z)[self.triangles].mean(axis=1)
+
+
 def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
-    """Triangulate scattered points and draw the render a described unstructured layer asks for.
+    """Draw the render a described unstructured layer asks for, on its own faces or on a triangulation.
+
+    Two shapes of input reach here and they are triangulated differently:
+
+    * **Scattered** points — a raster's cells or a point ``FeatureCollection`` — carry no connectivity, so
+      a Delaunay triangulation is built over them.
+    * A **UGRID mesh** carries its own ``face_node_connectivity``, already fan-cut into triangles by
+      pyramids. That connectivity is used as given: re-triangulating the nodes would invent faces the mesh
+      does not have and paint face-located values onto them.
 
     Args:
         scene: The map being drawn on.
-        data: The pyramids ``Dataset`` (its cells become points) or ``FeatureCollection`` the layer draws.
+        data: The pyramids ``Dataset`` (its cells become points), ``FeatureCollection`` or ``UgridDataset``
+            the layer draws.
         layer: The layer's description, whose ``via`` names the triangulated render.
 
     Returns:
@@ -1001,48 +1241,37 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
         OffLimbError: when the data lies outside the display CRS, or when enough points were supplied but
             too few of them survive the reprojection to triangulate — a vector warp sends off-view points
             to infinity rather than raising, and losing them all means the same thing as an off-limb
-            raster: nothing on the view to draw.
+            raster: nothing on the view to draw. For a mesh, when no triangle keeps all three nodes.
         ValueError: when fewer than three points were supplied in the first place, which no projection can
-            fix.
+            fix, or when a contour render is asked for a mesh whose values sit on the faces — contours are
+            interpolated between node values, which such a mesh does not have.
     """
-    from matplotlib.tri import Triangulation
-
     kind = layer.symbology.props["via"]
     opts = drawing_style(scene, layer)
-    x, y, z, field = scene._scattered(data)
-    # drop far-side points on a globe (Triangulation needs finite)
-    finite = np.isfinite(x) & np.isfinite(y)
-    supplied = np.asarray(x).size
-    x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
-    if x.size < 3:
-        if supplied < 3:
-            # Never enough points to triangulate, whatever the projection — a caller error, and the
-            # accurate complaint is the one matplotlib would give.
-            raise ValueError(
-                f"{kind}() needs at least three points to triangulate, got {supplied}"
-            )
-        raise OffLimbError(
-            f"{kind}: only {x.size} of {supplied} points survive the warp into "
-            f"{scene.crs!r}, which is too few to triangulate"
-        )
-    tri = Triangulation(x, y)
-    glyph = MeshGlyph(x, y, tri.triangles, ax=scene.ax, fig=scene.fig)
+    asked = scene._unstructured(
+        data, band=scene._layer_keys.get(layer.id, DEFAULT_BAND)
+    )
+    # Before placing anything: a render the values cannot feed is a caller error, not an empty view.
+    asked.refuse_unless_drawable(kind)
+    drawing = asked.triangulated(kind, scene.crs)
+    glyph = MeshGlyph(
+        drawing.x, drawing.y, drawing.triangles, ax=scene.ax, fig=scene.fig
+    )
     # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
     if kind == "tripcolor":
-        face_values = z[tri.triangles].mean(axis=1)
         drawn = scene._render_glyph(
-            glyph, face_values, location="face", colorbar=False, **opts
+            glyph, drawing.face_values(), location="face", colorbar=False, **opts
         )
     else:
         drawn = scene._render_glyph(
             glyph,
-            z,
+            drawing.z,
             location="node",
             filled=(kind == "tricontourf"),
             colorbar=False,
             **opts,
         )
-    return drawn.colored_by(field)
+    return drawn.colored_by(drawing.field)
 
 
 def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -2548,23 +2777,119 @@ class VectorMixin(_MixinBase):
             raise ValueError("FeatureCollection has no numeric value column to contour")
         return src.x.values, src.y.values, src.z.values, source_field(src)
 
+    def _placed_mesh(self, data: Any) -> Any:
+        """Put a UGRID mesh into the display CRS, or say why it cannot go there.
+
+        pyramids warps a mesh with ``UgridDataset.to_crs``, which takes an EPSG **code** and builds its own
+        target from it — so handing it the display CRS as written produced ``EPSG:EPSG:3857`` and let a raw
+        ``CRSError`` out of a visualization call for three of the four CRS spellings the ``Source`` contract
+        documents (review H2). The code is resolved here instead, and a display CRS carrying none is
+        refused in this repo's words.
+
+        Args:
+            data: The pyramids ``UgridDataset`` to place.
+
+        Returns:
+            The mesh in the display CRS, or the mesh untouched when it declares no CRS of its own or is
+            already in the display one.
+
+        Raises:
+            ValueError: when the mesh declares a *different* CRS and the display CRS carries no EPSG code — an
+                orthographic, Robinson or other projection pyramids' mesh warp cannot express. Drawing it
+                unprojected instead would put the mesh somewhere it does not belong, silently.
+
+        Note:
+            The restriction is upstream, not ours: `UgridDataset.to_crs` takes a bare EPSG integer while its
+            own source side already accepts a WKT. Reported as pyramids-core#1404; what to change here once
+            that lands is #507 — in short, hand `self.crs` straight to `reproject` and delete the refusal.
+        """
+        # A mesh with no declared CRS cannot be warped (pyramids refuses, rightly), so it is drawn in its
+        # own coordinates — the same bargain a bare numpy array gets.
+        held = declared_crs(data)
+        if held is None:
+            return data
+        if same_crs(held, self.crs):
+            # Already where it belongs: no warp is required, so neither the round-trip through pyramids nor
+            # the EPSG-code restriction applies. Refusing here was round-2 M3 — a mesh in '+proj=robin'
+            # drawn on a '+proj=robin' map was turned away for a reprojection it never needed.
+            return data
+        code = authority_code(self.crs)
+        if code is None:
+            raise ValueError(
+                f"a UGRID mesh cannot be drawn in {self.crs!r}: pyramids warps a mesh to an EPSG code and "
+                f"this display CRS carries none. Draw the mesh in a CRS that names a code, or reproject "
+                f"it yourself before passing it."
+            )
+        return reproject(data, code)
+
+    def _unstructured(self, data: Any, band: int = DEFAULT_BAND) -> "_TriInput":
+        """Return ``(x, y, z, field, triangles, location)`` for a triangulated render's input.
+
+        ``triangles`` is what tells the drawer which kind of input it got. A **UGRID mesh** answers with its
+        own connectivity and with where its values sit; anything scattered answers ``None``, meaning
+        "triangulate these points yourself".
+
+        Args:
+            data: A pyramids ``Dataset``, ``FeatureCollection`` or ``UgridDataset``.
+            band: 1-based step to draw from a mesh variable carrying a time (or layer) axis. Ignored for
+                scattered input, whose value belongs to the point.
+
+        Returns:
+            _TriInput: the coordinates in the display CRS, the values, the **name** those values are known
+            by, the mesh's triangles (``None`` for scattered input, which the drawer triangulates itself)
+            and the location the values sit on — ``"node"`` for scattered input, whose value belongs to
+            the point.
+
+        Raises:
+            ValueError: for the reasons :meth:`_scattered` and the mesh extractor give — no numeric column
+                to contour, no data variables on the mesh, or a variable on a location a surface render
+                cannot colour.
+        """
+        from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+        if isinstance(data, UgridDataset):
+            src = get_source(self._placed_mesh(data), band=band)
+            if not isinstance(src, MeshSource):
+                # The mesh branch of the extractor answers with a MeshSource, which is what carries the
+                # connectivity. Checked rather than cast: a narrowing that cannot be wrong is still worth
+                # one line when being wrong would surface as a missing attribute three frames later.
+                raise TypeError(
+                    f"the mesh extractor answered a {type(src).__name__}, not a MeshSource"
+                )
+            return _TriInput(
+                src.x.values,
+                src.y.values,
+                src.z.values,
+                source_field(src),
+                src.triangles,
+                src.location,
+            )
+        x, y, z, field = self._scattered(data)
+        return _TriInput(x, y, z, field, None, "node")
+
     def _tri(
         self,
         data: Any,
         *,
         kind: str,
+        band: int = DEFAULT_BAND,
         name: str | None = None,
         visible: bool = True,
         **opts,
     ) -> Any:
-        """Triangulate scattered points and render via ``cleopatra.MeshGlyph``.
+        """Render unstructured data via ``cleopatra.MeshGlyph``, triangulating it if it is not a mesh.
 
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a path
-                or URL to either. It is recorded as the layer's source as given, so only a path-backed
+            data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
+                ``UgridDataset`` — which keeps its **own** ``face_node_connectivity`` instead of being
+                re-triangulated — or a path or URL to one. It is recorded as the layer's source as given,
+                so only a path-backed
                 layer can be written down.
             kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
                 ``tripcolor``).
+            band: 1-based step to draw from a mesh variable carrying a time (or layer) axis. It reaches
+                the drawer on the layer's key channel, the way a clip boundary does; scattered input has
+                no step to choose.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2594,6 +2919,10 @@ class VectorMixin(_MixinBase):
             source=data,
             name=name,
             visible=visible,
+            # The band travels on the key channel, the way this module already hands a drawer a clip
+            # boundary or a reducer: `LayerRecord` carries no data selection, and the raster path resolves
+            # its own band in the builder rather than describing it.
+            key=band,
             symbology=Symbology(props={"via": kind}),
             opts=opts,
         )
@@ -2604,13 +2933,25 @@ class VectorMixin(_MixinBase):
             return None
 
     def tricontourf(
-        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
+        self,
+        data: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        name: str | None = None,
+        visible: bool = True,
+        **kwargs,
     ) -> Self:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
 
+        Contours are interpolated **between values at the nodes**, so a UGRID mesh is drawable here only
+        when its variable sits on the nodes. A face-located mesh is refused by name and pointed at
+        :meth:`tripcolor`, which shades each face — averaging the faces onto the nodes to make it work
+        would invent data.
+
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
-                path or URL to either. Only a path-backed layer can be written down.
+            data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
+                node-located ``UgridDataset`` — or a path or URL to one. Only a path-backed layer can be
+                written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2628,21 +2969,35 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
-                numeric column to contour.
+            ValueError: when fewer than three points were supplied, a ``FeatureCollection`` carries no
+                numeric column to contour, or a mesh's values sit on its faces rather than its nodes.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        self._tri(data, kind="tricontourf", name=name, visible=visible, **kwargs)
+        self._tri(
+            data, kind="tricontourf", band=band, name=name, visible=visible, **kwargs
+        )
         return self
 
     def tricontour(
-        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
+        self,
+        data: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        name: str | None = None,
+        visible: bool = True,
+        **kwargs,
     ) -> Self:
         """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
 
+        Contours are interpolated **between values at the nodes**, so a UGRID mesh is drawable here only
+        when its variable sits on the nodes. A face-located mesh is refused by name and pointed at
+        :meth:`tripcolor`, which shades each face — averaging the faces onto the nodes to make it work
+        would invent data.
+
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
-                path or URL to either. Only a path-backed layer can be written down.
+            data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
+                node-located ``UgridDataset`` — or a path or URL to one. Only a path-backed layer can be
+                written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2660,21 +3015,34 @@ class VectorMixin(_MixinBase):
             map rather than the artist (ST-20).
 
         Raises:
-            ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
-                numeric column to contour.
+            ValueError: when fewer than three points were supplied, a ``FeatureCollection`` carries no
+                numeric column to contour, or a mesh's values sit on its faces rather than its nodes.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        self._tri(data, kind="tricontour", name=name, visible=visible, **kwargs)
+        self._tri(
+            data, kind="tricontour", band=band, name=name, visible=visible, **kwargs
+        )
         return self
 
     def tripcolor(
-        self, data: Any, *, name: str | None = None, visible: bool = True, **kwargs
+        self,
+        data: Any,
+        *,
+        band: int = DEFAULT_BAND,
+        name: str | None = None,
+        visible: bool = True,
+        **kwargs,
     ) -> Self:
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
 
+        This is the render for a **UGRID mesh**: it shades each face its own colour, so a mesh whose
+        values sit on the faces is drawn as the mesh actually is. Scattered input is Delaunay-triangulated
+        first and each triangle takes the mean of its three nodes.
+
         Args:
-            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``, or a
-                path or URL to either. Only a path-backed layer can be written down.
+            data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
+                ``UgridDataset`` (drawn on its own ``face_node_connectivity``) — or a path or URL to one.
+                Only a path-backed layer can be written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
                 ``-2``, ``-3``, … (#321).
@@ -2693,10 +3061,13 @@ class VectorMixin(_MixinBase):
 
         Raises:
             ValueError: when fewer than three points were supplied, or a ``FeatureCollection`` carries no
-                numeric column to contour.
+                numeric column to colour by. A mesh's values may sit on its faces **or** its nodes here —
+                that is the difference between this render and the contour ones.
             AttributeError: from matplotlib for a styling keyword no artist property answers to.
         """
-        self._tri(data, kind="tripcolor", name=name, visible=visible, **kwargs)
+        self._tri(
+            data, kind="tripcolor", band=band, name=name, visible=visible, **kwargs
+        )
         return self
 
     @staticmethod

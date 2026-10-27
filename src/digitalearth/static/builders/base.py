@@ -223,7 +223,7 @@ class GeoLayerBase(Scene):
         The severity depends on whether hiding the data is a normal thing for this map to do. On a globe it
         is: a clipped projection shows one hemisphere, and a rotation sweeps past the far side on every
         run, so those skips are logged at debug and stay out of the way. On an unclipped display CRS there
-        is no limb to be behind, so a warp that places *none* of the data almost always means the raster is
+        is no limb to be behind, so a warp that places *none* of the data almost always means the input is
         mislabelled or its geo-transform is wrong — that is worth a warning, which is visible without any
         logging setup, because otherwise the only symptom is a blank figure.
 
@@ -246,7 +246,7 @@ class GeoLayerBase(Scene):
         else:
             logger.warning(
                 "%s: none of the data could be placed in %r, so nothing was drawn — on an unclipped "
-                "projection this usually means the raster's CRS or geo-transform is wrong",
+                "projection this usually means the data's CRS or geo-transform is wrong",
                 layer,
                 self.crs,
             )

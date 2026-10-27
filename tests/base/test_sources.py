@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from digitalearth.base.sources import DimensionInfo, Source, get_source
+from digitalearth.base.spec import DEFAULT_BAND
 
 
 def test_raster_source(dataset):
@@ -137,6 +138,115 @@ def test_netcdf_multislice_warns_and_takes_the_first(caplog):
         src = get_source(nc)
     assert src.z.values.ndim == 2, f"expected a 2-D field, got {src.z.values.ndim}-D"
     assert "slices" in caplog.text, f"no multi-slice warning emitted: {caplog.text!r}"
+
+
+def _slice_valued_netcdf(slices: int = 3):
+    """Build a NetCDF whose variable carries ``slices`` slices, slice ``k`` filled with the value ``k``.
+
+    Args:
+        slices: How many slices the variable carries.
+
+    Returns:
+        The pyramids ``NetCDF`` container, so a drawn slice is identifiable by its value alone.
+    """
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    arr = np.stack([np.full((6, 6), float(k)) for k in range(slices)]).astype("float32")
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    return NetCDF.from_array(arr, geo_ref=geo, variable_name="t2m")
+
+
+def test_netcdf_band_selects_the_slice():
+    """``band=`` draws the slice it names, on the same 1-based index the raster path uses.
+
+    Test scenario:
+        Slice ``k`` is filled with the value ``k``, so the slice that was drawn is read straight off the
+        values. Before #499 the band was dropped on the NetCDF branch and slice 0 was drawn whatever was
+        asked for.
+    """
+    nc = _slice_valued_netcdf()
+    drawn = [np.unique(get_source(nc, band=b).z.values).tolist() for b in (1, 2, 3)]
+    assert drawn == [[0.0], [1.0], [2.0]], f"band= did not select the slice: {drawn}"
+
+
+@pytest.mark.parametrize("band", [0, 4, 99])
+def test_netcdf_band_out_of_range_is_refused(band):
+    """A band the variable does not carry is refused, not quietly answered with slice 0.
+
+    Args:
+        band: A 1-based index outside the three slices the variable carries.
+    """
+    nc = _slice_valued_netcdf()
+    with pytest.raises(ValueError, match="out of range"):
+        get_source(nc, band=band)
+
+
+def test_netcdf_pinned_variable_is_plottable():
+    """A pinned ``get_variable`` subset becomes a Source instead of "no variables to plot" (#499).
+
+    Test scenario:
+        ``NetCDF.get_variable(name)`` hands back a subset that reports no ``variable_names`` of its own,
+        because it *is* the variable. The extractor used to read that as an empty container and refuse it.
+    """
+    pinned = _slice_valued_netcdf().get_variable("t2m")
+    assert list(pinned.variable_names) == [], (
+        "a pinned subset should report no names of its own"
+    )
+    src = get_source(pinned)
+    assert src.z.values.ndim == 2, f"expected a 2-D field, got {src.z.values.ndim}-D"
+    assert np.unique(src.z.values).tolist() == [0.0], (
+        "the pinned subset should default to its first slice"
+    )
+
+
+def test_netcdf_pinned_variable_honours_band():
+    """``band=`` chooses the slice on a pinned subset too, not only on a named container variable."""
+    pinned = _slice_valued_netcdf().get_variable("t2m")
+    assert np.unique(get_source(pinned, band=3).z.values).tolist() == [2.0]
+
+
+def test_netcdf_pinned_variable_records_its_recovered_name():
+    """A pinned subset records the variable it is, so readers keyed on the name still work (review H1).
+
+    Test scenario:
+        This asserted the opposite until the pinned path was fixed: the name was dropped, the style
+        matcher fell back, and the map was restyled in silence. The subset knows its own name, so it is
+        read back and recorded.
+    """
+    src = get_source(_slice_valued_netcdf().get_variable("t2m"))
+    assert src.metadata("variable") == "t2m", (
+        f"the pinned subset did not record its name: {src.metadata('variable', None)!r}"
+    )
+
+
+def test_netcdf_variable_key_is_absent_when_the_name_cannot_be_recovered():
+    """When a subset exposes no name at all, the key is left out rather than recorded as ``None``.
+
+    Test scenario:
+        Recording ``variable=None`` would make every reader's ``metadata("variable", fallback)`` answer
+        ``None`` instead of their own fallback. Exercised with a subset-shaped stub, because pyramids'
+        own subsets always carry the name.
+    """
+    from pyramids.netcdf import Variable
+
+    from digitalearth.base.sources.extractors import _from_netcdf
+
+    class _NamelessSubset(Variable):
+        def __init__(self):  # noqa: D107 - a stand-in, not a pyramids subset
+            pass
+
+        variable_names: list = []
+        lon = np.array([0.0, 1.0])
+        lat = np.array([0.0, 1.0])
+        attrs: dict = {}
+
+        @staticmethod
+        def read_array(masked=True):
+            return np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    src = _from_netcdf(_NamelessSubset(), None, None)
+    assert src.metadata("variable", "FALLBACK") == "FALLBACK"
 
 
 def test_unsupported_type_raises():
@@ -834,3 +944,393 @@ class TestRequireDrawableRefusesByName:
 
         with pytest.raises(ValueError, match="must name families from"):
             require_drawable({}, caller="Map.field()", accepts=())
+
+
+def test_ugrid_face_values_spread_over_the_faces_own_triangles(ugrid_mesh):
+    """A face-located variable keeps each face's value on that face's fan triangles (#499).
+
+    Test scenario:
+        The quad carries 10 and fan-triangulates into two triangles; the triangle carries 20. Colouring
+        the mesh by a Delaunay triangulation of its nodes instead would invent faces the mesh does not
+        have and paint these values onto the wrong ones.
+    """
+    src = get_source(ugrid_mesh("face"))
+    assert src.location == "face", f"expected face-located values, got {src.location!r}"
+    assert src.n_triangles == 3, (
+        f"a quad plus a triangle is three fan triangles, got {src.n_triangles}"
+    )
+    assert src.z.values.tolist() == [10.0, 10.0, 20.0], (
+        f"face values did not follow their own faces: {src.z.values.tolist()}"
+    )
+
+
+def test_ugrid_node_values_stay_one_per_node(ugrid_mesh):
+    """A node-located variable keeps one value per node, with the node indices left untouched."""
+    src = get_source(ugrid_mesh("node"))
+    assert src.location == "node"
+    assert src.z.values.size == 5, (
+        f"expected one value per node, got {src.z.values.size}"
+    )
+    assert src.x.values.size == 5
+    assert src.y.values.size == 5
+
+
+def test_ugrid_source_records_the_mesh_in_metadata(ugrid_mesh):
+    """The mesh source describes itself as a mesh and records its face and node counts."""
+    src = get_source(ugrid_mesh("face"))
+    recorded = (
+        src.metadata("kind"),
+        src.metadata("variable"),
+        src.metadata("n_faces"),
+        src.metadata("n_nodes"),
+    )
+    assert recorded == ("mesh", "depth", 2, 5), f"unexpected mesh metadata: {recorded}"
+
+
+def test_ugrid_variable_not_carried_is_refused(ugrid_mesh):
+    """Naming a variable the mesh does not carry is refused, listing the ones it does."""
+    mesh = ugrid_mesh("face")
+    with pytest.raises(ValueError, match="is not in this UgridDataset"):
+        get_source(mesh, variable="nope")
+
+
+def test_ugrid_without_data_variables_is_refused(ugrid_mesh):
+    """A mesh with no data variables is refused rather than drawn as a blank surface."""
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    mesh = ugrid_mesh("face").mesh
+    empty = UgridDataset(mesh=mesh, data_variables={}, global_attributes={})
+    with pytest.raises(ValueError, match="no data variables"):
+        get_source(empty)
+
+
+def test_ugrid_variable_on_an_uncolourable_location_is_refused(ugrid_mesh):
+    """A variable on an edge is refused: a surface render colours nodes or faces, nothing else."""
+    import numpy as np
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    mesh = ugrid_mesh("face").mesh
+    edged = UgridDataset(
+        mesh=mesh,
+        data_variables={
+            "e": MeshVariable(
+                name="e",
+                location="edge",
+                mesh_name="m",
+                shape=(1,),
+                _data=np.array([1.0]),
+            )
+        },
+        global_attributes={},
+    )
+    with pytest.raises(ValueError, match="colours node or face"):
+        get_source(edged)
+
+
+def test_ugrid_explicit_variable_name_is_read(ugrid_mesh):
+    """Naming a variable the mesh does carry reads that one, not the first.
+
+    Test scenario:
+        The face-located and node-located variables differ in both length and location, so the one that
+        was read is identifiable from the result alone.
+    """
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    face = ugrid_mesh("face")
+    both = UgridDataset(
+        mesh=face.mesh,
+        data_variables={
+            "depth": face.data_vars["depth"],
+            "zs": MeshVariable(
+                name="zs",
+                location="node",
+                mesh_name="m",
+                shape=(5,),
+                _data=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
+            ),
+        },
+        global_attributes={},
+    )
+    picked = get_source(both, variable="zs")
+    assert picked.location == "node", (
+        f"expected the named node variable, got {picked.location!r}"
+    )
+    assert picked.metadata("variable") == "zs"
+
+
+def test_fan_values_refuses_a_spread_that_does_not_match_the_triangulation():
+    """``_fan_values`` refuses when the connectivity and the fan triangulation disagree.
+
+    Test scenario:
+        A defensive guard: a mesh reporting three nodes on its one face (so one fan triangle) while the
+        triangulation holds two would otherwise colour the second triangle from whatever numpy broadcast
+        left there. Exercised directly with a stub, because pyramids' own meshes cannot disagree.
+    """
+    from digitalearth.base.sources.extractors import _fan_values
+
+    class _StubConnectivity:
+        @staticmethod
+        def nodes_per_element():
+            return np.array([3])
+
+    class _StubMesh:
+        face_node_connectivity = _StubConnectivity()
+
+    values = np.array([10.0])
+    stub = _StubMesh()
+    triangles = np.zeros((2, 3), dtype=int)
+    with pytest.raises(ValueError, match="connectivity and triangulation disagree"):
+        _fan_values(values, stub, triangles)
+
+
+def test_netcdf_two_dimensional_variable_needs_no_slicing():
+    """A variable already 2-D is carried through without the band-first slice step.
+
+    Test scenario:
+        Covers the other side of the ``z.ndim == 3`` branch: pyramids can hand back a plain ``(H, W)``
+        read, which must not be indexed as though it had a leading band axis.
+    """
+    from digitalearth.base.sources.extractors import _from_netcdf
+
+    class _StubNetCDF:
+        variable_names = ["flat"]
+        lon = np.array([0.0, 1.0])
+        lat = np.array([0.0, 1.0])
+
+        @staticmethod
+        def read_array(masked=True, variable=None):
+            return np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    src = _from_netcdf(_StubNetCDF(), None, None)
+    assert src.z.values.shape == (2, 2), (
+        f"a 2-D read was reshaped: {src.z.values.shape}"
+    )
+    assert src.z.values.tolist() == [[1.0, 2.0], [3.0, 4.0]]
+
+
+def test_pinned_variable_keeps_the_identity_the_style_matcher_reads():
+    """A pinned subset resolves to the same variable identity as naming it on the container (review H1).
+
+    Test scenario:
+        The two sides are built differently on purpose — one threads ``variable=`` through the extractor,
+        the other pins the subset first — and must agree. They did not: the pinned side recorded no
+        variable name, so the style matcher fell back and silently restyled the map (coolwarm -> viridis).
+    """
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    from digitalearth.base.autostyle import auto_style
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    nc = NetCDF.from_array(
+        np.full((1, 4, 4), 5.0, dtype="float32"),
+        geo_ref=geo,
+        variable_name="temperature",
+    )
+    threaded = get_source(nc, variable="temperature")
+    pinned = get_source(nc.get_variable("temperature"))
+    assert (
+        pinned.metadata("variable") == threaded.metadata("variable") == "temperature"
+    ), f"the pinned subset lost its name: {pinned.metadata('variable', None)!r}"
+    assert auto_style(pinned).get("cmap") == auto_style(threaded).get("cmap"), (
+        "the pinned subset styles differently from the same variable named on the container"
+    )
+
+
+def test_pinned_variable_is_named_in_an_out_of_range_band_message():
+    """An out-of-range slice on a pinned subset names the variable, not "the pinned variable"."""
+    from pyramids.dataset import GeoReference
+    from pyramids.netcdf import NetCDF
+
+    geo = GeoReference(top_left_corner=(0.0, 10.0), cell_size=1.0, epsg=4326)
+    pinned = NetCDF.from_array(
+        np.stack([np.zeros((4, 4)), np.ones((4, 4))]).astype("float32"),
+        geo_ref=geo,
+        variable_name="tp",
+    ).get_variable("tp")
+    with pytest.raises(ValueError, match=r"variable 'tp'"):
+        get_source(pinned, band=9)
+
+
+@pytest.mark.parametrize("location", ["face", "node"])
+def test_ugrid_temporal_variable_draws_one_step(ugrid_mesh, location):
+    """A variable with a leading time axis reduces to a single step instead of failing raw (review H4).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        location: Where the variable sits.
+
+    Test scenario:
+        ``masked_values`` keeps a UGRID variable's full ``(n_time, n_elements)`` shape, which is the normal
+        shape of model output. The face case raised a bare numpy broadcast error; the node case built a
+        Source whose ``z`` was 2-D, against that class's own documented contract, and died inside
+        matplotlib.
+    """
+    src = get_source(ugrid_mesh(location, steps=3))
+    assert src.z.values.ndim == 1, (
+        f"expected one step, got z with shape {src.z.values.shape}"
+    )
+    expected = src.n_triangles if location == "face" else src.x.values.size
+    assert src.z.values.size == expected, (
+        f"expected {expected} values for {location}-located data, got {src.z.values.size}"
+    )
+
+
+def test_ugrid_band_selects_the_step(ugrid_mesh):
+    """``band=`` picks the time step on a mesh, the 1-based index the raster and NetCDF paths use.
+
+    Test scenario:
+        Each step is offset by 100, so the values say which step was drawn. Step 3 of the face variable is
+        ``[210, 220]``, spread over the quad's two fan triangles and the lone triangle.
+    """
+    first = get_source(ugrid_mesh("face", steps=3), band=1).z.values
+    third = get_source(ugrid_mesh("face", steps=3), band=3).z.values
+    assert first.tolist() == [10.0, 10.0, 20.0], f"step 1 wrong: {first.tolist()}"
+    assert third.tolist() == [210.0, 210.0, 220.0], f"step 3 wrong: {third.tolist()}"
+
+
+def test_ugrid_step_out_of_range_is_refused(ugrid_mesh):
+    """A step the mesh variable does not carry is refused by name, not answered with the first."""
+    mesh = ugrid_mesh("face", steps=3)
+    with pytest.raises(ValueError, match="out of range"):
+        get_source(mesh, band=9)
+
+
+def test_netcdf_four_dimensional_variable_is_refused():
+    """A variable with more than one extra axis is refused, not stored 4-D on a 2-D Source (review M5).
+
+    Test scenario:
+        pyramids keeps every band dimension, so a ``(time, level, lat, lon)`` variable — an ERA5
+        pressure-levels read — arrives 4-D. ``band`` addresses one leading axis, so it cannot name a field
+        in such an array; it used to be dropped without a word and the 4-D array stored as if it were a
+        field. Exercised with a stub, since the message is about the shape, not about any driver.
+    """
+    from digitalearth.base.sources.extractors import _from_netcdf
+
+    class _FourDimensional:
+        variable_names = ["t"]
+        lon = np.arange(6.0)
+        lat = np.arange(6.0)
+
+        @staticmethod
+        def read_array(masked=True, variable=None):
+            return np.zeros((2, 3, 6, 6))
+
+    stub = _FourDimensional()
+    with pytest.raises(ValueError, match="4-D array"):
+        _from_netcdf(stub, None, None, band=2)
+
+
+def test_netcdf_multislice_notice_names_the_count_when_the_first_is_drawn(caplog):
+    """Drawing the first of several slices is noted with the count; naming another is not.
+
+    Args:
+        caplog: pytest log capture.
+
+    Test scenario:
+        The notice is keyed on the slice *drawn*, not on whether the caller named it. Keyed on "named
+        nothing" it could not fire from any public entry point — every tier builder forwards an int
+        default — so a 24-step forecast drew step 1 in silence (round-2 M1). It is worded as a statement
+        rather than advice, which is what round-1 L1 objected to: a caller who passed ``band=1`` is told
+        how many slices there are, not told to pass what they just passed.
+    """
+    import logging
+
+    nc = _slice_valued_netcdf()
+    with caplog.at_level(logging.WARNING):
+        get_source(nc)
+    assert "carries 3 slices" in caplog.text, (
+        f"the slice count should be named: {caplog.text!r}"
+    )
+    assert "pass band=" not in caplog.text, (
+        "the notice states a fact; it does not advise"
+    )
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        get_source(nc, band=3)
+    assert caplog.text == "", (
+        f"another slice was named, so there is nothing to note: {caplog.text!r}"
+    )
+
+
+def test_fan_values_refuses_triangles_not_grouped_by_face():
+    """A fan triangulation that is not face-major is refused, not matched up by position (review L9).
+
+    Test scenario:
+        The count guard alone cannot see a reorder: the same number of triangles grouped differently would
+        paint every face with another face's value. Fan triangulation cuts from each face's first vertex,
+        so each group leads with its own face's first node — which is what this checks. Exercised with a
+        stub, because pyramids' own triangulation is face-major.
+    """
+    from digitalearth.base.sources.extractors import _fan_values
+
+    class _StubConnectivity:
+        data = np.array([[0, 1, 2], [3, 4, 5]])
+
+        @staticmethod
+        def nodes_per_element():
+            return np.array([3, 3])
+
+    class _ReorderedMesh:
+        face_node_connectivity = _StubConnectivity()
+
+    values = np.array([10.0, 20.0])
+    mesh = _ReorderedMesh()
+    reordered = np.array([[3, 4, 5], [0, 1, 2]])
+    with pytest.raises(ValueError, match="not grouped by face index"):
+        _fan_values(values, mesh, reordered)
+
+
+def test_mesh_step_refuses_a_flat_variable_of_the_wrong_length():
+    """A 1-D mesh variable that does not have one value per element is refused by name.
+
+    Test scenario:
+        The mesh says how many faces or nodes it has, so a variable of any other length cannot be matched
+        to it — colouring would be a guess about which element each value belongs to.
+    """
+    from digitalearth.base.sources.extractors import _mesh_step
+
+    values = np.arange(5.0)
+    with pytest.raises(ValueError, match="holds 5 values"):
+        _mesh_step(values, "variable 'depth'", DEFAULT_BAND, 2)
+
+
+def test_mesh_step_refuses_a_shape_it_cannot_reduce():
+    """A variable whose last axis is not the element axis is refused, not reduced on a guess.
+
+    Test scenario:
+        ``(n_elements, n_time)`` is the transpose of what a step reduction expects, and a 3-D variable has
+        more axes than ``band`` can address. Both have to be named rather than silently indexed.
+    """
+    from digitalearth.base.sources.extractors import _mesh_step
+
+    transposed = np.zeros((2, 3))
+    with pytest.raises(ValueError, match="cannot reduce to one value per element"):
+        _mesh_step(transposed, "variable 'depth'", DEFAULT_BAND, 5)
+    layered = np.zeros((3, 4, 2))
+    with pytest.raises(ValueError, match="cannot reduce to one value per element"):
+        _mesh_step(layered, "variable 'depth'", DEFAULT_BAND, 2)
+
+
+def test_pinned_variable_units_come_from_its_band_when_its_metadata_has_none():
+    """A pinned subset's unit is read off its band, as the container path reads its resolved ``unit``.
+
+    Test scenario:
+        A subset carries no per-variable metadata entry for the variable it already is, so the CF
+        attributes come from the subset itself — and the unit pyramids resolves onto the band was being
+        skipped on that path, leaving a pinned variable unitless where a named one is not (round-2 L2).
+        Exercised with a stub, because a unit cannot be attached to a synthetic variable here.
+    """
+    from digitalearth.base.sources.extractors import _netcdf_attributes
+
+    class _SubsetWithBandUnit:
+        attrs: dict = {}
+        band_units = ["K"]
+        meta_data = None
+
+    attributes = _netcdf_attributes(_SubsetWithBandUnit(), "t2m", True)
+    assert attributes.get("units") == "K", (
+        f"the band's unit should be folded in: {attributes}"
+    )

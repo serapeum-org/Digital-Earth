@@ -39,6 +39,7 @@ from digitalearth.base.arrays import read_masked_band
 from digitalearth.base.crs import declared_crs, source_epsg
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources.dimension import DimensionInfo
+from digitalearth.base.sources.mesh import MESH_LOCATIONS, MeshSource
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, Selection
 from digitalearth.base.types import PlottableData, RasterLike
@@ -55,6 +56,7 @@ DRAWABLE_FAMILIES: Mapping[str, str] = MappingProxyType(
         "raster": "a pyramids Dataset (a NetCDF or a DatasetCollection counts as one)",
         "array": "a 2-D numpy array",
         "vector": "a pyramids FeatureCollection",
+        "mesh": "a pyramids UgridDataset (an unstructured mesh)",
     }
 )
 
@@ -102,10 +104,31 @@ def _is_vector(data: Any) -> bool:
     return hasattr(data, "geometry") and hasattr(data, "to_crs")
 
 
+def _is_mesh(data: Any) -> bool:
+    """Whether `data` is an unstructured mesh :func:`extract` can read a variable off.
+
+    Args:
+        data: The candidate.
+
+    Returns:
+        `True` for a pyramids `UgridDataset`. Matched by type, like the raster test, because that is how
+        :func:`extract` chooses the branch — a mesh is told apart from a raster by *being* one, not by
+        exposing a member a raster lacks.
+    """
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    return isinstance(data, UgridDataset)
+
+
 #: How each family is recognised. Keyed by the same names as :data:`DRAWABLE_FAMILIES`, so a family with a
 #: phrase and no test — or the reverse — is a `KeyError` here rather than a silent "no".
 _RECOGNISERS: Mapping[str, Callable[[Any], bool]] = MappingProxyType(
-    {"raster": _is_raster, "array": _is_array, "vector": _is_vector}
+    {
+        "raster": _is_raster,
+        "array": _is_array,
+        "vector": _is_vector,
+        "mesh": _is_mesh,
+    }
 )
 
 
@@ -232,7 +255,9 @@ def extract(
     Args:
         data: A pyramids ``Dataset``, ``NetCDF``, ``DatasetCollection`` or ``FeatureCollection``, or a numpy
             array.
-        band: 1-based band index for raster/collection inputs.
+        band: 1-based band index for raster/collection inputs, or the slice/step for a NetCDF or mesh
+            variable that carries one. Drawing the first of several is noted at WARNING, so a multi-step
+            variable never reduces to one field in silence.
         variable: Variable name for ``NetCDF`` inputs (defaults to the first variable).
         x: Optional x coordinates for a raw numpy array (defaults to pixel indices).
         y: Optional y coordinates for a raw numpy array (defaults to pixel indices).
@@ -310,7 +335,7 @@ def extract(
 
     # NetCDF subclasses Dataset, so it MUST be checked before the Dataset branch.
     if isinstance(data, NetCDF):
-        return _from_netcdf(data, variable, metadata, crs=crs)
+        return _from_netcdf(data, variable, metadata, band=band, crs=crs)
     if isinstance(data, Dataset):
         return _from_raster(data, band, metadata, crs=crs)
     if isinstance(data, DatasetCollection):
@@ -319,6 +344,11 @@ def extract(
         return _from_feature(data, metadata, crs=crs)
     if isinstance(data, np.ndarray):
         return _from_numpy(data, x, y, metadata, crs=crs)
+    # Last, not first: a UgridDataset is no subclass of any branch above, so the order is free — and
+    # testing it here keeps the ugrid subpackage unimported for a raster or vector extraction that does
+    # not come through `quickmap`, whose own input gate imports it on every call anyway.
+    if _is_mesh(data):
+        return _from_ugrid(data, variable, metadata, band=band, crs=crs)
     raise TypeError(f"cannot build a Source from {type(data).__name__}")
 
 
@@ -555,7 +585,7 @@ def _from_raster(
     )
 
 
-def _variable_attributes(nc: Any, variable: str) -> dict:
+def _variable_attributes(nc: Any, variable: str | None) -> dict:
     """The CF attributes pyramids read off one NetCDF variable, as a plain mapping.
 
     ``NetCDF.meta_data`` is a ``NetCDFMetadata`` whose ``variables`` hold one ``VariableInfo`` per variable,
@@ -585,8 +615,123 @@ def _variable_attributes(nc: Any, variable: str) -> dict:
     return {}
 
 
+def _netcdf_slice(z: np.ndarray, named: str, band: int) -> np.ndarray:
+    """Take the 1-based ``band`` slice off a band-first NetCDF read.
+
+    Args:
+        z: The 3-D ``(slices, rows, columns)`` array pyramids read.
+        named: How the variable reads in a message — ``"variable 't2m'"``, or ``"pinned variable"``.
+        band: 1-based index of the slice to draw.
+
+    Returns:
+        np.ndarray: the 2-D slice ``band`` names.
+
+    Raises:
+        ValueError: when ``band`` names a slice the variable does not carry. Silently drawing slice 0 for
+            an out-of-range index would show the wrong field without saying so.
+
+    Examples:
+        - The band is 1-based, like the raster path's, so ``band=2`` is the second slice:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources.extractors import _netcdf_slice
+            >>> stack = np.stack([np.full((2, 2), float(step)) for step in range(3)])
+            >>> _netcdf_slice(stack, "variable 't2m'", 2).tolist()
+            [[1.0, 1.0], [1.0, 1.0]]
+
+            ```
+        - A slice the variable does not carry is named rather than rounded down to the first:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources.extractors import _netcdf_slice
+            >>> stack = np.stack([np.zeros((2, 2)), np.ones((2, 2))])
+            >>> try:
+            ...     _netcdf_slice(stack, "variable 't2m'", 4)
+            ... except ValueError as error:
+            ...     print(error)
+            band=4 is out of range for the variable 't2m', which carries 2 slice(s)
+
+            ```
+    """
+    slices = int(z.shape[0])
+    if not 1 <= band <= slices:
+        raise ValueError(
+            f"band={band} is out of range for the {named}, which carries {slices} slice(s)"
+        )
+    if slices > 1 and band == DEFAULT_BAND:
+        # Keyed on the slice *drawn*, not on whether the caller named it: every tier builder forwards an
+        # int default, so a condition on "named nothing" could not fire from any public entry point and a
+        # 24-step forecast drew step 1 in silence (round-2 M1). Worded as a statement for the same reason
+        # the old wording was wrong (round-1 L1): a caller who did pass band=1 is being told the slice
+        # count, not advised to do what they just did.
+        logger.warning(
+            "The %s carries %d slices; band=%d is drawn", named, slices, band
+        )
+    taken: np.ndarray = z[band - 1]
+    return taken
+
+
+def _netcdf_variable(nc: Any, variable: str | None, pinned: bool) -> str | None:
+    """Which variable to read: the one named, the container's first, or the one a subset already is.
+
+    Args:
+        nc: The container or pinned subset.
+        variable: The name the caller gave, or ``None``.
+        pinned: Whether ``nc`` is a pinned variable subset.
+
+    Returns:
+        The variable's name, or ``None`` for a subset whose name cannot be recovered.
+
+    Raises:
+        ValueError: when a container exposes no variables to plot.
+    """
+    if variable is not None:
+        return variable
+    if not pinned:
+        names: list[str] = list(nc.variable_names)
+        if not names:
+            raise ValueError("NetCDF has no variables to plot")
+        return names[0]
+    # The subset knows which variable it is. Recovering the name is what keeps the identity the style
+    # matcher reads (`metadata("variable")`), the interactive colorbar label, and the slice messages — all
+    # of which went blank when the name was dropped here (round-1 H1).
+    recovered: str | None = getattr(nc, "_source_var_name", None)
+    return recovered
+
+
+def _netcdf_attributes(nc: Any, variable: str | None, pinned: bool) -> dict:
+    """The CF attributes for the variable, read from the container or off a pinned subset itself.
+
+    Args:
+        nc: The container or pinned subset.
+        variable: The variable's name, or ``None``.
+        pinned: Whether ``nc`` is a pinned variable subset.
+
+    Returns:
+        dict: the attributes, empty when neither source carries any.
+    """
+    attributes = _variable_attributes(nc, variable)
+    if not (pinned and not attributes):
+        return attributes
+    # A subset's metadata holds no per-variable entry for the variable it already is, so the CF attributes
+    # are read off the subset itself; without them the units and standard-name steps of the style matcher
+    # cannot fire on the one input type they were written for.
+    attributes = dict(getattr(nc, "attrs", None) or {})
+    # `_variable_attributes` folds the container's resolved `unit` into "units"; a subset has no container
+    # entry to read and carries the unit on its band instead (round-2 L2).
+    resolved = next(iter(getattr(nc, "band_units", None) or []), None)
+    if resolved and not _attr(attributes, "units"):
+        attributes["units"] = resolved
+    return attributes
+
+
 def _from_netcdf(
-    nc: Any, variable: str | None, metadata: dict | None, *, crs: Any = None
+    nc: Any,
+    variable: str | None,
+    metadata: dict | None,
+    *,
+    band: int = DEFAULT_BAND,
+    crs: Any = None,
 ) -> Source:
     """Build a raster :class:`Source` from a pyramids ``NetCDF`` variable (defaults to the first).
 
@@ -594,39 +739,58 @@ def _from_netcdf(
     here and carried onto the ``Source``; without them the style matcher's units and standard-name steps
     could never fire on the one input type they were written for.
 
+    Two shapes of input arrive here. A **container** exposes ``variable_names`` and is read by name. A
+    **pinned variable subset** — what ``NetCDF.get_variable(name)`` hands back — reports no names of its
+    own, because it *is* the variable; it is read without one. Refusing it as "no variables to plot" was
+    the defect #499 reported.
+
+    A subset still carries its identity, and this reads it back: the variable's **name** off the subset
+    and its **CF attributes** off the subset's own attributes. Both matter beyond tidiness — the style
+    matcher picks a colormap from the name, so losing it silently restyled the map.
+
     Args:
-        nc: The pyramids ``NetCDF`` container to read.
-        variable: The variable to plot; ``None`` takes the first.
+        nc: The pyramids ``NetCDF`` container to read, or a pinned ``Variable`` subset of one.
+        variable: The variable to plot; ``None`` takes the first, or the pinned one.
         metadata: Extra metadata merged over the derived keys (the caller wins).
+        band: 1-based slice to draw from a variable carrying **one** band/time dimension. A variable with
+            more than one extra axis is refused rather than silently reduced.
         crs: The CRS the container's coordinates are already in, stored verbatim; ``None`` derives it.
 
     Returns:
         Source: the raster source.
 
     Raises:
-        ValueError: when the container exposes no variables to plot.
+        ValueError: when the container exposes no variables to plot, or when ``band`` names a slice the
+            variable does not carry.
     """
-    names = list(nc.variable_names)
-    if variable is None:
-        if not names:
-            raise ValueError("NetCDF has no variables to plot")
-        variable = names[0]
+    from pyramids.netcdf import Variable
+
+    # A pinned subset reports no variable_names of its own, so it is read without naming one.
+    pinned = isinstance(nc, Variable)
+    variable = _netcdf_variable(nc, variable, pinned)
+    named = "pinned variable" if variable is None else f"variable {variable!r}"
+    # Read by name only from a container: a subset *is* the variable and refuses to be asked for one.
+    by_name = {} if pinned else {"variable": variable}
     z = np.ma.filled(
-        np.ma.asarray(nc.read_array(variable=variable, masked=True)).astype("float64"),
+        np.ma.asarray(nc.read_array(masked=True, **by_name)).astype("float64"),
         np.nan,
     )
     # pyramids 0.71 reads a NetCDF variable band-first — a single-variable grid comes back as ``(1, H, W)``
-    # where earlier it was ``(H, W)``. A ``Source`` wraps one 2-D field, so drop a leading band axis, taking
-    # the first slice of a genuinely multi-slice read — the same default the raster path's ``band`` takes.
+    # where earlier it was ``(H, W)``. A ``Source`` wraps one 2-D field, so take one slice off a leading
+    # band axis: the one ``band`` names, on the same 1-based index the raster path's ``band`` uses.
     if z.ndim == 3:
-        if z.shape[0] > 1:
-            logger.warning(
-                "NetCDF variable %r has %d slices; the Source draws the first (slice 0)",
-                variable,
-                z.shape[0],
-            )
-        z = z[0]
-    attributes = _variable_attributes(nc, variable)
+        z = _netcdf_slice(z, named, band)
+    elif z.ndim > 3:
+        # pyramids keeps every band dimension since its #1241, so a (time, level, lat, lon) variable — an
+        # ERA5 pressure-levels read, say — arrives 4-D. `band` addresses one leading axis, so it cannot
+        # name a field in here; saying so beats storing a 4-D array on a Source documented to wrap a 2-D
+        # field and dropping `band` without a word (review M5).
+        raise ValueError(
+            f"{named} reads a {z.ndim}-D array {tuple(int(size) for size in z.shape)}; band= addresses a "
+            f"single leading axis, so select the extra dimensions first (e.g. NetCDF.sel(...)) and plot "
+            f"the 2-D or 3-D result"
+        )
+    attributes = _netcdf_attributes(nc, variable, pinned)
     units = _attr(attributes, "units")
     return Source(
         z=_axis(z, "z", units),
@@ -636,8 +800,184 @@ def _from_netcdf(
         units=units,
         metadata={
             "kind": "raster",
-            "variable": variable,
+            # Left out rather than recorded as None in the one case the name is unrecoverable, so a reader
+            # asking for it gets their own fallback.
+            **({} if variable is None else {"variable": variable}),
             **_identity(attributes),
+            **(metadata or {}),
+        },
+    )
+
+
+def _fan_values(values: np.ndarray, mesh: Any, triangles: np.ndarray) -> np.ndarray:
+    """Spread one value per mesh face over the fan triangles that face was cut into.
+
+    A face with ``N`` nodes becomes ``N - 2`` triangles, so a face-located variable carries fewer values
+    than the triangulation has triangles. Repeating each face's value across its own triangles is what
+    keeps a quad flat-shaded as one colour instead of being silently misaligned onto other faces.
+
+    This relies on an ordering pyramids does not promise in writing: ``Mesh2d.fan_triangles`` emits the
+    triangles **face-major, in face-index order**. Both are therefore checked below rather than trusted —
+    the count, and that each fan group leads with its own face's first node.
+
+    Args:
+        values: One value per mesh face.
+        mesh: The pyramids ``Mesh2d`` whose connectivity was triangulated.
+        triangles: The fan triangulation, used to check the spread result lines up with it.
+
+    Returns:
+        np.ndarray: one value per triangle.
+
+    Raises:
+        ValueError: when the repeated values do not match the triangle count, or when the triangles are not
+            grouped by face index — either means the connectivity and the triangulation disagree, and
+            colouring the mesh would be a guess.
+    """
+    connectivity = mesh.face_node_connectivity
+    per_face = np.asarray(connectivity.nodes_per_element()) - 2
+    # A face with fewer than three valid nodes yields no triangles and pyramids skips it, so clip rather
+    # than repeat a negative count.
+    counts = np.clip(per_face, 0, None)
+    spread = np.repeat(values, counts)
+    if spread.size != triangles.shape[0]:
+        raise ValueError(
+            f"the mesh has {triangles.shape[0]} triangles but its face values spread to "
+            f"{spread.size}; connectivity and triangulation disagree"
+        )
+    # The count alone cannot catch a *reorder*: it would still match if the triangles came back grouped by
+    # anything other than face index, and every face would then be painted with another's value. Fan
+    # triangulation cuts from each face's first vertex, so every triangle of face *i* carries face *i*'s
+    # first node in its own first column — which is checkable in one comparison (review L9).
+    leading = np.asarray(connectivity.data)[:, 0]
+    if not np.array_equal(np.asarray(triangles)[:, 0], np.repeat(leading, counts)):
+        raise ValueError(
+            "the mesh's fan triangles are not grouped by face index, so a face-located value cannot be "
+            "matched to the triangles it was cut into"
+        )
+    return spread
+
+
+def _mesh_step(values: np.ndarray, named: str, band: int, expected: int) -> np.ndarray:
+    """Reduce a temporal or layered mesh variable to the single step ``band`` names.
+
+    ``UgridDataset.masked_values`` keeps a variable's full shape, and UGRID model output normally carries a
+    leading time axis — so ``(n_steps, n_elements)`` is the common case, not the exception. A surface render
+    colours one value per element, so the step is taken here: letting a 2-D array through reached the
+    fan-spread as a bare numpy broadcast error for face data, and built a ``MeshSource`` with a 2-D ``z``
+    for node data, against that class's own documented contract (review H4).
+
+    Args:
+        values: The variable as read — 1-D, or ``(n_steps, n_elements)``.
+        named: How the variable reads in a message.
+        band: 1-based index of the step to draw.
+        expected: How many elements the mesh has at this variable's location.
+
+    Returns:
+        np.ndarray: one value per element.
+
+    Raises:
+        ValueError: when the shape cannot be reduced to one value per element, or when ``band`` names a
+            step the variable does not carry.
+    """
+    if values.ndim == 1:
+        if values.size != expected:
+            raise ValueError(
+                f"{named} holds {values.size} values but its mesh has {expected} at that location"
+            )
+        return values
+    if values.ndim != 2 or int(values.shape[-1]) != expected:
+        raise ValueError(
+            f"{named} has shape {tuple(int(size) for size in values.shape)}, which a mesh render cannot "
+            f"reduce to one value per element ({expected} expected on the last axis)"
+        )
+    steps = int(values.shape[0])
+    if not 1 <= band <= steps:
+        raise ValueError(
+            f"band={band} is out of range for {named}, which carries {steps} step(s)"
+        )
+    if steps > 1 and band == DEFAULT_BAND:
+        # Reachable from every entry point, for the reason given in `_netcdf_slice`.
+        logger.warning("The %s carries %d steps; band=%d is drawn", named, steps, band)
+    taken: np.ndarray = values[band - 1]
+    return taken
+
+
+def _from_ugrid(
+    ug: Any,
+    variable: str | None,
+    metadata: dict | None,
+    *,
+    band: int = DEFAULT_BAND,
+    crs: Any = None,
+) -> MeshSource:
+    """Build a :class:`MeshSource` from a pyramids ``UgridDataset`` variable (defaults to the first).
+
+    The geometry comes from pyramids rather than being rebuilt here: ``Mesh2d.fan_triangles`` cuts every
+    face — triangle, quad or larger polygon — into triangles with pure numpy, which is both the one shape
+    a triangular renderer takes and the reason this stays inside ``base/``'s engine-neutral rule.
+    Re-triangulating the nodes instead (a Delaunay pass) would invent faces the mesh does not have and
+    mis-assign face-located values onto them.
+
+    Args:
+        ug: The pyramids ``UgridDataset`` to read.
+        variable: The data variable to draw; ``None`` takes the first.
+        metadata: Extra metadata merged over the derived keys (the caller wins).
+        band: 1-based step to draw from a variable carrying a time (or layer) axis.
+        crs: The CRS the mesh's coordinates are already in, stored verbatim; ``None`` derives it.
+
+    Returns:
+        MeshSource: the mesh source, with values on the nodes or on the triangles.
+
+    Raises:
+        ValueError: when the mesh carries no data variables, when ``variable`` names one it does not
+            carry, when the variable sits on a location a surface render cannot colour, or when its shape
+            cannot be reduced to one value per element (including a ``band`` it does not carry). pyramids
+            raises one of its own from ``fan_triangles`` for a mesh with no face of three or more nodes
+            (*"Cannot create triangulation: no faces with 3 or more nodes."*); it is left in its own words
+            because it describes the mesh's topology, which is pyramids' subject, not this layer's.
+    """
+    carried = list(ug.data_variable_names)
+    if variable is None:
+        if not carried:
+            raise ValueError("UgridDataset has no data variables to plot")
+        variable = carried[0]
+    elif variable not in carried:
+        raise ValueError(
+            f"variable={variable!r} is not in this UgridDataset, which carries {carried}"
+        )
+    held = ug.data_vars[variable]
+    location = getattr(held, "location", None)
+    if location not in MESH_LOCATIONS:
+        raise ValueError(
+            f"variable={variable!r} sits on {location!r}; a mesh render colours "
+            f"{' or '.join(MESH_LOCATIONS)} values"
+        )
+    mesh = ug.mesh
+    triangles = np.asarray(mesh.fan_triangles)
+    values = np.ma.filled(
+        np.ma.asarray(ug.masked_values(variable)).astype("float64"), np.nan
+    )
+    expected = int(mesh.n_face) if location == "face" else int(mesh.n_node)
+    values = _mesh_step(values, f"variable {variable!r}", band, expected)
+    if location == "face":
+        values = _fan_values(values, mesh, triangles)
+    units = getattr(held, "units", None)
+    standard_name = getattr(held, "standard_name", None)
+    return MeshSource(
+        _axis(values, "z", units),
+        _axis(mesh.node_x, "x"),
+        _axis(mesh.node_y, "y"),
+        triangles=triangles,
+        location=location,
+        crs=crs if crs is not None else declared_crs(ug),
+        units=units,
+        metadata={
+            "kind": "mesh",
+            "variable": variable,
+            "location": location,
+            "n_faces": int(mesh.n_face),
+            "n_nodes": int(mesh.n_node),
+            **({} if standard_name is None else {"standard_name": standard_name}),
             **(metadata or {}),
         },
     )

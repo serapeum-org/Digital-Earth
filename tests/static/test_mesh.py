@@ -58,3 +58,225 @@ def test_tricontourf_labels_is_noop(dataset):
     assert len(m.ax.texts) == 0, (
         "filled tricontourf must ignore labels= (no label artists)"
     )
+
+
+@pytest.mark.parametrize("kind", ["tricontourf", "tricontour"])
+def test_contour_refuses_a_mesh_whose_values_sit_on_the_faces(ugrid_mesh, kind):
+    """A contour render refuses a face-located mesh and names the render that shades faces.
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        kind: The contour verb under test.
+
+    Test scenario:
+        Contours interpolate between values at the nodes, which a face-located mesh does not have.
+        Averaging the faces onto the nodes to make it work would invent data, so it is refused instead.
+    """
+    mesh = ugrid_mesh("face")
+    verb = getattr(Map(), kind)
+    with pytest.raises(ValueError, match="values sit on its"):
+        verb(mesh)
+
+
+def test_tripcolor_skips_a_mesh_no_projection_can_place(ugrid_mesh, caplog):
+    """A mesh whose nodes are all unplaceable is skipped as off-limb, not drawn half-way.
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        caplog: pytest log capture.
+
+    Test scenario:
+        Every node is non-finite, so no triangle keeps all three. That is the mesh equivalent of an
+        off-limb raster: the verb records the skip and draws nothing, rather than handing matplotlib a
+        triangulation full of infinities.
+    """
+    import logging
+
+    import numpy as np
+
+    unplaceable = ugrid_mesh("face", node_x=np.full(5, np.inf))
+    scene = Map()
+    with caplog.at_level(logging.WARNING):
+        scene.tripcolor(unplaceable)
+    assert not scene.ax.collections, "an unplaceable mesh should have drawn nothing"
+    assert "tripcolor" in caplog.text, f"the skip should name the verb: {caplog.text!r}"
+    assert "none of the data could be placed" in caplog.text, (
+        f"the skip should be recorded, not silent: {caplog.text!r}"
+    )
+    assert "raster" not in caplog.text, (
+        f"a mesh was skipped, so the message must not blame a raster: {caplog.text!r}"
+    )
+
+
+def test_tripcolor_keeps_a_finite_view_when_part_of_the_mesh_is_unplaceable(ugrid_mesh):
+    """A partly unplaceable mesh still frames the triangles it did draw (#499 review H3).
+
+    Test scenario:
+        One node of the quad/triangle mesh is sent to infinity, which drops the one triangle leaning on it
+        and keeps the other two. Leaving the infinite node in the coordinate arrays poisoned the extent, so
+        the axes collapsed to about a tenth of a unit and the surviving triangles were drawn far outside the
+        view — a blank figure with no warning. The view must enclose what was drawn.
+    """
+    import numpy as np
+
+    partly = ugrid_mesh("face", node_x=np.array([0.0, 1.0, 1.0, 0.0, np.inf]))
+    scene = Map()
+    scene.tripcolor(partly)
+    (x0, y0), (x1, y1) = scene.ax.dataLim.get_points()
+    assert np.isfinite([x0, y0, x1, y1]).all(), (
+        f"the extent is not finite: {(x0, y0, x1, y1)}"
+    )
+    assert x1 - x0 >= 0.9, (
+        f"x extent collapsed to {x1 - x0}, so the drawn triangles are off-view"
+    )
+    assert y1 - y0 >= 0.9, (
+        f"y extent collapsed to {y1 - y0}, so the drawn triangles are off-view"
+    )
+
+
+@pytest.mark.parametrize("display", [3857, "EPSG:3857"])
+def test_a_crs_carrying_mesh_draws_in_a_coded_display_crs(ugrid_mesh, display):
+    """A mesh that declares a CRS is reprojected for any display CRS that names an EPSG code (review H2).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        display: The display CRS, as an int and as the `"EPSG:<code>"` spelling the Source contract allows.
+
+    Test scenario:
+        pyramids' `UgridDataset.to_crs` takes an EPSG **code** and builds its target as `f"EPSG:{code}"`,
+        so handing it the string spelling produced `EPSG:EPSG:3857` and a raw pyproj CRSError escaped a
+        visualization call. Both spellings must reach the same place.
+    """
+    mesh = ugrid_mesh("face", epsg=4326)
+    scene = Map(crs=display)
+    scene.tripcolor(mesh)
+    assert scene.ax.collections, "a CRS-carrying mesh drew nothing"
+
+
+def test_a_crs_carrying_mesh_refuses_a_display_crs_with_no_epsg_code(ugrid_mesh):
+    """A projection with no authority code is refused in this repo's words, not pyproj's.
+
+    Test scenario:
+        An orthographic or Robinson display CRS carries no EPSG code, and pyramids' mesh warp can only take
+        one. The caller should learn that from a message naming the CRS and the limit — not from
+        `CRSError: could not interpret 'EPSG:+proj=robin'`.
+    """
+    mesh = ugrid_mesh("face", epsg=4326)
+    scene = Map(crs="+proj=robin")
+    with pytest.raises(ValueError, match="EPSG code"):
+        scene.tripcolor(mesh)
+
+
+def _two_triangle_mesh(location="node", node_x=None):
+    """Build a mesh of two triangles sharing one node, with values on ``location``.
+
+    Faces ``[0, 1, 2]`` and ``[2, 3, 4]`` share only node 2, so making node 1 unplaceable drops the first
+    face and keeps the second — which is what makes a *shifted* renumbering observable.
+
+    Args:
+        location: ``"node"`` or ``"face"``.
+        node_x: Overrides the node x coordinates.
+
+    Returns:
+        The pyramids ``UgridDataset``.
+    """
+    import numpy as np
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+    from pyramids.netcdf.ugrid.models import MeshVariable
+
+    mesh = Mesh2d(
+        node_x=np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+        if node_x is None
+        else np.asarray(node_x),
+        node_y=np.array([0.0, 1.0, 0.0, 1.0, 0.0]),
+        face_node_connectivity=Connectivity(
+            data=np.array([[0, 1, 2], [2, 3, 4]], dtype=np.intp),
+            fill_value=-1,
+            cf_role="face_node_connectivity",
+            original_start_index=0,
+        ),
+    )
+    values = (
+        np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        if location == "node"
+        else np.array([10.0, 20.0])
+    )
+    name = "zs" if location == "node" else "depth"
+    return UgridDataset(
+        mesh=mesh,
+        data_variables={
+            name: MeshVariable(
+                name=name,
+                location=location,
+                mesh_name="m",
+                shape=values.shape,
+                _data=values,
+            )
+        },
+        global_attributes={},
+    )
+
+
+def test_node_located_values_follow_their_nodes_through_the_compaction():
+    """A node-located mesh keeps each node's own value when unplaceable nodes are dropped.
+
+    Test scenario:
+        Node 1 is unplaceable, so the face [0, 1, 2] goes and [2, 3, 4] stays. The surviving nodes are
+        2, 3 and 4, whose values are 30, 40 and 50 — mean 40. Compacting the coordinates without
+        compacting the values left the renumbered indices pointing at the *original* array, which drew
+        mean(10, 20, 30) = 20 instead: wrong colours, silently (round-2 H1).
+    """
+    import numpy as np
+
+    partly = _two_triangle_mesh("node", node_x=np.array([0.0, np.inf, 2.0, 3.0, 4.0]))
+    scene = Map()
+    scene.tripcolor(partly)
+    drawn = np.asarray(scene.ax.collections[-1].get_array()).tolist()
+    assert drawn == [40.0], f"expected the surviving nodes' mean 40.0, drew {drawn}"
+
+
+@pytest.mark.parametrize("kind", ["tricontourf", "tricontour"])
+def test_node_located_contours_survive_the_compaction(kind):
+    """A contour render of a partly unplaceable node-located mesh draws instead of failing raw.
+
+    Args:
+        kind: The contour verb under test.
+
+    Test scenario:
+        Leaving the values uncompacted handed matplotlib five values for three nodes, which it answered
+        with `ValueError: data length (5) does not match n_nodes (3)` — a message about an array the
+        caller never built.
+    """
+    import numpy as np
+
+    partly = _two_triangle_mesh("node", node_x=np.array([0.0, np.inf, 2.0, 3.0, 4.0]))
+    scene = Map()
+    getattr(scene, kind)(partly)
+    assert scene.ax.collections, (
+        f"{kind} drew nothing for a partly unplaceable node-located mesh"
+    )
+
+
+def test_a_mesh_already_in_the_display_crs_needs_no_epsg_code(ugrid_mesh):
+    """A mesh already in the display CRS is drawn, even where that CRS has no EPSG code (round-2 M3).
+
+    Test scenario:
+        The upstream restriction is about *warping* a mesh, so it cannot apply when no warp is required.
+        A mesh whose own CRS is the display CRS was nevertheless refused, because the guard resolved the
+        code before asking whether a reprojection was needed at all.
+    """
+    from pyramids.base.crs import crs_from_user_input
+
+    robinson = crs_from_user_input("+proj=robin").to_wkt()
+    mesh = ugrid_mesh("face")
+    mesh = mesh.__class__(
+        mesh=mesh.mesh,
+        data_variables=dict(mesh.data_vars),
+        global_attributes={},
+        crs_wkt=robinson,
+    )
+    scene = Map(crs="+proj=robin")
+    scene.tripcolor(mesh)
+    assert scene.ax.collections, "a mesh already in the display CRS should draw"

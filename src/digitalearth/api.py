@@ -594,6 +594,152 @@ def _renderer_for(table: dict, kind: str, kwargs: dict, caller: str) -> tuple:
     )
 
 
+def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData:
+    """Pin the NetCDF variable ``variable`` names, so every backend draws the field the caller asked for.
+
+    A NetCDF container holds several variables and the extractor draws the **first** unless told otherwise.
+    ``variable=`` is how a caller says which one, and it is answered here — once, before the backend
+    dispatch — rather than threaded through four tiers' builders, because the choice is about the *input*
+    and not about any renderer. Pinning is pyramids' own ``get_variable``, so the object handed on is the
+    same subset a caller could have pinned themselves (#499).
+
+    Args:
+        data: The input ``quickmap`` was given.
+        variable: The NetCDF or UGRID variable to draw, or ``None`` to leave the input alone.
+
+    Returns:
+        PlottableData: the narrowed input, or ``data`` unchanged when no variable was named.
+
+    Raises:
+        ValueError: when ``variable`` is named for an input that holds no variables to choose from, names
+            one the input does not carry, names a *different* variable on an already-pinned subset, or
+            names one pyramids cannot expose as a raster plane — a 1-D or non-numeric variable. Either way
+            the caller learns which, rather than seeing the first variable drawn in silence.
+
+    Examples:
+        - Naming a variable on a non-NetCDF input is refused by name:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _pinned_variable
+            >>> try:
+            ...     _pinned_variable(np.zeros((2, 2)), "t2m")
+            ... except ValueError as error:
+            ...     print(error)
+            variable='t2m' selects a NetCDF or UgridDataset variable, but the input is a ndarray
+
+            ```
+        - Asking for nothing leaves the input exactly as it came:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _pinned_variable
+            >>> grid = np.zeros((2, 2))
+            >>> _pinned_variable(grid, None) is grid
+            True
+
+            ```
+    """
+    if variable is None:
+        return data
+    from pyramids.netcdf import NetCDF
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    if isinstance(data, UgridDataset):
+        # A mesh is narrowed by dropping the others rather than by pinning one: `_from_ugrid` draws the
+        # first variable, so a single-variable mesh *is* the selection, and it keeps the variable's name,
+        # units and standard name — which a pinned NetCDF subset cannot (review M4).
+        carried = list(data.data_variable_names)
+        if variable not in carried:
+            raise ValueError(
+                f"variable={variable!r} is not in this UgridDataset, which carries {carried}"
+            )
+        others = [held for held in carried if held != variable]
+        return data.drop_variables(others) if others else data
+    if not isinstance(data, NetCDF):
+        raise ValueError(
+            f"variable={variable!r} selects a NetCDF or UgridDataset variable, but the input is a "
+            f"{type(data).__name__}"
+        )
+    from pyramids.netcdf import Variable
+
+    if isinstance(data, Variable):
+        # An already-pinned subset *is* one variable and reports no names of its own, so the container
+        # wording below would describe the wrong situation ("which carries []"). Naming the same variable
+        # asks for what is already in hand; naming another cannot be served from a subset (review L2).
+        # The name is pyramids' own private record of which variable this subset is. Read through
+        # getattr so a rename upstream degrades to a vaguer message rather than an AttributeError — and
+        # so the message never prints `None` as though it were a name (round-2 L3).
+        held = getattr(data, "_source_var_name", None)
+        if held is not None and variable == held:
+            return data
+        already = f"the variable {held!r}" if held is not None else "a pinned variable"
+        raise ValueError(
+            f"this input is already {already}, so variable={variable!r} cannot select another from it; "
+            f"pass the NetCDF container instead"
+        )
+    carried = list(data.variable_names)
+    if variable not in carried:
+        raise ValueError(
+            f"variable={variable!r} is not in this NetCDF, which carries {carried}"
+        )
+    pinned = data.get_variable(variable)
+    if not isinstance(pinned, Dataset):
+        # pyramids answers a LabeledArray for a variable it cannot expose as a raster plane — a 1-D or
+        # non-numeric one. Refusing by name beats letting the input gate complain about the *pinned* type,
+        # which the caller never asked for (review L3).
+        raise ValueError(
+            f"variable={variable!r} has no raster plane to draw: pyramids answered a "
+            f"{type(pinned).__name__}, which a map cannot draw as a field"
+        )
+    return pinned
+
+
+#: The backends that can draw an unstructured mesh. The static tier shades each face through cleopatra's
+#: ``MeshGlyph``; the other three have no triangular render, which is stated rather than discovered.
+MESH_BACKENDS: frozenset[str] = frozenset({"matplotlib"})
+
+
+def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
+    """Refuse an unstructured mesh on a backend with no render for one, before any scene is built.
+
+    Answered here rather than inside each tier's dispatch so no half-built figure or VTK plotter is left
+    behind by the refusal, and so the message names the backend and the remedy once (#499).
+
+    Args:
+        data: The input ``quickmap`` was given, already normalised.
+        backend: The backend name, already validated.
+
+    Raises:
+        TypeError: when ``data`` is a ``UgridDataset`` and ``backend`` is not one of
+            :data:`MESH_BACKENDS`.
+
+    Examples:
+        - The static tier is the one that draws a mesh, so it is the one this lets through:
+            ```python
+            >>> from digitalearth.api import MESH_BACKENDS
+            >>> sorted(MESH_BACKENDS)
+            ['matplotlib']
+
+            ```
+        - Only a mesh is refused: anything else passes on every backend, whatever it is:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _reject_mesh_backend
+            >>> _reject_mesh_backend(np.zeros((2, 2)), "web") is None
+            True
+
+            ```
+    """
+    if backend in MESH_BACKENDS:
+        return
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    if isinstance(data, UgridDataset):
+        raise TypeError(
+            f"backend={backend!r} has no unstructured-mesh render; draw a UgridDataset with "
+            f"backend='matplotlib', which shades each of its faces (tripcolor)"
+        )
+
+
 def _input_kind(data: PlottableData, caller: str) -> str:
     """Classify a ``quickmap`` input into the base layer kind its geometry draws — the decision, made once.
 
@@ -613,14 +759,20 @@ def _input_kind(data: PlottableData, caller: str) -> str:
         caller: Public function name to blame in a refusal — ``"quickmap"`` or ``"quickplot"``.
 
     Returns:
-        ``"raster"`` for a ``Dataset``; ``"points"``, ``"lines"`` or ``"polygons"`` for a uniform
-        ``FeatureCollection``; ``"mixed"`` for one whose geometry types disagree.
+        ``"raster"`` for a ``Dataset``; ``"mesh"`` for a ``UgridDataset``; ``"points"``, ``"lines"`` or
+        ``"polygons"`` for a uniform ``FeatureCollection``; ``"mixed"`` for one whose geometry types
+        disagree.
 
     Raises:
         ValueError: when a ``FeatureCollection`` is empty. Without this guard the all-``True`` result of an
             empty ``geom_type`` check reads as polygons and the map draws nothing, silently.
-        TypeError: when ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
+        TypeError: when ``data`` is none of a ``Dataset``, a ``UgridDataset`` or a ``FeatureCollection``.
     """
+    from pyramids.netcdf.ugrid.dataset import UgridDataset
+
+    # Before the Dataset branch for clarity only — a UgridDataset is not a Dataset subclass, unlike NetCDF.
+    if isinstance(data, UgridDataset):
+        return "mesh"
     if isinstance(data, Dataset):
         return "raster"
     if isinstance(data, FeatureCollection):
@@ -686,6 +838,16 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
         method, picked = _renderer_for(_STATIC_RASTER_KINDS, kind, kwargs, "quickmap")
         getattr(scene, method)(data, **picked, **kwargs)
         return
+    if family == "mesh":
+        # `tripcolor` is the render that shades a face its own colour, which is what a mesh carrying
+        # face-located values is; it also draws node-located values, by averaging each triangle's nodes.
+        if kind not in ("auto", "tripcolor"):
+            raise ValueError(
+                f"kind={kind!r} is not a renderer for a mesh; quickmap draws one with 'tripcolor', which "
+                f"shades each face. Contour a node-located mesh with Map.tricontourf() directly."
+            )
+        scene.tripcolor(data, **kwargs)
+        return
     if family == "polygons":
         _draw_polygons(scene, data, kwargs)
         return
@@ -706,6 +868,7 @@ def quickmap(
     *,
     crs: Any = _UNSET,
     kind: str = "auto",
+    variable: str | None = None,
     domain: Any = _UNSET,
     basemap: bool | str | Any = False,
     coastlines: Any = _UNSET,
@@ -716,7 +879,8 @@ def quickmap(
     """Build a finished map from a single pyramids object in one call.
 
     Args:
-        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
+        data: A pyramids ``Dataset`` (raster), ``FeatureCollection`` (points/polygons) or
+            ``UgridDataset`` (an unstructured mesh, drawn on ``backend="matplotlib"`` only).
         crs: Display CRS for the map (`backend="matplotlib"`/`"interactive"`, where it defaults to `3857`, and
             `"web"`, which accepts only `4326`). With `backend="3d"` the scene is drawn in it; left out, the 3-D
             scene takes the data's own CRS.
@@ -725,6 +889,12 @@ def quickmap(
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
             nothing) is accepted anywhere.
+        variable: Which variable to draw from a NetCDF container or a UGRID mesh, either of which
+            otherwise draws its **first**.
+            Every backend honours it, because it selects the input rather than asking anything of a
+            renderer. Naming one for a non-NetCDF input, or one the container does not carry, is refused by
+            name. To choose a slice of a variable that carries a band/time dimension, pass ``band=`` (1-based)
+            alongside it; without one, the first slice is drawn and a warning names how many there were.
         domain: Optional named region / bbox to set the extent. Honoured by ``backend="matplotlib"`` (its fixed
             extent) and by ``backend="3d"`` (it frames the camera on the region); the ``"interactive"`` and
             ``"web"`` tiers pan and zoom instead, so passing it to those is refused by name.
@@ -789,9 +959,13 @@ def quickmap(
             ``FeatureCollection``, which would otherwise draw nothing in silence, and for a keyword that
             contradicts the ``kind`` it was written beside — ``kind="contourf"`` *is* ``filled=True``, so
             naming both says one thing twice and disagrees. ``colorbar`` is never refused, since every
-            backend honours it.
-        TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection`` — and, on
-            ``backend="3d"``, for a line ``FeatureCollection`` too, which has no 3-D builder.
+            backend honours it. Also for a ``variable`` the input does not carry (or names on an input
+            with no variables to choose from), and for a ``kind`` other than ``"tripcolor"`` on a mesh,
+            which has only the one render.
+        TypeError: if ``data`` is none of a ``Dataset``, a ``FeatureCollection`` or a ``UgridDataset``;
+            for a ``UgridDataset`` on any backend but ``"matplotlib"``, which is the only tier with a
+            triangular render (:data:`MESH_BACKENDS`); and, on ``backend="3d"``, for a line
+            ``FeatureCollection`` too, which has no 3-D builder.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -848,6 +1022,12 @@ def quickmap(
         coastlines=coastlines,
         colorbar=colorbar,
     )
+    # Select the input before any backend is built: `variable=` is about which field is drawn, so it is
+    # answered the same way for all four tiers.
+    # Refuse first, then narrow: narrowing a mesh the chosen backend cannot draw is work thrown away,
+    # and `_reject_mesh_backend` only needs the input's type (round-2 N4).
+    _reject_mesh_backend(data, backend)
+    data = _pinned_variable(data, variable)
     # Past the gate, fill in the defaults the surviving backends expect.
     colorbar = True if colorbar is _UNSET else colorbar
     coastlines = False if coastlines is _UNSET else coastlines
