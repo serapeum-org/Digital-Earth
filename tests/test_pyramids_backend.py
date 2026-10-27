@@ -26,6 +26,7 @@ from digitalearth.pyramids_backend import (
     ANIMATION_BACKENDS,
     BAND_ORIGIN_SHIFT,
     _Forwarded,
+    _framed,
     interactive,
     three_d,
     web,
@@ -625,3 +626,37 @@ class TestMeshIsNotDrawnHereYet:
             f"{sorted(overlap)} now draws a mesh, so variable_name is reachable and needs a test "
             f"that exercises it through that tier"
         )
+
+
+class TestFrameKeywordsWithNoRoute:
+    """A frame keyword is refused when the scene has no verb for it, rather than silently skipped."""
+
+    class _Bare:
+        """A scene with neither a basemap verb nor a title verb."""
+
+    def test_a_basemap_on_a_tier_with_no_basemap_verb_is_refused(self):
+        """``basemap`` is named when the built scene has no verb to apply it with.
+
+        Test scenario:
+            Both tiers that animate do own ``basemap``, so this is the defensive arm — but a scene
+            that loses the verb upstream would otherwise drop a requested basemap in silence, which
+            is the failure mode this module exists to avoid.
+        """
+        plan = _Forwarded.from_facade("web", {"animate": True, "basemap": True})
+        scene = self._Bare()
+        with pytest.raises(ValueError, match="this tier has no basemap"):
+            _framed(scene, plan, {})
+
+    def test_a_title_on_a_tier_with_no_title_route_is_refused(self):
+        """``title`` is named when the scene has neither a constructor argument nor ``set_title``.
+
+        Test scenario:
+            The HoloViz tier reaches the title through its builder and the other two through
+            ``set_title``; a scene with neither would otherwise discard it without a word.
+        """
+        plan = _Forwarded.from_facade("web", {"animate": True, "title": "Flood"})
+        scene = self._Bare()
+        with pytest.raises(
+            ValueError, match="neither a title argument nor a set_title verb"
+        ):
+            _framed(scene, plan, {})

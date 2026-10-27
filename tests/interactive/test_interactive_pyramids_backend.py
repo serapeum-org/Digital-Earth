@@ -265,3 +265,32 @@ class TestKeywordsTheBuilderAccepts:
         monkeypatch.setattr(InteractiveMap, "timecube", spy)
         interactive(stack, backend="interactive", animate="time")
         assert seen.get("kdim") == "time", f"the named axis should become kdim: {seen}"
+
+    def test_the_forwarded_step_labels_reach_the_builder(self, stack, monkeypatch):
+        """``animation_axis_values`` becomes the builder's ``labels``, naming each step.
+
+        Args:
+            stack: A three-step collection.
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            Every animate facade forwards ``animation_axis_values`` — the values along the animated
+            axis — and both temporal builders take them as ``labels``. Dropped, the slider would
+            show positions instead of the times they stand for.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        seen = {}
+        real = InteractiveMap.timecube
+
+        def spy(self, collection, **kwargs):
+            seen.update(kwargs)
+            return real(self, collection, **kwargs)
+
+        monkeypatch.setattr(InteractiveMap, "timecube", spy)
+        interactive(
+            stack, backend="interactive", animate=True, animation_axis_values=[1, 2, 3]
+        )
+        assert seen.get("labels") == [1, 2, 3], (
+            f"the step labels should reach the builder: {seen}"
+        )
