@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -58,8 +59,39 @@ def _triangulated_surface(mesh: Any) -> Any:
     )
 
 
+def _point_scalars(surf: Any) -> np.ndarray | None:
+    """Return the surface's 1-D per-vertex colour scalars, interpolating cell scalars to points if needed.
+
+    Args:
+        surf: A triangulated PyVista surface.
+
+    Returns:
+        numpy.ndarray | None: an ``(n_points,)`` scalar array to colour by, or ``None`` when the surface carries
+        no usable scalars (neither point nor cell).
+    """
+    scalars = surf.active_scalars
+    if scalars is not None and np.ndim(scalars) == 1 and len(scalars) == surf.n_points:
+        return np.asarray(scalars)
+    # A layer coloured by cell data (len == n_cells) would otherwise fall through to the solid colour; averaging
+    # it to the points (same geometry, same value range, so the actor's LUT still applies) keeps its colouring.
+    name = surf.active_scalars_name
+    if name and name in surf.cell_data:
+        converted = surf.cell_data_to_point_data().point_data.get(name)
+        if (
+            converted is not None
+            and np.ndim(converted) == 1
+            and len(converted) == surf.n_points
+        ):
+            return np.asarray(converted)
+    return None
+
+
 def _vertex_rgb(surf: Any, actor: Any) -> np.ndarray:
     """Per-vertex float RGB in ``[0, 1]`` for a surface, mapped through the actor's LUT (solid colour otherwise).
+
+    Point scalars map directly; cell scalars are interpolated to the points first (see :func:`_point_scalars`).
+    A surface with no mappable scalars falls back to the actor's solid colour and **warns**, so the fallback is
+    observable rather than a silently grey layer.
 
     Args:
         surf: A triangulated PyVista surface (``n_points`` vertices).
@@ -68,8 +100,8 @@ def _vertex_rgb(surf: Any, actor: Any) -> np.ndarray:
     Returns:
         numpy.ndarray: an ``(n_points, 3)`` float32 array of RGB in ``[0, 1]``.
     """
-    scalars = surf.active_scalars
-    if scalars is not None and np.ndim(scalars) == 1 and len(scalars) == surf.n_points:
+    scalars = _point_scalars(surf)
+    if scalars is not None:
         try:
             from vtkmodules.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 
@@ -82,6 +114,10 @@ def _vertex_rgb(surf: Any, actor: Any) -> np.ndarray:
             return np.ascontiguousarray(rgb)
         except Exception:  # noqa: BLE001 - any LUT/VTK hiccup falls back to a solid colour, never fails the render
             pass
+    warnings.warn(
+        "photoreal(): a layer has no point-mappable scalars; rendering it in a solid colour",
+        stacklevel=2,
+    )
     try:
         solid = np.asarray(actor.prop.color, dtype="float32")[:3]
     except Exception:  # noqa: BLE001

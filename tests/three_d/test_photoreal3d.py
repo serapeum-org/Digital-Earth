@@ -80,25 +80,67 @@ class TestSplitAovs:
             _split_aovs(np.zeros((2, 2, 10), dtype="float32"))
 
 
-class TestVertexRgb:
-    """`_vertex_rgb` maps scalars through the actor LUT, or falls back to a solid colour."""
+class TestPointScalars:
+    """`_point_scalars` returns per-vertex scalars, interpolating cell data to points when needed."""
 
-    def test_scalar_colours_are_in_unit_range(self):
-        """A terrain layer's elevation maps to per-vertex RGB within [0, 1]."""
+    def test_point_scalars_are_returned_directly(self):
+        """A surface whose active scalars are point data returns them unchanged."""
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _point_scalars, _triangulated_surface
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        surf.point_data["e"] = np.linspace(0.0, 1.0, surf.n_points)
+        surf.set_active_scalars("e")
+        scalars = _point_scalars(surf)
+        assert scalars is not None, "point scalars must be found"
+        assert len(scalars) == surf.n_points, len(scalars)
+
+    def test_cell_scalars_are_interpolated_to_points(self):
+        """A cell-scalar layer is averaged to the points so it still gets per-vertex colours, not grey (L2)."""
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _point_scalars, _triangulated_surface
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=3, j_resolution=3))
+        surf.cell_data["c"] = np.arange(surf.n_cells, dtype="float64")
+        surf.set_active_scalars("c", preference="cell")
+        scalars = _point_scalars(surf)
+        assert scalars is not None, (
+            "cell scalars must interpolate to points, not fall through to solid"
+        )
+        assert len(scalars) == surf.n_points, len(scalars)
+
+    def test_no_scalars_returns_none(self):
+        """A surface with no scalars returns None, so the caller uses the solid fallback."""
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _point_scalars, _triangulated_surface
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        assert _point_scalars(surf) is None, "a scalar-less surface must map to None"
+
+
+class TestVertexRgb:
+    """`_vertex_rgb` maps scalars through the actor LUT, or falls back to a solid colour with a warning."""
+
+    def test_scalar_colours_map_to_distinct_unit_range_colours(self):
+        """A terrain's elevation maps through the LUT to varied RGB in [0, 1] (not a single grey fallback)."""
         from digitalearth.three_d.photoreal import _triangulated_surface, _vertex_rgb
 
         scene = _small_terrain_scene()
         mesh, actor = scene.layers[0]
         rgb = _vertex_rgb(_triangulated_surface(mesh), actor)
         assert rgb.shape[1] == 3, rgb.shape
-        assert float(rgb.min()) >= 0.0 and float(rgb.max()) <= 1.0, (
-            rgb.min(),
-            rgb.max(),
+        assert float(rgb.min()) >= 0.0, rgb.min()
+        assert float(rgb.max()) <= 1.0, rgb.max()
+        assert len(np.unique(rgb, axis=0)) > 1, (
+            "LUT mapping must vary colours, not return one solid colour"
         )
         scene.close()
 
-    def test_no_scalars_falls_back_to_the_actor_solid_colour(self):
-        """A surface with no active scalars is tiled with the actor's own flat colour."""
+    def test_no_scalars_falls_back_to_the_actor_solid_colour_and_warns(self):
+        """A surface with no scalars is tiled with the actor's flat colour, and the fallback warns (L2)."""
         from types import SimpleNamespace
 
         import pyvista as pv
@@ -107,7 +149,8 @@ class TestVertexRgb:
 
         surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
         actor = SimpleNamespace(prop=SimpleNamespace(color=(0.2, 0.4, 0.6)))
-        rgb = _vertex_rgb(surf, actor)
+        with pytest.warns(UserWarning, match="solid colour"):
+            rgb = _vertex_rgb(surf, actor)
         assert rgb.shape == (surf.n_points, 3), rgb.shape
         assert np.allclose(rgb, [0.2, 0.4, 0.6]), rgb[0]
 
@@ -130,7 +173,8 @@ class TestVertexRgb:
             mapper=SimpleNamespace(lookup_table=SimpleNamespace(MapScalars=_raise)),
             prop=SimpleNamespace(color=(0.1, 0.2, 0.3)),
         )
-        rgb = _vertex_rgb(surf, actor)
+        with pytest.warns(UserWarning, match="solid colour"):
+            rgb = _vertex_rgb(surf, actor)
         assert np.allclose(rgb, [0.1, 0.2, 0.3]), rgb[0]
 
     def test_missing_prop_falls_back_to_the_default_solid_colour(self):
@@ -146,7 +190,8 @@ class TestVertexRgb:
         )
 
         surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
-        rgb = _vertex_rgb(surf, SimpleNamespace())
+        with pytest.warns(UserWarning, match="solid colour"):
+            rgb = _vertex_rgb(surf, SimpleNamespace())
         assert np.allclose(rgb, _DEFAULT_SOLID_RGB), rgb[0]
 
 
