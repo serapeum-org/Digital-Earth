@@ -515,6 +515,18 @@ class TestPhotorealPointRadius:
         assert radius == pytest.approx(expected), f"expected {expected}, got {radius}"
         scene.close()
 
+    def test_a_zero_diagonal_scene_falls_back_to_a_positive_radius(self):
+        """A degenerate zero-diagonal scene gives a positive radius, not 0, so spheres do not collapse (#514 L1)."""
+        from types import SimpleNamespace
+
+        from digitalearth.three_d.photoreal import PhotorealMixin
+
+        fake = SimpleNamespace(
+            plotter=SimpleNamespace(bounds=(1.0, 1.0, 2.0, 2.0, 3.0, 3.0))
+        )
+        radius = PhotorealMixin._photoreal_point_radius(fake)
+        assert radius > 0.0, radius
+
 
 class TestPhotorealFollowups:
     """`Scene3D.photoreal` renders point clouds, honours a scene sun, and accepts the firefly/PBR knobs."""

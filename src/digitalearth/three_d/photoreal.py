@@ -524,10 +524,15 @@ class PhotorealMixin(_MixinBase):
         )
 
     def _photoreal_point_radius(self) -> float:
-        """Default point-cloud sphere radius: a small fraction of the scene bounding-box diagonal."""
+        """Default point-cloud sphere radius: a small fraction of the scene bounding-box diagonal.
+
+        A degenerate scene (a single point, all-coincident points) has a zero diagonal, which would collapse
+        every icosphere to its centre, so the radius falls back to ``1.0`` in that case.
+        """
         b = self.plotter.bounds
         diag = math.sqrt((b[1] - b[0]) ** 2 + (b[3] - b[2]) ** 2 + (b[5] - b[4]) ** 2)
-        return float(diag) * _POINT_RADIUS_FRACTION
+        radius = float(diag) * _POINT_RADIUS_FRACTION
+        return radius if radius > 0.0 else 1.0
 
     def _photoreal_meshes(
         self,
