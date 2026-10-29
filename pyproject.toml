@@ -593,6 +593,13 @@ doctests-web = { cmd = "pytest --doctest-modules src/digitalearth/web -p no:cach
 [tool.pixi.feature.numba-numpy.dependencies]
 numpy = "<2.5"
 
+# The PyPI `oidn` wheel ships libOpenImageDenoise but links the Intel TBB runtime (libtbb.so.12) from the
+# environment; the `mitsuba`/drjit path tracer needs it too. Provide it as a conda-forge dependency so the
+# `photoreal` env carries libtbb on every platform (otherwise `import oidn` fails on CI Linux with
+# "libtbb.so.12: cannot open shared object file").
+[tool.pixi.feature.photoreal.dependencies]
+tbb = "*"
+
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
