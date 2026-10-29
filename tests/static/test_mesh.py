@@ -203,6 +203,40 @@ def test_a_crs_carrying_mesh_partly_beyond_the_limb_draws_the_survivors(
     )
 
 
+def test_a_crs_carrying_mesh_wholly_beyond_the_limb_is_skipped_as_off_limb(
+    ugrid_mesh, caplog
+):
+    """A CRS-carrying mesh whose every node warps off the limb draws nothing, and the skip is logged (#507).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        caplog: pytest log capture.
+
+    Test scenario:
+        Every node sits near lon 178 — the far side of an orthographic globe centred on (0, 0) — so the warp
+        sends all of them non-finite and no triangle keeps its three nodes. This drives the fully off-limb
+        path through a *real* reprojection: `_placed_mesh` reaches `reproject` (the mesh declares EPSG:4326),
+        `triangulated` raises `OffLimbError`, and `_tri` answers it with an empty frame. The synthetic-infinity
+        sibling (`test_tripcolor_skips_a_mesh_no_projection_can_place`) returns early via the no-CRS guard and
+        never warps, so this is the only coverage of the CRS-carrying skip. Nothing is drawn, and the skip
+        names the verb rather than being silent.
+    """
+    import logging
+
+    import numpy as np
+
+    off_limb = ugrid_mesh(
+        "face", epsg=4326, node_x=np.array([179.0, 178.0, 178.0, 179.0, 177.0])
+    )
+    scene = Map(crs=projections.orthographic(0.0, 0.0))
+    with caplog.at_level(logging.WARNING):
+        scene.tripcolor(off_limb)
+    assert not scene.ax.collections, "a wholly off-limb mesh should have drawn nothing"
+    assert "tripcolor" in caplog.text and "none of the mesh's" in caplog.text, (
+        f"the off-limb skip should be recorded, naming the verb: {caplog.text!r}"
+    )
+
+
 def _two_triangle_mesh(location="node", node_x=None):
     """Build a mesh of two triangles sharing one node, with values on ``location``.
 
