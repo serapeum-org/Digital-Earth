@@ -571,12 +571,9 @@ class TestWhatTheSeamNeedsToDraw:
             describing what their object is not (round-2 H3).
         """
         single = self._Single()
-        try:
+        with pytest.raises(ValueError) as raised:
             web(single, backend="web", animate=True, path="out.gif")
-        except ValueError as exc:
-            message = str(exc)
-        else:
-            pytest.fail("a single raster should not animate")
+        message = str(raised.value)
         assert "DatasetCollection" in message, f"no collection route offered: {message}"
         assert "NetCDF" in message, f"no NetCDF route offered: {message}"
 

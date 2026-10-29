@@ -884,13 +884,25 @@ def _netcdf_stack(nc: Any, plan: _Forwarded) -> tuple[Any, Any]:
             f"to step along. Animate a variable with a time or level dimension"
         )
     reference = GeoReference(geo=variable.geotransform, epsg=variable.epsg)
-    # `read_array(band=…)` is 0-based here: this is pyramids' own reader, not the facade's
-    # 1-based selector, so the loop counts from zero deliberately.
-    members = [
-        Dataset.from_array(variable.read_array(band=step), geo_ref=reference)
-        for step in range(steps)
-    ]
-    return DatasetCollection(members[0], steps, datasets=members), _axis_values(
+
+    def member(step: int) -> Any:
+        """Read one step of the axis into its own in-memory Dataset.
+
+        Args:
+            step: The 0-based band to read — pyramids' own reader indexing, not the facade's
+                1-based selector.
+
+        Returns:
+            The step as a Dataset sharing the variable's geobox.
+        """
+        return Dataset.from_array(variable.read_array(band=step), geo_ref=reference)
+
+    # The first member is built on its own and the collection is seeded with it, rather than
+    # indexing the list afterwards: `steps >= 2` is checked above, but only the explicit form says
+    # so to a reader (and to a static analyser).
+    first = member(0)
+    members = [first] + [member(step) for step in range(1, steps)]
+    return DatasetCollection(first, steps, datasets=members), _axis_values(
         variable, plan
     )
 
@@ -955,7 +967,7 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
         return nc
     if named is None:
         # The same choice the still path makes, so `plot` and `animate` draw the same variable.
-        named = carried[0]
+        named = next(iter(carried))
     return nc.get_variable(named)
 
 

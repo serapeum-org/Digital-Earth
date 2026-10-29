@@ -47,12 +47,9 @@ class TestStillPlotThroughTheSeam:
         """
         from digitalearth.three_d import Scene3D
 
-        try:
+        with pytest.raises(ValueError) as raised:
             three_d("a-dataset", backend="3d", animate=True)
-        except ValueError as exc:
-            message = str(exc)
-        else:
-            pytest.fail("an animation on this tier should be refused")
+        message = str(raised.value)
         for verb in ("record", "orbit"):
             assert verb in message, f"the refusal should name {verb}: {message}"
             assert callable(getattr(Scene3D, verb, None)), (
