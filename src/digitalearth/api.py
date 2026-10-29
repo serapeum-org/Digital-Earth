@@ -1166,6 +1166,69 @@ def to_backend(
     return Map.from_figure(figure, **scene_kwargs)
 
 
+def _built(scene_class: Any, kwargs: dict[str, Any], **seeded: Any) -> Any:
+    """Build a tier scene, taking from ``kwargs`` whatever its constructor declares.
+
+    A tier scene takes some of its options only at construction — the HoloViz tier's ``width`` /
+    ``height`` / ``tiles``, the web tier's ``center`` / ``zoom`` / ``style``, the matplotlib tier's
+    ``figsize`` — and exposes no setter for them afterwards. ``quickmap`` builds the scene itself, so
+    before this those options had nowhere to go: they fell through to the data builder, which has no
+    such parameter, and were refused in its words. Read off the live signature, so a constructor
+    gaining an option needs no change here.
+
+    The keys taken are **removed from** ``kwargs``, which is the caller's own dict, so the builder is
+    not then offered them as well.
+
+    Args:
+        scene_class: The tier's scene class.
+        kwargs: The caller's remaining keywords, modified in place.
+        **seeded: Values this backend decides itself (e.g. its default ``crs``), used only when the
+            constructor declares the name and the caller did not pass it.
+
+    Returns:
+        The constructed scene.
+
+    Examples:
+        - A declared option is taken from the caller's kwargs and removed from them:
+            ```python
+            >>> from digitalearth.api import _built
+            >>> class Scene:
+            ...     def __init__(self, *, crs=None, zoom=None):
+            ...         self.crs, self.zoom = crs, zoom
+            >>> rest = {"zoom": 6, "cmap": "viridis"}
+            >>> scene = _built(Scene, rest, crs=3857)
+            >>> scene.crs, scene.zoom, rest
+            (3857, 6, {'cmap': 'viridis'})
+
+            ```
+        - One the constructor does not declare is left for the builder:
+            ```python
+            >>> from digitalearth.api import _built
+            >>> class Scene:
+            ...     def __init__(self, *, crs=None):
+            ...         self.crs = crs
+            >>> rest = {"zoom": 6}
+            >>> _built(Scene, rest, crs=3857).crs, rest
+            (3857, {'zoom': 6})
+
+            ```
+    """
+    import inspect
+
+    parameters = inspect.signature(scene_class).parameters
+    declared = {
+        name
+        for name, parameter in parameters.items()
+        if parameter.kind
+        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    }
+    taken = {name: kwargs.pop(name) for name in list(kwargs) if name in declared}
+    for name, value in seeded.items():
+        if name in declared and name not in taken:
+            taken[name] = value
+    return scene_class(**taken)
+
+
 def _quickmap_matplotlib(
     data: PlottableData,
     *,
@@ -1201,7 +1264,7 @@ def _quickmap_matplotlib(
     """
     from digitalearth.static import Map
 
-    scene = Map(crs=crs, domain=domain)
+    scene = _built(Map, kwargs, crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
         _best_effort("coastlines", scene.coastlines)
@@ -1389,7 +1452,7 @@ def _quickmap_interactive(
     """
     from digitalearth.interactive import InteractiveMap
 
-    scene = InteractiveMap(crs=crs)
+    scene = _built(InteractiveMap, kwargs, crs=crs)
     family = _input_kind(data, "quickplot")
     if family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
@@ -1554,7 +1617,7 @@ def _quickmap_web(
     """
     from digitalearth.web import WebMap
 
-    scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
+    scene = _built(WebMap, kwargs) if crs is _UNSET else _built(WebMap, kwargs, crs=crs)
     family = _input_kind(data, "quickplot")
     if family == "raster":
         scene.field(data, **kwargs)

@@ -233,3 +233,42 @@ class TestWhatTheAdapterDrivesOnThisTier:
         assert captured["title"] == [("Flood",)], (
             f"the title should be set on the scene: {captured}"
         )
+
+
+class TestConstructionOptionsOnTheRealScene:
+    """The web scene's construction-time options, reached through the plugin."""
+
+    def test_zoom_and_height_change_the_built_scene(self):
+        """`zoom` and `height` reach the constructor and change the scene they build.
+
+        Test scenario:
+            Both are construction-only on this tier — there is no setter for either on the finished
+            `WebMap` — so a caller going through `plot(backend="web")` could not set them at all.
+            Asserted against a default-built scene so the change is visible rather than assumed.
+        """
+        from pyramids.dataset import Dataset
+
+        ds = Dataset.read_file("examples/data/acc4000.tif")
+        plain = web(ds, backend="web", band=0)
+        tuned = web(ds, backend="web", band=0, zoom=6, height=700)
+        assert (plain.zoom, plain.height) != (tuned.zoom, tuned.height), (
+            "the options must change the scene, not merely be accepted"
+        )
+        assert (tuned.zoom, tuned.height) == (6, 700), (
+            f"expected zoom=6 height=700, got {tuned.zoom} {tuned.height}"
+        )
+
+    def test_an_unknown_keyword_is_still_refused_by_name(self):
+        """A keyword neither the constructor nor the builder declares is still named.
+
+        Test scenario:
+            Widening what the constructor may take must not turn the seam into a sink that accepts
+            anything — that is the silent-drop failure this module exists to prevent.
+        """
+        from pyramids.dataset import Dataset
+
+        ds = Dataset.read_file("examples/data/acc4000.tif")
+        with pytest.raises(
+            Exception, match="(?i)unexpected keyword|not correct|invalid"
+        ):
+            web(ds, backend="web", band=0, definitely_not_a_real_option=1)
