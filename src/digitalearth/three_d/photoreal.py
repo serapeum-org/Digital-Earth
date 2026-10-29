@@ -29,6 +29,9 @@ _DEFAULT_SUN_DIRECTION = (-0.5, 0.42, -0.76)
 _DEFAULT_SOLID_RGB = (0.6, 0.6, 0.62)
 #: Point-cloud sphere radius as a fraction of the scene bounding-box diagonal (when none is given).
 _POINT_RADIUS_FRACTION = 0.004
+#: Above this many points, a cloud is subsampled before glyphing — each point becomes a 20-triangle icosphere,
+#: so the uncapped triangle count (up to the tier's 500k-point budget x 20) is far too heavy for the CPU tracer.
+_MAX_GLYPH_POINTS = 50_000
 
 
 def _scene_sun_direction(decoration: Any) -> tuple[float, float, float] | None:
@@ -70,7 +73,23 @@ def _points_to_spheres(mesh: Any, radius: float) -> Any:
     import pyvista as pv
 
     name = mesh.active_scalars_name
-    glyphed = mesh.glyph(
+    source = mesh
+    count = int(getattr(mesh, "n_points", 0))
+    if count > _MAX_GLYPH_POINTS:
+        # Each point becomes a 20-triangle sphere, so cap the count for the CPU path tracer (an even stride
+        # keeps the render deterministic). The PyVista raster can draw far more as flat dots; this is the
+        # photoreal-specific budget the tier's point budget does not provide (#514).
+        index = np.arange(0, count, int(np.ceil(count / _MAX_GLYPH_POINTS)))
+        source = pv.PolyData(np.asarray(mesh.points)[index])
+        if name:
+            source[name] = np.asarray(mesh[name])[index]
+            source.set_active_scalars(name)
+        warnings.warn(
+            f"photoreal(): a point cloud of {count} points is subsampled to {source.n_points} for path tracing "
+            "(each point becomes a sphere); decimate the cloud upstream to render more",
+            stacklevel=2,
+        )
+    glyphed = source.glyph(
         geom=pv.Icosphere(radius=radius, nsub=0), scale=False, orient=False
     )
     if name and name in glyphed.point_data:

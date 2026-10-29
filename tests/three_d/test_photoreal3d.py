@@ -449,6 +449,24 @@ class TestPointsToSpheres:
         assert spheres is not None, "a scalarless cloud must still glyph to spheres"
         assert spheres.n_cells > 0, "the glyphed scalarless cloud must have faces"
 
+    def test_a_large_cloud_is_subsampled_with_a_warning(self, monkeypatch):
+        """A cloud above the glyph budget is strided down (keeping its scalars) and warns, so the tracer is
+        not handed millions of spheres (#514 M1)."""
+        import pyvista as pv
+
+        from digitalearth.three_d import photoreal as _pr
+
+        monkeypatch.setattr(_pr, "_MAX_GLYPH_POINTS", 10)
+        cloud = pv.PolyData(np.random.default_rng(6).random((40, 3)) * 5.0)
+        cloud["elev"] = cloud.points[:, 2]
+        cloud.set_active_scalars("elev")
+        with pytest.warns(UserWarning, match="subsampled"):
+            spheres = _pr._points_to_spheres(cloud, radius=0.2)
+        assert spheres.n_points <= 11 * 12, spheres.n_points
+        assert spheres.active_scalars_name == "elev", (
+            "the subsampled cloud must keep its colour scalars"
+        )
+
 
 class TestTriangulatedSurface:
     """`_triangulated_surface` triangulates a mesh, returning a face-less surface for a points-only cloud (#510)."""
