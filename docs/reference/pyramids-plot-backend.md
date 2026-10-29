@@ -141,13 +141,20 @@ A registered entry point resolves to the **callable** — not to its `module:att
 the `functools.partial` over `quickmap` that the fallback would hand back. That difference is how you
 tell the two apart.
 
-!!! warning "Needs a pyramids-core that ships the seam"
-    The `pyramids.plot_backends` group is resolved by pyramids-core's plot-backend seam, which merged
-    after `0.72.0` was cut and is therefore **in no release yet**: the installed `0.72.0` carries
-    neither `pyramids.base._plot_backends` nor the conformance kit, and `Dataset.plot` has no
-    `backend=` keyword. Until a release ships it, the entry points are registered and nothing reads
-    them — inert, not conflicting, and `plot()` behaves exactly as before. The declared floor of
-    `pyramids-core >=0.72.0` is simply the current release; it will need raising to whichever
-    release first carries the seam, at which point the two skipped tests here start guarding.
+!!! note "Needs pyramids-core 0.73.0 or newer"
+    The `pyramids.plot_backends` group is resolved by pyramids-core's plot-backend seam, which first
+    shipped in **0.73.0** — `0.72.0` was published after the seam merged but cut from a commit
+    without it, so it carries neither `pyramids.base._plot_backends` nor the conformance kit, and
+    its `Dataset.plot` has no `backend=` keyword. The declared floor is `>=0.73.0` for that reason.
+
+    Verified against 0.73.0:
+
+    ```python
+    >>> from pyramids.base._plot_backends import plot_backends, resolve_plot_backend
+    >>> sorted(plot_backends())
+    ['3d', 'interactive', 'web']
+    >>> resolve_plot_backend("interactive")
+    <function interactive at ...>          # the entry point, not the fallback partial
+    ```
 
 ::: digitalearth.pyramids_backend

@@ -145,12 +145,13 @@ class TestContractShape:
 
         Test scenario:
             The kit is the contract's executable form, so running it is stronger than mirroring its
-            checks. It ships in pyramids-core but is not in a release yet, so this skips until the
-            installed pyramids carries it — at which point it starts guarding automatically.
+            checks. It ships in pyramids-core from 0.73.0, which is this package's floor; the skip
+            remains so an older pyramids in a developer's environment reports a skip rather than a
+            collection error.
         """
         kit = pytest.importorskip(
             "pyramids.base.plot_backend_conformance",
-            reason="the plot-backend conformance kit is not in a released pyramids-core yet",
+            reason="the plot-backend conformance kit needs pyramids-core >= 0.73.0",
         )
         assert kit.check_plot_backend(fn) == [], f"{name} departs from the contract"
 

@@ -58,7 +58,7 @@ dependencies = [
     # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is
     # one repackaging away from a ModuleNotFoundError raised from inside basemap().
     "xyzservices >=2023.10.0",
-    "pyramids-core >=0.72.0",
+    "pyramids-core >=0.73.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -150,14 +150,15 @@ digitalearth = "digitalearth.ops.cli:main"
 #   my_vars = "my_pkg.styles:LIBRARY"        # e.g. {"ocean_heat": {"match": ["ohc"], "cmap": "inferno"}}
 
 # The one entry-point group digitalearth *provides* rather than consumes. pyramids-core resolves a
-# non-matplotlib `plot(backend=…)` through `pyramids.plot_backends`, so registering here is what will make
-# this package the renderer for those three names once a pyramids-core release carries that seam — it
-# merged after 0.72.0 was cut, so the declared floor is simply the current release and nothing reads this
-# group yet (harmless: an unread entry point costs nothing). Without it pyramids falls back to importing `digitalearth` by
-# name and calling `quickmap` directly, which forwards its own vocabulary verbatim — a registered entry point
-# wins over that fallback and goes through `pyramids_backend`, which translates the two vocabularies (notably
-# the 0-based `band` the facade sends against the 1-based one `quickmap` takes). The names are the values a
-# caller passes as `backend=`, and the module stays import-light because discovery imports it.
+# non-matplotlib `plot(backend=…)` through `pyramids.plot_backends`, so registering here is what makes
+# this package the renderer for those three names. The seam first shipped in pyramids-core 0.73.0,
+# which is why the floor is `>=0.73.0`: 0.72.0 was published after it merged but was cut from a commit
+# without it. Without the entry point pyramids falls back to importing `digitalearth` by name and
+# calling `quickmap` directly, which forwards its own vocabulary verbatim — a registered entry point
+# wins over that fallback and goes through `pyramids_backend`, which translates the two vocabularies
+# (notably the 0-based `band` the facade sends against the 1-based one `quickmap` takes). The names
+# are the values a caller passes as `backend=`, and the module stays import-light because discovery
+# imports it.
 [project.entry-points."pyramids.plot_backends"]
 interactive = "digitalearth.pyramids_backend:interactive"
 "3d" = "digitalearth.pyramids_backend:three_d"
