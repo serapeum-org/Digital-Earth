@@ -76,8 +76,9 @@ class TestSplitAovs:
         """A tensor without exactly 9 channels raises, so a Mitsuba layout change fails loud, not silent."""
         from digitalearth.three_d.photoreal import _split_aovs
 
+        wrong = np.zeros((2, 2, 10), dtype="float32")
         with pytest.raises(RuntimeError, match="9 render channels"):
-            _split_aovs(np.zeros((2, 2, 10), dtype="float32"))
+            _split_aovs(wrong)
 
 
 class TestPointScalars:
