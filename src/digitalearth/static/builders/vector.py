@@ -2784,7 +2784,8 @@ class VectorMixin(_MixinBase):
         display CRS in any form ``pyproj.CRS.from_user_input`` takes — an EPSG code, a ``"+proj=..."``
         string, WKT, an ``"ESRI:..."`` code — so the display CRS is handed over as written, exactly as every
         other family does. An orthographic, Robinson or Mollweide display CRS is no longer a special case:
-        the triangles beyond a globe's limb drop on the warp like any other off-view geometry.
+        the warp sends nodes beyond a globe's limb to non-finite coordinates, and the triangles leaning on
+        them are then dropped downstream (:func:`_placeable_triangles`), like any other off-view geometry.
 
         Args:
             data: The pyramids ``UgridDataset`` to place.

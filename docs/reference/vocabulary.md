@@ -173,11 +173,11 @@ render, so they refuse a mesh by name rather than drawing it as something else. 
 *input*: the `unstructured` row of the [support matrix](support-matrix.md) is about the triangulated **verbs**
 (`tricontourf` / `tricontour` / `tripcolor`), which the interactive tier does have for scattered points.
 
-A mesh that declares a CRS is drawn in any display CRS the `Source` contract accepts — an EPSG code, a
+A mesh that declares a CRS is drawn in any display CRS `pyproj.CRS.from_user_input` accepts — an EPSG code, a
 `"+proj=..."` string, WKT or an `ESRI:` code — because pyramids (pyramids-core >= 0.73.0,
 serapeum-org/pyramids-core#1404) warps a mesh to a CRS given in any form. An orthographic, Robinson or Mollweide
-display CRS is drawn like any other; the triangles beyond a globe's limb drop on the warp, as off-view geometry
-does for every layer family.
+display CRS is drawn like any other: the warp sends nodes beyond a globe's limb to non-finite coordinates, and the
+triangles leaning on them are then dropped, as off-view geometry is for every layer family.
 
 ::: digitalearth.base.sources.MeshSource
 
