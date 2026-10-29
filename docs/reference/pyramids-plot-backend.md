@@ -126,8 +126,17 @@ scene = ds.plot(backend="3d", band=0)
 scene.colorbar().orbit("fly.gif", n_frames=60)
 ```
 
-A tier scene's construction-time settings are plain attributes on the built object, so adjust them
-there rather than through the call:
+Some scene settings can also be passed to the call, and are applied when the scene is built:
+
+```python
+ds.plot(backend="web", band=0, center=(31.0, 30.0), zoom=6, style="light")
+ds.plot(backend="interactive", band=0, height=700)
+ds.plot(band=0, figsize=(14, 9))                      # matplotlib
+```
+
+Only names the tier's own builders do not use are routed this way — `height` is the map's height on
+the HoloViz tier but an *extrusion* height on `WebMap.extrusion`, so on the web tier it stays with
+the builder. Everything else is an attribute on the built scene:
 
 ```python
 scene = ds.plot(backend="web", band=0)

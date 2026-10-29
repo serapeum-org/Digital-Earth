@@ -30,6 +30,7 @@ support is forwarded to it.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Callable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -946,6 +947,9 @@ def quickmap(
             ``z_exaggeration``/``height``/``size`` for ``backend="3d"``). ``column`` names a **polygon**
             fill on ``backend="matplotlib"``: point input there is a ``Map.points``, which sizes markers
             by ``size_column`` instead, so ``column`` on points is refused by name rather than forwarded.
+            The few scene settings in :data:`_CONSTRUCTION_ONLY` are the exception: they are applied
+            when the scene is built rather than passed to the draw method, because that is the only
+            moment the tier reads them (round-1 M2).
 
     Returns:
         The decorated :class:`Map`, an :class:`InteractiveMap` when ``backend="interactive"``, a
@@ -1166,6 +1170,101 @@ def to_backend(
     return Map.from_figure(figure, **scene_kwargs)
 
 
+#: Scene options each tier takes **only** at construction, and that no public method on that tier
+#: also takes. Both halves matter. A tier scene is built inside `quickmap`, so an option with no
+#: setter is otherwise unreachable through it — but a *name* the tier's own builders use cannot be
+#: claimed here, or the scene would steal the argument from the render the call is about. That is
+#: what a signature sweep got wrong: `height` is the map's pixel height on the web scene and an
+#: extrusion height on `WebMap.extrusion`, so sweeping it to the constructor turned
+#: `quickmap(polygons, height=50_000)` from a `TypeError` into a 50,000-pixel map.
+#:
+#: Each list is the constructor's parameters minus every keyword any public method on that tier
+#: declares, computed from the live signatures and asserted by
+#: `tests/test_quickplot.py::TestConstructionOnlyOptions::test_each_option_is_claimed_by_no_builder`
+#: — which fails the day a builder takes one of these names.
+#:
+#: `crs`, `domain` and `title` are absent on purpose: they are explicit `quickmap` parameters with
+#: their own per-tier routing, which this does not touch.
+#:
+#: These names are **not** part of `BACKEND_CAPABILITIES` and do not appear in the support matrix.
+#: That table answers "which `quickmap` keyword does this backend honour", and each entry there is a
+#: declared tier capability with a stated reason when absent; these are scene-construction settings
+#: with no capability behind them, so adding them would overstate what the table means. A caller who
+#: passes one to a tier that does not list it gets the builder's own refusal, as before (round-1 M3).
+#:
+#: There is deliberately no way to aim one of these at the builder instead. A name is either the
+#: scene's or the builder's on a given tier, never the caller's choice per call — which is what keeps
+#: the split predictable (round-1 L5).
+_CONSTRUCTION_ONLY: Mapping[str, tuple[str, ...]] = {
+    # `fig` is absent although no builder claims it: this tier refuses `fig=` without `ax=`
+    # ("it names the figure that axes belongs to"), and `ax` *is* builder vocabulary — so routing
+    # `fig` alone could only ever reach that refusal. They are a pair or neither.
+    "matplotlib": ("figsize", "strict"),
+    "interactive": ("height", "tiles", "strict"),
+    "web": ("center", "zoom", "style", "strict"),
+}
+
+
+def _built(
+    scene_class: Any, backend: str, kwargs: dict[str, Any], **seeded: Any
+) -> Any:
+    """Build a tier scene, taking the construction-only options it declares.
+
+    Only the names in :data:`_CONSTRUCTION_ONLY` for that backend are taken, so a keyword the
+    tier's own builders use is left for them. The keys taken are **removed from** ``kwargs``, the
+    caller's own dict, so the builder is not then offered them as well.
+
+    Args:
+        scene_class: The tier's scene class.
+        backend: The backend being drawn, which selects the option list.
+        kwargs: The caller's remaining keywords, modified in place.
+        **seeded: Values this backend decides itself (e.g. its default ``crs``), used only when the
+            constructor declares the name.
+
+    Returns:
+        The constructed scene.
+
+    Examples:
+        - A construction-only option is taken and removed from the caller's kwargs:
+            ```python
+            >>> from digitalearth.api import _built
+            >>> class Scene:
+            ...     def __init__(self, *, crs=None, zoom=None):
+            ...         self.crs, self.zoom = crs, zoom
+            >>> rest = {"zoom": 6, "cmap": "viridis"}
+            >>> scene = _built(Scene, "web", rest, crs=3857)
+            >>> scene.crs, scene.zoom, rest
+            (3857, 6, {'cmap': 'viridis'})
+
+            ```
+        - A name the tier's builders also use is left alone, even when the constructor declares it:
+            ```python
+            >>> from digitalearth.api import _built
+            >>> class Scene:
+            ...     def __init__(self, *, crs=None, height=None):
+            ...         self.crs, self.height = crs, height
+            >>> rest = {"height": 50000.0}
+            >>> scene = _built(Scene, "web", rest, crs=3857)
+            >>> scene.height, rest
+            (None, {'height': 50000.0})
+
+            ```
+
+    See Also:
+        digitalearth.pyramids_backend._scene_kwargs: The plugin's animate path, which builds its
+            scene directly. It is the same *idea* and not the same rule: it offers the constructor
+            what that constructor declares, because a temporal builder's parameters are disjoint
+            from the scene's there, while this one needs the explicit list above (round-1 L4).
+    """
+    declared = set(inspect.signature(scene_class).parameters)
+    allowed = set(_CONSTRUCTION_ONLY.get(backend, ())) & declared
+    taken = {name: kwargs.pop(name) for name in list(kwargs) if name in allowed}
+    for name, value in seeded.items():
+        if name in declared:
+            taken.setdefault(name, value)
+    return scene_class(**taken)
+
+
 def _quickmap_matplotlib(
     data: PlottableData,
     *,
@@ -1201,7 +1300,7 @@ def _quickmap_matplotlib(
     """
     from digitalearth.static import Map
 
-    scene = Map(crs=crs, domain=domain)
+    scene = _built(Map, "matplotlib", kwargs, crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
         _best_effort("coastlines", scene.coastlines)
@@ -1389,7 +1488,7 @@ def _quickmap_interactive(
     """
     from digitalearth.interactive import InteractiveMap
 
-    scene = InteractiveMap(crs=crs)
+    scene = _built(InteractiveMap, "interactive", kwargs, crs=crs)
     family = _input_kind(data, "quickplot")
     if family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
@@ -1554,7 +1653,10 @@ def _quickmap_web(
     """
     from digitalearth.web import WebMap
 
-    scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
+    # One call, not one per branch: `_built` drains `kwargs`, so writing it twice in an expression
+    # invites a reader to think both run (round-1 N2).
+    seeded = {} if crs is _UNSET else {"crs": crs}
+    scene = _built(WebMap, "web", kwargs, **seeded)
     family = _input_kind(data, "quickplot")
     if family == "raster":
         scene.field(data, **kwargs)

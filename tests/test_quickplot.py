@@ -1,5 +1,7 @@
 """Tests for T9.1 — quickplot/quickmap one-call entry points and module functions."""
 
+import pathlib
+
 import pytest
 
 import digitalearth
@@ -1400,3 +1402,119 @@ def test_variable_with_no_raster_plane_is_refused_by_name():
     container = _NoRasterPlane()
     with pytest.raises(ValueError, match="has no raster plane to draw"):
         qp._pinned_variable(container, "station_id")
+
+
+class TestConstructionOnlyOptions:
+    """Scene options `quickmap` routes to the constructor, and the rule that keeps that safe."""
+
+    @pytest.mark.parametrize(
+        "tier, rel, cls",
+        [
+            ("interactive", "interactive/core/base.py", "InteractiveMapBase"),
+            ("web", "web/core/base.py", "WebMapBase"),
+        ],
+    )
+    def test_each_option_is_claimed_by_no_builder(self, tier, rel, cls):
+        """Every name in the allowlist is a constructor option that no builder on that tier takes.
+
+        Args:
+            tier: The backend whose list is checked.
+            rel: The module holding that tier's scene base.
+            cls: The scene base class.
+
+        Test scenario:
+            This is the rule the first attempt at this feature broke. A signature sweep gave the
+            constructor every name it declared, including `height` — which is the map's pixel height
+            on the web scene and an *extrusion* height on `WebMap.extrusion`. So
+            `quickmap(polygons, height=50_000)` stopped being a `TypeError` and became a
+            50,000-pixel map: a loud refusal traded for a silently wrong figure. Both halves are
+            asserted here, from the live signatures, so a builder that later takes one of these
+            names fails this test instead of quietly stealing the argument.
+        """
+        import ast
+
+        root = pathlib.Path(digitalearth.__file__).parent
+        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        declared: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == cls:
+                for member in node.body:
+                    if (
+                        isinstance(member, ast.FunctionDef)
+                        and member.name == "__init__"
+                    ):
+                        args = member.args
+                        declared = {p.arg for p in args.args[1:]} | {
+                            p.arg for p in args.kwonlyargs
+                        }
+        builders: set[str] = set()
+        for path in (root / tier).rglob("*.py"):
+            try:
+                parsed = ast.parse(path.read_text(encoding="utf-8"))
+            except SyntaxError:  # pragma: no cover - the package parses
+                continue
+            for node in ast.walk(parsed):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for member in node.body:
+                    if (
+                        isinstance(member, ast.FunctionDef)
+                        and not member.name.startswith("_")
+                        and member.name != "__init__"
+                    ):
+                        args = member.args
+                        builders |= {p.arg for p in args.args[1:]} | {
+                            p.arg for p in args.kwonlyargs
+                        }
+        assert declared, f"could not read {cls}'s constructor"
+        for name in qp._CONSTRUCTION_ONLY[tier]:
+            assert name in declared, f"{tier}: {name!r} is not a constructor option"
+            assert name not in builders, (
+                f"{tier}: {name!r} is now also a builder keyword, so routing it to the scene would "
+                f"take it from the render the call is about — drop it from _CONSTRUCTION_ONLY"
+            )
+
+    def test_a_builder_keyword_is_left_for_the_builder(self):
+        """A name the constructor declares but a builder also uses is not taken by the scene.
+
+        Test scenario:
+            `height` is the case that matters: the web scene declares it and so does
+            `WebMap.extrusion`. It must reach the builder — and be refused there when that builder
+            has no use for it — rather than silently resizing the map.
+        """
+
+        class Scene:
+            """A scene declaring a name the tier's builders also use."""
+
+            def __init__(self, *, crs=None, height=None):
+                """Record what was passed."""
+                self.crs, self.height = crs, height
+
+        rest = {"height": 50000.0}
+        scene = qp._built(Scene, "web", rest, crs=3857)
+        assert scene.height is None, "the scene must not take a builder's keyword"
+        assert rest == {"height": 50000.0}, f"it must be left for the builder: {rest}"
+
+    def test_an_allowlisted_option_is_taken_and_withheld_from_the_builder(self):
+        """An allowlisted option reaches the constructor and is removed from the builder's kwargs.
+
+        Test scenario:
+            Leaving it in would offer the same keyword twice — to a builder that has no parameter
+            for it, turning a working call into a by-name refusal.
+        """
+
+        class Scene:
+            """A scene declaring an allowlisted option."""
+
+            def __init__(self, *, crs=None, zoom=None):
+                """Record what was passed."""
+                self.crs, self.zoom = crs, zoom
+
+        rest = {"zoom": 6, "cmap": "viridis"}
+        scene = qp._built(Scene, "web", rest, crs=3857)
+        assert scene.zoom == 6, (
+            f"the option should reach the constructor, got {scene.zoom!r}"
+        )
+        assert rest == {"cmap": "viridis"}, (
+            f"it should be withheld from the builder: {rest}"
+        )
