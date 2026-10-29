@@ -14,6 +14,7 @@ boundaries: it only translates meshes the tier already built into a Mitsuba scen
 
 from __future__ import annotations
 
+import math
 import shutil
 import tempfile
 import warnings
@@ -26,6 +27,103 @@ import numpy as np
 _DEFAULT_SKY = (0.5, 0.56, 0.72)
 _DEFAULT_SUN_DIRECTION = (-0.5, 0.42, -0.76)
 _DEFAULT_SOLID_RGB = (0.6, 0.6, 0.62)
+#: Point-cloud sphere radius as a fraction of the scene bounding-box diagonal (when none is given).
+_POINT_RADIUS_FRACTION = 0.004
+#: Above this many points, a cloud is subsampled before glyphing — each point becomes a 20-triangle icosphere,
+#: so the uncapped triangle count (up to the tier's 500k-point budget x 20) is far too heavy for the CPU tracer.
+_MAX_GLYPH_POINTS = 50_000
+
+
+def _scene_sun_direction(decoration: Any) -> tuple[float, float, float] | None:
+    """Mitsuba sun travel-direction from a scene's recorded sun (azimuth/elevation), or ``None`` if none is set.
+
+    The tier's :meth:`~digitalearth.three_d.decoration.decoration.DecorationMixin.sun` records
+    ``{azimuth, elevation, ...}`` in the scene's decoration state and places a light *along*
+    ``(cos el sin az, cos el cos az, sin el)`` shining at the scene (#511), so the light **travels** the opposite
+    way — which is what Mitsuba's ``directional`` emitter takes as its ``direction``.
+
+    Args:
+        decoration: The scene's decoration state dict (``self._decoration``), or ``None``.
+
+    Returns:
+        The ``(x, y, z)`` travel-direction, or ``None`` when no sun is recorded.
+    """
+    sun = (decoration or {}).get("sun") if isinstance(decoration, dict) else None
+    if not sun:
+        return None
+    az = math.radians(float(sun["azimuth"]))
+    el = math.radians(float(sun["elevation"]))
+    return (-math.cos(el) * math.sin(az), -math.cos(el) * math.cos(az), -math.sin(el))
+
+
+def _points_to_spheres(mesh: Any, radius: float, layer: str = "a point cloud") -> Any:
+    """Replace a points-only layer (e.g. a point cloud) with a small sphere at each point, keeping its scalars.
+
+    A point-cloud mesh has no polygon faces, so it would triangulate to nothing and be dropped (#510). Glyphing a
+    low-resolution icosphere onto each point gives a renderable surface; the point scalars propagate, but glyph
+    makes its own ``GlyphScale`` array active, so the original colour scalars are re-activated here.
+
+    Args:
+        mesh: The points-only PyVista mesh.
+        radius: Sphere radius in the mesh's own (world) units.
+        layer: The layer's name, named in the subsample warning so each layer warns distinctly (not de-duplicated).
+
+    Returns:
+        The glyphed PyVista mesh (spheres at every point), or ``None`` when it has no geometry.
+    """
+    import pyvista as pv
+
+    name = mesh.active_scalars_name
+    source = mesh
+    count = int(getattr(mesh, "n_points", 0))
+    if count > _MAX_GLYPH_POINTS:
+        # Each point becomes a 20-triangle sphere, so cap the count for the CPU path tracer (an even stride
+        # keeps the render deterministic). The PyVista raster can draw far more as flat dots; this is the
+        # photoreal-specific budget the tier's point budget does not provide (#514).
+        index = np.arange(0, count, int(np.ceil(count / _MAX_GLYPH_POINTS)))
+        source = pv.PolyData(np.asarray(mesh.points)[index])
+        if name:
+            source[name] = np.asarray(mesh[name])[index]
+            source.set_active_scalars(name)
+        warnings.warn(
+            f"photoreal(): {layer} of {count} points is subsampled to {source.n_points} for path tracing "
+            "(each point becomes a sphere); decimate the cloud upstream to render more",
+            stacklevel=2,
+        )
+    glyphed = source.glyph(
+        geom=pv.Icosphere(radius=radius, nsub=0), scale=False, orient=False
+    )
+    if name and name in glyphed.point_data:
+        glyphed.set_active_scalars(name)
+    return glyphed if getattr(glyphed, "n_points", 0) else None
+
+
+def _material(roughness: float | None) -> dict[str, Any]:
+    """The twosided BSDF reading the per-vertex ``vertex_color``: diffuse by default, rough-PBR when asked.
+
+    ``twosided`` so a surface lights regardless of its triangulated normal facing. With ``roughness`` set, the
+    surface uses a Disney-style ``principled`` BSDF (so it reads as matte-to-glossy) instead of pure Lambertian
+    diffuse (#512).
+
+    Args:
+        roughness: ``None`` for a plain diffuse surface, else the ``principled`` BSDF roughness in ``[0, 1]``.
+
+    Returns:
+        dict: the ``twosided`` BSDF spec for :func:`mitsuba.load_dict`.
+    """
+    material: dict[str, Any]
+    if roughness is None:
+        material = {
+            "type": "diffuse",
+            "reflectance": {"type": "mesh_attribute", "name": "vertex_color"},
+        }
+    else:
+        material = {
+            "type": "principled",
+            "base_color": {"type": "mesh_attribute", "name": "vertex_color"},
+            "roughness": float(roughness),
+        }
+    return {"type": "twosided", "material": material}
 
 
 def _require_photoreal():
@@ -50,8 +148,14 @@ def _require_photoreal():
 
 
 def _triangulated_surface(mesh: Any) -> Any:
-    """Return the triangulated outer surface of a PyVista mesh, with per-vertex normals computed."""
+    """Return the triangulated outer surface of a PyVista mesh, with per-vertex normals when it has faces.
+
+    A points-only mesh (e.g. a point cloud) triangulates to no polygons, and VTK cannot compute normals for it,
+    so the surface is returned without normals — the caller detects the empty-face case and glyphs it (#510).
+    """
     surf = mesh.extract_surface(algorithm="dataset_surface").triangulate()
+    if np.asarray(surf.faces).reshape(-1, 4).shape[0] == 0:
+        return surf
     return surf.compute_normals(
         point_normals=True, cell_normals=False, auto_orient_normals=True
     )
@@ -201,6 +305,45 @@ def _denoise(beauty: np.ndarray, albedo: np.ndarray, normal: np.ndarray) -> np.n
     return np.clip(out, 0.0, 1.0)
 
 
+def _median_3x3(plane: np.ndarray) -> np.ndarray:
+    """Return the 3x3 neighbourhood median of a 2-D array, with edge padding at the borders."""
+    padded = np.pad(plane, 1, mode="edge")
+    rows, cols = plane.shape
+    neighbours = np.stack(
+        [padded[i : i + rows, j : j + cols] for i in range(3) for j in range(3)],
+        axis=0,
+    )
+    return np.asarray(np.median(neighbours, axis=0))
+
+
+def _despeckle(color: np.ndarray, threshold: float) -> np.ndarray:
+    """Replace pixels whose luminance deviates from their 3x3 neighbourhood median by more than ``threshold``.
+
+    A selective median filter that removes the isolated bright/dark speckles (fireflies) a low-sample path trace
+    leaves (#512). The outlier decision is made once per pixel on luminance and all three channels of a flagged
+    pixel are replaced by their local median together, so a speckle bright in only one channel is removed cleanly
+    rather than left as a hue-shifted residual. Step edges keep a 3-pixel majority and are preserved, but an
+    isolated one-pixel-wide feature (a thin line, a lone point, a specular glint) is indistinguishable from a
+    firefly to a 3x3 median and is also removed — so enable this only when that trade-off is acceptable. Operates
+    on an LDR ``[0, 1]`` image.
+
+    Args:
+        color: An ``(H, W, 3)`` image in ``[0, 1]``.
+        threshold: Maximum allowed luminance deviation from the local median before a pixel is a speckle.
+
+    Returns:
+        numpy.ndarray: the despeckled ``(H, W, 3)`` image.
+    """
+    luminance = color.mean(axis=2)
+    outlier = np.abs(luminance - _median_3x3(luminance)) > float(threshold)
+    out = color.copy()
+    for channel in range(color.shape[2]):
+        out[..., channel] = np.where(
+            outlier, _median_3x3(color[..., channel]), color[..., channel]
+        )
+    return out
+
+
 def _split_aovs(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Split an `aov`-integrator render tensor into ``(beauty, albedo, normal)``, failing loud on a layout change.
 
@@ -246,10 +389,13 @@ class PhotorealMixin(_MixinBase):
         width: int = 1280,
         height: int = 800,
         denoise: bool = True,
-        sun_direction: Any = _DEFAULT_SUN_DIRECTION,
+        sun_direction: Any = None,
         sun_irradiance: float = 6.0,
         sky: Any = _DEFAULT_SKY,
         max_depth: int = 8,
+        despeckle: float | None = None,
+        roughness: float | None = None,
+        point_radius: float | None = None,
     ) -> Any:
         """Render the scene as a photorealistic path-traced still with Mitsuba 3, optionally denoised.
 
@@ -265,9 +411,19 @@ class PhotorealMixin(_MixinBase):
             height: Image height in pixels.
             denoise: Denoise the frame with Intel OIDN (albedo + normal guided). Needs the ``oidn`` dependency.
             sun_direction: ``(x, y, z)`` direction the sunlight travels (from the light toward the scene).
+                ``None`` (the default) derives it from the scene's :meth:`~...decoration.DecorationMixin.sun`
+                azimuth/elevation when one is set, falling back to a fixed default otherwise (#511).
             sun_irradiance: Scalar brightness of the sun.
             sky: ``(r, g, b)`` radiance of the constant sky fill.
             max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower).
+            despeckle: Remove isolated bright/dark speckles (fireflies) a low-sample path trace leaves: a pixel
+                deviating from its 3x3 neighbourhood median by more than this (in the ``[0, 1]`` output) is
+                replaced by the median, leaving edges and smooth regions untouched. ``None`` (the default) is
+                off; ``~0.2-0.4`` is a typical strength (#512).
+            roughness: ``None`` renders a plain Lambertian diffuse surface; a value in ``[0, 1]`` uses a
+                Disney-style ``principled`` BSDF of that roughness so the surface reads matte-to-glossy (#512).
+            point_radius: Sphere radius (world units) for points-only layers such as point clouds. ``None``
+                (the default) uses a small fraction of the scene bounding-box diagonal (#510).
 
         Returns:
             The rendered ``(H, W, 3)`` uint8 RGB array; also written to ``path`` when one was given.
@@ -294,9 +450,18 @@ class PhotorealMixin(_MixinBase):
         mi.set_variant("scalar_rgb")
 
         center = self._photoreal_center()
+        if sun_direction is None:
+            sun_direction = (
+                _scene_sun_direction(getattr(self, "_decoration", None))
+                or _DEFAULT_SUN_DIRECTION
+            )
+        if point_radius is None:
+            point_radius = self._photoreal_point_radius()
         tmpdir = Path(tempfile.mkdtemp(prefix="digitalearth-photoreal-"))
         try:
-            meshes = self._photoreal_meshes(center, tmpdir)
+            meshes = self._photoreal_meshes(
+                center, tmpdir, point_radius=float(point_radius), roughness=roughness
+            )
             if not meshes:
                 raise ValueError(
                     "photoreal() has no renderable geometry; add a layer (e.g. terrain) before rendering"
@@ -344,6 +509,10 @@ class PhotorealMixin(_MixinBase):
                 if denoise
                 else np.clip(beauty, 0.0, 1.0)
             )
+            if despeckle is not None:
+                # Remove the isolated bright/dark speckles a low-sample path trace leaves, after the denoise,
+                # on the LDR image where a firefly is a lone outlier against its neighbours (#512).
+                color = _despeckle(color, float(despeckle))
 
             bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
                 mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
@@ -364,22 +533,43 @@ class PhotorealMixin(_MixinBase):
             float(b[4] + b[5]) / 2.0,
         )
 
+    def _photoreal_point_radius(self) -> float:
+        """Default point-cloud sphere radius: a small fraction of the scene bounding-box diagonal.
+
+        A degenerate scene (a single point, all-coincident points) has a zero diagonal, which would collapse
+        every icosphere to its centre, so the radius falls back to ``1.0`` in that case.
+        """
+        b = self.plotter.bounds
+        diag = math.sqrt((b[1] - b[0]) ** 2 + (b[3] - b[2]) ** 2 + (b[5] - b[4]) ** 2)
+        radius = float(diag) * _POINT_RADIUS_FRACTION
+        return radius if radius > 0.0 else 1.0
+
     def _photoreal_meshes(
-        self, center: tuple[float, float, float], tmpdir: Path
+        self,
+        center: tuple[float, float, float],
+        tmpdir: Path,
+        *,
+        point_radius: float,
+        roughness: float | None,
     ) -> dict[str, Any]:
         """Translate every registered layer's mesh into a Mitsuba PLY shape with per-vertex colours.
 
         Each mesh is recentered by subtracting ``center`` so large projected-CRS coordinates do not lose float
         precision in the renderer; :meth:`photoreal` subtracts the same ``center`` from the camera to match. The
         PLYs are written into ``tmpdir``, whose lifetime :meth:`photoreal` owns (it removes it after the render).
+        A points-only layer (e.g. a point cloud) has no faces, so it is glyphed into a sphere at each point
+        (:func:`_points_to_spheres`) rather than dropped.
 
         Args:
             center: The scene bounding-box centre to subtract from every vertex (see :meth:`_photoreal_center`).
             tmpdir: A directory to write the per-layer PLY files into, cleaned up by the caller.
+            point_radius: Sphere radius (world units) for a points-only layer's per-point glyph.
+            roughness: ``None`` for a diffuse BSDF, else the ``principled`` BSDF roughness (see :func:`_material`).
 
         Returns:
-            dict: ``{layer_name: shape_dict}`` for :func:`mitsuba.load_dict`, each a ``ply`` shape with a diffuse
-            BSDF reading its ``vertex_color`` attribute. Empty when the scene has no geometry.
+            dict: ``{layer_name: shape_dict}`` for :func:`mitsuba.load_dict`, each a ``ply`` shape with the
+            twosided BSDF :func:`_material` builds (diffuse, or ``principled`` when ``roughness`` is set), reading
+            its ``vertex_color`` attribute. Empty when the scene has no geometry.
         """
         offset = np.asarray(center, dtype="float64")
         shapes: dict[str, Any] = {}
@@ -389,7 +579,15 @@ class PhotorealMixin(_MixinBase):
             surf = _triangulated_surface(mesh)
             faces = np.asarray(surf.faces).reshape(-1, 4)[:, 1:4].astype("int32")
             if len(faces) == 0:
-                continue
+                # A points-only layer (e.g. a point cloud) triangulates to nothing; render each point as a
+                # small sphere so it is drawn rather than silently dropped (#510).
+                spheres = _points_to_spheres(mesh, point_radius, layer=f"layer_{index}")
+                if spheres is None:
+                    continue
+                surf = _triangulated_surface(spheres)
+                faces = np.asarray(surf.faces).reshape(-1, 4)[:, 1:4].astype("int32")
+                if len(faces) == 0:
+                    continue
             verts = (np.asarray(surf.points, dtype="float64") - offset).astype(
                 "float32"
             )
@@ -400,17 +598,6 @@ class PhotorealMixin(_MixinBase):
             shapes[f"layer_{index}"] = {
                 "type": "ply",
                 "filename": ply,
-                # twosided so the surface lights regardless of which way the triangulated normals ended up
-                # facing — a one-sided diffuse renders the camera-facing back of a terrain surface black.
-                "bsdf": {
-                    "type": "twosided",
-                    "material": {
-                        "type": "diffuse",
-                        "reflectance": {
-                            "type": "mesh_attribute",
-                            "name": "vertex_color",
-                        },
-                    },
-                },
+                "bsdf": _material(roughness),
             }
         return shapes
