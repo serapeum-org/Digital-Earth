@@ -312,7 +312,7 @@ def _median_3x3(plane: np.ndarray) -> np.ndarray:
         [padded[i : i + rows, j : j + cols] for i in range(3) for j in range(3)],
         axis=0,
     )
-    return np.median(neighbours, axis=0)
+    return np.asarray(np.median(neighbours, axis=0))
 
 
 def _despeckle(color: np.ndarray, threshold: float) -> np.ndarray:
