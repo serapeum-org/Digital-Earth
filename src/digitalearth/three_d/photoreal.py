@@ -285,6 +285,36 @@ def _denoise(beauty: np.ndarray, albedo: np.ndarray, normal: np.ndarray) -> np.n
     return np.clip(out, 0.0, 1.0)
 
 
+def _despeckle(color: np.ndarray, threshold: float) -> np.ndarray:
+    """Replace pixels that deviate from their 3x3 neighbourhood median by more than ``threshold`` with it.
+
+    A selective median filter that removes the isolated bright/dark speckles (fireflies) a low-sample path trace
+    leaves, while leaving real edges and smooth regions untouched — only a pixel differing from its local median
+    by more than ``threshold`` is replaced (#512). Operates per channel on an LDR ``[0, 1]`` image.
+
+    Args:
+        color: An ``(H, W, 3)`` image in ``[0, 1]``.
+        threshold: Maximum allowed deviation from the local median before a pixel is treated as a speckle.
+
+    Returns:
+        numpy.ndarray: the despeckled ``(H, W, 3)`` image.
+    """
+    out = color.copy()
+    for channel in range(color.shape[2]):
+        plane = color[..., channel]
+        padded = np.pad(plane, 1, mode="edge")
+        rows, cols = plane.shape
+        neighbours = np.stack(
+            [padded[i : i + rows, j : j + cols] for i in range(3) for j in range(3)],
+            axis=0,
+        )
+        median = np.median(neighbours, axis=0)
+        out[..., channel] = np.where(
+            np.abs(plane - median) > float(threshold), median, plane
+        )
+    return out
+
+
 def _split_aovs(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Split an `aov`-integrator render tensor into ``(beauty, albedo, normal)``, failing loud on a layout change.
 
@@ -334,7 +364,7 @@ class PhotorealMixin(_MixinBase):
         sun_irradiance: float = 6.0,
         sky: Any = _DEFAULT_SKY,
         max_depth: int = 8,
-        firefly_clamp: float | None = None,
+        despeckle: float | None = None,
         roughness: float | None = None,
         point_radius: float | None = None,
     ) -> Any:
@@ -357,8 +387,10 @@ class PhotorealMixin(_MixinBase):
             sun_irradiance: Scalar brightness of the sun.
             sky: ``(r, g, b)`` radiance of the constant sky fill.
             max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower).
-            firefly_clamp: Upper bound applied to the HDR beauty before tonemap/denoise, to remove stray bright
-                outlier pixels (fireflies). ``None`` (the default) applies no clamp (#512).
+            despeckle: Remove isolated bright/dark speckles (fireflies) a low-sample path trace leaves: a pixel
+                deviating from its 3x3 neighbourhood median by more than this (in the ``[0, 1]`` output) is
+                replaced by the median, leaving edges and smooth regions untouched. ``None`` (the default) is
+                off; ``~0.2-0.4`` is a typical strength (#512).
             roughness: ``None`` renders a plain Lambertian diffuse surface; a value in ``[0, 1]`` uses a
                 Disney-style ``principled`` BSDF of that roughness so the surface reads matte-to-glossy (#512).
             point_radius: Sphere radius (world units) for points-only layers such as point clouds. ``None``
@@ -443,15 +475,15 @@ class PhotorealMixin(_MixinBase):
 
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
             beauty, albedo, normal = _split_aovs(arr)
-            if firefly_clamp is not None:
-                # Bound outlier bright samples (fireflies) before the denoise/tonemap, so a few stray hot pixels
-                # from the directional sun do not survive as speckles (#512).
-                beauty = np.minimum(beauty, float(firefly_clamp))
             color = (
                 _denoise(beauty, albedo, normal)
                 if denoise
                 else np.clip(beauty, 0.0, 1.0)
             )
+            if despeckle is not None:
+                # Remove the isolated bright/dark speckles a low-sample path trace leaves, after the denoise,
+                # on the LDR image where a firefly is a lone outlier against its neighbours (#512).
+                color = _despeckle(color, float(despeckle))
 
             bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
                 mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True

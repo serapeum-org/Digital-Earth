@@ -81,6 +81,31 @@ class TestSplitAovs:
             _split_aovs(wrong)
 
 
+class TestDespeckle:
+    """`_despeckle` replaces isolated bright/dark speckles with the local median, preserving real edges (#512)."""
+
+    def test_isolated_speckles_are_pulled_back_to_the_neighbourhood(self):
+        """A lone dark pixel and a lone bright pixel are both replaced by their 3x3 median."""
+        from digitalearth.three_d.photoreal import _despeckle
+
+        img = np.full((20, 20, 3), 0.5, dtype="float32")
+        img[5, 5, :] = 0.0
+        img[12, 8, :] = 1.0
+        out = _despeckle(img, 0.3)
+        assert abs(float(out[5, 5, 0]) - 0.5) < 0.05, out[5, 5, 0]
+        assert abs(float(out[12, 8, 0]) - 0.5) < 0.05, out[12, 8, 0]
+
+    def test_a_sub_threshold_edge_is_preserved(self):
+        """A step edge no larger than the threshold is left unchanged, so real detail is not blurred."""
+        from digitalearth.three_d.photoreal import _despeckle
+
+        img = np.full((16, 16, 3), 0.3, dtype="float32")
+        img[:, 8:, :] = 0.6
+        assert np.array_equal(_despeckle(img, 0.3), img), (
+            "a sub-threshold edge must be preserved"
+        )
+
+
 class TestPointScalars:
     """`_point_scalars` returns per-vertex scalars, interpolating cell data to points when needed."""
 
@@ -495,14 +520,14 @@ class TestPhotorealFollowups:
         assert int(img.max()) > 0, "a scene-sun render must not be black"
         scene.close()
 
-    def test_firefly_clamp_and_roughness_render(self):
-        """The firefly_clamp and roughness knobs are accepted and still render a non-blank frame (#512)."""
+    def test_despeckle_and_roughness_render(self):
+        """The despeckle and roughness knobs are accepted and still render a non-blank frame (#512)."""
         scene = _small_terrain_scene()
         img = scene.photoreal(
-            spp=4, width=80, height=60, denoise=False, firefly_clamp=4.0, roughness=0.5
+            spp=4, width=80, height=60, denoise=False, despeckle=0.3, roughness=0.5
         )
         assert img.shape == (60, 80, 3), img.shape
-        assert int(img.max()) > 0, "the clamped/roughened render must not be black"
+        assert int(img.max()) > 0, "the despeckled/roughened render must not be black"
         scene.close()
 
     def test_explicit_sun_direction_and_point_radius_skip_their_derivations(
