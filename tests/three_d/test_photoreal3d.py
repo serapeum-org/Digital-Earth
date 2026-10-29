@@ -238,22 +238,40 @@ class TestPhotorealMeshes:
         from digitalearth.three_d.photoreal import PhotorealMixin
 
         fake = SimpleNamespace(layers=[(None, None)])
-        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0), tmp_path)
+        shapes = PhotorealMixin._photoreal_meshes(
+            fake, (0.0, 0.0, 0.0), tmp_path, point_radius=1.0, roughness=None
+        )
         assert shapes == {}, shapes
 
-    def test_skips_meshes_with_no_faces(self, tmp_path):
-        """A mesh whose triangulated surface carries zero faces is skipped rather than written as a shape."""
-        from types import SimpleNamespace
-
+    def test_a_point_cloud_layer_becomes_a_glyphed_shape(self, tmp_path):
+        """A points-only layer is no longer skipped: it is glyphed into a sphere mesh and written as a shape (#510)."""
         from digitalearth.three_d.photoreal import PhotorealMixin
 
-        surf = SimpleNamespace(faces=np.empty(0, dtype="int32"))
-        tri = SimpleNamespace(compute_normals=lambda **_kwargs: surf)
-        extract = SimpleNamespace(triangulate=lambda: tri)
-        mesh = SimpleNamespace(n_points=5, extract_surface=lambda **_kwargs: extract)
-        fake = SimpleNamespace(layers=[(mesh, None)])
-        shapes = PhotorealMixin._photoreal_meshes(fake, (0.0, 0.0, 0.0), tmp_path)
+        scene = Scene3D(off_screen=True)
+        pts = np.random.default_rng(2).random((15, 3)) * 5.0
+        scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
+        shapes = PhotorealMixin._photoreal_meshes(
+            scene, (0.0, 0.0, 0.0), tmp_path, point_radius=0.2, roughness=None
+        )
+        assert len(shapes) == 1, (
+            f"the point cloud should yield one glyphed shape, got {shapes}"
+        )
+        scene.close()
+
+    def test_an_empty_glyph_is_skipped(self, tmp_path, monkeypatch):
+        """A points-only layer whose glyph yields no geometry is skipped rather than written."""
+        from digitalearth.three_d import photoreal as _pr
+        from digitalearth.three_d.photoreal import PhotorealMixin
+
+        scene = Scene3D(off_screen=True)
+        pts = np.random.default_rng(3).random((10, 3)) * 5.0
+        scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
+        monkeypatch.setattr(_pr, "_points_to_spheres", lambda _mesh, _radius: None)
+        shapes = PhotorealMixin._photoreal_meshes(
+            scene, (0.0, 0.0, 0.0), tmp_path, point_radius=1.0, roughness=None
+        )
         assert shapes == {}, shapes
+        scene.close()
 
 
 class TestPhotorealRender:
@@ -298,3 +316,96 @@ class TestPhotorealRender:
         scene.close()
         leaked = set(glob.glob(pattern)) - before
         assert leaked == set(), f"photoreal() leaked temp directories: {leaked}"
+
+
+class TestSceneSunDirection:
+    """`_scene_sun_direction` turns the scene's recorded sun azimuth/elevation into a travel-direction (#511)."""
+
+    def test_a_recorded_sun_gives_its_travel_direction(self):
+        """An east sun (az=90) low on the horizon (el=20) travels west and slightly down."""
+        from digitalearth.three_d.photoreal import _scene_sun_direction
+
+        direction = _scene_sun_direction({"sun": {"azimuth": 90.0, "elevation": 20.0}})
+        assert direction is not None, "a recorded sun must produce a direction"
+        assert direction[0] < -0.9, direction
+        assert abs(direction[1]) < 1e-6, direction
+        assert direction[2] < 0.0, direction
+
+    def test_no_sun_returns_none(self):
+        """No recorded sun (empty state or None) returns None, so photoreal() uses its default."""
+        from digitalearth.three_d.photoreal import _scene_sun_direction
+
+        assert _scene_sun_direction({}) is None
+        assert _scene_sun_direction(None) is None
+
+
+class TestMaterial:
+    """`_material` is a diffuse BSDF by default and a rough principled BSDF when a roughness is given (#512)."""
+
+    def test_diffuse_by_default(self):
+        """Without a roughness the material is a twosided diffuse reading vertex_color."""
+        from digitalearth.three_d.photoreal import _material
+
+        bsdf = _material(None)
+        assert bsdf["type"] == "twosided", bsdf
+        assert bsdf["material"]["type"] == "diffuse", bsdf
+
+    def test_principled_when_roughness_is_set(self):
+        """A roughness selects a principled BSDF carrying that roughness and the vertex_color base."""
+        from digitalearth.three_d.photoreal import _material
+
+        bsdf = _material(0.4)
+        assert bsdf["material"]["type"] == "principled", bsdf
+        assert bsdf["material"]["roughness"] == 0.4, bsdf
+        assert bsdf["material"]["base_color"]["name"] == "vertex_color", bsdf
+
+
+class TestPointsToSpheres:
+    """`_points_to_spheres` glyphs a point cloud into spheres and keeps its colour scalars active (#510)."""
+
+    def test_points_become_a_faced_mesh_with_the_original_scalars(self):
+        """A points-only cloud becomes a faced sphere mesh whose active scalars are the cloud's, not GlyphScale."""
+        scene = Scene3D(off_screen=True)
+        pts = np.random.default_rng(0).random((20, 3)) * 5.0
+        scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
+        mesh, _actor = scene.layers[0]
+        original = mesh.active_scalars_name
+        from digitalearth.three_d.photoreal import _points_to_spheres
+
+        spheres = _points_to_spheres(mesh, radius=0.2)
+        assert spheres.n_cells > 0, "the glyphed cloud must have faces"
+        assert spheres.active_scalars_name == original, spheres.active_scalars_name
+        scene.close()
+
+
+class TestPhotorealFollowups:
+    """`Scene3D.photoreal` renders point clouds, honours a scene sun, and accepts the firefly/PBR knobs."""
+
+    def test_a_point_cloud_is_rendered_not_dropped(self):
+        """A point-cloud layer renders a non-blank image instead of being silently skipped (#510)."""
+        scene = Scene3D(off_screen=True)
+        pts = np.random.default_rng(1).random((120, 3)) * 8.0
+        scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
+        scene.view_angles(azimuth=225.0, elevation=30.0)
+        img = scene.photoreal(spp=4, width=96, height=72, denoise=False)
+        assert img.shape == (72, 96, 3), img.shape
+        assert int(img.max()) > 0, "the point cloud must render, not be dropped"
+        scene.close()
+
+    def test_a_scene_sun_renders(self):
+        """With a recorded sun and sun_direction=None, the derived sun lights the render (non-blank)."""
+        scene = _small_terrain_scene()
+        scene.sun(azimuth=135.0, elevation=25.0)
+        img = scene.photoreal(spp=4, width=80, height=60, denoise=False)
+        assert int(img.max()) > 0, "a scene-sun render must not be black"
+        scene.close()
+
+    def test_firefly_clamp_and_roughness_render(self):
+        """The firefly_clamp and roughness knobs are accepted and still render a non-blank frame (#512)."""
+        scene = _small_terrain_scene()
+        img = scene.photoreal(
+            spp=4, width=80, height=60, denoise=False, firefly_clamp=4.0, roughness=0.5
+        )
+        assert img.shape == (60, 80, 3), img.shape
+        assert int(img.max()) > 0, "the clamped/roughened render must not be black"
+        scene.close()
