@@ -126,22 +126,21 @@ scene = ds.plot(backend="3d", band=0)
 scene.colorbar().orbit("fly.gif", n_frames=60)
 ```
 
-Some scene settings can also be passed to the call, and are applied when the scene is built:
-
-```python
-ds.plot(backend="web", band=0, center=(31.0, 30.0), zoom=6, style="light")
-ds.plot(backend="interactive", band=0, height=700)
-ds.plot(band=0, figsize=(14, 9))                      # matplotlib
-```
-
-Only names the tier's own builders do not use are routed this way — `height` is the map's height on
-the HoloViz tier but an *extrusion* height on `WebMap.extrusion`, so on the web tier it stays with
-the builder. Everything else is an attribute on the built scene:
+A tier scene's construction-time settings are attributes on the built object. Adjust them there —
+they cannot be passed to the call, because a keyword goes to the render, and several names mean one
+thing to a scene and another to a builder (`height` is the HoloViz canvas height for a rasterized
+layer and the web map's pixel height):
 
 ```python
 scene = ds.plot(backend="web", band=0)
-scene.zoom, scene.height = 7, 650
+scene.style = "light"
 ```
+
+!!! note "Some settings are read only while the scene is built"
+    The web tier's `zoom` and `center` are among them: a raster layer fits the view to the data's
+    extent, so assigning `scene.zoom` afterwards does not move the camera. Build the scene yourself
+    when you need to choose the view — `WebMap(zoom=6, center=(31.0, 30.0))` — and add the layer to
+    it.
 
 Two things need `import digitalearth`, and no keyword can change that:
 
