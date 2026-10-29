@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4424,6 +4424,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/pyramids-plot-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyramids plot backend (plugin)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/static_map/" class="md-nav__link">
         
   
@@ -6114,7 +6142,179 @@ scene.screenshot().shape</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>ERROR:root:1: #version 150
+<pre><span class="ansi-red-fg">2026-10-29 19:42:21.368 (   1.812s) [    7FFB92C92740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x55eafa686a10): 1: #version 150
+2: #ifdef GL_ES
+3: #ifdef GL_FRAGMENT_PRECISION_HIGH
+4: precision highp float;
+5: precision highp sampler2D;
+6: precision highp sampler3D;
+7: #else
+8: precision mediump float;
+9: precision mediump sampler2D;
+10: precision mediump sampler3D;
+11: #endif
+12: #define texelFetchBuffer texelFetch
+13: #define texture1D texture
+14: #define texture2D texture
+15: #define texture3D texture
+16: #else // GL_ES
+17: #define highp
+18: #define mediump
+19: #define lowp
+20: #if __VERSION__ &gt;= 150
+21: #define texelFetchBuffer texelFetch
+22: #define texture1D texture
+23: #define texture2D texture
+24: #define texture3D texture
+25: #endif
+26: #endif // GL_ES
+27: #define varying in
+28: 
+29: 
+30: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
+31: // SPDX-License-Identifier: BSD-3-Clause
+32: // Template for the polydata mappers fragment shader
+33: 
+34: uniform int PrimitiveIDOffset;
+35: 
+36: 
+37: 
+38: // VC position of this fragment
+39: //VTK::PositionVC::Dec
+40: 
+41: // Camera prop
+42: uniform int cameraParallel;
+43: 
+44: 
+45: // optional color passed in from the vertex shader, vertexColor
+46: uniform float ambientIntensity; // the material ambient
+47: uniform float diffuseIntensity; // the material diffuse
+48: uniform float opacityUniform; // the fragment opacity
+49: uniform vec3 ambientColorUniform; // ambient color
+50: uniform vec3 diffuseColorUniform; // diffuse color
+51: 
+52: 
+53: // optional surface normal declaration
+54: //VTK::Normal::Dec
+55: 
+56: // extra lighting parameters
+57: uniform vec3 lightColor0;
+58:   uniform vec3 lightDirectionVC0; // normalized
+59: 
+60: uniform float depthC;
+61: vec2 calcShadow(in vec4 vert,
+62:                   in sampler2D shadowMap,
+63:                   in mat4 shadowTransform,
+64:                   in float attenuation,
+65:                   in int shadowParallel,
+66:                   in float sNearZ, in float sFarZ)
+67: {
+68:   vec4 shadowCoord = shadowTransform*vert;
+69:   float expFactor = 8.0;
+70:   float thickness = 0.0;
+71:   if(shadowCoord.w &gt; 0.0)
+72:     {
+73:     vec2 projected = shadowCoord.xy/shadowCoord.w;
+74:     if(projected.x &gt;= 0.0 &amp;&amp; projected.x &lt;= 1.0
+75:        &amp;&amp; projected.y &gt;= 0.0 &amp;&amp; projected.y &lt;= 1.0)
+76:       {
+77:       float ldepth = shadowCoord.z;
+78:       if (shadowParallel == 0) { ldepth =  (shadowCoord.w - sNearZ)/(sFarZ - sNearZ); }
+79:       float depthCExpActual = exp(- depthC*ldepth);
+80:       float depthCExpBlured = texture2D(shadowMap,projected).r;
+81:       expFactor = depthCExpBlured * depthCExpActual;
+82:       float depth = log(depthCExpBlured)/depthC;
+83:       thickness = clamp(ldepth - depth, 0.0, 1.0)*(sFarZ - sNearZ);
+84:       if (expFactor &gt; 1.0) { expFactor = 1.0; }
+85:       }
+86:     }
+87:   return vec2(1.0 - attenuation + attenuation*expFactor, thickness);
+88: }
+89: uniform int shadowParallel0;
+90: uniform float shadowNearZ0;
+91: uniform float shadowFarZ0;
+92: uniform float shadowAttenuation0;
+93: uniform sampler2D shadowMap0;
+94: uniform mat4 shadowTransform0;
+95: 
+96: 
+97: // Texture maps
+98: //VTK::TMap::Dec
+99: 
+100: // Texture coordinates
+101: //VTK::TCoord::Dec
+102: 
+103: // picking support
+104: //VTK::Picking::Dec
+105: 
+106: // Depth Peeling Support
+107: //VTK::DepthPeeling::Dec
+108: 
+109: // clipping plane vars
+110: //VTK::Clip::Dec
+111: 
+112: // the output of this shader
+113: out vec4 fragOutput0;
+114: 
+115: 
+116: // Apple Bug
+117: //VTK::PrimID::Dec
+118: 
+119: // handle coincident offsets
+120: //VTK::Coincident::Dec
+121: 
+122: // Value raster
+123: //VTK::ValuePass::Dec
+124: 
+125: // surface with edges
+126: //VTK::Edges::Dec
+127: 
+128: void main()
+129: {
+130:   // VC position of this fragment. This should not branch/return/discard.
+131:   //VTK::PositionVC::Impl
+132: 
+133:   // Place any calls that require uniform flow (e.g. dFdx) here.
+134:   //VTK::UniformFlow::Impl
+135: 
+136:   // Set gl_FragDepth here (gl_FragCoord.z by default)
+137:   //VTK::Depth::Impl
+138: 
+139:   // Early depth peeling abort:
+140:   //VTK::DepthPeeling::PreColor
+141: 
+142:   // Apple Bug
+143:   //VTK::PrimID::Impl
+144: 
+145:   //VTK::Clip::Impl
+146: 
+147:   //VTK::ValuePass::Impl
+148: 
+149:     vec3 ambientColor = ambientIntensity * ambientColorUniform;
+150:   vec3 diffuseColor = diffuseIntensity * diffuseColorUniform;
+151:   float opacity = opacityUniform;
+152: 
+153: 
+154:   //VTK::Edges::Impl
+155: 
+156:   // Generate the normal if we are not passed in one
+157:   //VTK::Normal::Impl
+158: 
+159:   //VTK::PBR::Impl
+160: 
+161:   vec2 factor0 = calcShadow(vertexVC, shadowMap0, shadowTransform0, shadowAttenuation0, shadowParallel0, shadowNearZ0, shadowFarZ0);
+162:   fragOutput0 = vec4(ambientColor + diffuseColor, opacity);
+163:   //VTK::Light::Impl
+164: 
+165: 
+166: 
+167:   //VTK::TCoord::Impl
+168: 
+169:   if (fragOutput0.a &lt;= 0.0)
+170:     {
+171:     discard;
+172:     }
+173ERROR:root:1: #version 150
 2: #ifdef GL_ES
 3: #ifdef GL_FRAGMENT_PRECISION_HIGH
 4: precision highp float;
@@ -6294,185 +6494,7 @@ scene.screenshot().shape</div>
 178:   // handle coincident offsets
 179:   //VTK::Coincident::Impl
 180: }
-<span class="ansi-red-fg">2026-10-29 19:41:40.620 (   1.629s) [    7F3698380740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x5604c62f6610): 1: #version 150
-2: #ifdef GL_ES
-3: #ifdef GL_FRAGMENT_PRECISION_HIGH
-4: precision highp float;
-5: precision highp sampler2D;
-6: precision highp sampler3D;
-7: #else
-8: precision mediump float;
-9: precision mediump sampler2D;
-10: precision mediump sampler3D;
-11: #endif
-12: #define texelFetchBuffer texelFetch
-13: #define texture1D texture
-14: #define texture2D texture
-15: #define texture3D texture
-16: #else // GL_ES
-17: #define highp
-18: #define mediump
-19: #define lowp
-20: #if __VERSION__ &gt;= 150
-21: #define texelFetchBuffer texelFetch
-22: #define texture1D texture
-23: #define texture2D texture
-24: #define texture3D texture
-25: #endif
-26: #endif // GL_ES
-27: #define varying in
-28: 
-29: 
-30: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
-31: // SPDX-License-Identifier: BSD-3-Clause
-32: // Template for the polydata mappers fragment shader
-33: 
-34: uniform int PrimitiveIDOffset;
-35: 
-36: 
-37: 
-38: // VC position of this fragment
-39: //VTK::PositionVC::Dec
-40: 
-41: // Camera prop
-42: uniform int cameraParallel;
-43: 
-44: 
-45: // optional color passed in from the vertex shader, vertexColor
-46: uniform float ambientIntensity; // the material ambient
-47: uniform float diffuseIntensity; // the material diffuse
-48: uniform float opacityUniform; // the fragment opacity
-49: uniform vec3 ambientColorUniform; // ambient color
-50: uniform vec3 diffuseColorUniform; // diffuse color
-51: 
-52: 
-53: // optional surface normal declaration
-54: //VTK::Normal::Dec
-55: 
-56: // extra lighting parameters
-57: uniform vec3 lightColor0;
-58:   uniform vec3 lightDirectionVC0; // normalized
-59: 
-60: uniform float depthC;
-61: vec2 calcShadow(in vec4 vert,
-62:                   in sampler2D shadowMap,
-63:                   in mat4 shadowTransform,
-64:                   in float attenuation,
-65:                   in int shadowParallel,
-6</span></pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>6:                   in float sNearZ, in float sFarZ)
-67: {
-68:   vec4 shadowCoord = shadowTransform*vert;
-69:   float expFactor = 8.0;
-70:   float thickness = 0.0;
-71:   if(shadowCoord.w &gt; 0.0)
-72:     {
-73:     vec2 projected = shadowCoord.xy/shadowCoord.w;
-74:     if(projected.x &gt;= 0.0 &amp;&amp; projected.x &lt;= 1.0
-75:        &amp;&amp; projected.y &gt;= 0.0 &amp;&amp; projected.y &lt;= 1.0)
-76:       {
-77:       float ldepth = shadowCoord.z;
-78:       if (shadowParallel == 0) { ldepth =  (shadowCoord.w - sNearZ)/(sFarZ - sNearZ); }
-79:       float depthCExpActual = exp(- depthC*ldepth);
-80:       float depthCExpBlured = texture2D(shadowMap,projected).r;
-81:       expFactor = depthCExpBlured * depthCExpActual;
-82:       float depth = log(depthCExpBlured)/depthC;
-83:       thickness = clamp(ldepth - depth, 0.0, 1.0)*(sFarZ - sNearZ);
-84:       if (expFactor &gt; 1.0) { expFactor = 1.0; }
-85:       }
-86:     }
-87:   return vec2(1.0 - attenuation + attenuation*expFactor, thickness);
-88: }
-89: uniform int shadowParallel0;
-90: uniform float shadowNearZ0;
-91: uniform float shadowFarZ0;
-92: uniform float shadowAttenuation0;
-93: uniform sampler2D shadowMap0;
-94: uniform mat4 shadowTransform0;
-95: 
-96: 
-97: // Texture maps
-98: //VTK::TMap::Dec
-99: 
-100: // Texture coordinates
-101: //VTK::TCoord::Dec
-102: 
-103: // picking support
-104: //VTK::Picking::Dec
-105: 
-106: // Depth Peeling Support
-107: //VTK::DepthPeeling::Dec
-108: 
-109: // clipping plane vars
-110: //VTK::Clip::Dec
-111: 
-112: // the output of this shader
-113: out vec4 fragOutput0;
-114: 
-115: 
-116: // Apple Bug
-117: //VTK::PrimID::Dec
-118: 
-119: // handle coincident offsets
-120: //VTK::Coincident::Dec
-121: 
-122: // Value raster
-123: //VTK::ValuePass::Dec
-124: 
-125: // surface with edges
-126: //VTK::Edges::Dec
-127: 
-128: void main()
-129: {
-130:   // VC position of this fragment. This should not branch/return/discard.
-131:   //VTK::PositionVC::Impl
-132: 
-133:   // Place any calls that require uniform flow (e.g. dFdx) here.
-134:   //VTK::UniformFlow::Impl
-135: 
-136:   // Set gl_FragDepth here (gl_FragCoord.z by default)
-137:   //VTK::Depth::Impl
-138: 
-139:   // Early depth peeling abort:
-140:   //VTK::DepthPeeling::PreColor
-141: 
-142:   // Apple Bug
-143:   //VTK::PrimID::Impl
-144: 
-145:   //VTK::Clip::Impl
-146: 
-147:   //VTK::ValuePass::Impl
-148: 
-149:     vec3 ambientColor = ambientIntensity * ambientColorUniform;
-150:   vec3 diffuseColor = diffuseIntensity * diffuseColorUniform;
-151:   float opacity = opacityUniform;
-152: 
-153: 
-154:   //VTK::Edges::Impl
-155: 
-156:   // Generate the normal if we are not passed in one
-157:   //VTK::Normal::Impl
-158: 
-159:   //VTK::PBR::Impl
-160: 
-161:   vec2 factor0 = calcShadow(vertexVC, shadowMap0, shadowTransform0, shadowAttenuation0, shadowParallel0, shadowNearZ0, shadowFarZ0);
-162:   fragOutput0 = vec4(ambientColor + diffuseColor, opacity);
-163:   //VTK::Light::Impl
-164: 
-165: 
-166: 
-167:   //VTK::TCoord::Impl
-168: 
-169:   if (fragOutput0.a &lt;= 0.0)
-170:     {
-171:     discard;
-172:     }
-173: 
+: 
 174:   //VTK::DepthPeeling::Impl
 175: 
 176:   //VTK::Picking::Impl
@@ -6480,12 +6502,14 @@ scene.screenshot().shape</div>
 178:   // handle coincident offsets
 179:   //VTK::Coincident::Impl
 180: }
-
-<span class="ansi-red-fg">2026-10-29 19:41:40.622 (   1.631s) [    7F3698380740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x5604c62f6610): 0:161(28): error: `vertexVC' undeclared
-0:161(17): error: no matching function for call to `calcShadow(error, sampler2D, mat4, float, int, float, float)'; candidates are:
-0:161(17): error:    vec2 calcShadow(vec4, sampler2D, mat4, float, int, float, float)
 </span>
-ERROR:root:0:161(28): error: `vertexVC' undeclared
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>ERROR:root:0:161(28): error: `vertexVC' undeclared
 0:161(17): error: no matching function for call to `calcShadow(error, sampler2D, mat4, float, int, float, float)'; candidates are:
 0:161(17): error:    vec2 calcShadow(vec4, sampler2D, mat4, float, int, float, float)
 </pre>
@@ -6495,15 +6519,19 @@ ERROR:root:0:161(28): error: `vertexVC' undeclared
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
 <pre>ERROR:root:Could not set shader program
-<span class="ansi-red-fg">2026-10-29 19:41:40.623 (   1.632s) [    7F3698380740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x5604c56cdb90): Could not set shader program</span>
 </pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
-<span class="ansi-red-fg">2026-10-29 19:41:40.624 (   1.632s) [    7F3698380740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x5604c598ad10): attempt to add attribute without a bound program for attribute vertexMC</span>
+<pre><span class="ansi-red-fg">2026-10-29 19:42:21.370 (   1.814s) [    7FFB92C92740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x55eafa686a10): 0:161(28): error: `vertexVC' undeclared
+0:161(17): error: no matching function for call to `calcShadow(error, sampler2D, mat4, float, int, float, float)'; candidates are:
+0:161(17): error:    vec2 calcShadow(vec4, sampler2D, mat4, float, int, float, float)
+</span>
+<span class="ansi-red-fg">2026-10-29 19:42:21.370 (   1.814s) [    7FFB92C92740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x55eaf8dd25a0): Could not set shader program</span>
+<span class="ansi-red-fg">2026-10-29 19:42:21.371 (   1.815s) [    7FFB92C92740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x55eaf8dd3410): attempt to add attribute without a bound program for attribute vertexMC</span>
+ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
 </pre>
 </div>
 </div>
@@ -6511,13 +6539,7 @@ ERROR:root:0:161(28): error: `vertexVC' undeclared
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
 <pre>ERROR:root:Error setting 'vertexMC' in shader VAO.
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:40.624 (   1.633s) [    7F3698380740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x5604c5650f00): Error setting 'vertexMC' in shader VAO.</span>
+<span class="ansi-red-fg">2026-10-29 19:42:21.372 (   1.815s) [    7FFB92C92740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x55eaf8b99550): Error setting 'vertexMC' in shader VAO.</span>
 </pre>
 </div>
 </div>
@@ -6728,9 +6750,38 @@ except ValueError as error:
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-yellow-fg">2026-10-29 19:41:41.336 (   2.345s) [    7F3698380740]     vtkOpenGLState.cxx:627   WARN| Attempt to set draw buffers from a Framebuffer Object that is not bound.</span>
-<span class="ansi-yellow-fg">2026-10-29 19:41:41.356 (   2.364s) [    7F3698380740]     vtkOpenGLState.cxx:627   WARN| Attempt to set draw buffers from a Framebuffer Object that is not bound.</span>
-<span class="ansi-red-fg">2026-10-29 19:41:41.421 (   2.429s) [    7F3698380740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x5604c624d550): 1: #version 150
+<pre><span class="ansi-yellow-fg">2026-10-29 19:42:22.088 (   2.532s) [    7FFB92C92740]     vtkOpenGLState.cxx:627   WARN| Attempt to set draw buffers from a Framebuffer Object that is not bound.</span>
+<span class="ansi-yellow-fg">2026-10-29 19:42:22.110 (   2.554s) [    7FFB92C92740]     vtkOpenGLState.cxx:627   WARN| Attempt to set draw buffers from a Framebuffer Object that is not bound.</span>
+<span class="ansi-red-fg">2026-10-29 19:42:22.189 (   2.633s) [    7FFB92C92740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x55eafdfd2ce0): 1: #version 150
+2: #ifdef GL_ES
+3: #ifdef GL_FRAGMENT_PRECISION_HIGH
+4: precision highp float;
+5: precision highp sampler2D;
+6: precision highp sampler3D;
+7: #else
+8: precision mediump float;
+9: precision mediump sampler2D;
+10: precision mediump sampler3D;
+11: #endif
+12: #define texelFetchBuffer texelFetch
+13: #define texture1D texture
+14: #define texture2D texture
+15: #define texture3D texture
+16: #else // GL_ES
+17: #define highp
+18: #define mediump
+19: #define lowp
+20: #if __VERSION__ &gt;= 150
+21: #define texelFetchBuffer texelFetch
+22: #define texture1D texture
+23: #define texture2D texture
+24: #define texture3D texture
+25: #endif
+26: #endif // GL_ES
+27: #define varying in
+28: 
+29: 
+30: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will SchroedERROR:root:1: #version 150
 2: #ifdef GL_ES
 3: #ifdef GL_FRAGMENT_PRECISION_HIGH
 4: precision highp float;
@@ -6917,37 +6968,7 @@ except ValueError as error:
 185:   // handle coincident offsets
 186:   //VTK::Coincident::Impl
 187: }
-</span>
-ERROR:root:1: #version 150
-2: #ifdef GL_ES
-3: #ifdef GL_FRAGMENT_PRECISION_HIGH
-4: precision highp float;
-5: precision highp sampler2D;
-6: precision highp sampler3D;
-7: #else
-8: precision mediump float;
-9: precision mediump sampler2D;
-10: precision mediump sampler3D;
-11: #endif
-12: #define texelFetchBuffer texelFetch
-13: #define texture1D texture
-14: #define texture2D texture
-15: #define texture3D texture
-16: #else // GL_ES
-17: #define highp
-18: #define mediump
-19: #define lowp
-20: #if __VERSION__ &gt;= 150
-21: #define texelFetchBuffer texelFetch
-22: #define texture1D texture
-23: #define texture2D texture
-24: #define texture3D texture
-25: #endif
-26: #endif // GL_ES
-27: #define varying in
-28: 
-29: 
-30: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
+er, Bill Lorensen
 31: // SPDX-License-Identifier: BSD-3-Clause
 32: // Template for the polydata mappers fragment shader
 33: 
@@ -7004,114 +7025,115 @@ ERROR:root:1: #version 150
 84:       if (expFactor &gt; 1.0) { expFactor = 1.0; }
 85:       }
 86:     }
-87:   return vec2(1.0 - attenuation + attenuation*expFactor, thickness);
-88: }
-89: uniform int shadowParallel0;
-90: uniform float shadowNearZ0;
-91: uniform float shadowFarZ0;
-92: uniform float shadowAttenuation0;
-93: uniform sampler2D shadowMap0;
-94: uniform mat4 shadowTransform0;
-95: 
-96: 
-97: // Texture maps
-98: //VTK::TMap::Dec
-99: 
-100: // Texture coordinates
-101: //VTK::TCoord::Dec
-102: 
-103: // picking support
-104: //VTK::Picking::Dec
-105: 
-106: // Depth Peeling Support
-107: //VTK::DepthPeeling::Dec
-108: 
-109: // clipping plane vars
-110: //VTK::Clip::Dec
-111: 
-112: // the output of this shader
-113: out vec4 fragOutput0;
-114: out vec4 fragOutput1;
-115: out vec4 fragOutput2;
-116: 
-117: 
-118: // Apple Bug
-119: //VTK::PrimID::Dec
-120: 
-121: // handle coincident offsets
-122: //VTK::Coincident::Dec
-123: 
-124: // Value raster
-125: //VTK::ValuePass::Dec
-126: 
-127: // surface with edges
-128: //VTK::Edges::Dec
-129: 
-130: void main()
-131: {
-132:   // VC position of this fragment. This should not branch/return/discard.
-133:   //VTK::PositionVC::Impl
-134: 
-135:   // Place any calls that require uniform flow (e.g. dFdx) here.
-136:   //VTK::UniformFlow::Impl
-137: 
-138:   // Set gl_FragDepth here (gl_FragCoord.z by default)
-139:   //VTK::Depth::Impl
-140: 
-141:   // Early depth peeling abort:
-142:   //VTK::DepthPeeling::PreColor
-143: 
-144:   // Apple Bug
-145:   //VTK::PrimID::Impl
-146: 
-147:   //VTK::Clip::Impl
-148: 
-149:   //VTK::ValuePass::Impl
-150: 
-151:     vec3 ambientColor = ambientIntensity * ambientColorUniform;
-152:   vec3 diffuseColor = diffuseIntensity * diffuseColorUniform;
-153:   float opacity = opacityUniform;
-154: 
-155: 
-156:   //VTK::Edges::Impl
-157: 
-158:   // Generate the normal if we are not passed in one
-159:   //VTK::Normal::Impl
-160: 
-161:   //VTK::PBR::Impl
-162: 
-163:   vec2 factor0 = calcShadow(vertexVC, shadowMap0, shadowTransform0, shadowAttenuation0, shadowParallel0, shadowNearZ0, shadowFarZ0);
-164:   fragOutput0 = vec4(ambientColor + diffuseColor, opacity);
-165:   //VTK::Light::Impl
-166: 
-167: 
-168:   fragOutput1 = vec4(0.0, 0.0, 0.0, 0.0);
-169:   fragOutput2 = vec4(0.0, 0.0, 0.0, 0.0);
-170: 
-171: 
-172: 
-173: 
-174:   //VTK::TCoord::Impl
-175: 
-176:   if (fragOutput0.a &lt;= 0.0)
-177:     {
-178:     discard;
-179:     }
-180: 
-181:   //VTK::DepthPeeling::Impl
-182: 
-183:   //VTK::Picking::Impl
-184: 
-185:   // handle coincident offsets
-186:   //VTK::Coincident::Impl
-187: }
-</pre>
+87: </span></pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:41.422 (   2.431s) [    7F3698380740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x5604c624d550): 0:163(28): error: `vertexVC' undeclared
+<pre>  return vec2(1.0 - attenuation + attenuation*expFactor, thickness);
+88: }
+89: uniform int shadowParallel0;
+90: uniform float shadowNearZ0;
+91: uniform float shadowFarZ0;
+92: uniform float shadowAttenuation0;
+93: uniform sampler2D shadowMap0;
+94: uniform mat4 shadowTransform0;
+95: 
+96: 
+97: // Texture maps
+98: //VTK::TMap::Dec
+99: 
+100: // Texture coordinates
+101: //VTK::TCoord::Dec
+102: 
+103: // picking support
+104: //VTK::Picking::Dec
+105: 
+106: // Depth Peeling Support
+107: //VTK::DepthPeeling::Dec
+108: 
+109: // clipping plane vars
+110: //VTK::Clip::Dec
+111: 
+112: // the output of this shader
+113: out vec4 fragOutput0;
+114: out vec4 fragOutput1;
+115: out vec4 fragOutput2;
+116: 
+117: 
+118: // Apple Bug
+119: //VTK::PrimID::Dec
+120: 
+121: // handle coincident offsets
+122: //VTK::Coincident::Dec
+123: 
+124: // Value raster
+125: //VTK::ValuePass::Dec
+126: 
+127: // surface with edges
+128: //VTK::Edges::Dec
+129: 
+130: void main()
+131: {
+132:   // VC position of this fragment. This should not branch/return/discard.
+133:   //VTK::PositionVC::Impl
+134: 
+135:   // Place any calls that require uniform flow (e.g. dFdx) here.
+136:   //VTK::UniformFlow::Impl
+137: 
+138:   // Set gl_FragDepth here (gl_FragCoord.z by default)
+139:   //VTK::Depth::Impl
+140: 
+141:   // Early depth peeling abort:
+142:   //VTK::DepthPeeling::PreColor
+143: 
+144:   // Apple Bug
+145:   //VTK::PrimID::Impl
+146: 
+147:   //VTK::Clip::Impl
+148: 
+149:   //VTK::ValuePass::Impl
+150: 
+151:     vec3 ambientColor = ambientIntensity * ambientColorUniform;
+152:   vec3 diffuseColor = diffuseIntensity * diffuseColorUniform;
+153:   float opacity = opacityUniform;
+154: 
+155: 
+156:   //VTK::Edges::Impl
+157: 
+158:   // Generate the normal if we are not passed in one
+159:   //VTK::Normal::Impl
+160: 
+161:   //VTK::PBR::Impl
+162: 
+163:   vec2 factor0 = calcShadow(vertexVC, shadowMap0, shadowTransform0, shadowAttenuation0, shadowParallel0, shadowNearZ0, shadowFarZ0);
+164:   fragOutput0 = vec4(ambientColor + diffuseColor, opacity);
+165:   //VTK::Light::Impl
+166: 
+167: 
+168:   fragOutput1 = vec4(0.0, 0.0, 0.0, 0.0);
+169:   fragOutput2 = vec4(0.0, 0.0, 0.0, 0.0);
+170: 
+171: 
+172: 
+173: 
+174:   //VTK::TCoord::Impl
+175: 
+176:   if (fragOutput0.a &lt;= 0.0)
+177:     {
+178:     discard;
+179:     }
+180: 
+181:   //VTK::DepthPeeling::Impl
+182: 
+183:   //VTK::Picking::Impl
+184: 
+185:   // handle coincident offsets
+186:   //VTK::Coincident::Impl
+187: }
+
+<span class="ansi-red-fg">2026-10-29 19:42:22.190 (   2.634s) [    7FFB92C92740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x55eafdfd2ce0): 0:163(28): error: `vertexVC' undeclared
 0:163(17): error: no matching function for call to `calcShadow(error, sampler2D, mat4, float, int, float, float)'; candidates are:
 0:163(17): error:    vec2 calcShadow(vec4, sampler2D, mat4, float, int, float, float)
 </span>
@@ -7131,9 +7153,9 @@ ERROR:root:0:163(28): error: `vertexVC' undeclared
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:41.423 (   2.431s) [    7F3698380740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x5604c56cdb90): Could not set shader program</span>
-ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
-<span class="ansi-red-fg">2026-10-29 19:41:41.423 (   2.432s) [    7F3698380740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x5604c598ad10): attempt to add attribute without a bound program for attribute vertexMC</span>
+<pre><span class="ansi-red-fg">2026-10-29 19:42:22.191 (   2.635s) [    7FFB92C92740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x55ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
+eaf8dd25a0): Could not set shader program</span>
+<span class="ansi-red-fg">2026-10-29 19:42:22.191 (   2.635s) [    7FFB92C92740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x55eaf8dd3410): attempt to add attribute without a bound program for attribute vertexMC</span>
 </pre>
 </div>
 </div>
@@ -7141,7 +7163,13 @@ ERROR:root:attempt to add attribute without a bound program for attribute vertex
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
 <pre>ERROR:root:Error setting 'vertexMC' in shader VAO.
-<span class="ansi-red-fg">2026-10-29 19:41:41.424 (   2.433s) [    7F3698380740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x5604c5650f00): Error setting 'vertexMC' in shader VAO.</span>
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre><span class="ansi-red-fg">2026-10-29 19:42:22.192 (   2.636s) [    7FFB92C92740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x55eaf8b99550): Error setting 'vertexMC' in shader VAO.</span>
 </pre>
 </div>
 </div>
@@ -7236,7 +7264,222 @@ ERROR:root:attempt to add attribute without a bound program for attribute vertex
 86: 
 87:   //VTK::EdgesGLES30::Impl
 88: }
-<span class="ansi-red-fg">2026-10-29 19:41:41.709 (   2.717s) [    7F3698380740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x5604c624d550): 1: #version 150
+<span class="ansi-red-fg">2026-10-29 19:42:22.507 (   2.951s) [    7FFB92C92740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x55eafdfd2ce0): 1: #version 150
+2: #ifndef GL_ES
+3: #define highp
+4: #define mediump
+5: #define lowp
+6: #define texelFetchBuffer texelFetch
+7: #endif // GL_ES
+8: #define attribute in
+9: #define varying out
+10: 
+11: 
+12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
+13: // SPDX-License-Identifier: BSD-3-Clause
+14: 
+15: in vec4 vertexMC;
+16: 
+17: 
+18: 
+19: // frag position in VC
+20: //VTK::PositionVC::Dec
+21: 
+22: // optional normal declaration
+23: //VTK::Normal::Dec
+24: 
+25: // extra lighting parameters
+26: //VTK::Light::Dec
+27: 
+28: // Texture coordinates
+29: //VTK::TCoord::Dec
+30: 
+31: // material property values
+32: //VTK::Color::Dec
+33: 
+34: // clipping plane vars
+35: //VTK::Clip::Dec
+36: 
+37: // camera and actor matrix values
+38: uniform mat4 MCDCMatrix;
+39: 
+40: // Apple Bug
+41: //VTK::PrimID::Dec
+42: 
+43: // Value raster
+44: //VTK::ValuePass::Dec
+45: 
+46: // picking support
+47: //VTK::Picking::Dec
+48: 
+49: // Surface with edges on GLES 3.0
+50: //VTK::EdgesGLES30::Dec
+51: 
+52: // PointSize on GLES 3.0
+53: //VTK::PointSizeGLES30::Dec
+54: 
+55: // LineWidth on GLES 3.0
+56: //VTK::LineWidthGLES30::Dec
+57: 
+58: void main()
+59: {
+60:   //VTK::CustomBegin::Impl
+61: 
+62:   //VTK::PointSizeGLES30::Impl
+63: 
+64:   //VTK::Color::Impl
+65: 
+66:   //VTK::Normal::Impl
+67: 
+68:   //VTK::TCoord::Impl
+69: 
+70:   //VTK::Clip::Impl
+71: 
+72:   //VTK::PrimID::Impl
+73: 
+74:     gl_Position = MCDCMatrix * vertexMC;
+75: 
+76: 
+77:   //VTK::LineWidthGLES30::Impl
+78: 
+79:   //VTK::ValuePass::Impl
+80: 
+81:   //VTK::Light::Impl
+82: 
+83:   //VTK::Picking::Impl
+84: 
+85:   //VTK::CustomEnd::Impl
+86: 
+87:   //VTK::EdgesGLES30::Impl
+88: }
+</span>
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre><span class="ansi-red-fg">2026-10-29 19:42:22.508 (   2.952s) [    7FFB92C92740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x55eafdfd2ce0): </span>
+ERROR:root:
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>ERROR:root:Could not set shader program
+<span class="ansi-red-fg">2026-10-29 19:42:22.508 (   2.952s) [    7FFB92C92740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x55eaf8dd25a0): Could not set shader program</span>
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>ERROR:root:Error setting 'vertexMC' in shader VAO.
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre><span class="ansi-red-fg">2026-10-29 19:42:22.509 (   2.953s) [    7FFB92C92740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x55eaf8dd3410): attempt to add attribute without a bound program for attribute vertexMC</span>
+<span class="ansi-red-fg">2026-10-29 19:42:22.509 (   2.953s) [    7FFB92C92740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x55eaf8b99550): Error setting 'vertexMC' in shader VAO.</span>
+ERROR:root:1: #version 150
+2: #ifndef GL_ES
+3: #define highp
+4: #define mediump
+5: #define lowp
+6: #define texelFetchBuffer texelFetch
+7: #endif // GL_ES
+8: #define attribute in
+9: #define varying out
+10: 
+11: 
+12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
+13: // SPDX-License-Identifier: BSD-3-Clause
+14: 
+15: in vec4 vertexMC;
+16: 
+17: 
+18: 
+19: // frag position in VC
+20: //VTK::PositionVC::Dec
+21: 
+22: // optional normal declaration
+23: //VTK::Normal::Dec
+24: 
+25: // extra lighting parameters
+26: //VTK::Light::Dec
+27: 
+28: // Texture coordinates
+29: //VTK::TCoord::Dec
+30: 
+31: // material property values
+32: //VTK::Color::Dec
+33: 
+34: // clipping plane vars
+35: //VTK::Clip::Dec
+36: 
+37: // camera and actor matrix values
+38: uniform mat4 MCDCMatrix;
+39: 
+40: // Apple Bug
+41: //VTK::PrimID::Dec
+42: 
+43: // Value raster
+44: //VTK::ValuePass::Dec
+45: 
+46: // picking support
+47: //VTK::Picking::Dec
+48: 
+49: // Surface with edges on GLES 3.0
+50: //VTK::EdgesGLES30::Dec
+51: 
+52: // PointSize on GLES 3.0
+53: //VTK::PointSizeGLES30::Dec
+54: 
+55: // LineWidth on GLES 3.0
+56: //VTK::LineWidthGLES30::Dec
+57: 
+58: void main()
+59: {
+60:   //VTK::CustomBegin::Impl
+61: 
+62:   //VTK::PointSizeGLES30::Impl
+63: 
+64:   //VTK::Color::Impl
+65: 
+66:   //VTK::Normal::Impl
+67: 
+68:   //VTK::TCoord::Impl
+69: 
+70:   //VTK::Clip::Impl
+71: 
+72:   //VTK::PrimID::Impl
+73: 
+74:     gl_Position = MCDCMatrix * vertexMC;
+75: 
+76: 
+77:   //VTK::LineWidthGLES30::Impl
+78: 
+79:   //VTK::ValuePass::Impl
+80: 
+81:   //VTK::Light::Impl
+82: 
+83:   //VTK::Picking::Impl
+84: 
+85:   //VTK::CustomEnd::Impl
+86: 
+87:   //VTK::EdgesGLES30::Impl
+88: }
+<span class="ansi-red-fg">2026-10-29 19:42:22.655 (   3.099s) [    7FFB92C92740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x55eafdfd2ce0): 1: #version 150
 2: #ifndef GL_ES
 3: #define highp
 4: #define mediump
@@ -7285,8 +7528,7 @@ ERROR:root:attempt to add attribute without a bound program for attribute vertex
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>ERROR:root:
-VTK::ValuePass::Dec
+<pre>VTK::ValuePass::Dec
 45: 
 46: // picking support
 47: //VTK::Picking::Dec
@@ -7332,7 +7574,8 @@ VTK::ValuePass::Dec
 87:   //VTK::EdgesGLES30::Impl
 88: }
 
-<span class="ansi-red-fg">2026-10-29 19:41:41.710 (   2.718s) [    7F3698380740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x5604c624d550): </span>
+ERROR:root:
+<span class="ansi-red-fg">2026-10-29 19:42:22.655 (   3.099s) [    7FFB92C92740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x55eafdfd2ce0): </span>
 </pre>
 </div>
 </div>
@@ -7340,7 +7583,7 @@ VTK::ValuePass::Dec
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
 <pre>ERROR:root:Could not set shader program
-<span class="ansi-red-fg">2026-10-29 19:41:41.712 (   2.720s) [    7F3698380740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x5604c56cdb90): Could not set shader program</span>
+<span class="ansi-red-fg">2026-10-29 19:42:22.656 (   3.100s) [    7FFB92C92740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x55eaf8dd25a0): Could not set shader program</span>
 </pre>
 </div>
 </div>
@@ -7348,7 +7591,6 @@ VTK::ValuePass::Dec
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
 <pre>ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
-<span class="ansi-red-fg">2026-10-29 19:41:41.713 (   2.722s) [    7F3698380740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x5604c598ad10): attempt to add attribute without a bound program for attribute vertexMC</span>
 </pre>
 </div>
 </div>
@@ -7356,444 +7598,21 @@ VTK::ValuePass::Dec
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
 <pre>ERROR:root:Error setting 'vertexMC' in shader VAO.
-<span class="ansi-red-fg">2026-10-29 19:41:41.714 (   2.723s) [    7F3698380740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x5604c5650f00): Error setting 'vertexMC' in shader VAO.</span>
 </pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:41.859 (   2.868s) [    7F3698380740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x5604c624dERROR:root:1: #version 150
-2: #ifndef GL_ES
-3: #define highp
-4: #define mediump
-5: #define lowp
-6: #define texelFetchBuffer texelFetch
-7: #endif // GL_ES
-8: #define attribute in
-9: #define varying out
-10: 
-11: 
-12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
-13: // SPDX-License-Identifier: BSD-3-Clause
-14: 
-15: in vec4 vertexMC;
-16: 
-17: 
-18: 
-19: // frag position in VC
-20: //VTK::PositionVC::Dec
-21: 
-22: // optional normal declaration
-23: //VTK::Normal::Dec
-24: 
-25: // extra lighting parameters
-26: //VTK::Light::Dec
-27: 
-28: // Texture coordinates
-29: //VTK::TCoord::Dec
-30: 
-31: // material property values
-32: //VTK::Color::Dec
-33: 
-34: // clipping plane vars
-35: //VTK::Clip::Dec
-36: 
-37: // camera and actor matrix values
-38: uniform mat4 MCDCMatrix;
-39: 
-40: // Apple Bug
-41: //VTK::PrimID::Dec
-42: 
-43: // Value raster
-44: //VTK::ValuePass::Dec
-45: 
-46: // picking support
-47: //VTK::Picking::Dec
-48: 
-49: // Surface with edges on GLES 3.0
-50: //VTK::EdgesGLES30::Dec
-51: 
-52: // PointSize on GLES 3.0
-53: //VTK::PointSizeGLES30::Dec
-54: 
-55: // LineWidth on GLES 3.0
-56: //VTK::LineWidthGLES30::Dec
-57: 
-58: void main()
-59: {
-60:   //VTK::CustomBegin::Impl
-61: 
-62:   //VTK::PointSizeGLES30::Impl
-63: 
-64:   //VTK::Color::Impl
-65: 
-66:   //VTK::Normal::Impl
-67: 
-68:   //VTK::TCoord::Impl
-69: 
-70:   //VTK::Clip::Impl
-71: 
-72:   //VTK::PrimID::Impl
-73: 
-74:     gl_Position = MCDCMatrix * vertexMC;
-75: 
-76: 
-77:   //VTK::LineWidthGLES30::Impl
-78: 
-79:   //VTK::ValuePass::Impl
-80: 
-81:   //VTK::Light::Impl
-82: 
-83:   //VTK::Picking::Impl
-84: 
-85:   //VTK::CustomEnd::Impl
-86: 
-87:   //VTK::EdgesGLES30::Impl
-88: }
-</span></pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>550): 1: #version 150
-2: #ifndef GL_ES
-3: #define highp
-4: #define mediump
-5: #define lowp
-6: #define texelFetchBuffer texelFetch
-7: #endif // GL_ES
-8: #define attribute in
-9: #define varying out
-10: 
-11: 
-12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
-13: // SPDX-License-Identifier: BSD-3-Clause
-14: 
-15: in vec4 vertexMC;
-16: 
-17: 
-18: 
-19: // frag position in VC
-20: //VTK::PositionVC::Dec
-21: 
-22: // optional normal declaration
-23: //VTK::Normal::Dec
-24: 
-25: // extra lighting parameters
-26: //VTK::Light::Dec
-27: 
-28: // Texture coordinates
-29: //VTK::TCoord::Dec
-30: 
-31: // material property values
-32: //VTK::Color::Dec
-33: 
-34: // clipping plane vars
-35: //VTK::Clip::Dec
-36: 
-37: // camera and actor matrix values
-38: uniform mat4 MCDCMatrix;
-39: 
-40: // Apple Bug
-41: //VTK::PrimID::Dec
-42: 
-43: // Value raster
-44: //VTK::ValuePass::Dec
-45: 
-46: // picking support
-47: //VTK::Picking::Dec
-48: 
-49: // Surface with edges on GLES 3.0
-50: //VTK::EdgesGLES30::Dec
-51: 
-52: // PointSize on GLES 3.0
-53: //VTK::PointSizeGLES30::Dec
-54: 
-55: // LineWidth on GLES 3.0
-56: //VTK::LineWidthGLES30::Dec
-57: 
-58: void main()
-59: {
-60:   //VTK::CustomBegin::Impl
-61: 
-62:   //VTK::PointSizeGLES30::Impl
-63: 
-64:   //VTK::Color::Impl
-65: 
-66:   //VTK::Normal::Impl
-67: 
-68:   //VTK::TCoord::Impl
-69: 
-70:   //VTK::Clip::Impl
-71: 
-72:   //VTK::PrimID::Impl
-73: 
-74:     gl_Position = MCDCMatrix * vertexMC;
-75: 
-76: 
-77:   //VTK::LineWidthGLES30::Impl
-78: 
-79:   //VTK::ValuePass::Impl
-80: 
-81:   //VTK::Light::Impl
-82: 
-83:   //VTK::Picking::Impl
-84: 
-85:   //VTK::CustomEnd::Impl
-86: 
-87:   //VTK::EdgesGLES30::Impl
-88: }
-
-<span class="ansi-red-fg">2026-10-29 19:41:41.860 (   2.869s) [    7F3698380740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x5604c624d550): </span>
-ERROR:root:
+<pre><span class="ansi-red-fg">2026-10-29 19:42:22.657 (   3.101s) [    7FFB92C92740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x55eaf8dd3410): attempt to add attribute without a bound program for attribute vertexMC</span>
+<span class="ansi-red-fg">2026-10-29 19:42:22.659 (   3.102s) [    7FFB92C92740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x55eaf8b99550): Error setting 'vertexMC' in shader VAO.</span>
 </pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:41.860 (   2.869s) [    7F3698380740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x56ERROR:root:Could not set shader program
-04c56cdb90): Could not set shader program</span>
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
-<span class="ansi-red-fg">2026-10-29 19:41:41.861 (   2.869s) [    7F3698380740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x5604c598ad10): attempt to add attribute without a bound program for attribute vertexMC</span>
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>ERROR:root:Error setting 'vertexMC' in shader VAO.
-<span class="ansi-red-fg">2026-10-29 19:41:41.861 (   2.870s) [    7F3698380740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x5604c5650f00): Error setting 'vertexMC' in shader VAO.</span>
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>ERROR:root:1: #version 150
-2: #ifndef GL_ES
-3: #define highp
-4: #define mediump
-5: #define lowp
-6: #define texelFetchBuffer texelFetch
-7: #endif // GL_ES
-8: #define attribute in
-9: #define varying out
-10: 
-11: 
-12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
-13: // SPDX-License-Identifier: BSD-3-Clause
-14: 
-15: in vec4 vertexMC;
-16: 
-17: 
-18: 
-19: // frag position in VC
-20: //VTK::PositionVC::Dec
-21: 
-22: // optional normal declaration
-23: //VTK::Normal::Dec
-24: 
-25: // extra lighting parameters
-26: //VTK::Light::Dec
-27: 
-28: // Texture coordinates
-29: //VTK::TCoord::Dec
-30: 
-31: // material property values
-32: //VTK::Color::Dec
-33: 
-34: // clipping plane vars
-35: //VTK::Clip::Dec
-36: 
-37: // camera and actor matrix values
-38: uniform mat4 MCDCMatrix;
-39: 
-40: // Apple Bug
-41: //VTK::PrimID::Dec
-42: 
-43: // Value raster
-44: //VTK::ValuePass::Dec
-45: 
-46: // picking support
-47: //VTK::Picking::Dec
-48: 
-49: // Surface with edges on GLES 3.0
-50: //VTK::EdgesGLES30::Dec
-51: 
-52: // PointSize on GLES 3.0
-53: //VTK::PointSizeGLES30::Dec
-54: 
-55: // LineWidth on GLES 3.0
-56: //VTK::LineWidthGLES30::Dec
-57: 
-58: void main()
-59: {
-60:   //VTK::CustomBegin::Impl
-61: 
-62:   //VTK::PointSizeGLES30::Impl
-63: 
-64:   //VTK::Color::Impl
-65: 
-66:   //VTK::Normal::Impl
-67: 
-68:   //VTK::TCoord::Impl
-69: 
-70:   //VTK::Clip::Impl
-71: 
-72:   //VTK::PrimID::Impl
-73: 
-74:     gl_Position = MCDCMatrix * vertexMC;
-75: 
-76: 
-77:   //VTK::LineWidthGLES30::Impl
-78: 
-79:   //VTK::ValuePass::Impl
-80: 
-81:   //VTK::Light::Impl
-82: 
-83:   //VTK::Picking::Impl
-84: 
-85:   //VTK::CustomEnd::Impl
-86: 
-87:   //VTK::EdgesGLES30::Impl
-88: }
-<span class="ansi-red-fg">2026-10-29 19:41:42.020 (   3.028s) [    7F3698380740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x5604c624d550): 1: #version 150
-2: #ifndef GL_ES
-3: #define highp
-4: #define mediump
-5: #define lowp
-6: #define texelFetchBuffer texelFetch
-7: #endif // GL_ES
-8: #define attribute in
-9: #define varying out
-10: 
-11: 
-12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
-13: // SPDX-License-Identifier: BSD-3-Clause
-14: 
-15: in vec4 vertexMC;
-16: 
-17: 
-18: 
-19: // frag position in VC
-20: //VTK::PositionVC::Dec
-21: 
-22: // optional normal declaration
-23: //VTK::Normal::Dec
-24: 
-25: // extra lighting parameters
-26: //VTK::Light::Dec
-27: 
-28: // Texture coordinates
-29: //VTK::TCoord::Dec
-30: 
-31: // material property values
-32: //VTK::Color::Dec
-33: 
-34: // clipping plane vars
-35: //VTK::Clip::Dec
-36: 
-37: // camera and actor matrix values
-38: uniform mat4 MCDCMatrix;
-39: 
-40: // Apple Bug
-41: //VTK::PrimID::Dec
-42: 
-43: // Value raster
-44: //VTK::ValuePass::Dec
-45: 
-46: // picking support
-47: //VTK::Picking::Dec
-48: 
-49: // Surface with edges on GLES 3.0
-50: //VTK::EdgesGLES30::Dec
-51: 
-52: // PointSize on GLES 3.0
-53: //VTK::PointSizeGLES30::Dec
-54: 
-55: // LineWidth on GLES 3.0
-56: //VTK::LineWidthGLES30::Dec
-57: 
-58: void main()
-59: {
-60:   //VTK::CustomBegin::Impl
-61: 
-62:   //VTK::PointSizeGLES30::Impl
-63: 
-64:   //VTK::Color::Impl
-65: 
-66:   //VTK::Normal::Impl
-67: 
-68:   //VTK::TCoord::Impl
-69: 
-70:   //VTK::Clip::Impl
-71: 
-72:   //VTK::PrimID::Impl
-73: 
-74:     gl_Position = MCDCMatrix * vertexMC;
-75: 
-76: 
-77:   //VTK::LineWidthGLES30::Impl
-78: 
-79:   //VTK::ValuePass::Impl
-80: 
-81:   //VTK::Light::Impl
-82: 
-83:   //VTK::Picking::Impl
-84: 
-85:   //VTK::CustomEnd::Impl
-86: 
-87:   //VTK::EdgesGLES30::Impl
-88: }
-</span>
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>ERROR:root:
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:42.021 (   3.029s) [    7F3698380740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x5604c624d550): </span>
-ERROR:root:Could not set shader program
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:42.022 (   3.031s) [    7F3698380740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x5604c56cdb90): Could not set shader program</span>
-ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
-<span class="ansi-red-fg">2026-10-29 19:41:42.024 (   3.033s) [    7F3698380740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x5604c598ad10): attempt to add attribute without a bound program for attribute vertexMC</span>
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:42.025 (   3.033s) [    7F3698380740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x5604c5650f00): Error setting 'vertexMC' in shader VAO.</span>
-ERROR:root:Error setting 'vertexMC' in shader VAO.
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:42.240 (   3.248s) [    7F3698380740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x5604c624d550): 1: #version 150
+<pre><span class="ansi-red-fg">2026-10-29 19:42:22.815 (   3.259s) [    7FFB92C92740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x55eafdfd2ce0): 1: #version 150
 2: #ifndef GL_ES
 3: #define highp
 4: #define mediump
@@ -7977,22 +7796,237 @@ ERROR:root:Error setting 'vertexMC' in shader VAO.
 88: }
 
 ERROR:root:
-<span class="ansi-red-fg">2026-10-29 19:41:42.241 (   3.249s) [    7F3698380740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x5604c624d550): </span>
+<span class="ansi-red-fg">2026-10-29 19:42:22.817 (   3.261s) [    7FFB92C92740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x55eafdfd2ce0): </span>
 </pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:42.242 (   3.250s) [    7F3698380740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x5604c56cdb90): Could not set shader program</span>
+<pre>ERROR:root:Could not set shader program
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre><span class="ansi-red-fg">2026-10-29 19:42:22.818 (   3.262s) [    7FFB92C92740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x55eaf8dd25a0): Could not set shader program</span>
+ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
+<span class="ansi-red-fg">2026-10-29 19:42:22.818 (   3.262s) [    7FFB92C92740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x55eaf8dd3410): attempt to add attribute without a bound program for attribute vertexMC</span>
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>ERROR:root:Error setting 'vertexMC' in shader VAO.
+<span class="ansi-red-fg">2026-10-29 19:42:22.819 (   3.263s) [    7FFB92C92740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x55eaf8b99550): Error setting 'vertexMC' in shader VAO.</span>
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre><span class="ansi-red-fg">2026-10-29 19:42:23.060 (   3.504s) [    7FFB92C92740]   vtkShaderProgram.cxx:1282   ERR| vtkShaderProgram (0x55eafdfd2ce0): 1: #version 150
+2: #ifndef GL_ES
+3: #define highp
+4: #define mediump
+5: #define lowp
+6: #define texelFetchBuffer texelFetch
+7: #endif // GL_ES
+8: #define attribute in
+9: #define varying out
+10: 
+11: 
+12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
+13: // SPDX-License-Identifier: BSD-3-Clause
+14: 
+15: in vec4 vertexMC;
+16: 
+17: 
+18: 
+19: // frag position in VC
+20: //VTK::PositionVC::Dec
+21: 
+22: // optional normal declaration
+23: //VTK::Normal::Dec
+24: 
+25: // extra lighting parameters
+26: //VTK::Light::Dec
+27: 
+28: // Texture coordinates
+29: //VTK::TCoord::Dec
+30: 
+31: // material property values
+32: //VTK::Color::Dec
+33: 
+34: // clipping plane vars
+35: //VTK::Clip::Dec
+36: 
+37: // camera and actor matrix values
+38: uniform mat4 MCDCMatrix;
+39: 
+40: // Apple Bug
+41: //VTK::PrimID::Dec
+42: 
+43: // Value raster
+44: //ERROR:root:1: #version 150
+2: #ifndef GL_ES
+3: #define highp
+4: #define mediump
+5: #define lowp
+6: #define texelFetchBuffer texelFetch
+7: #endif // GL_ES
+8: #define attribute in
+9: #define varying out
+10: 
+11: 
+12: // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
+13: // SPDX-License-Identifier: BSD-3-Clause
+14: 
+15: in vec4 vertexMC;
+16: 
+17: 
+18: 
+19: // frag position in VC
+20: //VTK::PositionVC::Dec
+21: 
+22: // optional normal declaration
+23: //VTK::Normal::Dec
+24: 
+25: // extra lighting parameters
+26: //VTK::Light::Dec
+27: 
+28: // Texture coordinates
+29: //VTK::TCoord::Dec
+30: 
+31: // material property values
+32: //VTK::Color::Dec
+33: 
+34: // clipping plane vars
+35: //VTK::Clip::Dec
+36: 
+37: // camera and actor matrix values
+38: uniform mat4 MCDCMatrix;
+39: 
+40: // Apple Bug
+41: //VTK::PrimID::Dec
+42: 
+43: // Value raster
+44: //VTK::ValuePass::Dec
+45: 
+46: // picking support
+47: //VTK::Picking::Dec
+48: 
+49: // Surface with edges on GLES 3.0
+50: //VTK::EdgesGLES30::Dec
+51: 
+52: // PointSize on GLES 3.0
+53: //VTK::PointSizeGLES30::Dec
+54: 
+55: // LineWidth on GLES 3.0
+56: //VTK::LineWidthGLES30::Dec
+57: 
+58: void main()
+59: {
+60:   //VTK::CustomBegin::Impl
+61: 
+62:   //VTK::PointSizeGLES30::Impl
+63: 
+64:   //VTK::Color::Impl
+65: 
+66:   //VTK::Normal::Impl
+67: 
+68:   //VTK::TCoord::Impl
+69: 
+70:   //VTK::Clip::Impl
+71: 
+72:   //VTK::PrimID::Impl
+73: 
+74:     gl_Position = MCDCMatrix * vertexMC;
+75: 
+76: 
+77:   //VTK::LineWidthGLES30::Impl
+78: 
+79:   //VTK::ValuePass::Impl
+80: 
+81:   //VTK::Light::Impl
+82: 
+83:   //VTK::Picking::Impl
+84: 
+85:   //VTK::CustomEnd::Impl
+86: 
+87:   //VTK::EdgesGLES30::Impl
+88: }
+</span></pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>VTK::ValuePass::Dec
+45: 
+46: // picking support
+47: //VTK::Picking::Dec
+48: 
+49: // Surface with edges on GLES 3.0
+50: //VTK::EdgesGLES30::Dec
+51: 
+52: // PointSize on GLES 3.0
+53: //VTK::PointSizeGLES30::Dec
+54: 
+55: // LineWidth on GLES 3.0
+56: //VTK::LineWidthGLES30::Dec
+57: 
+58: void main()
+59: {
+60:   //VTK::CustomBegin::Impl
+61: 
+62:   //VTK::PointSizeGLES30::Impl
+63: 
+64:   //VTK::Color::Impl
+65: 
+66:   //VTK::Normal::Impl
+67: 
+68:   //VTK::TCoord::Impl
+69: 
+70:   //VTK::Clip::Impl
+71: 
+72:   //VTK::PrimID::Impl
+73: 
+74:     gl_Position = MCDCMatrix * vertexMC;
+75: 
+76: 
+77:   //VTK::LineWidthGLES30::Impl
+78: 
+79:   //VTK::ValuePass::Impl
+80: 
+81:   //VTK::Light::Impl
+82: 
+83:   //VTK::Picking::Impl
+84: 
+85:   //VTK::CustomEnd::Impl
+86: 
+87:   //VTK::EdgesGLES30::Impl
+88: }
+
+ERROR:root:
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre><span class="ansi-red-fg">2026-10-29 19:42:23.061 (   3.505s) [    7FFB92C92740]   vtkShaderProgram.cxx:1283   ERR| vtkShaderProgram (0x55eafdfd2ce0): </span>
 ERROR:root:Could not set shader program
+<span class="ansi-red-fg">2026-10-29 19:42:23.061 (   3.505s) [    7FFB92C92740]vtkOpenGLPolyDataMapper:2771   ERR| vtkOpenGLPolyDataMapper (0x55eaf8dd25a0): Could not set shader program</span>
 </pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:42.242 (   3.251s) [    7F3698380740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x5604c598ad10): attempt to add attribute without a bound program for attribute vertexMC</span>
+<pre><span class="ansi-red-fg">2026-10-29 19:42:23.062 (   3.506s) [    7FFB92C92740]vtkOpenGLVertexArrayObj:262    ERR| vtkOpenGLVertexArrayObject (0x55eaf8dd3410): attempt to add attribute without a bound program for attribute vertexMC</span>
 ERROR:root:attempt to add attribute without a bound program for attribute vertexMC
 </pre>
 </div>
@@ -8000,8 +8034,7 @@ ERROR:root:attempt to add attribute without a bound program for attribute vertex
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre><span class="ansi-red-fg">2026-10-29 19:41:42.243 (   3.251s) [    7F3698380740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x5604c5650f00): Error setting 'vertexMC' in shader VAO.</span>
-ERROR:root:Error setting 'vertexMC' in shader VAO.
+<pre>ERROR:root:Error setting 'vertexMC' in shader VAO.
 </pre>
 </div>
 </div>
@@ -8009,7 +8042,14 @@ ERROR:root:Error setting 'vertexMC' in shader VAO.
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
 <pre>vector export written: True
-in-memory scene is not bundleable: save_bundle(): source 'terrain-1' is 'object:69bb6b0f5ffd:terrain-1', wh ...
+in-memory scene is not bundleable: save_bundle(): source 'terrain-1' is 'object:5235adca3cac:terrain-1', wh ...
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre><span class="ansi-red-fg">2026-10-29 19:42:23.063 (   3.506s) [    7FFB92C92740]vtkOpenGLVertexBufferOb:267    ERR| vtkOpenGLVertexBufferObjectGroup (0x55eaf8b99550): Error setting 'vertexMC' in shader VAO.</span>
 </pre>
 </div>
 </div>

@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4276,6 +4276,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../pyramids-plot-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyramids plot backend (plugin)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../static_map/" class="md-nav__link">
         
   
@@ -5924,7 +5952,7 @@ its <code>figure_spec</code> taken — without a renderer, and <code>Scene3D.fro
 
     <div class="doc doc-contents first">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="digitalearth.three_d.builders.terrain.TerrainMixin">TerrainMixin</span></code>, <code><span title="digitalearth.three_d.builders.point_cloud.PointCloudMixin">PointCloudMixin</span></code>, <code><span title="digitalearth.three_d.builders.flat.FlatMixin">FlatMixin</span></code>, <code><span title="digitalearth.three_d.builders.volume.VolumeMixin">VolumeMixin</span></code>, <code><span title="digitalearth.three_d.builders.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.three_d.builders.globe.GlobeMixin">GlobeMixin</span></code>, <code><span title="digitalearth.three_d.decoration.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.three_d.legends.legend.GuideMixin">GuideMixin</span></code>, <code><span title="digitalearth.three_d.app.interaction.InteractionMixin">InteractionMixin</span></code>, <code><span title="digitalearth.three_d.app.serve.ServeMixin">ServeMixin</span></code>, <code><span title="digitalearth.three_d.temporal.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.three_d.photoreal.PhotorealMixin">PhotorealMixin</span></code>, <code><span title="digitalearth.three_d.core.base.Scene3DBase">Scene3DBase</span></code></p>
+              Bases: <code><span title="digitalearth.three_d.builders.terrain.TerrainMixin">TerrainMixin</span></code>, <code><span title="digitalearth.three_d.builders.point_cloud.PointCloudMixin">PointCloudMixin</span></code>, <code><span title="digitalearth.three_d.builders.flat.FlatMixin">FlatMixin</span></code>, <code><span title="digitalearth.three_d.builders.volume.VolumeMixin">VolumeMixin</span></code>, <code><span title="digitalearth.three_d.builders.vector.VectorMixin">VectorMixin</span></code>, <code><span title="digitalearth.three_d.builders.globe.GlobeMixin">GlobeMixin</span></code>, <code><span title="digitalearth.three_d.decoration.decoration.DecorationMixin">DecorationMixin</span></code>, <code><span title="digitalearth.three_d.legends.legend.GuideMixin">GuideMixin</span></code>, <code><span title="digitalearth.three_d.app.interaction.InteractionMixin">InteractionMixin</span></code>, <code><span title="digitalearth.three_d.app.serve.ServeMixin">ServeMixin</span></code>, <code><span title="digitalearth.three_d.temporal.animation.AnimationMixin">AnimationMixin</span></code>, <code><span title="digitalearth.three_d.core.base.Scene3DBase">Scene3DBase</span></code></p>
 
 
 
@@ -5961,7 +5989,10 @@ plot methods from the capability mixins (:meth:<code>terrain</code>, :meth:<code
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/digitalearth/three_d/scene3d.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-49">49</a></span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#__codelineno-0-49">49</a></span>
 <span class="normal"><a href="#__codelineno-0-50">50</a></span>
 <span class="normal"><a href="#__codelineno-0-51">51</a></span>
 <span class="normal"><a href="#__codelineno-0-52">52</a></span>
@@ -5995,49 +6026,44 @@ plot methods from the capability mixins (:meth:<code>terrain</code>, :meth:<code
 <span class="normal"><a href="#__codelineno-0-80">80</a></span>
 <span class="normal"><a href="#__codelineno-0-81">81</a></span>
 <span class="normal"><a href="#__codelineno-0-82">82</a></span>
-<span class="normal"><a href="#__codelineno-0-83">83</a></span>
-<span class="normal"><a href="#__codelineno-0-84">84</a></span>
-<span class="normal"><a href="#__codelineno-0-85">85</a></span>
-<span class="normal"><a href="#__codelineno-0-86">86</a></span>
-<span class="normal"><a href="#__codelineno-0-87">87</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="k">class</span><span class="w"> </span><span class="nc">Scene3D</span><span class="p">(</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50"></a>    <span class="n">TerrainMixin</span><span class="p">,</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="n">PointCloudMixin</span><span class="p">,</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52"></a>    <span class="n">FlatMixin</span><span class="p">,</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="n">VolumeMixin</span><span class="p">,</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="n">VectorMixin</span><span class="p">,</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="n">GlobeMixin</span><span class="p">,</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="n">DecorationMixin</span><span class="p">,</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57"></a>    <span class="n">GuideMixin</span><span class="p">,</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="n">InteractionMixin</span><span class="p">,</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59"></a>    <span class="n">ServeMixin</span><span class="p">,</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60"></a>    <span class="n">AnimationMixin</span><span class="p">,</span>
-<a id="__codelineno-0-61" name="__codelineno-0-61"></a>    <span class="n">PhotorealMixin</span><span class="p">,</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62"></a>    <span class="n">Scene3DBase</span><span class="p">,</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="p">):</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A single-:class:`pyvista.Plotter` 3-D scene with geospatial plot verbs.</span>
-<a id="__codelineno-0-65" name="__codelineno-0-65"></a>
-<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">    Inherits the plotter/layer/render lifecycle from :class:`~digitalearth.three_d.core.base.Scene3DBase` and the</span>
-<a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">    plot methods from the capability mixins (:meth:`terrain`, :meth:`point_cloud`, :meth:`volume`,</span>
-<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">    :meth:`isosurface`, :meth:`vectors`, :meth:`extruded_polygons`, :meth:`globe`, :meth:`set_title`,</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">    :meth:`text`, :meth:`axes`, :meth:`orientation_axes`, :meth:`colorbar`, :meth:`legend`, :meth:`orbit`,</span>
-<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">    :meth:`record`). See those classes for the full surface.</span>
-<a id="__codelineno-0-71" name="__codelineno-0-71"></a>
-<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">        - Create a headless scene, render a DEM as 3-D relief, screenshot it:</span>
-<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.sources import get_source</span>
-<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">            &gt;&gt;&gt; dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))</span>
-<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
-<a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="sd">            &gt;&gt;&gt; _ = scene.terrain(get_source(dem), z_exaggeration=3.0)</span>
-<a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="sd">            &gt;&gt;&gt; img = scene.screenshot()</span>
-<a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="sd">            &gt;&gt;&gt; img.shape[-1], bool(img.any())</span>
-<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">            (3, True)</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
-<a id="__codelineno-0-85" name="__codelineno-0-85"></a>
-<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-87" name="__codelineno-0-87"></a><span class="sd">    &quot;&quot;&quot;</span>
+<span class="normal"><a href="#__codelineno-0-83">83</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="k">class</span><span class="w"> </span><span class="nc">Scene3D</span><span class="p">(</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47"></a>    <span class="n">TerrainMixin</span><span class="p">,</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="n">PointCloudMixin</span><span class="p">,</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49"></a>    <span class="n">FlatMixin</span><span class="p">,</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50"></a>    <span class="n">VolumeMixin</span><span class="p">,</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="n">VectorMixin</span><span class="p">,</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52"></a>    <span class="n">GlobeMixin</span><span class="p">,</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="n">DecorationMixin</span><span class="p">,</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="n">GuideMixin</span><span class="p">,</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="n">InteractionMixin</span><span class="p">,</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="n">ServeMixin</span><span class="p">,</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57"></a>    <span class="n">AnimationMixin</span><span class="p">,</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="n">Scene3DBase</span><span class="p">,</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="p">):</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A single-:class:`pyvista.Plotter` 3-D scene with geospatial plot verbs.</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61"></a>
+<a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Inherits the plotter/layer/render lifecycle from :class:`~digitalearth.three_d.core.base.Scene3DBase` and the</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">    plot methods from the capability mixins (:meth:`terrain`, :meth:`point_cloud`, :meth:`volume`,</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    :meth:`isosurface`, :meth:`vectors`, :meth:`extruded_polygons`, :meth:`globe`, :meth:`set_title`,</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="sd">    :meth:`text`, :meth:`axes`, :meth:`orientation_axes`, :meth:`colorbar`, :meth:`legend`, :meth:`orbit`,</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">    :meth:`record`). See those classes for the full surface.</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67"></a>
+<a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">        - Create a headless scene, render a DEM as 3-D relief, screenshot it:</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.three_d import Scene3D</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.sources import get_source</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">            &gt;&gt;&gt; dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            &gt;&gt;&gt; scene = Scene3D(off_screen=True)</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">            &gt;&gt;&gt; _ = scene.terrain(get_source(dem), z_exaggeration=3.0)</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">            &gt;&gt;&gt; img = scene.screenshot()</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">            &gt;&gt;&gt; img.shape[-1], bool(img.any())</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">            (3, True)</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="sd">            &gt;&gt;&gt; scene.close()</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81"></a>
+<a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">    &quot;&quot;&quot;</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
