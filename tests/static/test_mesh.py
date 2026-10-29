@@ -200,11 +200,11 @@ def test_a_crs_carrying_mesh_partly_beyond_the_limb_draws_the_survivors(
     assert np.isfinite([x0, y0, x1, y1]).all(), (
         f"the extent is not finite: {(x0, y0, x1, y1)}"
     )
-    assert x1 > x0 and y1 > y0, (
-        f"the extent did not enclose the drawn triangles: {(x0, y0, x1, y1)}"
-    )
-    assert "tripcolor" in caplog.text and "fall outside" in caplog.text, (
-        f"the partial drop should be recorded, naming the verb: {caplog.text!r}"
+    assert x1 > x0, f"the x extent did not enclose the drawn triangles: {(x0, x1)}"
+    assert y1 > y0, f"the y extent did not enclose the drawn triangles: {(y0, y1)}"
+    assert "tripcolor" in caplog.text, f"the skip should name the verb: {caplog.text!r}"
+    assert "fall outside" in caplog.text, (
+        f"the partial drop should be recorded: {caplog.text!r}"
     )
 
 
@@ -238,9 +238,10 @@ def test_a_crs_carrying_mesh_wholly_beyond_the_limb_is_skipped_as_off_limb(
     with caplog.at_level(logging.WARNING):
         scene.tripcolor(off_limb)
     assert not scene.ax.collections, "a wholly off-limb mesh should have drawn nothing"
-    assert (
-        "tripcolor" in caplog.text and "none of the data could be placed" in caplog.text
-    ), f"the off-limb skip should be recorded, naming the verb: {caplog.text!r}"
+    assert "tripcolor" in caplog.text, f"the skip should name the verb: {caplog.text!r}"
+    assert "none of the data could be placed" in caplog.text, (
+        f"the off-limb skip should be recorded: {caplog.text!r}"
+    )
 
 
 def _two_triangle_mesh(location="node", node_x=None):
