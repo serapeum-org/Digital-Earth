@@ -31,7 +31,7 @@ from shapely import MultiPoint, box, voronoi_polygons
 from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
-from digitalearth.base.crs import authority_code, declared_crs, reproject
+from digitalearth.base.crs import declared_crs, reproject
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import MeshSource, get_source, require_drawable
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, LayerSpec, Symbology
@@ -2778,13 +2778,14 @@ class VectorMixin(_MixinBase):
         return src.x.values, src.y.values, src.z.values, source_field(src)
 
     def _placed_mesh(self, data: Any) -> Any:
-        """Put a UGRID mesh into the display CRS, or say why it cannot go there.
+        """Put a UGRID mesh into the display CRS.
 
-        pyramids warps a mesh with ``UgridDataset.to_crs``, which takes an EPSG **code** and builds its own
-        target from it — so handing it the display CRS as written produced ``EPSG:EPSG:3857`` and let a raw
-        ``CRSError`` out of a visualization call for three of the four CRS spellings the ``Source`` contract
-        documents (review H2). The code is resolved here instead, and a display CRS carrying none is
-        refused in this repo's words.
+        A mesh is warped with ``UgridDataset.to_crs``, which (pyramids-core >= 0.73.0, #1404) accepts the
+        display CRS in any form ``pyproj.CRS.from_user_input`` takes — an EPSG code, a ``"+proj=..."``
+        string, WKT, an ``"ESRI:..."`` code — so the display CRS is handed over as written, exactly as every
+        other family does. An orthographic, Robinson or Mollweide display CRS is no longer a special case:
+        the warp sends nodes beyond a globe's limb to non-finite coordinates, and the triangles leaning on
+        them are then dropped downstream (:func:`_placeable_triangles`), like any other off-view geometry.
 
         Args:
             data: The pyramids ``UgridDataset`` to place.
@@ -2792,16 +2793,6 @@ class VectorMixin(_MixinBase):
         Returns:
             The mesh in the display CRS, or the mesh untouched when it declares no CRS of its own or is
             already in the display one.
-
-        Raises:
-            ValueError: when the mesh declares a *different* CRS and the display CRS carries no EPSG code — an
-                orthographic, Robinson or other projection pyramids' mesh warp cannot express. Drawing it
-                unprojected instead would put the mesh somewhere it does not belong, silently.
-
-        Note:
-            The restriction is upstream, not ours: `UgridDataset.to_crs` takes a bare EPSG integer while its
-            own source side already accepts a WKT. Reported as pyramids-core#1404; what to change here once
-            that lands is #507 — in short, hand `self.crs` straight to `reproject` and delete the refusal.
         """
         # A mesh with no declared CRS cannot be warped (pyramids refuses, rightly), so it is drawn in its
         # own coordinates — the same bargain a bare numpy array gets.
@@ -2809,18 +2800,11 @@ class VectorMixin(_MixinBase):
         if held is None:
             return data
         if same_crs(held, self.crs):
-            # Already where it belongs: no warp is required, so neither the round-trip through pyramids nor
-            # the EPSG-code restriction applies. Refusing here was round-2 M3 — a mesh in '+proj=robin'
-            # drawn on a '+proj=robin' map was turned away for a reprojection it never needed.
+            # Already where it belongs: no warp is required, so the round-trip through pyramids is skipped.
+            # Refusing here was round-2 M3 — a mesh in '+proj=robin' drawn on a '+proj=robin' map was turned
+            # away for a reprojection it never needed.
             return data
-        code = authority_code(self.crs)
-        if code is None:
-            raise ValueError(
-                f"a UGRID mesh cannot be drawn in {self.crs!r}: pyramids warps a mesh to an EPSG code and "
-                f"this display CRS carries none. Draw the mesh in a CRS that names a code, or reproject "
-                f"it yourself before passing it."
-            )
-        return reproject(data, code)
+        return reproject(data, self.crs)
 
     def _unstructured(self, data: Any, band: int = DEFAULT_BAND) -> "_TriInput":
         """Return ``(x, y, z, field, triangles, location)`` for a triangulated render's input.

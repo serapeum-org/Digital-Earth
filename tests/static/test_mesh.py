@@ -1,8 +1,10 @@
 """Tests for T4.1 — Map unstructured methods (tricontourf/tricontour/tripcolor) via MeshGlyph."""
 
 import pytest
+from pyramids.base.crs import crs_from_user_input
 
 from digitalearth.static import Map
+from digitalearth.static.view import projections
 
 
 @pytest.mark.parametrize("kind", ["tricontourf", "tricontour", "tripcolor"])
@@ -134,18 +136,32 @@ def test_tripcolor_keeps_a_finite_view_when_part_of_the_mesh_is_unplaceable(ugri
     )
 
 
-@pytest.mark.parametrize("display", [3857, "EPSG:3857"])
-def test_a_crs_carrying_mesh_draws_in_a_coded_display_crs(ugrid_mesh, display):
-    """A mesh that declares a CRS is reprojected for any display CRS that names an EPSG code (review H2).
+@pytest.mark.parametrize(
+    "display",
+    [
+        pytest.param(3857, id="int-code"),
+        pytest.param("EPSG:3857", id="epsg-string"),
+        pytest.param("+proj=robin", id="proj4-robinson"),
+        pytest.param(projections.orthographic(0.0, 0.0), id="orthographic"),
+        pytest.param(crs_from_user_input("EPSG:3857").to_wkt(), id="wkt"),
+        pytest.param("ESRI:54030", id="esri-code"),
+    ],
+)
+def test_a_crs_carrying_mesh_draws_in_any_display_crs_spelling(ugrid_mesh, display):
+    """A mesh that declares a CRS draws in any display CRS spelling pyproj accepts (#507).
 
     Args:
         ugrid_mesh: Factory for the two-face mesh.
-        display: The display CRS, as an int and as the `"EPSG:<code>"` spelling the Source contract allows.
+        display: The display CRS in each spelling `pyproj.CRS.from_user_input` accepts — an EPSG int, the
+            `"EPSG:<code>"` string, a `"+proj=..."` definition, a projection carrying no EPSG code, a full
+            WKT string, and an `"ESRI:<code>"` code.
 
     Test scenario:
-        pyramids' `UgridDataset.to_crs` takes an EPSG **code** and builds its target as `f"EPSG:{code}"`,
-        so handing it the string spelling produced `EPSG:EPSG:3857` and a raw pyproj CRSError escaped a
-        visualization call. Both spellings must reach the same place.
+        pyramids-core >= 0.73.0 (serapeum-org/pyramids-core#1404) warps a mesh to a display CRS given in
+        any form `pyproj.CRS.from_user_input` accepts, so an orthographic or Robinson projection, a WKT
+        string or an ESRI code is drawn as readily as a coded one. No EPSG code is required and no refusal
+        escapes a visualization call — the mesh is the last layer family that used to need special-casing
+        here, and no longer does.
     """
     mesh = ugrid_mesh("face", epsg=4326)
     scene = Map(crs=display)
@@ -153,18 +169,79 @@ def test_a_crs_carrying_mesh_draws_in_a_coded_display_crs(ugrid_mesh, display):
     assert scene.ax.collections, "a CRS-carrying mesh drew nothing"
 
 
-def test_a_crs_carrying_mesh_refuses_a_display_crs_with_no_epsg_code(ugrid_mesh):
-    """A projection with no authority code is refused in this repo's words, not pyproj's.
+def test_a_crs_carrying_mesh_partly_beyond_the_limb_draws_the_survivors(
+    ugrid_mesh, caplog
+):
+    """A mesh reprojected into an orthographic globe drops its off-limb triangles and frames the rest (#507).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        caplog: pytest log capture.
 
     Test scenario:
-        An orthographic or Robinson display CRS carries no EPSG code, and pyramids' mesh warp can only take
-        one. The caller should learn that from a message naming the CRS and the limit — not from
-        `CRSError: could not interpret 'EPSG:+proj=robin'`.
+        The mesh declares EPSG:4326 and one node sits at lon 179 — the far side of an orthographic globe
+        centred on (0, 0). That node warps to non-finite coordinates, so the one triangle leaning on it is
+        dropped while the near-side quad survives. Until pyramids-core accepted a projection with no EPSG
+        code, no test could reproject a mesh into such a CRS at all, so `_placeable_triangles` /
+        `_compacted_nodes` had only ever been driven by synthetic infinities; this drives the off-limb path
+        with a real warp. The survivors must be drawn inside a finite extent, and the partial drop must be
+        recorded rather than silent.
     """
-    mesh = ugrid_mesh("face", epsg=4326)
-    scene = Map(crs="+proj=robin")
-    with pytest.raises(ValueError, match="EPSG code"):
-        scene.tripcolor(mesh)
+    import logging
+
+    import numpy as np
+
+    partly = ugrid_mesh("face", epsg=4326, node_x=np.array([0.0, 1.0, 1.0, 0.0, 179.0]))
+    scene = Map(crs=projections.orthographic(0.0, 0.0))
+    with caplog.at_level(logging.WARNING):
+        scene.tripcolor(partly)
+    assert scene.ax.collections, "the near-side triangles drew nothing"
+    (x0, y0), (x1, y1) = scene.ax.dataLim.get_points()
+    assert np.isfinite([x0, y0, x1, y1]).all(), (
+        f"the extent is not finite: {(x0, y0, x1, y1)}"
+    )
+    assert x1 > x0, f"the x extent did not enclose the drawn triangles: {(x0, x1)}"
+    assert y1 > y0, f"the y extent did not enclose the drawn triangles: {(y0, y1)}"
+    assert "tripcolor" in caplog.text, f"the skip should name the verb: {caplog.text!r}"
+    assert "fall outside" in caplog.text, (
+        f"the partial drop should be recorded: {caplog.text!r}"
+    )
+
+
+def test_a_crs_carrying_mesh_wholly_beyond_the_limb_is_skipped_as_off_limb(
+    ugrid_mesh, caplog
+):
+    """A CRS-carrying mesh whose every node warps off the limb draws nothing, and the skip is logged (#507).
+
+    Args:
+        ugrid_mesh: Factory for the two-face mesh.
+        caplog: pytest log capture.
+
+    Test scenario:
+        Every node sits near lon 178 — the far side of an orthographic globe centred on (0, 0) — so the warp
+        sends all of them non-finite and no triangle keeps its three nodes. This drives the fully off-limb
+        path through a *real* reprojection: `_placed_mesh` reaches `reproject` (the mesh declares EPSG:4326),
+        an `OffLimbError` is raised, and `_tri` answers it with an empty frame. The synthetic-infinity sibling
+        (`test_tripcolor_skips_a_mesh_no_projection_can_place`) returns early via the no-CRS guard and never
+        warps, so this is the only coverage of the CRS-carrying skip. The assertion pins the user-visible
+        contract — nothing drawn and a verb-named skip — rather than *where* the error was raised, so it
+        stays valid if a future pyramids moves the off-limb detection into the warp itself.
+    """
+    import logging
+
+    import numpy as np
+
+    off_limb = ugrid_mesh(
+        "face", epsg=4326, node_x=np.array([179.0, 178.0, 178.0, 179.0, 177.0])
+    )
+    scene = Map(crs=projections.orthographic(0.0, 0.0))
+    with caplog.at_level(logging.WARNING):
+        scene.tripcolor(off_limb)
+    assert not scene.ax.collections, "a wholly off-limb mesh should have drawn nothing"
+    assert "tripcolor" in caplog.text, f"the skip should name the verb: {caplog.text!r}"
+    assert "none of the data could be placed" in caplog.text, (
+        f"the off-limb skip should be recorded: {caplog.text!r}"
+    )
 
 
 def _two_triangle_mesh(location="node", node_x=None):
