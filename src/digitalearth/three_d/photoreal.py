@@ -547,14 +547,19 @@ class PhotorealMixin(_MixinBase):
         Each mesh is recentered by subtracting ``center`` so large projected-CRS coordinates do not lose float
         precision in the renderer; :meth:`photoreal` subtracts the same ``center`` from the camera to match. The
         PLYs are written into ``tmpdir``, whose lifetime :meth:`photoreal` owns (it removes it after the render).
+        A points-only layer (e.g. a point cloud) has no faces, so it is glyphed into a sphere at each point
+        (:func:`_points_to_spheres`) rather than dropped.
 
         Args:
             center: The scene bounding-box centre to subtract from every vertex (see :meth:`_photoreal_center`).
             tmpdir: A directory to write the per-layer PLY files into, cleaned up by the caller.
+            point_radius: Sphere radius (world units) for a points-only layer's per-point glyph.
+            roughness: ``None`` for a diffuse BSDF, else the ``principled`` BSDF roughness (see :func:`_material`).
 
         Returns:
-            dict: ``{layer_name: shape_dict}`` for :func:`mitsuba.load_dict`, each a ``ply`` shape with a diffuse
-            BSDF reading its ``vertex_color`` attribute. Empty when the scene has no geometry.
+            dict: ``{layer_name: shape_dict}`` for :func:`mitsuba.load_dict`, each a ``ply`` shape with the
+            twosided BSDF :func:`_material` builds (diffuse, or ``principled`` when ``roughness`` is set), reading
+            its ``vertex_color`` attribute. Empty when the scene has no geometry.
         """
         offset = np.asarray(center, dtype="float64")
         shapes: dict[str, Any] = {}
