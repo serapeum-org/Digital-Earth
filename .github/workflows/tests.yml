@@ -410,6 +410,37 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
+  # The photorealistic path-tracer (Mitsuba + OIDN — the #496 option-B second renderer) lives in its own
+  # `photoreal` env. Every other env (including viz3d) lacks mitsuba/oidn, so tests/three_d/test_photoreal3d.py
+  # importorskip-skips everywhere else — this is the ONLY job that executes it. PyVista still needs a virtual
+  # framebuffer to build the Scene3D geometry the renderer reads, so it runs headless under xvfb like tests-3d.
+  tests-photoreal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: photoreal
+          activate-environment: photoreal
+          cache: true
+          version: v0.73.0
+
+      - name: Install a virtual framebuffer + software OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+
+      - name: Run the photorealistic-renderer tests
+        run: |
+          xvfb-run -a pixi run -e photoreal test-photoreal
+
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+
   # The interactive (HoloViz) tier needs the `interactive` extra (geoviews/holoviews/datashader/panel), which the
   # default py311/312/313 matrix does not install (so it skips those tests). Validate it here in the interactive
   # env. Bokeh/Panel render headless (to HTML; baselines use the matplotlib backend) — no display needed.

@@ -22,6 +22,8 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
 - :class:`~digitalearth.three_d.app.serve.ServeMixin` → :meth:`serve` (a live, streaming trame view — the
   alternative to the frozen page :meth:`export_html` writes).
 - :class:`~digitalearth.three_d.temporal.animation.AnimationMixin` → :meth:`orbit` / :meth:`record` / :meth:`jupyter`.
+- :class:`~digitalearth.three_d.photoreal.PhotorealMixin` → :meth:`photoreal` (a path-traced photorealistic still
+  via Mitsuba 3 + Intel OIDN — the second renderer beside PyVista, the ``#496`` spike's option B).
 
 Every layer is built from pyramids-sourced numpy + geometry — **never** xarray/rasterio/pyvista-xarray (enforced
 by ``tests/test_no_competitor_imports.py``); all CRS/reproject work stays in pyramids.
@@ -38,6 +40,7 @@ from digitalearth.three_d.builders.volume import VolumeMixin
 from digitalearth.three_d.core.base import Scene3DBase, house_theme
 from digitalearth.three_d.decoration.decoration import DecorationMixin
 from digitalearth.three_d.legends.legend import GuideMixin
+from digitalearth.three_d.photoreal import PhotorealMixin
 from digitalearth.three_d.temporal.animation import AnimationMixin
 
 __all__ = ["Scene3D", "house_theme"]
@@ -55,6 +58,7 @@ class Scene3D(
     InteractionMixin,
     ServeMixin,
     AnimationMixin,
+    PhotorealMixin,
     Scene3DBase,
 ):
     """A single-:class:`pyvista.Plotter` 3-D scene with geospatial plot verbs.
