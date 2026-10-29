@@ -1,6 +1,7 @@
 """Tests for T4.1 — Map unstructured methods (tricontourf/tricontour/tripcolor) via MeshGlyph."""
 
 import pytest
+from pyramids.base.crs import crs_from_user_input
 
 from digitalearth.static import Map
 from digitalearth.static.view import projections
@@ -142,21 +143,25 @@ def test_tripcolor_keeps_a_finite_view_when_part_of_the_mesh_is_unplaceable(ugri
         pytest.param("EPSG:3857", id="epsg-string"),
         pytest.param("+proj=robin", id="proj4-robinson"),
         pytest.param(projections.orthographic(0.0, 0.0), id="orthographic"),
+        pytest.param(crs_from_user_input("EPSG:3857").to_wkt(), id="wkt"),
+        pytest.param("ESRI:54030", id="esri-code"),
     ],
 )
 def test_a_crs_carrying_mesh_draws_in_any_display_crs_spelling(ugrid_mesh, display):
-    """A mesh that declares a CRS draws in every display CRS the Source contract documents (#507).
+    """A mesh that declares a CRS draws in any display CRS spelling pyproj accepts (#507).
 
     Args:
         ugrid_mesh: Factory for the two-face mesh.
-        display: The display CRS in each spelling the Source contract allows — an EPSG int, the
-            `"EPSG:<code>"` string, a `"+proj=..."` definition, and a projection carrying no EPSG code.
+        display: The display CRS in each spelling `pyproj.CRS.from_user_input` accepts — an EPSG int, the
+            `"EPSG:<code>"` string, a `"+proj=..."` definition, a projection carrying no EPSG code, a full
+            WKT string, and an `"ESRI:<code>"` code.
 
     Test scenario:
         pyramids-core >= 0.73.0 (serapeum-org/pyramids-core#1404) warps a mesh to a display CRS given in
-        any form `pyproj.CRS.from_user_input` accepts, so an orthographic or Robinson projection is drawn
-        as readily as a coded one. No EPSG code is required and no refusal escapes a visualization call —
-        the mesh is the last layer family that used to need special-casing here, and no longer does.
+        any form `pyproj.CRS.from_user_input` accepts, so an orthographic or Robinson projection, a WKT
+        string or an ESRI code is drawn as readily as a coded one. No EPSG code is required and no refusal
+        escapes a visualization call — the mesh is the last layer family that used to need special-casing
+        here, and no longer does.
     """
     mesh = ugrid_mesh("face", epsg=4326)
     scene = Map(crs=display)
