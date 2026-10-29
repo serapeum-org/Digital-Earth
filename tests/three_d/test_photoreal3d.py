@@ -480,6 +480,17 @@ class TestPointsToSpheres:
             "the subsampled cloud must keep its colour scalars"
         )
 
+    def test_the_subsample_warning_names_the_layer(self, monkeypatch):
+        """The subsample warning names the layer, so distinct layers warn distinctly (not de-duplicated) (L3)."""
+        import pyvista as pv
+
+        from digitalearth.three_d import photoreal as _pr
+
+        monkeypatch.setattr(_pr, "_MAX_GLYPH_POINTS", 10)
+        cloud = pv.PolyData(np.random.default_rng(7).random((40, 3)) * 5.0)
+        with pytest.warns(UserWarning, match="layer_7"):
+            _pr._points_to_spheres(cloud, radius=0.2, layer="layer_7")
+
 
 class TestTriangulatedSurface:
     """`_triangulated_surface` triangulates a mesh, returning a face-less surface for a points-only cloud (#510)."""

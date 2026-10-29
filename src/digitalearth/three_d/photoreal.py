@@ -56,7 +56,7 @@ def _scene_sun_direction(decoration: Any) -> tuple[float, float, float] | None:
     return (-math.cos(el) * math.sin(az), -math.cos(el) * math.cos(az), -math.sin(el))
 
 
-def _points_to_spheres(mesh: Any, radius: float) -> Any:
+def _points_to_spheres(mesh: Any, radius: float, layer: str = "a point cloud") -> Any:
     """Replace a points-only layer (e.g. a point cloud) with a small sphere at each point, keeping its scalars.
 
     A point-cloud mesh has no polygon faces, so it would triangulate to nothing and be dropped (#510). Glyphing a
@@ -66,6 +66,7 @@ def _points_to_spheres(mesh: Any, radius: float) -> Any:
     Args:
         mesh: The points-only PyVista mesh.
         radius: Sphere radius in the mesh's own (world) units.
+        layer: The layer's name, named in the subsample warning so each layer warns distinctly (not de-duplicated).
 
     Returns:
         The glyphed PyVista mesh (spheres at every point), or ``None`` when it has no geometry.
@@ -85,7 +86,7 @@ def _points_to_spheres(mesh: Any, radius: float) -> Any:
             source[name] = np.asarray(mesh[name])[index]
             source.set_active_scalars(name)
         warnings.warn(
-            f"photoreal(): a point cloud of {count} points is subsampled to {source.n_points} for path tracing "
+            f"photoreal(): {layer} of {count} points is subsampled to {source.n_points} for path tracing "
             "(each point becomes a sphere); decimate the cloud upstream to render more",
             stacklevel=2,
         )
@@ -580,7 +581,7 @@ class PhotorealMixin(_MixinBase):
             if len(faces) == 0:
                 # A points-only layer (e.g. a point cloud) triangulates to nothing; render each point as a
                 # small sphere so it is drawn rather than silently dropped (#510).
-                spheres = _points_to_spheres(mesh, point_radius)
+                spheres = _points_to_spheres(mesh, point_radius, layer=f"layer_{index}")
                 if spheres is None:
                     continue
                 surf = _triangulated_surface(spheres)
