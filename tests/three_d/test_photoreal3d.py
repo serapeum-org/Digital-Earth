@@ -321,7 +321,9 @@ class TestPhotorealMeshes:
         scene = Scene3D(off_screen=True)
         pts = np.random.default_rng(3).random((10, 3)) * 5.0
         scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
-        monkeypatch.setattr(_pr, "_points_to_spheres", lambda _mesh, _radius: None)
+        monkeypatch.setattr(
+            _pr, "_points_to_spheres", lambda _mesh, _radius, layer="": None
+        )
         shapes = PhotorealMixin._photoreal_meshes(
             scene, (0.0, 0.0, 0.0), tmp_path, point_radius=1.0, roughness=None
         )
@@ -339,7 +341,9 @@ class TestPhotorealMeshes:
         pts = np.random.default_rng(4).random((10, 3)) * 5.0
         scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
         faceless = pv.PolyData(np.random.default_rng(5).random((8, 3)) * 2.0)
-        monkeypatch.setattr(_pr, "_points_to_spheres", lambda _mesh, _radius: faceless)
+        monkeypatch.setattr(
+            _pr, "_points_to_spheres", lambda _mesh, _radius, layer="": faceless
+        )
         shapes = PhotorealMixin._photoreal_meshes(
             scene, (0.0, 0.0, 0.0), tmp_path, point_radius=1.0, roughness=None
         )
