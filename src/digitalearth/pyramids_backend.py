@@ -1035,9 +1035,9 @@ def _animated_interactive(
 
     frame = _scene_kwargs(plan, InteractiveMap)
     scene = InteractiveMap(**frame)
-    drawn, applied = _animation_kwargs(plan, scene.timecube, labels, consumed, frame)
+    drawn, scened = _animation_kwargs(plan, scene.timecube, labels, consumed)
     scene.timecube(obj, **drawn)
-    _framed(scene, plan, frame, applied)
+    _framed(scene, plan, frame, scened)
     if plan.path is not None:
         if plan.fps is None:
             return scene.save_animation(plan.path)
@@ -1072,9 +1072,9 @@ def _animated_web(
 
     frame = _scene_kwargs(plan, WebMap)
     scene = WebMap(**frame)
-    drawn, applied = _animation_kwargs(plan, scene.timeslider, labels, consumed, frame)
+    drawn, scened = _animation_kwargs(plan, scene.timeslider, labels, consumed)
     scene.timeslider(obj, **drawn)
-    _framed(scene, plan, frame, applied)
+    _framed(scene, plan, frame, scened)
     if plan.fps is None:
         return scene.save_animation(destination)
     return scene.save_animation(destination, fps=plan.fps)
@@ -1085,7 +1085,6 @@ def _animation_kwargs(
     verb: Callable[..., Any],
     labels: Any = None,
     consumed: tuple[str, ...] = (),
-    scened: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The data keywords for a temporal builder, checked against what it really accepts.
 
@@ -1095,7 +1094,6 @@ def _animation_kwargs(
         labels: Step labels the data carried; used only when the call named none of its own, so a
             caller's ``animation_axis_values`` always wins over a NetCDF's time axis.
         consumed: Keywords already spent choosing the data, left out rather than passed on.
-        scened: Keywords the scene constructor already took, likewise left out.
 
     Returns:
         tuple: the keywords to pass the builder, and those the scene applies instead.
@@ -1144,7 +1142,7 @@ def _animation_kwargs(
         _for_builder: Checks these against what the builder accepts.
         _scene_kwargs: The frame half, which this one deliberately leaves out.
     """
-    held_back = set(_FRAME_KWARGS) | set(consumed) | set(scened or {})
+    held_back = set(_FRAME_KWARGS) | set(consumed)
     candidates = {
         name: value for name, value in plan.draw.items() if name not in held_back
     }
@@ -1167,26 +1165,15 @@ def _animation_kwargs(
 
 
 def _scene_kwargs(plan: _Forwarded, constructor: Callable[..., Any]) -> dict[str, Any]:
-    """The forwarded keywords the tier's scene **constructor** takes.
-
-    Every keyword the constructor accepts is offered to it, not just the frame ones. A tier scene is
-    built inside this call, so a keyword it only takes at construction — the HoloViz tier's
-    ``width`` / ``height`` / ``tiles`` / ``big_data_threshold``, the web tier's ``center`` / ``zoom``
-    / ``style``, the matplotlib tier's ``figsize`` / ``domain`` / ``globe`` — is otherwise
-    unreachable through ``plot(backend=…)``: there is no setter for it on the finished object. The
-    facade forwards any further keyword verbatim, so they already arrive here; before this they were
-    offered to the data builder, which has no such parameter, and refused.
-
-    The constructor is asked first and the builder second, which is safe because the two parameter
-    sets are disjoint on every tier (asserted by ``test_no_constructor_builder_collision``).
+    """The frame keywords the tier's scene constructor really takes.
 
     Args:
         plan: The translated call.
         constructor: The tier's scene class, whose signature decides what it is handed.
 
     Returns:
-        dict: the constructor keywords. One the constructor does not take is left for the builder,
-            or for :func:`_framed` to apply through the tier's own verb — never dropped.
+        dict: the constructor keywords. A frame keyword the constructor does not take is left for
+            :func:`_framed` to apply through the tier's own verb, not dropped.
 
     Examples:
         - A constructor that takes a title is handed it; one that does not, is not:
@@ -1203,35 +1190,14 @@ def _scene_kwargs(plan: _Forwarded, constructor: Callable[..., Any]) -> dict[str
             []
 
             ```
-        - A construction-time option reaches the constructor that declares it:
-            ```python
-            >>> from digitalearth.pyramids_backend import _Forwarded, _scene_kwargs
-            >>> def web_scene(*, center=None, zoom=None, style=None, crs=None):
-            ...     ...
-            >>> plan = _Forwarded.from_facade(
-            ...     "web", {"animate": True, "zoom": 6, "style": "dark", "band": 0}
-            ... )
-            >>> sorted(_scene_kwargs(plan, web_scene).items())
-            [('style', 'dark'), ('zoom', 6)]
-
-            ```
-
-    See Also:
-        digitalearth.api._built: The same split on the still path, where `quickmap` builds the scene.
-        _framed: Applies the frame keywords this one's constructor could not take.
     """
     accepted, _absorbs = _accepted_by(constructor)
-    taken = {
+    offered = {"crs": plan.crs, "title": plan.title}
+    return {
         name: value
-        for name, value in plan.draw.items()
+        for name, value in offered.items()
         if name in accepted and value is not None
     }
-    # `crs` and `title` are read off the record rather than `draw`, because `_framed` needs to know
-    # whether the constructor consumed the title before it reaches for `set_title`.
-    for name, value in (("crs", plan.crs), ("title", plan.title)):
-        if name in accepted and value is not None:
-            taken[name] = value
-    return taken
 
 
 def _framed(
