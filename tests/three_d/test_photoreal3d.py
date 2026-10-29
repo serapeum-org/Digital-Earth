@@ -139,6 +139,23 @@ class TestPointScalars:
             "a failing conversion must degrade to solid, not raise"
         )
 
+    def test_an_empty_cell_conversion_returns_none(self, monkeypatch):
+        """A cell->point conversion yielding no usable array returns None, so the caller uses the solid fallback."""
+        from types import SimpleNamespace
+
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _point_scalars, _triangulated_surface
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=3, j_resolution=3))
+        surf.cell_data["c"] = np.arange(surf.n_cells, dtype="float64")
+        surf.set_active_scalars("c", preference="cell")
+        empty = SimpleNamespace(point_data=SimpleNamespace(get=lambda _name: None))
+        monkeypatch.setattr(surf, "cell_data_to_point_data", lambda: empty)
+        assert _point_scalars(surf) is None, (
+            "an empty conversion must degrade to the solid fallback, not return a value"
+        )
+
 
 class TestVertexRgb:
     """`_vertex_rgb` maps scalars through the actor LUT, or falls back to a solid colour with a warning."""
@@ -273,6 +290,24 @@ class TestPhotorealMeshes:
         assert shapes == {}, shapes
         scene.close()
 
+    def test_a_faceless_glyph_is_skipped(self, tmp_path, monkeypatch):
+        """A points-only layer whose glyph still triangulates to no faces is skipped rather than written."""
+        import pyvista as pv
+
+        from digitalearth.three_d import photoreal as _pr
+        from digitalearth.three_d.photoreal import PhotorealMixin
+
+        scene = Scene3D(off_screen=True)
+        pts = np.random.default_rng(4).random((10, 3)) * 5.0
+        scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
+        faceless = pv.PolyData(np.random.default_rng(5).random((8, 3)) * 2.0)
+        monkeypatch.setattr(_pr, "_points_to_spheres", lambda _mesh, _radius: faceless)
+        shapes = PhotorealMixin._photoreal_meshes(
+            scene, (0.0, 0.0, 0.0), tmp_path, point_radius=1.0, roughness=None
+        )
+        assert shapes == {}, shapes
+        scene.close()
+
 
 class TestPhotorealRender:
     """`Scene3D.photoreal` renders a headless path-traced still of the scene's geometry."""
@@ -377,6 +412,66 @@ class TestPointsToSpheres:
         assert spheres.active_scalars_name == original, spheres.active_scalars_name
         scene.close()
 
+    def test_a_scalarless_cloud_glyphs_without_reactivating_scalars(self):
+        """A points-only mesh with no active scalars still glyphs to spheres, skipping the scalar re-activation."""
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _points_to_spheres
+
+        cloud = pv.PolyData(np.random.default_rng(5).random((12, 3)) * 5.0)
+        assert cloud.active_scalars_name is None, cloud.active_scalars_name
+        spheres = _points_to_spheres(cloud, radius=0.2)
+        assert spheres is not None, "a scalarless cloud must still glyph to spheres"
+        assert spheres.n_cells > 0, "the glyphed scalarless cloud must have faces"
+
+
+class TestTriangulatedSurface:
+    """`_triangulated_surface` triangulates a mesh, returning a face-less surface for a points-only cloud (#510)."""
+
+    def test_a_points_only_mesh_returns_a_faceless_surface_without_normals(self):
+        """A points-only cloud triangulates to no faces and is returned without computed normals (#510)."""
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _triangulated_surface
+
+        surf = _triangulated_surface(
+            pv.PolyData(np.random.default_rng(6).random((10, 3)))
+        )
+        face_rows = np.asarray(surf.faces).reshape(-1, 4).shape[0]
+        assert face_rows == 0, (
+            f"a points-only mesh must triangulate to no faces, got {face_rows}"
+        )
+        assert "Normals" not in surf.point_data, (
+            "a face-less surface must not carry computed normals"
+        )
+
+    def test_a_faced_mesh_keeps_its_per_vertex_normals(self):
+        """A mesh with faces returns a triangulated surface that carries per-vertex normals."""
+        import pyvista as pv
+
+        from digitalearth.three_d.photoreal import _triangulated_surface
+
+        surf = _triangulated_surface(pv.Plane(i_resolution=2, j_resolution=2))
+        assert "Normals" in surf.point_data, (
+            "a faced surface must carry per-vertex normals"
+        )
+
+
+class TestPhotorealPointRadius:
+    """`PhotorealMixin._photoreal_point_radius` derives a default sphere radius from the bbox diagonal (#510)."""
+
+    def test_default_radius_is_a_fraction_of_the_bbox_diagonal(self):
+        """The default radius equals the scene bounding-box diagonal (via norm) times the module fraction."""
+        from digitalearth.three_d.photoreal import _POINT_RADIUS_FRACTION
+
+        scene = _small_terrain_scene()
+        b = scene.plotter.bounds
+        diagonal = float(np.linalg.norm([b[1] - b[0], b[3] - b[2], b[5] - b[4]]))
+        expected = diagonal * _POINT_RADIUS_FRACTION
+        radius = scene._photoreal_point_radius()
+        assert radius == pytest.approx(expected), f"expected {expected}, got {radius}"
+        scene.close()
+
 
 class TestPhotorealFollowups:
     """`Scene3D.photoreal` renders point clouds, honours a scene sun, and accepts the firefly/PBR knobs."""
@@ -408,4 +503,32 @@ class TestPhotorealFollowups:
         )
         assert img.shape == (60, 80, 3), img.shape
         assert int(img.max()) > 0, "the clamped/roughened render must not be black"
+        scene.close()
+
+    def test_explicit_sun_direction_and_point_radius_skip_their_derivations(
+        self, monkeypatch
+    ):
+        """Explicit sun_direction and point_radius override the scene-derived defaults, which are never consulted."""
+        from digitalearth.three_d import photoreal as _pr
+
+        scene = _small_terrain_scene()
+        scene.sun(azimuth=135.0, elevation=25.0)
+
+        def _must_not_run(*_args, **_kwargs):
+            raise AssertionError(
+                "a scene-derived default must not be computed when an explicit value is given"
+            )
+
+        monkeypatch.setattr(_pr, "_scene_sun_direction", _must_not_run)
+        monkeypatch.setattr(scene, "_photoreal_point_radius", _must_not_run)
+        img = scene.photoreal(
+            spp=4,
+            width=48,
+            height=32,
+            denoise=False,
+            sun_direction=(-0.5, 0.42, -0.76),
+            point_radius=0.3,
+        )
+        assert img.shape == (32, 48, 3), img.shape
+        assert int(img.max()) > 0, "the overridden render must not be black"
         scene.close()
