@@ -1,5 +1,57 @@
 # Change log
 
+## 0.14.0 (2026-10-29)
+
+### BREAKING CHANGE
+
+- the interactive `field` builder no longer accepts
+`clim=` or `alpha=`; pass `limits=` and `opacity=` instead.
+- builder parameters are renamed with no alias, since the
+package treats its API spelling as unreleased. Positional calls are
+unaffected; keyword callers must adopt the new names. static
+field(dataset=)->data=, interactive contours(data=)->dataset=, static
+set_title(title=)->heading=, static/interactive add_layer's first
+argument->layer, static basemap(source=)->provider=. Web
+set_bounds(padding=) changes from pixels to a fraction of the span, with
+the pixel value at padding_px=. The interactive
+tiles(provider=<name|preset|object>) is removed; use basemap(provider=),
+and tiles() now takes a URL template only.
+- TexturedGlobe.animate() was the camera rotation and is now
+spin(). animate() now steps a stack of rasters. Callers that relied on
+animate() to rotate the globe must call spin() instead.
+
+### Feat
+
+- register digitalearth as a pyramids plot-backend plugin (#508)
+- **three_d**: add a photorealistic path-traced renderer (Mitsuba + OIDN) (#509)
+- draw a NetCDF variable slice and a UGRID mesh through quickmap (#503)
+- **three_d**: read LAS/LAZ point clouds via pointclouds (#506)
+- **static**: add shared_colorbars — group a figure's bars by scale (#505)
+- **three_d**: add cartography, styling, lighting and export verbs (#500)
+- **3d**: cover the five deliberately-absent map features (#482)
+- **static**: dateline inset locator and faster globe frame (#470)
+- **interactive**: classify polygons() and tighten the vector builders (#469)
+- **static**: view-clipped graticule and categorical scale/legend fixes (#468)
+- **web**: deck.gl layers join the layer tree, labels(crs=), recorded tier scope (#467)
+- **three_d**: add view_angles() and reset_camera() to Scene3D (#466)
+- hole-aware land/ocean/lakes polygon fills on the web and 3-D tiers (#449)
+- **base**: surface GRIB NWP metadata and verify model-grid field rendering (#460)
+- **static**: add NWP-field ergonomics — domains, styles, captions, panels, units (#452)
+- **static**: step a stack of rasters on the textured globe, and cover the backend's untaught APIs (#451)
+
+### Fix
+
+- **web**: ship the standalone-export srcjs assets in the wheel (#504)
+- **raster**: honour vmin/vmax under a graduated scheme by pinning the window (#474)
+- **static**: harden the vector builders' input guards and stop a doctest figure leak (#462)
+
+### Refactor
+
+- group each backend's flat modules into per-concern subpackages (#479)
+- **api**: adopt the Core channel keywords on the diverging builders (#471)
+- **api**: unify the cross-tier contract and harden the base layer (#473)
+- **base**: move single-consumer preprocess helpers to static (#472)
+
 ## 0.13.0 (2026-10-08)
 
 ### Feat
