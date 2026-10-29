@@ -105,6 +105,19 @@ class TestDespeckle:
             "a sub-threshold edge must be preserved"
         )
 
+    def test_a_single_channel_speckle_is_not_hue_shifted(self):
+        """The outlier decision is on luminance, so a one-channel speckle is never left as a recoloured residual."""
+        from digitalearth.three_d.photoreal import _despeckle
+
+        img = np.full((9, 9, 3), 0.5, dtype="float32")
+        img[4, 4, :] = (1.0, 0.65, 0.65)
+        out = _despeckle(img, 0.3)
+        pixel = out[4, 4]
+        # Either fully kept or fully replaced by the neutral median — never one channel pulled while two remain.
+        assert np.allclose(pixel, (1.0, 0.65, 0.65)) or np.allclose(
+            pixel, 0.5, atol=0.05
+        ), pixel
+
 
 class TestPointScalars:
     """`_point_scalars` returns per-vertex scalars, interpolating cell data to points when needed."""

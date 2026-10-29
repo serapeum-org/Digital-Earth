@@ -304,32 +304,41 @@ def _denoise(beauty: np.ndarray, albedo: np.ndarray, normal: np.ndarray) -> np.n
     return np.clip(out, 0.0, 1.0)
 
 
+def _median_3x3(plane: np.ndarray) -> np.ndarray:
+    """Return the 3x3 neighbourhood median of a 2-D array, with edge padding at the borders."""
+    padded = np.pad(plane, 1, mode="edge")
+    rows, cols = plane.shape
+    neighbours = np.stack(
+        [padded[i : i + rows, j : j + cols] for i in range(3) for j in range(3)],
+        axis=0,
+    )
+    return np.median(neighbours, axis=0)
+
+
 def _despeckle(color: np.ndarray, threshold: float) -> np.ndarray:
-    """Replace pixels that deviate from their 3x3 neighbourhood median by more than ``threshold`` with it.
+    """Replace pixels whose luminance deviates from their 3x3 neighbourhood median by more than ``threshold``.
 
     A selective median filter that removes the isolated bright/dark speckles (fireflies) a low-sample path trace
-    leaves, while leaving real edges and smooth regions untouched — only a pixel differing from its local median
-    by more than ``threshold`` is replaced (#512). Operates per channel on an LDR ``[0, 1]`` image.
+    leaves (#512). The outlier decision is made once per pixel on luminance and all three channels of a flagged
+    pixel are replaced by their local median together, so a speckle bright in only one channel is removed cleanly
+    rather than left as a hue-shifted residual. Step edges keep a 3-pixel majority and are preserved, but an
+    isolated one-pixel-wide feature (a thin line, a lone point, a specular glint) is indistinguishable from a
+    firefly to a 3x3 median and is also removed — so enable this only when that trade-off is acceptable. Operates
+    on an LDR ``[0, 1]`` image.
 
     Args:
         color: An ``(H, W, 3)`` image in ``[0, 1]``.
-        threshold: Maximum allowed deviation from the local median before a pixel is treated as a speckle.
+        threshold: Maximum allowed luminance deviation from the local median before a pixel is a speckle.
 
     Returns:
         numpy.ndarray: the despeckled ``(H, W, 3)`` image.
     """
+    luminance = color.mean(axis=2)
+    outlier = np.abs(luminance - _median_3x3(luminance)) > float(threshold)
     out = color.copy()
     for channel in range(color.shape[2]):
-        plane = color[..., channel]
-        padded = np.pad(plane, 1, mode="edge")
-        rows, cols = plane.shape
-        neighbours = np.stack(
-            [padded[i : i + rows, j : j + cols] for i in range(3) for j in range(3)],
-            axis=0,
-        )
-        median = np.median(neighbours, axis=0)
         out[..., channel] = np.where(
-            np.abs(plane - median) > float(threshold), median, plane
+            outlier, _median_3x3(color[..., channel]), color[..., channel]
         )
     return out
 
