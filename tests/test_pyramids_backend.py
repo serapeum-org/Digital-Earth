@@ -25,11 +25,14 @@ import digitalearth
 from digitalearth.pyramids_backend import (
     ANIMATION_BACKENDS,
     BAND_ORIGIN_SHIFT,
+    _animatable,
     _animation_kwargs,
     _basemap_asked,
     _classified,
     _Forwarded,
     _framed,
+    _netcdf_stack,
+    _netcdf_variable,
     interactive,
     three_d,
     web,
@@ -795,3 +798,168 @@ class TestLabelValuedColumn:
         assert "scheme" not in draw, (
             f"a numeric column should not be classified: {draw}"
         )
+
+
+class TestChoosingTheNetcdfVariable:
+    """Which variable a NetCDF animation slices, and when there is no axis to slice."""
+
+    def test_a_container_with_no_named_variable_uses_its_first(self):
+        """With no ``variable`` forwarded, the same one the still path draws is animated.
+
+        Test scenario:
+            ``plot`` and ``animate`` must agree about which variable they mean, or the same call
+            differing only in ``animate=`` would draw two different fields.
+        """
+        from pyramids.netcdf import NetCDF
+
+        nc = NetCDF.read_file("examples/data/global/ersstv5.nc")
+        plan = _Forwarded.from_facade("interactive", {"animate": True})
+        chosen = _netcdf_variable(nc, plan)
+        assert chosen._source_var_name == list(nc.variable_names)[0], (
+            f"expected the container's first variable, got {chosen._source_var_name!r}"
+        )
+
+    def test_a_variable_already_pinned_is_used_as_it_is(self):
+        """A variable pinned out of its container is animated directly, not re-selected.
+
+        Test scenario:
+            A pinned subset reports no ``variable_names`` of its own because it *is* the variable —
+            the same test ``base.sources.extractors`` makes of a subset. Asking it for a variable
+            by name would fail.
+        """
+        from pyramids.netcdf import NetCDF
+
+        nc = NetCDF.read_file("examples/data/global/ersstv5.nc")
+        pinned = nc.get_variable("sst")
+        plan = _Forwarded.from_facade("interactive", {"animate": True})
+        assert _netcdf_variable(pinned, plan) is pinned, (
+            "a pinned variable should be used as it is"
+        )
+
+    def test_a_single_band_variable_has_no_axis_to_step_along(self):
+        """A one-band variable is refused by name rather than animated as a single frame.
+
+        Test scenario:
+            ``time_bnds`` in the bundled file carries one band. An animation of it would be a
+            one-frame player, which answers a different question than the one asked.
+        """
+        from pyramids.netcdf import NetCDF
+
+        nc = NetCDF.read_file("examples/data/global/ersstv5.nc")
+        plan = _Forwarded.from_facade(
+            "interactive", {"animate": True, "variable": "time_bnds"}
+        )
+        with pytest.raises(ValueError, match="no axis to step along"):
+            _netcdf_stack(nc, plan)
+
+
+class TestTheVectorSeriesTheWebSliderTakes:
+    """The second shape ``timeslider`` documents: a vector layer stepped through by time."""
+
+    def test_a_vector_layer_is_animatable_on_the_web_tier(self):
+        """A ``FeatureCollection`` is handed to the slider, which documents taking one.
+
+        Test scenario:
+            ``timeslider`` takes either a raster stack or a vector series; refusing the vector half
+            would make a documented form of the call impossible on the only tier that offers it.
+        """
+        from pyramids.feature import FeatureCollection
+
+        layer = FeatureCollection.read_file("tests/data/points.geojson")
+        plan = _Forwarded.from_facade("web", {"animate": True, "path": "out.gif"})
+        stack, labels, consumed = _animatable(layer, plan)
+        assert stack is layer, "the vector layer should be passed through to the slider"
+        assert labels is None, (
+            f"a vector layer carries no step labels of its own: {labels}"
+        )
+        assert consumed == (), f"nothing is spent choosing it: {consumed}"
+
+    def test_a_vector_layer_is_not_animatable_on_the_holoviz_tier(self):
+        """``timecube`` takes a collection only, so the vector form is refused there.
+
+        Test scenario:
+            The two tiers' temporal builders differ, and claiming otherwise would send a vector
+            layer into ``timecube``, which reads ``collection.datasets``.
+        """
+        from pyramids.feature import FeatureCollection
+
+        layer = FeatureCollection.read_file("tests/data/points.geojson")
+        plan = _Forwarded.from_facade("interactive", {"animate": True})
+        with pytest.raises(ValueError, match="steps through a stack"):
+            _animatable(layer, plan)
+
+
+class TestTheRemainingFrameRoutes:
+    """The still path's frame handling, and a scene with no verb for a fallback keyword."""
+
+    def test_a_title_that_is_not_a_heading_is_refused_before_the_render(
+        self, monkeypatch
+    ):
+        """A non-string title is refused before ``quickmap`` is called at all.
+
+        Test scenario:
+            Set on the finished scene, a bad title cost the whole picture: the 3-D tier built its
+            ``Scene3D`` and then raised, while the web tier accepted an int and returned a map —
+            two answers to one call (round-2 L5).
+        """
+        drawn = []
+        monkeypatch.setattr(
+            digitalearth,
+            "quickmap",
+            lambda data, **kwargs: drawn.append(True) or _FakeScene(),
+        )
+        with pytest.raises(ValueError, match="is not a heading"):
+            web("a-dataset", backend="web", title=3)
+        assert drawn == [], "the refusal must precede the render, not follow it"
+
+    def test_a_still_plots_basemap_mapping_is_unwrapped_for_the_builder(
+        self, monkeypatch
+    ):
+        """The still path normalises a ``basemap`` mapping too, not only the animate path.
+
+        Test scenario:
+            The still path hands ``basemap`` to ``quickmap`` rather than to ``_framed``, so a
+            mapping reached the tier as a mapping: ``AttributeError: 'dict' object has no attribute
+            'replace'`` (round-2 M3).
+        """
+        seen = {}
+
+        def fake_quickmap(data, **kwargs):
+            seen.update(kwargs)
+            return _FakeScene()
+
+        monkeypatch.setattr(digitalearth, "quickmap", fake_quickmap)
+        web("a-dataset", backend="web", basemap={"provider": "CartoLight"})
+        assert seen["basemap"] == "CartoLight", (
+            f"the mapping should be unwrapped: {seen}"
+        )
+
+    def test_a_fallback_keyword_with_no_scene_verb_is_refused(self):
+        """A keyword the builder cannot take and the scene cannot apply is named, not dropped.
+
+        Test scenario:
+            Both animating tiers own ``colorbar``, so this guards a scene that loses the verb —
+            the same reasoning as the other two unreachable arms of ``_framed`` (round-2 L3).
+        """
+
+        class Bare:
+            """A scene with no colorbar verb."""
+
+        plan = _Forwarded.from_facade("web", {"animate": True})
+        bare = Bare()
+        with pytest.raises(
+            ValueError, match="neither this render nor the scene takes it"
+        ):
+            _framed(bare, plan, {}, {"colorbar": True})
+
+    def test_a_label_column_is_left_alone_on_the_holoviz_tier(self):
+        """The HoloViz tier draws a label column unaided, so nothing is added for it.
+
+        Test scenario:
+            Executed: that tier colours by a label column without a ``scheme``. Supplying one
+            anyway would change a picture that already worked.
+        """
+        layer = {"shapeName": np.array(["a", "b"])}
+        draw = {"column": "shapeName"}
+        _classified(layer, "interactive", draw)
+        assert draw == {"column": "shapeName"}, f"nothing should be added here: {draw}"
