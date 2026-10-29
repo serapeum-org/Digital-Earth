@@ -38,7 +38,7 @@ in. Everything else passes through untouched.
 
 | pyramids forwards | digitalearth takes | Why |
 |---|---|---|
-| `band=0` (0-based) | `band=1` (1-based) | 0-based upstream, 1-based here. Unshifted,<br>`band=0` read as index `-1`. |
+| `band=0` (0-based) | `band=1` (1-based) | 0-based upstream, 1-based here;<br>unshifted it was refused. |
 | `variable_name=` | `variable=` | The `UgridDataset` facade's spelling.<br>Inert today — see below. |
 | `interval=200` (ms/frame) | `fps=5.0` | The facades describe an interval; the<br>tier verbs take a rate. |
 
@@ -94,11 +94,20 @@ stack.animate(backend="web", interval=120, path="flood.gif")           # written
 ```
 
 !!! note "Leave `interval` out and the speed is digitalearth's, not pyramids'"
-    `interval=200` is pyramids' own default, and a facade **drops** a defaulted argument before
-    forwarding it — so the backend cannot tell "the caller asked for 200 ms" from "the caller said
-    nothing". With nothing forwarded, the tier uses digitalearth's shared `DEFAULT_FPS` of `3.0`,
-    which is **333 ms** a frame, where a plain `stack.animate()` on matplotlib runs at pyramids'
-    200 ms. Pass a non-default `interval` when the speed matters.
+    With no `interval` forwarded, the tier uses digitalearth's shared `DEFAULT_FPS` of `3.0`, which
+    is **333 ms** a frame, where a plain `stack.animate()` on matplotlib runs at pyramids' own
+    default of 200 ms. Pass an `interval` when the speed matters.
+
+    Whether a default `interval=200` reaches the backend at all depends on the facade:
+    `Dataset.animate` declares the parameter and drops it when it is unchanged, so the backend
+    cannot tell "asked for 200 ms" from "said nothing"; `DatasetCollection.animate` forwards
+    `**kwargs` verbatim, so there a `200` you pass does arrive (round-2 L8).
+
+!!! warning "The web animation needs a headless browser"
+    `digitalearth[web]` does not install one, so the web example above raises until you add it:
+    `ImportError: GIF export needs a headless browser … Install Playwright
+    (pip install playwright && python -m playwright install chromium) or Selenium + a driver.`
+    The interactive tier needs nothing extra for its player (round-2 L1).
 
 - **interactive** builds a time cube and returns a Panel player, or writes a GIF/MP4 when you pass a
   `path`.
