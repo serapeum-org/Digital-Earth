@@ -21,9 +21,11 @@ class TestStillPlotThroughTheSeam:
         """The facade's 0-based first band renders, and the tier's own object comes back.
 
         Test scenario:
-            ``band=0`` is what ``Dataset.plot`` forwards for the first band. Before the shift it
-            reached the reader as index ``-1`` and raised ``band -1 is out of range for a 1-band
-            dataset`` — the defect reported in #501, here on the tier it was first reported against.
+            ``band=0`` is what ``Dataset.plot`` forwards for the first band. Before the shift it was
+            refused on every tier, though this one words it differently from the others: web and
+            HoloViz answer ``band -1 is out of range for a 1-band dataset`` while 3-D answers
+            ``Selection bands are 1-based; got 0``. Quoting the first as this tier's symptom was
+            wrong (round-2 M9).
         """
         from pyramids.dataset import Dataset
 
@@ -49,6 +51,8 @@ class TestStillPlotThroughTheSeam:
             three_d("a-dataset", backend="3d", animate=True)
         except ValueError as exc:
             message = str(exc)
+        else:
+            pytest.fail("an animation on this tier should be refused")
         for verb in ("record", "orbit"):
             assert verb in message, f"the refusal should name {verb}: {message}"
             assert callable(getattr(Scene3D, verb, None)), (

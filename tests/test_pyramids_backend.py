@@ -25,6 +25,9 @@ import digitalearth
 from digitalearth.pyramids_backend import (
     ANIMATION_BACKENDS,
     BAND_ORIGIN_SHIFT,
+    _animation_kwargs,
+    _basemap_asked,
+    _classified,
     _Forwarded,
     _framed,
     interactive,
@@ -543,12 +546,7 @@ class TestWhatTheSeamNeedsToDraw:
     """The object shapes each path needs, refused in terms of the call that was made."""
 
     class _Single:
-        """Stands in for a single raster: no members to step through."""
-
-    class _Stack:
-        """Stands in for a collection: members to step through."""
-
-        datasets = ("a", "b", "c")
+        """Stands in for a single raster: nothing to step through."""
 
     def test_animating_something_with_no_steps_is_refused_by_name(self):
         """An animation of a single raster says so, instead of failing inside the stack builder.
@@ -559,73 +557,25 @@ class TestWhatTheSeamNeedsToDraw:
             ``AttributeError: 'Dataset' object has no attribute 'datasets'`` (round-1 H3).
         """
         single = self._Single()
-        with pytest.raises(ValueError, match="carries no steps to animate"):
+        with pytest.raises(ValueError, match="steps through a stack"):
             interactive(single, backend="interactive", animate=True)
 
-    def test_the_refusal_names_the_matplotlib_route_for_a_single_rasters_bands(self):
-        """The refusal points at the backend that does animate one raster's bands.
+    def test_the_refusal_names_both_shapes_this_seam_animates(self):
+        """The refusal names a collection and a NetCDF, the two things it can step through.
 
         Test scenario:
-            A caller who wanted a band animation is not stuck: the matplotlib tier's ``animate``
-            takes a stack of bands. Naming it is the difference between a refusal and a dead end.
+            A caller is not left guessing: the message states the two accepted shapes rather than
+            describing what their object is not (round-2 H3).
         """
         single = self._Single()
         try:
             web(single, backend="web", animate=True, path="out.gif")
         except ValueError as exc:
             message = str(exc)
-        assert "backend='matplotlib'" in message, f"no route offered: {message}"
-
-    def test_a_still_plot_of_a_stack_is_refused_in_terms_of_the_call_made(self):
-        """A still plot of a collection is refused without naming an unrelated function.
-
-        Test scenario:
-            ``DatasetCollection.plot(backend=…)`` is one of the facades, and ``quickmap`` cannot
-            draw a collection — it answered ``TypeError: quickplot cannot draw a DatasetCollection``,
-            naming ``quickplot``, which the caller never used (round-1 M5).
-        """
-        stack = self._Stack()
-        with pytest.raises(ValueError, match=r"plot\(backend='web'\) draws one field"):
-            web(stack, backend="web")
-
-    def test_the_still_refusal_offers_the_animation_route(self):
-        """The refusal names ``animate`` as the way to show every member.
-
-        Test scenario:
-            A collection passed to a still plot is usually a caller wanting the series; pointing at
-            the animate call answers what they were reaching for.
-        """
-        stack = self._Stack()
-        try:
-            interactive(stack, backend="interactive")
-        except ValueError as exc:
-            message = str(exc)
-        assert "animate(backend='interactive')" in message, (
-            f"no route offered: {message}"
-        )
-
-
-class TestMeshIsNotDrawnHereYet:
-    """Why the ``variable_name`` translation is inert, pinned so it stops being inert loudly."""
-
-    def test_no_plugin_backend_draws_a_mesh_yet(self):
-        """None of the three registered backends has a mesh render, so a mesh never reaches them.
-
-        Test scenario:
-            ``variable_name`` is forwarded only by the ``UgridDataset`` facades, and ``quickmap``
-            refuses a mesh on every backend outside ``MESH_BACKENDS`` before reading any keyword —
-            executed on all three tiers through the repo's mesh fixture. That is what makes the
-            translation unreachable today (round-1 M1). If a tier gains a triangular render, this
-            fails, which is the signal to cover that translation for real.
-        """
-        from digitalearth.api import MESH_BACKENDS
-
-        registered = {name for name, _fn, _declared in REGISTERED}
-        overlap = registered & set(MESH_BACKENDS)
-        assert overlap == set(), (
-            f"{sorted(overlap)} now draws a mesh, so variable_name is reachable and needs a test "
-            f"that exercises it through that tier"
-        )
+        else:
+            pytest.fail("a single raster should not animate")
+        assert "DatasetCollection" in message, f"no collection route offered: {message}"
+        assert "NetCDF" in message, f"no NetCDF route offered: {message}"
 
 
 class TestFrameKeywordsWithNoRoute:
@@ -660,3 +610,188 @@ class TestFrameKeywordsWithNoRoute:
             ValueError, match="neither a title argument nor a set_title verb"
         ):
             _framed(scene, plan, {})
+
+
+class TestWhatCountsAsAStack:
+    """Deciding what can be stepped through, by type rather than by attribute."""
+
+    def test_a_vector_layer_with_a_datasets_column_is_still_drawable(self, monkeypatch):
+        """A ``FeatureCollection`` carrying a column named ``datasets`` draws as the vector it is.
+
+        Args:
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            ``FeatureCollection`` subclasses ``GeoDataFrame``, and pandas resolves a column name as
+            an attribute — so an attribute test for ``datasets`` reported a catalogue or join result
+            as a multi-member stack and refused to draw it, advising a ``FeatureCollection.animate``
+            facade pyramids does not expose (round-2 H1).
+        """
+        from pyramids.feature import FeatureCollection
+
+        layer = FeatureCollection.read_file("tests/data/points.geojson")
+        layer["datasets"] = 1
+        assert hasattr(layer, "datasets"), (
+            "the column must resolve as an attribute for this test"
+        )
+        scene = _FakeScene()
+        monkeypatch.setattr(digitalearth, "quickmap", lambda data, **kwargs: scene)
+        assert web(layer, backend="web") is scene, (
+            "a vector layer must still reach the builder"
+        )
+
+    def test_a_collection_is_refused_for_a_still_plot_by_type(self, monkeypatch):
+        """A real ``DatasetCollection`` is still refused on the still path, now by type.
+
+        Args:
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            The refusal itself is right — ``quickmap`` draws one field — and must survive the move
+            from an attribute test to a type test.
+        """
+        from pyramids.dataset.collection import DatasetCollection
+
+        stack = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 2)
+        monkeypatch.setattr(
+            digitalearth, "quickmap", lambda data, **kwargs: _FakeScene()
+        )
+        with pytest.raises(ValueError, match="draws one field"):
+            web(stack, backend="web")
+
+    def test_animating_something_that_is_no_stack_names_what_is_needed(self):
+        """A plain object is refused with the two shapes this seam animates.
+
+        Test scenario:
+            The refusal previously named pyramids' internal ``Container`` class and told a caller
+            their data "carries no steps" (round-2 H3). It now names what to pass instead.
+        """
+
+        class Neither:
+            """Neither a collection nor a NetCDF."""
+
+        neither = Neither()
+        with pytest.raises(ValueError, match="steps through a stack"):
+            interactive(neither, backend="interactive", animate=True)
+
+    def test_a_named_axis_that_contradicts_an_explicit_kdim_is_refused(self):
+        """``animate="time"`` beside ``kdim="level"`` is refused rather than silently overwritten.
+
+        Test scenario:
+            Both name the axis to step along. Overwriting one with the other would animate a
+            dimension the caller did not ask for, having been told nothing (round-2 M4). Asserted
+            on the keyword split, which needs no engine.
+        """
+
+        def timecube(collection, *, kdim="time", band=1):
+            """Stands in for a temporal builder that takes a kdim."""
+
+        plan = _Forwarded.from_facade(
+            "interactive", {"animate": "time", "kdim": "level"}
+        )
+        with pytest.raises(ValueError, match="name different axes"):
+            _animation_kwargs(plan, timecube)
+
+
+class TestShapesTheFacadesSend:
+    """Argument *shapes* a facade may forward that the tiers cannot act on as they arrive."""
+
+    def test_a_basemap_mapping_is_unwrapped_to_its_provider(self):
+        """A ``{"provider": name}`` mapping becomes the name the tiers take.
+
+        Test scenario:
+            The facades type ``basemap`` as ``bool | str | dict | Basemap | None``. A dict reached
+            the web tier and came back as ``AttributeError: 'dict' object has no attribute
+            'replace'``, while the 3-D and HoloViz tiers accepted it and drew no basemap at all
+            (round-2 M3).
+        """
+        assert _basemap_asked({"provider": "CartoLight"}, "web") == "CartoLight", (
+            "a mapping carrying a provider name should be unwrapped to it"
+        )
+
+    def test_a_basemap_mapping_with_no_provider_is_refused(self):
+        """A mapping naming no provider is refused, saying what the tiers take instead.
+
+        Test scenario:
+            Silently dropping it would leave a caller believing a basemap was drawn — the failure
+            this module exists to prevent — and passing it on produced an ``AttributeError`` from
+            inside the tier.
+        """
+        with pytest.raises(ValueError, match="is not a shape"):
+            _basemap_asked({"zoom": 3}, "web")
+
+    @pytest.mark.parametrize("value", [True, "CartoLight", None, False])
+    def test_the_shapes_the_tiers_already_take_pass_through(self, value):
+        """``True``, a provider name and the unset values are handed on untouched.
+
+        Args:
+            value: A shape the tiers already accept.
+
+        Test scenario:
+            The translation must not start reinterpreting the shapes that already worked.
+        """
+        assert _basemap_asked(value, "web") is value, (
+            f"{value!r} should pass through unchanged"
+        )
+
+    @pytest.mark.parametrize("name", ["selectors", "axes"])
+    def test_the_netcdf_slice_refusal_names_the_band_origin(self, name):
+        """The refusal that advises ``band=`` says which origin it means.
+
+        Args:
+            name: The refused read-time keyword.
+
+        Test scenario:
+            A caller following the advice passes ``band=`` as an extra keyword, and this seam shifts
+            whatever it is handed — so advising the keyword without naming its origin reintroduced
+            #501's own off-by-one, one layer up (round-2 M7).
+        """
+        forwarded = {name: {"time": 0}}
+        with pytest.raises(ValueError, match="0-based band="):
+            _Forwarded.from_facade("web", forwarded)
+
+
+class TestLabelValuedColumn:
+    """``column`` naming a label column, the ordinary reason the facade forwards it."""
+
+    def test_a_label_column_is_classified_on_the_web_tier(self):
+        """The web tier is told the scale is categorical, so a label column draws.
+
+        Test scenario:
+            Forwarded alone, ``column`` reached the classifier as a number:
+            ``could not convert string to float: 'Baden-Württemberg'``. Executed on the web tier,
+            naming the scale categorical draws it — and the facade forwards no ``scheme``, so the
+            caller has no way to say so (round-2 M10).
+        """
+        layer = {"shapeName": np.array(["a", "b"])}
+        draw = {"column": "shapeName"}
+        _classified(layer, "web", draw)
+        assert draw["scheme"] == "categorical", (
+            f"the scale should be classified: {draw}"
+        )
+
+    def test_a_label_column_is_refused_on_the_tier_with_no_categorical_fill(self):
+        """The 3-D tier is told it cannot, rather than failing inside its classifier.
+
+        Test scenario:
+            Executed on the 3-D tier, ``scheme="categorical"`` does not rescue it either — that tier
+            colours by a number — so there is no route and the refusal names the tiers that have one.
+        """
+        layer = {"shapeName": np.array(["a", "b"])}
+        draw = {"column": "shapeName"}
+        with pytest.raises(ValueError, match="no categorical fill"):
+            _classified(layer, "3d", draw)
+
+    def test_a_numeric_column_is_left_alone(self):
+        """A numeric column needs no classification and gets none.
+
+        Test scenario:
+            Adding ``scheme="categorical"`` to a numeric choropleth would replace a continuous scale
+            with a categorical one, changing the picture the caller asked for.
+        """
+        layer = {"pop": np.array([1.0, 2.0])}
+        draw = {"column": "pop"}
+        _classified(layer, "web", draw)
+        assert "scheme" not in draw, (
+            f"a numeric column should not be classified: {draw}"
+        )

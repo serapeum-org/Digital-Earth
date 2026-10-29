@@ -23,17 +23,26 @@ the caller made — and on one tier the complaint is not even digitalearth's:
 
 The last is PyVista's own argument parser, surfacing to someone who wrote ``ds.plot(backend="3d",
 title=…)``. So the adapter's job is to translate between the two vocabularies, to apply a frame
-keyword through the route that tier actually has, and to refuse the rest **by name**, before a
-scene is half-built — not to convert silence into a message, since the tiers were never silent.
+keyword through the route that tier actually has, and to refuse **the keywords it knows about** by
+name, before a scene is half-built — not to convert silence into a message, since the tiers were
+never silent.
+
+That last qualifier is the honest scope. This module checks the keywords the facades are documented
+to forward: the ones no tier can serve (:data:`_UNSERVED`), the animation-only ones, the frame ones,
+and — on the animate path, where it knows the builder — every remaining keyword against that
+builder's signature. A keyword outside that set still reaches the tier on a **still** plot and is
+answered there, in the terms quoted above, because ``quickmap`` takes ``**kwargs`` and there is no
+signature to check it against (round-2 M2).
 
 Three translations are genuinely necessary, because the facade and this package count and spell
 things differently:
 
 * **``band`` is 0-based upstream and 1-based here.** pyramids documents the forwarded selector as
   "a **0-based** raster band index (band ``0`` is the first band, not band ``1``)", while
-  digitalearth's public ``band=`` is 1-based everywhere. Forwarded unchanged, ``band=0`` reached the
-  reader as index ``-1`` and raised ``band -1 is out of range for a 1-band dataset`` — the
-  off-by-one reported in #501.
+  digitalearth's public ``band=`` is 1-based everywhere. Forwarded unchanged, ``band=0`` — what a
+  facade sends for the *first* band — was refused on every tier, though not in the same words: the
+  web and HoloViz tiers answered ``band -1 is out of range for a 1-band dataset`` and the 3-D tier
+  ``Selection bands are 1-based; got 0`` (round-2 M9). That is the off-by-one reported in #501.
 * **``variable_name`` is this package's ``variable``.** The ``UgridDataset`` facade spells the mesh
   selector ``variable_name``; ``quickmap`` spells it ``variable``.
 * **``interval`` is milliseconds; the tiers take ``fps``.** The animation facades forward a frame
@@ -85,11 +94,16 @@ _UNSERVED: Mapping[str, str] = {
         "a three-band composite is built with Map.rgb_composite on the static tier, which this "
         "seam does not reach"
     ),
+    # Both say "0-based" deliberately: a caller following this advice passes `band=` as an extra
+    # keyword, and this seam shifts whatever it is given. Advising the keyword without naming its
+    # origin reintroduced #501's own off-by-one, one layer up (round-2 M7).
     "selectors": (
-        "a NetCDF slice is chosen here with variable= and band=, not with read-time selectors"
+        "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
+        "not with read-time selectors"
     ),
     "axes": (
-        "a NetCDF slice is chosen here with variable= and band=, not by naming its axes"
+        "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
+        "not by naming its axes"
     ),
 }
 
@@ -102,13 +116,23 @@ _ANIMATION_ONLY = ("bands", "animation_axis_values", "interval", "path")
 
 #: Keywords this module routes itself rather than handing to a builder: the scene frame. They are
 #: applied through each tier's own constructor argument or verb, which differ — so they must not be
-#: offered to the data builder, whose signature does not carry them.
+#: offered to the data builder, whose signature does not carry them. This is the **animate** path's
+#: rule: a still plot delegates the whole call to `quickmap`, which routes the frame itself, and
+#: only `title` is lifted out there (round-2 L2).
 _FRAME_KWARGS = ("crs", "title", "basemap")
 
 #: Tiers whose raster builder refuses `title` but whose scene owns `set_title`, so a still plot's
 #: title is applied after the scene is built. The HoloViz tier is absent because it has no
 #: `set_title` and its builder does accept `title` (executed on all three tiers, round-1 H2).
 _TITLE_AFTER_BUILD = frozenset({"web", "3d"})
+
+#: Keywords a tier can honour on the **built scene** when its data builder has no parameter for
+#: them. `colorbar` is in every facade's forwarded set and the still web path honours it, but
+#: `WebMap.timeslider` has no such parameter — so refusing it made a documented call impossible on
+#: the animate path while it worked on the still one (round-2 H2). Both animating tiers own a
+#: `colorbar()` verb, so it is applied there instead. A falsy value needs no call: neither tier
+#: shows a key unless one is asked for.
+_SCENE_FALLBACK = ("colorbar",)
 
 
 def _accepted_by(verb: Callable[..., Any]) -> tuple[frozenset[str], bool]:
@@ -151,8 +175,12 @@ def _accepted_by(verb: Callable[..., Any]) -> tuple[frozenset[str], bool]:
         _for_builder: Splits a forwarded set against what this reports.
     """
     parameters = inspect.signature(verb).parameters.values()
-    # Only parameters with a default: the one without is the data itself, and listing it in a
-    # refusal would invite a caller to pass their raster as a keyword.
+    # Only parameters with a default. The rule is "optional", not "is not the data" — those are
+    # different properties, and this package has a counter-example in `Scene3D.basemap`, whose
+    # keyword-only `bbox` is required and would be dropped here (round-2 N1). It holds for the
+    # verbs this routes to, whose one required parameter is the data, and it is what keeps a
+    # refusal from inviting a caller to pass their raster as a keyword. A required keyword the
+    # builder genuinely needs would be refused as unknown, which is loud rather than silent.
     named = {
         parameter.name
         for parameter in parameters
@@ -163,25 +191,31 @@ def _accepted_by(verb: Callable[..., Any]) -> tuple[frozenset[str], bool]:
     absorbs = any(
         parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters
     )
-    return frozenset(named) - {"self"}, absorbs
+    return frozenset(named), absorbs
 
 
 def _for_builder(
-    verb: Callable[..., Any], candidates: Mapping[str, Any], named: str
-) -> dict[str, Any]:
+    verb: Callable[..., Any],
+    candidates: Mapping[str, Any],
+    named: str,
+    fallback: tuple[str, ...] = (),
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Split ``candidates`` against what ``verb`` accepts, refusing what it cannot take.
 
     Args:
         verb: The builder the keywords are destined for.
         candidates: The forwarded keywords left after the frame ones are routed.
         named: How to describe the builder in a refusal, e.g. ``"animate(backend='web')"``.
+        fallback: Names that may be applied to the built scene instead of the builder, and so are
+            handed back rather than refused.
 
     Returns:
-        dict: the keywords to pass on.
+        tuple: the keywords to pass to the builder, and those left for the scene.
 
     Raises:
-        ValueError: when a candidate is one the builder does not accept — named here, with the ones
-            it does accept, instead of dropped in silence or sent on to a ``TypeError``.
+        ValueError: when a candidate is one neither the builder nor the scene can take — named
+            here, with the ones the builder does accept, instead of dropped in silence or sent on
+            to a ``TypeError``.
 
     Examples:
         - Keywords the builder takes are passed through:
@@ -190,19 +224,28 @@ def _for_builder(
             >>> def slider(data, *, band=1, cmap="viridis"):
             ...     ...
             >>> _for_builder(slider, {"band": 2, "cmap": "magma"}, "animate(backend='web')")
-            {'band': 2, 'cmap': 'magma'}
+            ({'band': 2, 'cmap': 'magma'}, {})
 
             ```
-        - One it does not take is refused by name, listing what it will accept:
+        - One it does not take, but the scene can, is handed back for the scene:
+            ```python
+            >>> from digitalearth.pyramids_backend import _for_builder
+            >>> def slider(data, *, band=1):
+            ...     ...
+            >>> _for_builder(slider, {"colorbar": True}, "animate(…)", fallback=("colorbar",))
+            ({}, {'colorbar': True})
+
+            ```
+        - One neither can take is refused by name, listing what the builder will accept:
             ```python
             >>> from digitalearth.pyramids_backend import _for_builder
             >>> def slider(data, *, band=1, cmap="viridis"):
             ...     ...
             >>> try:
-            ...     _for_builder(slider, {"colorbar": True}, "animate(backend='web')")
+            ...     _for_builder(slider, {"opacity": 0.5}, "animate(backend='web')")
             ... except ValueError as exc:
             ...     print(exc)
-            animate(backend='web') cannot apply colorbar=…; this render accepts band, cmap
+            animate(backend='web') cannot apply opacity=…; this render's parameters are band, cmap
 
             ```
 
@@ -211,22 +254,25 @@ def _for_builder(
         _refuse_unserved: The earlier gate, for keywords no tier could serve.
     """
     accepted, absorbs = _accepted_by(verb)
-    if absorbs:
-        return dict(candidates)
     taken: dict[str, Any] = {}
+    scened: dict[str, Any] = {}
     refused: list[str] = []
     for name, value in candidates.items():
-        if name in accepted:
+        if name in accepted or absorbs:
             taken[name] = value
+        elif name in fallback:
+            scened[name] = value
         else:
             refused.append(name)
     if refused:
+        # "takes", not "accepts for this data": the list is the builder's whole parameter set, and
+        # a raster series will not use its vector-choropleth half (round-2 L7).
         offered = ", ".join(sorted(accepted))
         wanted = ", ".join(f"{name}=…" for name in sorted(refused))
         raise ValueError(
-            f"{named} cannot apply {wanted}; this render accepts {offered}"
+            f"{named} cannot apply {wanted}; this render's parameters are {offered}"
         )
-    return taken
+    return taken, scened
 
 
 def _refuse_unserved(backend: str, forwarded: Mapping[str, Any]) -> None:
@@ -257,12 +303,71 @@ def _refuse_unserved(backend: str, forwarded: Mapping[str, Any]) -> None:
 
             ```
     """
-    for name, reason in _UNSERVED.items():
-        if name in forwarded:
-            raise ValueError(
-                f"plot({name}=…) cannot be served on backend={backend!r}: {reason}. Drop it for "
-                f"this backend, or render on backend='matplotlib'."
-            )
+    # Every match, not the first: `NetCDF.plot` forwards both `selectors` and `axes`, so stopping
+    # at one had a caller fix it and be refused again for the other (round-2 N3).
+    hit = [name for name in _UNSERVED if name in forwarded]
+    if hit:
+        reasons = "; ".join(f"{name}= — {_UNSERVED[name]}" for name in hit)
+        raise ValueError(
+            f"plot(…) cannot serve {len(hit)} argument(s) on backend={backend!r}: {reasons}. Drop "
+            f"them for this backend, or render on backend='matplotlib'."
+        )
+
+
+def _basemap_asked(value: Any, backend: str) -> Any:
+    """The basemap the tiers can actually act on, out of the shapes a facade may forward.
+
+    The facades type ``basemap`` as ``bool | str | dict | Basemap | None``; the tiers take ``True``
+    for their default, a provider name, an ``xyzservices`` provider or a keyed preset. A dict
+    reached the web tier and came back as ``AttributeError: 'dict' object has no attribute
+    'replace'``, while the 3-D and HoloViz tiers accepted it and drew no basemap at all — a
+    requested basemap silently missing, which is worse than the error (round-2 M3).
+
+    Args:
+        value: The ``basemap`` the facade forwarded.
+        backend: The backend the facade selected, named in a refusal.
+
+    Returns:
+        The value to hand the tier: ``True``, or a provider name.
+
+    Raises:
+        ValueError: for a shape no tier can act on, named rather than dropped.
+
+    Examples:
+        - ``True`` and a provider name pass straight through:
+            ```python
+            >>> from digitalearth.pyramids_backend import _basemap_asked
+            >>> _basemap_asked(True, "web"), _basemap_asked("CartoDB.Positron", "web")
+            (True, 'CartoDB.Positron')
+
+            ```
+        - A mapping carrying a provider name is unwrapped to that name:
+            ```python
+            >>> from digitalearth.pyramids_backend import _basemap_asked
+            >>> _basemap_asked({"provider": "CartoDB.Positron"}, "web")
+            'CartoDB.Positron'
+
+            ```
+        - A mapping naming no provider is refused, saying what the tiers take:
+            ```python
+            >>> from digitalearth.pyramids_backend import _basemap_asked
+            >>> try:
+            ...     _basemap_asked({"zoom": 3}, "web")
+            ... except ValueError as exc:
+            ...     print(str(exc).split("can apply: ")[1])
+            pass True for the tier's default, or the provider name (optionally as {'provider': '…'})
+
+            ```
+    """
+    if not isinstance(value, Mapping):
+        return value
+    named = value.get("provider") or value.get("name")
+    if named is None:
+        raise ValueError(
+            f"basemap={value!r} is not a shape backend={backend!r} can apply: pass True for the "
+            f"tier's default, or the provider name (optionally as {{'provider': '…'}})"
+        )
+    return named
 
 
 def _shifted_band(band: Any) -> int:
@@ -386,7 +491,9 @@ class _Forwarded:
         backend: The backend name the facade selected, as the seam passes it.
         animate: Whether this is an animation call (the facade forwards ``animate=True``).
         draw: The keywords to hand ``quickmap`` — translated, with the animation-only ones removed.
-            A read-only mapping, so the record really is the fixed record it claims to be.
+            A read-only mapping, so the record really is the fixed record it claims to be. That
+            makes the record unpicklable and un-deep-copyable, which nothing here needs: it is
+            built, read and dropped inside one call (round-2 L4).
         fps: Playback rate in frames per second, or ``None`` when the call named no ``interval``.
         path: Where to write the animation, or ``None`` when the caller named no ``path``.
         labels: The per-step labels the facade forwarded as ``animation_axis_values``.
@@ -647,75 +754,156 @@ def _refuse_unanimatable(plan: _Forwarded) -> None:
         )
 
 
-def _is_stack(obj: Any) -> bool:
-    """Whether ``obj`` carries the members a temporal builder steps through.
+def _animatable(obj: Any, plan: _Forwarded) -> tuple[Any, Any, tuple[str, ...]]:
+    """The stack a temporal builder can step through, and the labels for its steps.
 
-    A ``DatasetCollection`` holds its members on ``datasets``; a single ``Dataset`` does not, which
-    is the difference the stack builders depend on. Asked by attribute rather than by type so this
-    module keeps importing nothing from pyramids — discovery imports it on every
-    ``import pyramids``.
-
-    Args:
-        obj: The object the facade was called on.
-
-    Returns:
-        bool: ``True`` when it exposes members to step through.
-
-    Examples:
-        - An object holding members reads as a stack; a bare one does not:
-            ```python
-            >>> from digitalearth.pyramids_backend import _is_stack
-            >>> class Stack:
-            ...     datasets = ["a", "b"]
-            >>> class Single:
-            ...     pass
-            >>> _is_stack(Stack()), _is_stack(Single())
-            (True, False)
-
-            ```
-    """
-    return hasattr(obj, "datasets")
-
-
-def _refuse_unstacked(obj: Any, plan: _Forwarded) -> None:
-    """Refuse an animation of something with no steps, naming what this seam animates.
+    Asked by **type**, not by attribute. The duck-typed version of this (``hasattr(obj,
+    "datasets")``) misread a ``FeatureCollection``: it subclasses ``GeoDataFrame``, and pandas
+    resolves a column name as an attribute, so a vector layer with a column called ``datasets``
+    was refused as a multi-member stack and told to call a facade pyramids does not expose for
+    vectors (round-2 H1). The import is inside the function, so this module still imports nothing
+    from pyramids at discovery time.
 
     Args:
         obj: The object the facade was called on.
         plan: The translated call.
 
+    Returns:
+        tuple: the object to hand the temporal builder, the step labels to pass with it (``None``
+            when the data carries none of its own), and the keywords this consumed in choosing
+            them — so they are neither offered to the builder nor dropped in silence.
+
     Raises:
-        ValueError: when ``obj`` carries no members to step through.
-
-    Examples:
-        - A single raster has nothing to step through, and is told so:
-            ```python
-            >>> from digitalearth.pyramids_backend import _Forwarded, _refuse_unstacked
-            >>> plan = _Forwarded.from_facade("interactive", {"animate": True})
-            >>> class Single:
-            ...     pass
-            >>> try:
-            ...     _refuse_unstacked(Single(), plan)
-            ... except ValueError as exc:
-            ...     print(str(exc).split(":")[1].split(".")[0].strip())
-            a Single carries no steps to animate
-
-            ```
+        ValueError: when ``obj`` is nothing either tier can step through.
     """
-    if not _is_stack(obj):
+    from pyramids.dataset.collection import DatasetCollection
+    from pyramids.netcdf import NetCDF
+
+    if isinstance(obj, DatasetCollection):
+        return obj, None, ()
+    if isinstance(obj, NetCDF):
+        stack, labels = _netcdf_stack(obj, plan)
+        # `variable` picked which variable to slice, so it has done its job here; left in, it
+        # reaches `timecube`, whose `**opts` forwards it to HoloViews: `'variable' is not an option
+        # Image takes on the bokeh backend` (round-2 H3/M1).
+        return stack, labels, ("variable",)
+    if plan.backend == "web" and _is_vector(obj):
+        # `timeslider` documents a vector series as one of the two forms it takes: one layer per
+        # step, sharing a colour classification across the series.
+        return obj, None, ()
+    raise ValueError(
+        f"animate(backend={plan.backend!r}) steps through a stack, which "
+        f"{type(obj).__name__} is not. Pass a DatasetCollection of the steps, or a NetCDF whose "
+        f"variable carries the axis to step along"
+    )
+
+
+def _is_vector(obj: Any) -> bool:
+    """Whether ``obj`` is a vector layer the web tier's slider can step through.
+
+    Args:
+        obj: The object the facade was called on.
+
+    Returns:
+        bool: ``True`` for a ``FeatureCollection`` or the ``GeoDataFrame`` it subclasses.
+    """
+    try:
+        from geopandas import GeoDataFrame
+    except ImportError:  # pragma: no cover - geopandas arrives with pyramids
+        return False
+    return isinstance(obj, GeoDataFrame)
+
+
+def _netcdf_stack(nc: Any, plan: _Forwarded) -> tuple[Any, Any]:
+    """Slice a NetCDF variable's extra axis into a collection of steps, with its own labels.
+
+    Neither tier's temporal builder takes a NetCDF: both step through a collection's members. So
+    the variable's bands — its time steps — are read into one in-memory ``Dataset`` each. Before
+    this, every NetCDF animation was refused with a message naming pyramids' internal ``Container``
+    class and claiming a 624-step variable carried no steps (round-2 H3).
+
+    The whole axis is materialised, which is the cost of animating it: roughly 40 MB for the 624
+    steps of ``examples/data/global/ersstv5.nc``.
+
+    Args:
+        nc: The ``NetCDF`` container, or a variable already pinned out of one.
+        plan: The translated call. ``variable`` names the variable to animate; ``axis`` names the
+            dimension whose values label the steps.
+
+    Returns:
+        tuple: a ``DatasetCollection`` of the steps, and the axis values that label them.
+
+    Raises:
+        ValueError: when the container exposes no variable to animate, or the chosen variable
+            carries a single band and so has no axis to step along.
+    """
+    from pyramids.dataset import Dataset, GeoReference
+    from pyramids.dataset.collection import DatasetCollection
+
+    variable = _netcdf_variable(nc, plan)
+    steps = int(variable.band_count)
+    if steps < 2:
         raise ValueError(
-            f"animate(backend={plan.backend!r}): a {type(obj).__name__} carries no steps to "
-            f"animate. Pass a DatasetCollection of the steps, or animate on "
-            f"backend='matplotlib', which animates a single raster's bands"
+            f"animate(backend={plan.backend!r}): the variable carries one band, so it has no axis "
+            f"to step along. Animate a variable with a time or level dimension"
         )
+    reference = GeoReference(geo=variable.geotransform, epsg=variable.epsg)
+    # `read_array(band=…)` is 0-based here: this is pyramids' own reader, not the facade's
+    # 1-based selector, so the loop counts from zero deliberately.
+    members = [
+        Dataset.from_array(variable.read_array(band=step), geo_ref=reference)
+        for step in range(steps)
+    ]
+    return DatasetCollection(members[0], steps, datasets=members), _axis_values(
+        variable, plan
+    )
+
+
+def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
+    """The variable to animate: the one named, the one ``nc`` already is, or the container's first.
+
+    Args:
+        nc: The container, or a variable already pinned out of one.
+        plan: The translated call.
+
+    Returns:
+        The variable to slice.
+
+    Raises:
+        ValueError: when the container exposes no variables.
+    """
+    named = plan.draw.get("variable")
+    carried = list(getattr(nc, "variable_names", None) or [])
+    if not carried:
+        # A pinned subset reports no variable names of its own because it *is* the variable, which
+        # is the same test `base.sources.extractors` makes of a subset.
+        return nc
+    if named is None:
+        # The same choice the still path makes, so `plot` and `animate` draw the same variable.
+        named = carried[0]
+    return nc.get_variable(named)
+
+
+def _axis_values(variable: Any, plan: _Forwarded) -> Any:
+    """The values along the animated axis, used to label the steps.
+
+    Args:
+        variable: The variable being sliced.
+        plan: The translated call, whose ``axis`` names the dimension when the caller did.
+
+    Returns:
+        The axis values, or ``None`` when the variable exposes none.
+    """
+    if plan.axis is not None:
+        return variable.get_dimension_values(plan.axis)
+    return variable.get_time_values()
 
 
 def _animated(obj: Any, plan: _Forwarded) -> Any:
     """Build the tier's temporal scene and return its animation.
 
     Args:
-        obj: The pyramids object the facade was called on — a stack, since a single field has no
-            steps to animate.
+        obj: The pyramids object the facade was called on.
         plan: The translated call.
 
     Returns:
@@ -723,41 +911,46 @@ def _animated(obj: Any, plan: _Forwarded) -> Any:
 
     Raises:
         ValueError: propagated from :func:`_refuse_unanimatable` for a tier with no verb to drive,
-            from :func:`_refuse_unstacked` for an object with no steps, or from
+            from :func:`_animatable` for data with no steps, or from
             :meth:`_Forwarded.destination` for a web animation with no destination.
     """
     _refuse_unanimatable(plan)
     if plan.backend == "interactive":
-        _refuse_unstacked(obj, plan)
-        return _animated_interactive(obj, plan)
+        stack, labels, consumed = _animatable(obj, plan)
+        return _animated_interactive(stack, plan, labels, consumed)
     # The destination is resolved first, before the tier is imported and before the payload is
     # examined: it is a property of the call rather than of the data, so a pathless animation is
     # answered the same way whatever was passed, and never pays for the engine.
     destination = plan.destination()
-    _refuse_unstacked(obj, plan)
-    return _animated_web(obj, plan, destination)
+    stack, labels, consumed = _animatable(obj, plan)
+    return _animated_web(stack, plan, destination, labels, consumed)
 
 
-def _animated_interactive(obj: Any, plan: _Forwarded) -> Any:
+def _animated_interactive(
+    obj: Any, plan: _Forwarded, labels: Any, consumed: tuple[str, ...] = ()
+) -> Any:
     """Animate a stack on the HoloViz tier: a time cube, then its player or its export.
 
     Args:
         obj: The stack to animate.
         plan: The translated call.
+        labels: Step labels the data carried, used when the call named none.
+        consumed: Keywords already spent choosing the data, so the builder is not offered them.
 
     Returns:
         A Panel player when the call named no ``path``, else whatever ``save_animation`` returns
         for the destination it wrote.
 
     Raises:
-        ValueError: for a keyword neither the scene nor ``timecube`` can take.
+        ValueError: for a keyword neither ``timecube`` nor the scene can take.
     """
     from digitalearth.interactive import InteractiveMap
 
     frame = _scene_kwargs(plan, InteractiveMap)
     scene = InteractiveMap(**frame)
-    scene.timecube(obj, **_animation_kwargs(plan, scene.timecube))
-    _framed(scene, plan, frame)
+    drawn, scened = _animation_kwargs(plan, scene.timecube, labels, consumed)
+    scene.timecube(obj, **drawn)
+    _framed(scene, plan, frame, scened)
     if plan.path is not None:
         if plan.fps is None:
             return scene.save_animation(plan.path)
@@ -765,7 +958,13 @@ def _animated_interactive(obj: Any, plan: _Forwarded) -> Any:
     return scene.play() if plan.fps is None else scene.play(fps=plan.fps)
 
 
-def _animated_web(obj: Any, plan: _Forwarded, destination: str) -> Any:
+def _animated_web(
+    obj: Any,
+    plan: _Forwarded,
+    destination: str,
+    labels: Any,
+    consumed: tuple[str, ...] = (),
+) -> Any:
     """Animate a stack on the MapLibre tier: a time slider, then the written file.
 
     Args:
@@ -773,38 +972,48 @@ def _animated_web(obj: Any, plan: _Forwarded, destination: str) -> Any:
         plan: The translated call.
         destination: Where to write the animation, already resolved by
             :meth:`_Forwarded.destination` so the refusal precedes the engine import.
+        labels: Step labels the data carried, used when the call named none.
+        consumed: Keywords already spent choosing the data, so the builder is not offered them.
 
     Returns:
         Whatever ``save_animation`` returns for the destination it wrote.
 
     Raises:
-        ValueError: for a keyword neither the scene nor ``timeslider`` can take — ``colorbar`` is
-            the one the facades forward that this tier's slider has no parameter for.
+        ValueError: for a keyword neither ``timeslider`` nor the scene can take.
     """
     from digitalearth.web import WebMap
 
     frame = _scene_kwargs(plan, WebMap)
     scene = WebMap(**frame)
-    scene.timeslider(obj, **_animation_kwargs(plan, scene.timeslider))
-    _framed(scene, plan, frame)
+    drawn, scened = _animation_kwargs(plan, scene.timeslider, labels, consumed)
+    scene.timeslider(obj, **drawn)
+    _framed(scene, plan, frame, scened)
     if plan.fps is None:
         return scene.save_animation(destination)
     return scene.save_animation(destination, fps=plan.fps)
 
 
-def _animation_kwargs(plan: _Forwarded, verb: Callable[..., Any]) -> dict[str, Any]:
+def _animation_kwargs(
+    plan: _Forwarded,
+    verb: Callable[..., Any],
+    labels: Any = None,
+    consumed: tuple[str, ...] = (),
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """The data keywords for a temporal builder, checked against what it really accepts.
 
     Args:
         plan: The translated call.
         verb: The tier's temporal builder, bound to its scene.
+        labels: Step labels the data carried; used only when the call named none of its own, so a
+            caller's ``animation_axis_values`` always wins over a NetCDF's time axis.
+        consumed: Keywords already spent choosing the data, left out rather than passed on.
 
     Returns:
-        dict: the keywords to pass, including the step ``labels`` and the ``kdim`` a named
-            animation axis asks for.
+        tuple: the keywords to pass the builder, and those the scene applies instead.
 
     Raises:
-        ValueError: for a forwarded keyword the builder cannot apply.
+        ValueError: for a forwarded keyword neither can apply, or an ``animate="…"`` axis that
+            contradicts an explicit ``kdim``.
 
     Examples:
         - The frame keywords are held back and the step labels folded in:
@@ -816,8 +1025,9 @@ def _animation_kwargs(plan: _Forwarded, verb: Callable[..., Any]) -> dict[str, A
             ...     "interactive",
             ...     {"animate": True, "title": "T", "cmap": "magma", "animation_axis_values": [1, 2]},
             ... )
-            >>> sorted(_animation_kwargs(plan, timecube).items())
-            [('cmap', 'magma'), ('labels', [1, 2])]
+            >>> drawn, scened = _animation_kwargs(plan, timecube)
+            >>> sorted(drawn.items()), scened
+            ([('cmap', 'magma'), ('labels', [1, 2])], {})
 
             ```
         - A named animation axis arrives as the builder's ``kdim``:
@@ -826,8 +1036,18 @@ def _animation_kwargs(plan: _Forwarded, verb: Callable[..., Any]) -> dict[str, A
             >>> def timecube(collection, *, kdim="time", band=1):
             ...     ...
             >>> plan = _Forwarded.from_facade("interactive", {"animate": "step"})
-            >>> _animation_kwargs(plan, timecube)
+            >>> _animation_kwargs(plan, timecube)[0]
             {'kdim': 'step'}
+
+            ```
+        - A keyword the builder has no parameter for, but the scene can apply, is handed to it:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _animation_kwargs
+            >>> def slider(features, *, band=1):
+            ...     ...
+            >>> plan = _Forwarded.from_facade("web", {"animate": True, "colorbar": True})
+            >>> _animation_kwargs(plan, slider)
+            ({}, {'colorbar': True})
 
             ```
 
@@ -835,14 +1055,26 @@ def _animation_kwargs(plan: _Forwarded, verb: Callable[..., Any]) -> dict[str, A
         _for_builder: Checks these against what the builder accepts.
         _scene_kwargs: The frame half, which this one deliberately leaves out.
     """
+    held_back = set(_FRAME_KWARGS) | set(consumed)
     candidates = {
-        name: value for name, value in plan.draw.items() if name not in _FRAME_KWARGS
+        name: value for name, value in plan.draw.items() if name not in held_back
     }
-    if plan.labels is not None:
-        candidates["labels"] = plan.labels
+    held = plan.labels if plan.labels is not None else labels
+    if held is not None:
+        candidates["labels"] = held
     if plan.axis is not None:
+        asked = candidates.get("kdim")
+        if asked is not None and asked != plan.axis:
+            # Overwriting it would animate a different dimension than the caller named in the
+            # keyword they passed explicitly (round-2 M4).
+            raise ValueError(
+                f"animate={plan.axis!r} and kdim={asked!r} name different axes to step along; "
+                f"pass one of them"
+            )
         candidates["kdim"] = plan.axis
-    return _for_builder(verb, candidates, f"animate(backend={plan.backend!r})")
+    return _for_builder(
+        verb, candidates, f"animate(backend={plan.backend!r})", _SCENE_FALLBACK
+    )
 
 
 def _scene_kwargs(plan: _Forwarded, constructor: Callable[..., Any]) -> dict[str, Any]:
@@ -881,7 +1113,12 @@ def _scene_kwargs(plan: _Forwarded, constructor: Callable[..., Any]) -> dict[str
     }
 
 
-def _framed(scene: Any, plan: _Forwarded, applied: Mapping[str, Any]) -> None:
+def _framed(
+    scene: Any,
+    plan: _Forwarded,
+    applied: Mapping[str, Any],
+    scened: Mapping[str, Any] | None = None,
+) -> None:
     """Apply the frame keywords the constructor could not take, through the scene's own verbs.
 
     ``basemap`` is a verb on every tier that has one, and a title is a verb on the tiers whose
@@ -889,10 +1126,16 @@ def _framed(scene: Any, plan: _Forwarded, applied: Mapping[str, Any]) -> None:
     what raised ``RasterMixin.field() got an unexpected keyword argument 'title'`` on the web tier
     and a raw PyVista ``"title" is an invalid keyword argument`` on the 3-D one.
 
+    Two of the refusals below cannot fire through the tiers this routes to today — both animating
+    tiers own ``basemap`` and ``colorbar``, and the web scene owns ``set_title`` — so they guard a
+    scene that loses a verb rather than describing live behaviour (round-2 L3).
+
     Args:
         scene: The built tier scene.
         plan: The translated call.
         applied: The keywords the constructor already consumed, so a title is not set twice.
+        scened: Keywords the data builder had no parameter for, which this tier applies through a
+            verb on the built scene instead — ``colorbar`` is the one the facades forward.
 
     Raises:
         ValueError: when a frame keyword has no route at all on this tier — named rather than
@@ -937,7 +1180,8 @@ def _framed(scene: Any, plan: _Forwarded, applied: Mapping[str, Any]) -> None:
             raise ValueError(
                 f"basemap= cannot be applied on backend={plan.backend!r}: this tier has no basemap"
             )
-        basemap() if plan.basemap is True else basemap(plan.basemap)
+        asked = _basemap_asked(plan.basemap, plan.backend)
+        basemap() if asked is True else basemap(asked)
     if plan.title is not None and "title" not in applied:
         set_title = getattr(scene, "set_title", None)
         if set_title is None:
@@ -946,6 +1190,90 @@ def _framed(scene: Any, plan: _Forwarded, applied: Mapping[str, Any]) -> None:
                 f"title argument nor a set_title verb"
             )
         set_title(plan.title)
+    for name, value in (scened or {}).items():
+        if not value:
+            # Neither tier shows a key unless asked, so a falsy `colorbar` needs no call — and
+            # calling the verb to say "no" would add the very thing it is refusing.
+            continue
+        verb = getattr(scene, name, None)
+        if verb is None:
+            raise ValueError(
+                f"{name}= cannot be applied on backend={plan.backend!r}: neither this render nor "
+                f"the scene takes it"
+            )
+        verb()
+
+
+def _categorical(obj: Any, column: str) -> bool:
+    """Whether ``column`` holds labels rather than numbers.
+
+    Read off the column's dtype kind rather than through pandas' type helpers, so this stays a
+    two-line check on the array interface every vector layer already exposes.
+
+    Args:
+        obj: The vector layer the facade was called on.
+        column: The attribute column named by the caller.
+
+    Returns:
+        bool: ``True`` when the column's values are strings or objects.
+
+    Examples:
+        - A string column is categorical; a numeric one is not:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _categorical
+            >>> layer = {"name": np.array(["a", "b"]), "pop": np.array([1.0, 2.0])}
+            >>> _categorical(layer, "name"), _categorical(layer, "pop")
+            (True, False)
+
+            ```
+        - A column the layer does not carry is not claimed either way:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _categorical
+            >>> _categorical({"pop": np.array([1.0])}, "absent")
+            False
+
+            ```
+    """
+    try:
+        values = obj[column]
+    except Exception:  # noqa: BLE001 - any lookup failure means "nothing to classify here"
+        return False
+    kind = getattr(getattr(values, "dtype", None), "kind", "")
+    return kind in ("O", "U", "S")
+
+
+def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
+    """Make a label-valued ``column`` drawable, or refuse it on the tier that cannot.
+
+    ``column`` is the ``FeatureCollection.plot`` facade's own selector, and colouring by a *label*
+    column is the ordinary reason to pass it. Forwarded alone it reached the tier's classifier as a
+    number: ``could not convert string to float: 'Baden-Württemberg'`` on web and 3-D. The web tier
+    draws it once told the scale is categorical; the 3-D tier has no categorical fill at all, and
+    both ways round it produced the same unreadable message (round-2 M10).
+
+    Args:
+        obj: The vector layer the facade was called on.
+        backend: The backend the facade selected.
+        draw: The keywords bound for the builder, modified in place.
+
+    Raises:
+        ValueError: on ``backend="3d"``, which cannot colour a label column by any route.
+    """
+    column = draw.get("column")
+    if column is None or not _categorical(obj, column):
+        return
+    if backend == "3d":
+        raise ValueError(
+            f"column={column!r} holds labels, and backend='3d' has no categorical fill: it "
+            f"colours by a number. Draw the labels on backend='web' or 'interactive', or pass a "
+            f"numeric column"
+        )
+    if backend == "web":
+        # Executed: the web tier draws a label column once the scale is named categorical, and the
+        # facade forwards no `scheme`, so there is no way for the caller to say it themselves.
+        draw.setdefault("scheme", "categorical")
 
 
 def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
@@ -960,24 +1288,30 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
         The tier's own object — a scene, a player, or a written animation path.
 
     Raises:
-        ValueError: for a keyword this seam cannot serve, an animation the tier cannot drive, or a
-            still plot of a multi-member stack, which draws one field.
+        ValueError: for a keyword this seam cannot serve, an animation the tier cannot drive, a
+            still plot of a multi-member stack, which draws one field, or a label-valued
+            ``column`` on the tier with no categorical fill.
     """
     plan = _Forwarded.from_facade(backend, forwarded)
     if plan.animate:
         return _animated(obj, plan)
     # Imported here, not at module scope: discovery imports this module, and `quickmap` reaches the
     # tier packages, whose engines must not be pulled into a bare `import pyramids`.
+    from pyramids.dataset.collection import DatasetCollection
+
     from digitalearth import quickmap
 
-    if _is_stack(obj):
-        # `DatasetCollection.plot(backend=…)` is one of the facades, and `quickmap` cannot draw a
-        # collection — it answered with `TypeError: quickplot cannot draw a DatasetCollection`,
-        # naming a function the caller never called. Said here in terms of the call they did make
-        # (round-1 M5).
+    # Asked by type, for the reason given in `_animatable`: the attribute test this used to make
+    # misread a `FeatureCollection`, whose columns resolve as attributes (round-2 H1).
+    #
+    # Not reachable through the facades as they stand: `DatasetCollection.plot(backend=…)` forwards
+    # `animate=True` either way, so a collection always arrives on the animate path (round-2 M6).
+    # Kept for a direct call, and because `quickmap` answers a collection with
+    # `TypeError: quickplot cannot draw a DatasetCollection` — a function the caller never called.
+    if isinstance(obj, DatasetCollection):
         raise ValueError(
-            f"plot(backend={backend!r}) draws one field, and a "
-            f"{type(obj).__name__} carries several. Select one member and plot that, or call "
+            f"plot(backend={backend!r}) draws one field, and {type(obj).__name__} carries "
+            f"several. Select one member and plot that, or call "
             f"animate(backend={backend!r}) to step through them"
         )
     draw = dict(plan.draw)
@@ -988,6 +1322,17 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
     # HoloViz tier has no `set_title`, so there it stays a builder keyword, which is the route that
     # already works (round-1 H2/L6).
     held = draw.pop("title", None) if backend in _TITLE_AFTER_BUILD else None
+    if held is not None and not isinstance(held, str):
+        # Checked before the render, not after. Set on the finished scene, a bad title cost the
+        # whole picture: `three_d(ds, title=3)` built the Scene3D and *then* raised, while the web
+        # tier took the int and returned a map — two answers to the same call (round-2 L5).
+        raise ValueError(
+            f"title={held!r} is not a heading; pass a string (backend={backend!r} sets it on the "
+            f"finished scene)"
+        )
+    _classified(obj, backend, draw)
+    if "basemap" in draw:
+        draw["basemap"] = _basemap_asked(draw["basemap"], backend)
     scene = quickmap(obj, backend=backend, **draw)
     if held is not None:
         scene.set_title(held)
@@ -1026,8 +1371,8 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
             >>> try:
             ...     interactive("a-dataset", backend="interactive", rgb_options={})
             ... except ValueError as exc:
-            ...     print(str(exc).split(": ")[1].split(". Drop")[0])
-            a three-band composite is built with Map.rgb_composite on the static tier, which this seam does not reach
+            ...     print(str(exc).split("— ")[1].split(", which")[0])
+            a three-band composite is built with Map.rgb_composite on the static tier
 
             ```
         - An animation keyword on a still plot is named rather than ignored, which is what it used

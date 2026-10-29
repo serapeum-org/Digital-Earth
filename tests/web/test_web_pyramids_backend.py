@@ -73,19 +73,35 @@ class TestAnimateThroughTheSeam:
             f"the slider should be built once, got {len(built)} times"
         )
 
-    def test_a_colorbar_on_an_animation_is_refused_by_name(self, stack):
-        """``colorbar`` is forwarded by the facades but this tier's slider has no such parameter.
+    @pytest.mark.parametrize("asked", [True, False])
+    def test_a_colorbar_on_an_animation_is_applied_not_refused(
+        self, stack, asked, monkeypatch
+    ):
+        """``colorbar`` works on an animation, as it already did on a still plot.
 
         Args:
             stack: A three-step collection.
+            asked: Whether a key was asked for.
+            monkeypatch: pytest's patcher.
 
         Test scenario:
-            Passed straight through it raised ``TemporalMixin.timeslider() got an unexpected keyword
-            argument 'colorbar'`` from inside the tier. The adapter now checks the builder's real
-            signature and refuses by name, listing what the render does accept (round-1 H1).
+            ``colorbar`` is in every facade's forwarded set and the still web path honours it, but
+            this tier's slider has no such parameter — so round 1 refused it, turning a ``TypeError``
+            into a nicer ``ValueError`` without making the documented call work, and a test pinned
+            that refusal as intended. The scene owns a ``colorbar()`` verb, so it is applied there
+            (round-2 H2). A falsy value needs no call: this tier shows no key unless asked.
         """
-        with pytest.raises(ValueError, match="cannot apply colorbar"):
-            web(stack, backend="web", animate=True, path="out.gif", colorbar=True)
+        from digitalearth.web import WebMap
+
+        keyed = []
+        monkeypatch.setattr(WebMap, "save_animation", lambda self, path, **k: path)
+        monkeypatch.setattr(
+            WebMap, "colorbar", lambda self, *a, **k: keyed.append(True) or self
+        )
+        web(stack, backend="web", animate=True, path="out.gif", colorbar=asked)
+        assert keyed == ([True] if asked else []), (
+            f"colorbar={asked} should {'add' if asked else 'not add'} a key, got {keyed}"
+        )
 
     def test_a_still_plots_title_reaches_the_scene_not_the_builder(self):
         """``title`` is set on the finished scene, where the raster builder would have refused it.

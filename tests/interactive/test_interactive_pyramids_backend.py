@@ -294,3 +294,59 @@ class TestKeywordsTheBuilderAccepts:
         assert seen.get("labels") == [1, 2, 3], (
             f"the step labels should reach the builder: {seen}"
         )
+
+
+class TestNetcdfAnimation:
+    """A NetCDF variable's own axis, stepped through on this tier."""
+
+    def test_a_netcdf_variable_animates_over_its_time_axis(self):
+        """``animate="time"`` slices the variable's steps and returns a player over them.
+
+        Test scenario:
+            ``NetCDF.plot`` is the only facade that forwards a named axis, and
+            ``NetCDF.animate(dim=…)`` is implemented as ``plot(animate=dim)``. Both were refused
+            outright, with a message naming pyramids' internal ``Container`` class and claiming a
+            624-step variable carried no steps (round-2 H3). Neither tier's builder takes a NetCDF,
+            so the variable's bands are read into one ``Dataset`` per step.
+        """
+        from pyramids.netcdf import NetCDF
+
+        nc = NetCDF.read_file("examples/data/global/ersstv5.nc")
+        app = interactive(nc, backend="interactive", animate="time", variable="sst")
+        assert isinstance(app, pn.viewable.Viewable), (
+            f"expected a player, got {type(app)}"
+        )
+
+    def test_the_variables_own_axis_values_label_the_steps(self):
+        """The slider is labelled with the variable's time values, not step positions.
+
+        Test scenario:
+            ``get_time_values()`` is pyramids' public accessor for the axis, so the steps carry the
+            times they stand for. Read back off the player's widget rather than trusted.
+        """
+        from pyramids.netcdf import NetCDF
+
+        nc = NetCDF.read_file("examples/data/global/ersstv5.nc")
+        expected = list(nc.get_variable("sst").get_time_values())
+        app = interactive(nc, backend="interactive", animate="time", variable="sst")
+        players = app.select(pn.widgets.DiscretePlayer)
+        assert players, "an animation must come back with a player widget"
+        assert len(players[0].options) == len(expected), (
+            f"the player should span all {len(expected)} steps, got {len(players[0].options)}"
+        )
+
+    def test_the_variable_keyword_is_spent_choosing_the_variable(self):
+        """``variable`` picks the variable and is not also handed to the builder.
+
+        Test scenario:
+            Left in, it reached ``timecube``, whose ``**opts`` forwards the remainder to HoloViews:
+            ``'variable' is not an option Image takes on the bokeh backend`` — raised after the
+            whole 624-step cube had been built (round-2 H3/M1).
+        """
+        from pyramids.netcdf import NetCDF
+
+        nc = NetCDF.read_file("examples/data/global/ersstv5.nc")
+        app = interactive(nc, backend="interactive", animate=True, variable="sst")
+        assert isinstance(app, pn.viewable.Viewable), (
+            f"expected a player, got {type(app)}"
+        )
