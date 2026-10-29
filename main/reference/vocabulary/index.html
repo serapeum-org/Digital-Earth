@@ -42575,9 +42575,11 @@ with <code>tripcolor</code> — each face shaded its own colour. The interactive
 render, so they refuse a mesh by name rather than drawing it as something else. Note this is about the mesh
 <em>input</em>: the <code>unstructured</code> row of the <a href="../support-matrix/">support matrix</a> is about the triangulated <strong>verbs</strong>
 (<code>tricontourf</code> / <code>tricontour</code> / <code>tripcolor</code>), which the interactive tier does have for scattered points.</p>
-<p>A mesh that declares a CRS can only be drawn in a display CRS that names an EPSG code, because pyramids warps a
-mesh to a code; an orthographic or Robinson display CRS is refused by name. That limit is upstream
-(serapeum-org/pyramids-core#1404), and #507 tracks what changes here once it lifts.</p>
+<p>A mesh that declares a CRS is drawn in any display CRS <code>pyproj.CRS.from_user_input</code> accepts — an EPSG code, a
+<code>"+proj=..."</code> string, WKT or an <code>ESRI:</code> code — because pyramids (pyramids-core &gt;= 0.73.0,
+serapeum-org/pyramids-core#1404) warps a mesh to a CRS given in any form. An orthographic, Robinson or Mollweide
+display CRS is drawn like any other: the warp sends nodes beyond a globe's limb to non-finite coordinates, and the
+triangles leaning on them are then dropped, as off-view geometry is for every layer family.</p>
 
 
 <div class="doc doc-object doc-class">
