@@ -116,6 +116,41 @@ stack.animate(backend="web", interval=120, path="flood.gif")           # written
   `Scene3D.orbit` sweeps the camera over a static scene, so neither can be driven from a plot call's
   keywords. Build the scene with digitalearth and call one of them directly.
 
+## What you can reach through `plot(backend=…)`, and what needs an import
+
+The call hands back the tier's **own object**, exactly as `ds.plot()` hands back a cleopatra glyph —
+so every method on that object is in reach by chaining:
+
+```python
+scene = ds.plot(backend="3d", band=0)
+scene.basemap().colorbar().orbit("fly.gif", n_frames=60)
+```
+
+Construction-time options are in reach too, because they are routed to the scene's constructor:
+
+```python
+ds.plot(backend="web", band=0, center=(31.0, 30.0), zoom=6, style="dark", height=700)
+ds.plot(backend="interactive", band=0, width=1100, height=700, tiles=True)
+ds.plot(backend="matplotlib", band=0, figsize=(12, 8), domain=(-20, 40, 0, 60))
+```
+
+Two things need `import digitalearth`, and no keyword can change that:
+
+- **Composition across scenes.** One call returns one scene, so `grid`, `facet` and `quickpanels`
+  — which build their own panels — cannot come back from it. The colour-bar sharers take
+  already-built scenes, though, so they compose what `plot` returned:
+
+    ```python
+    import digitalearth as de
+
+    left, right = ds1.plot(), ds2.plot()
+    de.shared_colorbars(left.fig, [left, right])
+    ```
+
+- **Everything that is not a scene**: the charts and statistical series (`bar`, `boxplot`,
+  `envelope`, `stripes`, `quantile_band`), `TexturedGlobe`, `TimeSeries`, `Climatology`, the batch
+  renderer and HTML gallery (`Batch`, `gallery`), and `to_backend`.
+
 ## A mesh is not drawn on these tiers
 
 `UgridDataset.plot(backend=…)` is refused before any keyword is read: only the matplotlib tier has a
