@@ -1215,6 +1215,10 @@ def _scene_kwargs(plan: _Forwarded, constructor: Callable[..., Any]) -> dict[str
             [('style', 'dark'), ('zoom', 6)]
 
             ```
+
+    See Also:
+        digitalearth.api._built: The same split on the still path, where `quickmap` builds the scene.
+        _framed: Applies the frame keywords this one's constructor could not take.
     """
     accepted, _absorbs = _accepted_by(constructor)
     taken = {

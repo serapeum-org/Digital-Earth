@@ -1212,6 +1212,10 @@ def _built(scene_class: Any, kwargs: dict[str, Any], **seeded: Any) -> Any:
             (3857, {'zoom': 6})
 
             ```
+
+    See Also:
+        digitalearth.pyramids_backend._scene_kwargs: The same split on the plugin's animate path,
+            which builds its scene directly rather than through `quickmap`.
     """
     import inspect
 
