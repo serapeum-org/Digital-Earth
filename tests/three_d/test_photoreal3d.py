@@ -491,6 +491,28 @@ class TestPointsToSpheres:
         with pytest.warns(UserWarning, match="layer_7"):
             _pr._points_to_spheres(cloud, radius=0.2, layer="layer_7")
 
+    def test_a_point_cloud_glyph_keeps_distinct_mapped_colours(self):
+        """A point cloud's per-point values map through the actor LUT to varied sphere colours, not a solid
+        fallback — the end-to-end colour survival #510 relies on (glyph -> re-triangulate -> _vertex_rgb)."""
+        from digitalearth.three_d.photoreal import (
+            _points_to_spheres,
+            _triangulated_surface,
+            _vertex_rgb,
+        )
+
+        scene = Scene3D(off_screen=True)
+        pts = np.random.default_rng(9).random((30, 3)) * 10.0
+        scene.point_cloud(pts, values=pts[:, 2], eye_dome_lighting=False)
+        mesh, actor = scene.layers[0]
+        rgb = _vertex_rgb(
+            _triangulated_surface(_points_to_spheres(mesh, radius=0.3)), actor
+        )
+        assert rgb.shape[1] == 3, rgb.shape
+        assert len(np.unique(rgb, axis=0)) > 1, (
+            "the point cloud's colours must vary, not collapse to the solid fallback"
+        )
+        scene.close()
+
 
 class TestTriangulatedSurface:
     """`_triangulated_surface` triangulates a mesh, returning a face-less surface for a points-only cloud (#510)."""
