@@ -775,6 +775,25 @@ def _animatable(obj: Any, plan: _Forwarded) -> tuple[Any, Any, tuple[str, ...]]:
 
     Raises:
         ValueError: when ``obj`` is nothing either tier can step through.
+
+    Examples:
+        - Something that is neither a stack nor a NetCDF is refused, naming both shapes:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _animatable
+            >>> class Neither:
+            ...     pass
+            >>> plan = _Forwarded.from_facade("interactive", {"animate": True})
+            >>> try:
+            ...     _animatable(Neither(), plan)
+            ... except ValueError as exc:
+            ...     print(str(exc).split(". ")[0].split(") ")[1])
+            steps through a stack, which Neither is not
+
+            ```
+
+    See Also:
+        _netcdf_stack: Slices the NetCDF form into the stack this returns.
+        _is_vector: The web-only second form.
     """
     from pyramids.dataset.collection import DatasetCollection
     from pyramids.netcdf import NetCDF
@@ -806,6 +825,23 @@ def _is_vector(obj: Any) -> bool:
 
     Returns:
         bool: ``True`` for a ``FeatureCollection`` or the ``GeoDataFrame`` it subclasses.
+
+    Examples:
+        - A plain object is no vector layer:
+            ```python
+            >>> from digitalearth.pyramids_backend import _is_vector
+            >>> _is_vector(object())
+            False
+
+            ```
+        - A GeoDataFrame is, which is what makes it the web slider's second accepted form:
+            ```python
+            >>> from geopandas import GeoDataFrame
+            >>> from digitalearth.pyramids_backend import _is_vector
+            >>> _is_vector(GeoDataFrame({"a": [1]}))
+            True
+
+            ```
     """
     try:
         from geopandas import GeoDataFrame
@@ -871,6 +907,45 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
 
     Raises:
         ValueError: when the container exposes no variables.
+
+    Examples:
+        - A container hands back the variable the call named:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _netcdf_variable
+            >>> class Container:
+            ...     variable_names = ["time_bnds", "sst"]
+            ...     def get_variable(self, name):
+            ...         return f"<{name}>"
+            >>> plan = _Forwarded.from_facade(
+            ...     "interactive", {"animate": True, "variable": "sst"}
+            ... )
+            >>> _netcdf_variable(Container(), plan)
+            '<sst>'
+
+            ```
+        - With none named it takes the first, which is what the still path draws too:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _netcdf_variable
+            >>> class Container:
+            ...     variable_names = ["time_bnds", "sst"]
+            ...     def get_variable(self, name):
+            ...         return f"<{name}>"
+            >>> plan = _Forwarded.from_facade("interactive", {"animate": True})
+            >>> _netcdf_variable(Container(), plan)
+            '<time_bnds>'
+
+            ```
+        - A variable already pinned out of its container is used as it is:
+            ```python
+            >>> from digitalearth.pyramids_backend import _Forwarded, _netcdf_variable
+            >>> class Pinned:
+            ...     variable_names = []
+            >>> pinned = Pinned()
+            >>> plan = _Forwarded.from_facade("interactive", {"animate": True})
+            >>> _netcdf_variable(pinned, plan) is pinned
+            True
+
+            ```
     """
     named = plan.draw.get("variable")
     carried = list(getattr(nc, "variable_names", None) or [])
@@ -1235,6 +1310,9 @@ def _categorical(obj: Any, column: str) -> bool:
             False
 
             ```
+
+    See Also:
+        _classified: Acts on this, per tier.
     """
     try:
         values = obj[column]
@@ -1260,6 +1338,43 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
 
     Raises:
         ValueError: on ``backend="3d"``, which cannot colour a label column by any route.
+
+    Examples:
+        - The web tier is told the scale is categorical, so a label column draws:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _classified
+            >>> layer = {"name": np.array(["a", "b"])}
+            >>> draw = {"column": "name"}
+            >>> _classified(layer, "web", draw)
+            >>> sorted(draw.items())
+            [('column', 'name'), ('scheme', 'categorical')]
+
+            ```
+        - A numeric column is left exactly as it came:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _classified
+            >>> draw = {"column": "pop"}
+            >>> _classified({"pop": np.array([1.0, 2.0])}, "web", draw)
+            >>> draw
+            {'column': 'pop'}
+
+            ```
+        - The 3-D tier colours by a number, so a label column is refused there:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _classified
+            >>> try:
+            ...     _classified({"name": np.array(["a"])}, "3d", {"column": "name"})
+            ... except ValueError as exc:
+            ...     print(str(exc).split(": ")[1].split(".")[0])
+            it colours by a number
+
+            ```
+
+    See Also:
+        _categorical: The dtype test this acts on.
     """
     column = draw.get("column")
     if column is None or not _categorical(obj, column):
