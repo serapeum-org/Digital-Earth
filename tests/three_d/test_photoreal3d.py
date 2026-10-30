@@ -680,9 +680,8 @@ class TestSkyModel:
         const = _sky_emitters(
             "constant", (-0.5, 0.4, -0.76), 6.0, (0.5, 0.56, 0.72), 3.0
         )
-        assert (
-            const["sun"]["type"] == "directional" and const["sky"]["type"] == "constant"
-        ), const
+        assert const["sun"]["type"] == "directional", const["sun"]
+        assert const["sky"]["type"] == "constant", const["sky"]
         sunsky = _sky_emitters(
             "sunsky", (-0.5, 0.4, -0.76), 6.0, (0.5, 0.56, 0.72), 3.0
         )
@@ -722,15 +721,13 @@ class TestWater:
         smooth = _water_shape(
             mi, (0.0, 10.0, 0.0, 8.0, 0.0, 5.0), (5.0, 4.0, 2.5), 1.0, 0.0
         )
-        assert (
-            smooth["type"] == "rectangle" and smooth["bsdf"]["type"] == "dielectric"
-        ), smooth
+        assert smooth["type"] == "rectangle", smooth
+        assert smooth["bsdf"]["type"] == "dielectric", smooth["bsdf"]
         rough = _water_shape(
             mi, (0.0, 10.0, 0.0, 8.0, 0.0, 5.0), (5.0, 4.0, 2.5), 1.0, 0.3
         )
-        assert (
-            rough["bsdf"]["type"] == "roughdielectric" and rough["bsdf"]["alpha"] == 0.3
-        ), rough
+        assert rough["bsdf"]["type"] == "roughdielectric", rough["bsdf"]
+        assert rough["bsdf"]["alpha"] == 0.3, rough["bsdf"]
 
     def test_water_level_renders_and_differs_from_dry(self):
         """A water_level render is non-blank and differs from the same scene with no water."""
