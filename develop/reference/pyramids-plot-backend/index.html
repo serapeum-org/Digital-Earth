@@ -5241,19 +5241,34 @@ so every method on that object is in reach by chaining, and so is every attribut
 <p>A tier scene's own settings go in <code>scene_kw</code>, which keeps them out of the render's keywords:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scene_kw</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;center&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mf">31.0</span><span class="p">,</span> <span class="mf">30.0</span><span class="p">),</span> <span class="s2">&quot;zoom&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span> <span class="s2">&quot;style&quot;</span><span class="p">:</span> <span class="s2">&quot;light&quot;</span><span class="p">})</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scene_kw</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;width&quot;</span><span class="p">:</span> <span class="mi">1100</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">:</span> <span class="mi">700</span><span class="p">})</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scene_kw</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;figsize&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">9</span><span class="p">)})</span>                 <span class="c1"># matplotlib</span>
+</code></pre></div>
+<p><code>backend="matplotlib"</code> is not one of these: pyramids short-circuits its default to cleopatra and
+never reaches this package, so <code>ds.plot(scene_kw=…)</code> is refused by cleopatra. Use digitalearth's own
+entry point for the matplotlib tier:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">de</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">de</span><span class="o">.</span><span class="n">quickmap</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">scene_kw</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;figsize&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">9</span><span class="p">)})</span>
 </code></pre></div>
 <p>They need their own mapping because a name alone cannot say which object it is for. <code>height</code> is the
 web map's pixel height, <em>and</em> <code>WebMap.extrusion</code>'s extrusion height, <em>and</em> the Datashader canvas
 height the HoloViz tier takes out of a builder's <code>**opts</code>. So both can be asked for at once, and
 each reaches its own object:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">scene_kw</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;height&quot;</span><span class="p">:</span> <span class="mi">650</span><span class="p">})</span>   <span class="c1"># the map is 650px tall</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">polygons</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">50_000</span><span class="p">)</span>        <span class="c1"># the extrusion is 50km — the builder&#39;s keyword</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">scene_kw</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;height&quot;</span><span class="p">:</span> <span class="mi">650</span><span class="p">})</span>   <span class="c1"># the map is 650px tall</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">polygons</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">50_000</span><span class="p">)</span>        <span class="c1"># the extrusion is 50km — the builder&#39;s keyword</span>
 </code></pre></div>
 <p>A key the scene does not take is refused by the scene, naming it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>ds.plot(band=0, scene_kw={&quot;not_a_scene_option&quot;: 1})
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>TypeError: GeoLayerBase.__init__() got an unexpected keyword argument &#39;not_a_scene_option&#39;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>de.quickmap(ds, band=1, scene_kw={&quot;not_a_scene_option&quot;: 1})
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>TypeError: GeoLayerBase.__init__() got an unexpected keyword argument &#39;not_a_scene_option&#39;
 </code></pre></div>
+<div class="admonition note">
+<p class="admonition-title"><code>scene_kw</code> hands you the scene's own behaviour</p>
+<p>Its contents go to the tier's constructor unscreened, so a <em>value</em> that class does not validate
+is not validated here either — <code>scene_kw={"style": 3}</code> builds a <code>WebMap</code> with <code>style == 3</code> and
+fails later, as <code>WebMap(style=3)</code> does. That is deliberate: screening the values would mean this
+layer keeping a second opinion about every tier's constructor. These names are also outside
+<code>BACKEND_CAPABILITIES</code> and the support matrix, which answer which <em>capability</em> a tier declares —
+a scene setting has none behind it.</p>
+</div>
 <p>Two things need <code>import digitalearth</code>, and no keyword can change that:</p>
 <ul>
 <li><strong>Composition across scenes.</strong> One call returns one scene, so <code>grid</code>, <code>facet</code> and <code>quickpanels</code>
@@ -5266,15 +5281,15 @@ each reaches its own object:</p>
 <p><code>UgridDataset.plot(backend=…)</code> is refused before any keyword is read: only the matplotlib tier has a
 triangular render, which <code>digitalearth.api.MESH_BACKENDS</code> states. That is why the <code>variable_name</code>
 translation above is inert today — the call carrying it never gets that far:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>UgridDataset.plot(backend=&quot;web&quot;)
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>TypeError: backend=&#39;web&#39; has no unstructured-mesh render; draw a UgridDataset with
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>backend=&#39;matplotlib&#39;, which shades each of its faces (tripcolor)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>UgridDataset.plot(backend=&quot;web&quot;)
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>TypeError: backend=&#39;web&#39; has no unstructured-mesh render; draw a UgridDataset with
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>backend=&#39;matplotlib&#39;, which shades each of its faces (tripcolor)
 </code></pre></div>
 <h2 id="checking-what-is-registered"><a class="toclink" href="#checking-what-is-registered">Checking what is registered</a><a class="headerlink" href="#checking-what-is-registered" title="Permanent link">#</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>              <span class="c1"># [&#39;3d&#39;, &#39;interactive&#39;, &#39;web&#39;]</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>  <span class="c1"># the callable itself, loaded from the entry point</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>              <span class="c1"># [&#39;3d&#39;, &#39;interactive&#39;, &#39;web&#39;]</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>  <span class="c1"># the callable itself, loaded from the entry point</span>
 </code></pre></div>
 <p>A registered entry point resolves to the <strong>callable</strong> — not to its <code>module:attr</code> string, and not to
 the <code>functools.partial</code> over <code>quickmap</code> that the fallback would hand back. That difference is how you
@@ -5286,11 +5301,11 @@ shipped in <strong>0.73.0</strong> — <code>0.72.0</code> was published after t
 without it, so it carries neither <code>pyramids.base._plot_backends</code> nor the conformance kit, and
 its <code>Dataset.plot</code> has no <code>backend=</code> keyword. The declared floor is <code>&gt;=0.73.0</code> for that reason.</p>
 <p>Verified against 0.73.0:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="p">[</span><span class="s1">&#39;3d&#39;</span><span class="p">,</span> <span class="s1">&#39;interactive&#39;</span><span class="p">,</span> <span class="s1">&#39;web&#39;</span><span class="p">]</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="o">&lt;</span><span class="n">function</span> <span class="n">interactive</span> <span class="n">at</span> <span class="o">...&gt;</span>          <span class="c1"># the entry point, not the fallback partial</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="p">[</span><span class="s1">&#39;3d&#39;</span><span class="p">,</span> <span class="s1">&#39;interactive&#39;</span><span class="p">,</span> <span class="s1">&#39;web&#39;</span><span class="p">]</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="o">&lt;</span><span class="n">function</span> <span class="n">interactive</span> <span class="n">at</span> <span class="o">...&gt;</span>          <span class="c1"># the entry point, not the fallback partial</span>
 </code></pre></div>
 </div>
 
