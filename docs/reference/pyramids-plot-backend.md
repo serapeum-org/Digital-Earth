@@ -116,6 +116,78 @@ stack.animate(backend="web", interval=120, path="flood.gif")           # written
   `Scene3D.orbit` sweeps the camera over a static scene, so neither can be driven from a plot call's
   keywords. Build the scene with digitalearth and call one of them directly.
 
+## What you can reach through `plot(backend=…)`, and what needs an import
+
+The call hands back the tier's **own object**, exactly as `ds.plot()` hands back a cleopatra glyph —
+so every method on that object is in reach by chaining, and so is every attribute it exposes:
+
+```python
+scene = ds.plot(backend="3d", band=0)
+scene.colorbar().orbit("fly.gif", n_frames=60)
+```
+
+A tier scene's own settings go in `scene_kw`, which keeps them out of the render's keywords:
+
+```python
+ds.plot(backend="web", band=0, scene_kw={"center": (31.0, 30.0), "zoom": 6, "style": "light"})
+ds.plot(backend="interactive", band=0, scene_kw={"width": 1100, "height": 700})
+```
+
+`backend="matplotlib"` is not one of these: pyramids short-circuits its default to cleopatra and
+never reaches this package, so `ds.plot(scene_kw=…)` is refused by cleopatra. Use digitalearth's own
+entry point for the matplotlib tier:
+
+```python
+import digitalearth as de
+
+de.quickmap(ds, band=1, scene_kw={"figsize": (14, 9)})
+```
+
+They need their own mapping because a name alone cannot say which object it is for. `height` is the
+web map's pixel height, *and* `WebMap.extrusion`'s extrusion height, *and* the Datashader canvas
+height the HoloViz tier takes out of a builder's `**opts`. So both can be asked for at once, and
+each reaches its own object:
+
+```python
+ds.plot(backend="web", scene_kw={"height": 650})   # the map is 650px tall
+```
+
+Outside `scene_kw`, `height` stays the render's, and the builder answers for it. On a polygon layer
+that answer is a refusal, because `quickmap` draws polygons through `polygons()` — `height` belongs to
+`WebMap.extrusion`, which it does not call:
+
+```text
+polygons.plot(backend="web", height=50_000)
+TypeError: VectorMixin.polygons() got an unexpected keyword argument 'height'
+```
+
+That refusal is the point: the same name reaches a different object on each side of the namespace, and
+neither side quietly swallows the other's keyword. An earlier attempt at this feature inferred the
+destination from signatures instead, and turned exactly that refusal into a 50,000-pixel map.
+
+A key the scene does not take is refused by the scene, naming it:
+
+```text
+de.quickmap(ds, band=1, scene_kw={"not_a_scene_option": 1})
+TypeError: GeoLayerBase.__init__() got an unexpected keyword argument 'not_a_scene_option'
+```
+
+!!! note "`scene_kw` hands you the scene's own behaviour"
+    Its contents go to the tier's constructor unscreened, so a *value* that class does not validate
+    is not validated here either — `scene_kw={"style": 3}` builds a `WebMap` with `style == 3` and
+    fails later, as `WebMap(style=3)` does. That is deliberate: screening the values would mean this
+    layer keeping a second opinion about every tier's constructor. These names are also outside
+    `BACKEND_CAPABILITIES` and the support matrix, which answer which *capability* a tier declares —
+    a scene setting has none behind it.
+
+Two things need `import digitalearth`, and no keyword can change that:
+
+- **Composition across scenes.** One call returns one scene, so `grid`, `facet` and `quickpanels`
+  — which build their own panels — cannot come back from it.
+- **Everything that is not a scene**: the charts and statistical series (`bar`, `boxplot`,
+  `envelope`, `stripes`, `quantile_band`), `TexturedGlobe`, `TimeSeries`, `Climatology`, the batch
+  renderer and HTML gallery (`Batch`, `gallery`), and `to_backend`.
+
 ## A mesh is not drawn on these tiers
 
 `UgridDataset.plot(backend=…)` is refused before any keyword is read: only the matplotlib tier has a

@@ -1,5 +1,8 @@
 """Tests for T9.1 — quickplot/quickmap one-call entry points and module functions."""
 
+import pathlib
+import types
+
 import pytest
 
 import digitalearth
@@ -1400,3 +1403,164 @@ def test_variable_with_no_raster_plane_is_refused_by_name():
     container = _NoRasterPlane()
     with pytest.raises(ValueError, match="has no raster plane to draw"):
         qp._pinned_variable(container, "station_id")
+
+
+class TestSceneKw:
+    """`scene_kw` — the scene's settings, kept in their own namespace."""
+
+    @pytest.fixture
+    def dem(self):
+        """A single-band raster to draw.
+
+        Returns:
+            The bundled accumulation raster.
+        """
+        from pyramids.dataset import Dataset
+
+        return Dataset.read_file("examples/data/acc4000.tif")
+
+    def test_a_scene_setting_reaches_the_constructor(self, dem):
+        """A `scene_kw` entry is applied when the scene is built.
+
+        Test scenario:
+            `figsize` is read only at construction and `quickmap` builds the scene, so without a way
+            to pass it a one-call plot cannot choose a figure size at all.
+        """
+        plain = qp.quickmap(dem, band=1)
+        tuned = qp.quickmap(dem, band=1, scene_kw={"figsize": (14.0, 9.0)})
+        assert tuple(plain.fig.get_size_inches()) != tuple(
+            tuned.fig.get_size_inches()
+        ), "the setting must change the scene, not merely be accepted"
+        assert tuple(tuned.fig.get_size_inches()) == (14.0, 9.0), (
+            f"expected (14, 9), got {tuple(tuned.fig.get_size_inches())}"
+        )
+
+    def test_both_namespaces_are_honoured_in_one_call(self, dem, monkeypatch):
+        """A scene setting and a render keyword are applied to their own objects in the same call.
+
+        Test scenario:
+            This is what two earlier attempts on this branch got wrong by inferring from signatures.
+            `height` is the web map's pixel height, `WebMap.extrusion`'s extrusion height, and — out
+            of a builder's `**opts`, declared nowhere — a Datashader canvas height, so no signature
+            comparison can place it. Here the scene's `figsize` and the render's `cmap` travel
+            together and both arrive, which is only possible because they never share a namespace.
+        """
+        drawn = []
+        real = Map.field
+
+        def spy(self, data, **kwargs):
+            drawn.append(kwargs)
+            return real(self, data, **kwargs)
+
+        monkeypatch.setattr(Map, "field", spy)
+        scene = qp.quickmap(
+            dem, band=1, scene_kw={"figsize": (14.0, 9.0)}, cmap="magma"
+        )
+        assert tuple(scene.fig.get_size_inches()) == (14.0, 9.0), (
+            f"the scene setting should reach the scene, got {tuple(scene.fig.get_size_inches())}"
+        )
+        assert drawn, "the builder should have been called"
+        assert drawn[0].get("cmap") == "magma", (
+            f"the render keyword should reach the builder, got {drawn}"
+        )
+        assert "figsize" not in drawn[0], (
+            f"the scene setting must not also be offered to the builder: {drawn}"
+        )
+
+    def test_an_unknown_scene_setting_is_refused_by_the_constructor(self, dem):
+        """A `scene_kw` key the scene does not take is named by the scene itself.
+
+        Test scenario:
+            `scene_kw` means "these are for the scene", so its contents get that class's own answer.
+            Screening them here would mean maintaining a second opinion about every tier's
+            constructor — the very coupling this design removes.
+        """
+        with pytest.raises(TypeError, match="not_a_scene_option"):
+            qp.quickmap(dem, band=1, scene_kw={"not_a_scene_option": 1})
+
+    def test_no_scene_kw_leaves_the_defaults_alone(self, dem):
+        """Omitting `scene_kw` changes nothing about how the scene is built.
+
+        Test scenario:
+            The parameter is additive: every existing call must build exactly the scene it did
+            before, which is what makes this safe to land.
+        """
+        assert tuple(qp.quickmap(dem, band=1).fig.get_size_inches()) == (8.0, 8.0), (
+            "the default figure size must be unchanged"
+        )
+
+    def test_the_callers_mapping_is_not_mutated(self, dem):
+        """`_scene_of` leaves the mapping it was given exactly as it found it.
+
+        Args:
+            dem: The raster fixture.
+
+        Test scenario:
+            The helper merges rather than updates, so a caller reusing one dict across several plots
+            cannot have it filled in with another call's seeded values.
+        """
+        settings = {"figsize": (11.0, 7.0)}
+
+        with qp.quickmap(dem, band=1, scene_kw=settings):
+            pass
+
+        assert settings == {"figsize": (11.0, 7.0)}, (
+            f"the caller's mapping must be untouched, got {settings}"
+        )
+
+    def test_an_empty_mapping_behaves_as_none(self, dem):
+        """An empty `scene_kw` is the same as omitting it.
+
+        Args:
+            dem: The raster fixture.
+
+        Test scenario:
+            `None` and `{}` are distinct inputs that must not diverge: a caller building the mapping
+            programmatically can legitimately end up with an empty one, and that should not be a
+            different plot from passing nothing.
+        """
+        with qp.quickmap(dem, band=1, scene_kw={}) as empty:
+            empty_size = tuple(empty.fig.get_size_inches())
+        with qp.quickmap(dem, band=1) as omitted:
+            omitted_size = tuple(omitted.fig.get_size_inches())
+
+        assert empty_size == omitted_size, (
+            f"an empty scene_kw must match omitting it, got {empty_size} vs {omitted_size}"
+        )
+
+    def test_any_mapping_is_accepted_not_only_a_dict(self, dem):
+        """A read-only `Mapping` works, as the annotation promises.
+
+        Args:
+            dem: The raster fixture.
+
+        Test scenario:
+            The parameter is annotated `Mapping`, not `dict`, so a `MappingProxyType` — what a caller
+            gets from a frozen settings object — has to be accepted. A `dict`-only implementation
+            (one that called `.update` or `.pop`) would raise here.
+        """
+        settings = types.MappingProxyType({"figsize": (12.0, 5.0)})
+
+        with qp.quickmap(dem, band=1, scene_kw=settings) as scene:
+            size = tuple(scene.fig.get_size_inches())
+
+        assert size == (12.0, 5.0), f"a read-only Mapping must be accepted, got {size}"
+
+    def test_a_caller_setting_overrides_the_backend_default(self):
+        """A `scene_kw` entry wins over a default this layer would otherwise seed.
+
+        Test scenario:
+            `quickmap` seeds the matplotlib tier's `crs` with 3857. A caller who names one in
+            `scene_kw` should get theirs, rather than the seed silently winning.
+        """
+
+        class Scene:
+            """A stand-in scene recording its CRS."""
+
+            def __init__(self, *, crs=None):
+                """Record the CRS it was built with."""
+                self.crs = crs
+
+        assert qp._scene_of(Scene, {"crs": 4326}, crs=3857).crs == 4326, (
+            "the caller's value must win over the seeded one"
+        )

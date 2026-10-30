@@ -874,6 +874,7 @@ def quickmap(
     coastlines: Any = _UNSET,
     colorbar: Any = _UNSET,
     backend: str = "matplotlib",
+    scene_kw: Mapping[str, Any] | None = None,
     **kwargs,
 ) -> Any:
     """Build a finished map from a single pyramids object in one call.
@@ -942,6 +943,14 @@ def quickmap(
             extra); ``"web"`` returns a :class:`~digitalearth.web.map.WebMap` (MapLibre + deck.gl; needs the
             ``web`` extra) — all fed from the same input-type dispatch. Which of the arguments above each one
             honours is :data:`BACKEND_CAPABILITIES`; anything else you pass it is refused, not dropped.
+        scene_kw: Settings for the scene itself, as opposed to the render — the HoloViz tier's
+            ``width``/``height``/``tiles``, the web tier's ``center``/``zoom``/``style``, the
+            matplotlib tier's ``figsize``. A tier reads these only while the scene is built, and
+            this call builds it, so they are unreachable otherwise. They live in their own mapping
+            because a name alone cannot say which object it is for: ``height`` is the web map's
+            pixel height *and* an extrusion height, and the HoloViz tier sizes a Datashader canvas
+            from ``width``/``height`` taken out of a builder's ``**opts``. Anything outside this
+            mapping is the render's.
         **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``;
             ``z_exaggeration``/``height``/``size`` for ``backend="3d"``). ``column`` names a **polygon**
             fill on ``backend="matplotlib"``: point input there is a ``Map.points``, which sizes markers
@@ -1035,6 +1044,7 @@ def quickmap(
     if backend == "3d":
         return _quickmap_3d(
             data,
+            scene_kw=scene_kw,
             colorbar=colorbar,
             crs=None if crs is _UNSET else crs,
             domain=domain,
@@ -1044,6 +1054,7 @@ def quickmap(
     if backend == "interactive":
         return _quickmap_interactive(
             data,
+            scene_kw=scene_kw,
             crs=3857 if crs is _UNSET else crs,
             kind=kind,
             basemap=basemap,
@@ -1053,10 +1064,16 @@ def quickmap(
         )
     if backend == "web":
         return _quickmap_web(
-            data, crs=crs, basemap=basemap, colorbar=colorbar, **kwargs
+            data,
+            scene_kw=scene_kw,
+            crs=crs,
+            basemap=basemap,
+            colorbar=colorbar,
+            **kwargs,
         )
     return _quickmap_matplotlib(
         data,
+        scene_kw=scene_kw,
         crs=3857 if crs is _UNSET else crs,
         kind=kind,
         domain=domain,
@@ -1166,9 +1183,84 @@ def to_backend(
     return Map.from_figure(figure, **scene_kwargs)
 
 
+def _scene_of(
+    scene_class: Any, scene_kw: Mapping[str, Any] | None, **seeded: Any
+) -> Any:
+    """Build a tier scene from the caller's ``scene_kw`` and this backend's own seeded values.
+
+    A tier scene takes some settings only while it is being built, and `quickmap` builds the scene
+    itself — so without a way to pass them, they are out of reach of a one-call plot. Deciding *by
+    name* which of a call's keywords are the scene's cannot work: `height` is the web map's pixel
+    height and `WebMap.extrusion`'s extrusion height, and the HoloViz tier takes `width`/`height`
+    out of a builder's `**opts` to size a Datashader canvas without declaring them anywhere. A name
+    carries no information about which object it is for.
+
+    So the caller says. `scene_kw` is the scene's; every other keyword is the render's. No name can
+    be ambiguous, because the two never share a namespace — the same separation matplotlib draws
+    with `subplot_kw` and `gridspec_kw`.
+
+    A key the constructor does not take is refused by the constructor itself, naming it, which is
+    the behaviour of that class as documented; `scene_kw` means "these are for the scene", so its
+    contents get the scene's own answer rather than a second opinion from here.
+
+    Args:
+        scene_class: The tier's scene class.
+        scene_kw: The caller's construction settings, or `None`.
+        **seeded: Values this backend decides itself (e.g. its default `crs`). A `scene_kw` entry of
+            the same name wins, so the caller can override a default this function would otherwise
+            impose.
+
+    Returns:
+        The constructed scene.
+
+    Raises:
+        TypeError: from the constructor, for a `scene_kw` key it does not take.
+
+    Examples:
+        - The caller's settings reach the constructor, with the backend's defaults behind them:
+            ```python
+            >>> from digitalearth.api import _scene_of
+            >>> class Scene:
+            ...     def __init__(self, *, crs=None, zoom=None):
+            ...         self.crs, self.zoom = crs, zoom
+            >>> scene = _scene_of(Scene, {"zoom": 6}, crs=3857)
+            >>> scene.crs, scene.zoom
+            (3857, 6)
+
+            ```
+        - A caller's value overrides the backend's seeded one:
+            ```python
+            >>> from digitalearth.api import _scene_of
+            >>> class Scene:
+            ...     def __init__(self, *, crs=None):
+            ...         self.crs = crs
+            >>> _scene_of(Scene, {"crs": 4326}, crs=3857).crs
+            4326
+
+            ```
+        - No `scene_kw` leaves the backend's own values untouched:
+            ```python
+            >>> from digitalearth.api import _scene_of
+            >>> class Scene:
+            ...     def __init__(self, *, crs=None, zoom=None):
+            ...         self.crs, self.zoom = crs, zoom
+            >>> scene = _scene_of(Scene, None, crs=3857)
+            >>> scene.crs, scene.zoom
+            (3857, None)
+
+            ```
+
+    See Also:
+        quickmap: The entry point that takes ``scene_kw`` and hands it to one of the four tier
+            helpers, each of which builds its scene through this function.
+    """
+    return scene_class(**{**seeded, **(scene_kw or {})})
+
+
 def _quickmap_matplotlib(
     data: PlottableData,
     *,
+    scene_kw: Mapping[str, Any] | None = None,
     crs: Any,
     kind: str,
     domain: Any,
@@ -1186,6 +1278,8 @@ def _quickmap_matplotlib(
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
         crs: Display CRS for the map.
+        scene_kw: Construction settings for the scene, kept out of ``**kwargs`` so no name has to
+            be guessed at (see :func:`_scene_of`).
         kind: Raster renderer (``"auto"`` → ``imshow``, drawn by ``Map.field``).
         domain: A named region / bbox to frame on, or `None` to leave the extent to the data.
         basemap: ``True`` for the backend's default tile source, or the source itself.
@@ -1201,7 +1295,7 @@ def _quickmap_matplotlib(
     """
     from digitalearth.static import Map
 
-    scene = Map(crs=crs, domain=domain)
+    scene = _scene_of(Map, scene_kw, crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
         _best_effort("coastlines", scene.coastlines)
@@ -1346,6 +1440,7 @@ def _decorate_interactive(scene: Any, basemap: Any, coastlines: bool) -> None:
 def _quickmap_interactive(
     data: PlottableData,
     *,
+    scene_kw: Mapping[str, Any] | None = None,
     crs: Any,
     kind: str,
     basemap: bool | str | Any,
@@ -1367,6 +1462,8 @@ def _quickmap_interactive(
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
         crs: Display CRS for the interactive map.
+        scene_kw: Construction settings for the scene, kept out of ``**kwargs`` so no name has to
+            be guessed at (see :func:`_scene_of`).
         kind: Raster renderer (``"auto"`` → ``imshow``, drawn by ``InteractiveMap.field``; or
             ``contourf``/``contour``/``pcolormesh``).
         basemap: ``True`` for the backend's default tile source, or the source itself (provider name or
@@ -1389,7 +1486,7 @@ def _quickmap_interactive(
     """
     from digitalearth.interactive import InteractiveMap
 
-    scene = InteractiveMap(crs=crs)
+    scene = _scene_of(InteractiveMap, scene_kw, crs=crs)
     family = _input_kind(data, "quickplot")
     if family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
@@ -1514,6 +1611,7 @@ def _add_web_legend(scene: Any, *, visible: bool) -> Any:
 def _quickmap_web(
     data: PlottableData,
     *,
+    scene_kw: Mapping[str, Any] | None = None,
     crs: Any = _UNSET,
     basemap: bool | str | Any = False,
     colorbar: bool = True,
@@ -1536,6 +1634,11 @@ def _quickmap_web(
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
         crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
+        scene_kw: Construction settings for the scene, kept out of ``**kwargs`` so no name has to
+            be guessed at (see :func:`_scene_of`). This is the tier where that matters most:
+            ``height`` is both the map's pixel height, declared by the constructor, and the
+            extrusion height ``WebMap.extrusion`` reads, so only the caller can say which one a
+            given call means.
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
         colorbar: Whether this tier's colour key is drawn, carried through :func:`_add_web_legend` rather
@@ -1554,7 +1657,8 @@ def _quickmap_web(
     """
     from digitalearth.web import WebMap
 
-    scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
+    seeded = {} if crs is _UNSET else {"crs": crs}
+    scene = _scene_of(WebMap, scene_kw, **seeded)
     family = _input_kind(data, "quickplot")
     if family == "raster":
         scene.field(data, **kwargs)
@@ -1656,6 +1760,7 @@ def _add_key(backend: str, scene: Any, *, visible: bool) -> None:
 def _quickmap_3d(
     data: PlottableData,
     *,
+    scene_kw: Mapping[str, Any] | None = None,
     colorbar: bool = True,
     crs: Any = None,
     domain: Any = None,
@@ -1685,6 +1790,9 @@ def _quickmap_3d(
             scalar bar reading `0, 1, 2 …` over its class indices. ``False`` takes the bar off. Either way a
             layer whose colour is flat gets no key and no error, as on the matplotlib and web paths.
         crs: The scene's display CRS; ``None`` takes the data's own.
+        scene_kw: Construction settings for the scene, kept out of ``**kwargs`` so no name has to
+            be guessed at (see :func:`_scene_of`) — ``window_size``, ``off_screen``, ``theme`` and
+            the rest of what ``Scene3D`` reads only while it is built.
         **kwargs: Forwarded to the chosen ``Scene3D`` builder (e.g. ``cmap``, ``z_exaggeration``,
             ``column``, ``height``, ``size``).
 
@@ -1711,9 +1819,8 @@ def _quickmap_3d(
             f"{sorted(data.geometry.geom_type.unique())}"
         )
 
-    scene = Scene3D(
-        crs=crs
-    )  # constructed only after validation, so the error paths above leak no scene
+    # Constructed only after validation, so the error paths above leak no scene.
+    scene = _scene_of(Scene3D, scene_kw, crs=crs)
     if family == "raster":
         scene.terrain(data, **kwargs)
     elif family == "polygons":
