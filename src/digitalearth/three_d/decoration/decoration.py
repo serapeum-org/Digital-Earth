@@ -1789,7 +1789,9 @@ class DecorationMixin(_MixinBase):
         if title is not None:
             self.set_title(title, subtitle=subtitle)
         if legend:
-            self.legend()
+            # legend() lives on the sibling LegendMixin, which is present in the composed Scene3D; the type
+            # checker only sees this mixin's Scene3DBase self, so it cannot know that.
+            self.legend()  # type: ignore[attr-defined]
         if scale_bar:
             self.scale_bar()
         if north_arrow:
