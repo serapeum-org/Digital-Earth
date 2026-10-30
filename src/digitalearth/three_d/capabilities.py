@@ -35,6 +35,10 @@ CAPABILITIES = Capabilities(
             "isosurface",
             "vectors",
             "extrusion",
+            # 3-D building surfaces (LOD2 city models) handed over as Polygon-Z features by
+            # `pyramids-citymodels`; fan-triangulated and drawn as a mesh by `buildings()` (#512 A7). Distinct
+            # from `extrusion`, which raises a flat 2-D footprint — this draws geometry that is already 3-D.
+            "buildings",
             "lines",
             "streamlines",
             "raster",

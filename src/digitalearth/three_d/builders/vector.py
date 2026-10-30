@@ -668,6 +668,38 @@ class VectorMixin(_MixinBase):
             **kwargs,
         )
 
+    def buildings(
+        self,
+        data: Any,
+        *,
+        name: Any = None,
+        visible: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Draw 3-D building surfaces (LOD2 city models) as a triangulated mesh, registered as one layer (A7).
+
+        Where :meth:`extruded_polygons` raises a flat 2-D footprint into a prism, this renders geometry that is
+        already 3-D — the ``Polygon Z`` surfaces a semantic city model carries (CityGML / CityJSON / 3D Tiles,
+        read upstream by ``pyramids-citymodels`` and handed over as a ``FeatureCollection``), with their real
+        roofs and façades. Each surface is fan-triangulated and the surfaces are merged into one mesh, placed in
+        the scene's display CRS — set when the scene has none, reprojected through pyramids when they are in
+        another. The fan is exact for the planar, convex faces LOD2 buildings are built from (#512 A7).
+
+        Args:
+            data: A GeoDataFrame / pyramids ``FeatureCollection`` of 3-D ``Polygon``/``MultiPolygon`` (``Z``)
+                building surfaces; only their coordinates are read (duck-typed, no shapely/geopandas import).
+            name: The layer's name; ``None`` numbers it by kind.
+            visible: Whether the layer is drawn when it is added.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh` (e.g. ``color``, ``opacity``).
+
+        Returns:
+            The registered :class:`pyvista.Actor`, or ``None`` when there were no surfaces to draw (see
+            ``strict`` on :class:`~digitalearth.three_d.core.base.Scene3DBase`).
+        """
+        return self._add_described_layer(
+            kind="buildings", data=data, name=name, visible=visible, **kwargs
+        )
+
 
 def _color_encoding(
     gdf: Any, column: str | None, scheme: Any, k: int, cmap: Any
@@ -806,6 +838,70 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
     if colours is None:
         return merged, scene.plotter.add_mesh(merged, scalars=None, cmap=cmap, **props)
     return merged, scene.plotter.add_mesh(merged, scalars=VALUE, **style, **props)
+
+
+def _surface_rings(geom: Any) -> Iterator[np.ndarray]:
+    """Yield each polygon part's exterior ring as ``(M, 3)`` 3-D coordinates (duck-typed; keeps z).
+
+    Unlike :func:`_exterior_rings`, which the flat builders lift onto ``z=0``, this preserves the ring's own
+    ``z`` — the façade/roof heights an LOD2 surface carries. A 2-D ring (no ``z``) is lifted onto ``z=0`` so a
+    mixed input still draws, and a repeated closing vertex is dropped.
+
+    Args:
+        geom: A shapely ``Polygon``/``MultiPolygon`` (read via its public attributes, never imported).
+
+    Yields:
+        numpy.ndarray: the ``(M, 3)`` exterior-ring coordinates of each polygon part.
+    """
+    for exterior, _interiors in _polygon_parts(geom):
+        ring = (
+            exterior[:-1]
+            if len(exterior) > 1 and np.allclose(exterior[0], exterior[-1])
+            else exterior
+        )
+        if ring.shape[1] == 2:
+            ring = np.column_stack([ring, np.zeros(len(ring))])
+        yield np.asarray(ring[:, :3], dtype="float64")
+
+
+def draw_buildings(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the triangulated 3-D surfaces a `buildings` layer describes (LOD2 city models, #512 A7).
+
+    Each polygon surface is fan-triangulated (exact for the planar convex faces LOD2 buildings are built from)
+    and all surfaces are merged into one `PolyData`, drawn in the scene's display CRS via :meth:`_place`.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: 3-D Polygon/MultiPolygon building surfaces.
+        layer: The layer's description, whose props are forwarded to ``add_mesh``.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when there were no surfaces and the scene is not `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    gdf = scene._place(data, layer="buildings")
+
+    import pyvista as pv
+
+    points: list[np.ndarray] = []
+    faces: list[int] = []
+    offset = 0
+    for geom in gdf.geometry:
+        for ring in _surface_rings(geom):
+            count = len(ring)
+            if count < 3:
+                continue
+            points.append(ring)
+            for i in range(1, count - 1):
+                faces.extend((3, offset, offset + i, offset + i + 1))
+            offset += count
+
+    if not faces:
+        scene._skip_empty("buildings", "no polygon surfaces to draw")
+        return None
+
+    mesh = pv.PolyData(np.vstack(points), faces=np.asarray(faces, dtype="int64"))
+    return mesh, scene.plotter.add_mesh(mesh, **props)
 
 
 #: The point-data array name the vector field is attached to the streamline grid under.

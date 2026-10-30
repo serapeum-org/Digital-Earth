@@ -709,3 +709,40 @@ class TestTheExtrudedColumnIsClassifiedOnce:
         assert painted == list(wanted["cmap"]), (
             f"replace_layer({changed}) painted {painted}, not the {list(wanted['cmap'])} it asked for"
         )
+
+
+def test_buildings_triangulates_3d_surfaces():
+    """buildings() renders 3-D Polygon-Z surfaces as a mesh that keeps its z (a real building, not a footprint)."""
+    walls = [
+        Polygon([(0, 0, 0), (4, 0, 0), (4, 0, 3), (0, 0, 3)]),
+        Polygon([(0, 6, 0), (4, 6, 0), (4, 6, 3), (0, 6, 3)]),
+    ]
+    roof = [Polygon([(0, 0, 3), (4, 0, 3), (2, 0, 5)])]
+    gdf = gpd.GeoDataFrame(geometry=walls + roof)
+    scene = Scene3D(off_screen=True)
+    scene.buildings(gdf, color="tan")
+    mesh, _ = scene.layers[0]
+    assert mesh.n_cells > 0, "the building mesh must have faces"
+    assert (mesh.bounds[5] - mesh.bounds[4]) > 0, (
+        "surfaces keep their z (3-D, not a flat footprint)"
+    )
+    scene.close()
+
+
+def test_buildings_empty_is_skipped():
+    """A buildings layer with no surfaces is skipped rather than drawn empty."""
+    scene = Scene3D(off_screen=True)
+    assert scene.buildings(gpd.GeoDataFrame(geometry=[])) is None, (
+        "no surfaces -> skipped layer"
+    )
+    assert len(scene.layers) == 0, "nothing registered"
+    scene.close()
+
+
+def test_surface_rings_preserves_z():
+    """_surface_rings yields 3-D rings that keep the polygon's z (unlike the flat builders, which force z=0)."""
+    from digitalearth.three_d.builders.vector import _surface_rings
+
+    rings = list(_surface_rings(Polygon([(0, 0, 1), (1, 0, 1), (1, 1, 2), (0, 1, 2)])))
+    assert len(rings) == 1 and rings[0].shape[1] == 3, rings
+    assert float(rings[0][:, 2].max()) == 2.0, "z is preserved"
