@@ -637,3 +637,36 @@ class TestPhotorealFollowups:
         assert img.shape == (32, 48, 3), img.shape
         assert int(img.max()) > 0, "the overridden render must not be black"
         scene.close()
+
+
+class TestExrAndReturnAovs:
+    """`photoreal` can write a linear HDR EXR and return the AOV passes (#512 A1)."""
+
+    def test_return_aovs_gives_unclipped_hdr_passes(self):
+        """return_aovs=True returns a PhotorealResult whose HDR beauty is unclipped (can exceed 1)."""
+        from digitalearth.three_d.photoreal import PhotorealResult
+
+        scene = _small_terrain_scene()
+        res = scene.photoreal(
+            spp=8, width=64, height=48, denoise=False, return_aovs=True
+        )
+        assert isinstance(res, PhotorealResult), type(res)
+        assert res.image.dtype == np.uint8 and res.image.shape == (48, 64, 3), (
+            res.image.shape
+        )
+        assert res.beauty.shape == (48, 64, 3) and res.beauty.dtype == np.float32, (
+            res.beauty.shape
+        )
+        assert float(res.beauty.max()) > 1.0, "the HDR beauty pass must be unclipped"
+        scene.close()
+
+    def test_exr_is_written_and_default_return_is_unchanged(self, tmp_path):
+        """An exr= path writes a non-empty OpenEXR file; without return_aovs the return stays the uint8 image."""
+        scene = _small_terrain_scene()
+        exr = tmp_path / "render.exr"
+        img = scene.photoreal(spp=8, width=48, height=36, denoise=False, exr=str(exr))
+        assert exr.exists() and exr.stat().st_size > 0, "the EXR must be written"
+        assert isinstance(img, np.ndarray) and img.dtype == np.uint8, (
+            "default return stays the uint8 image"
+        )
+        scene.close()

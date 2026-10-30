@@ -18,6 +18,7 @@ import math
 import shutil
 import tempfile
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,26 @@ _POINT_RADIUS_FRACTION = 0.004
 #: Above this many points, a cloud is subsampled before glyphing — each point becomes a 20-triangle icosphere,
 #: so the uncapped triangle count (up to the tier's 500k-point budget x 20) is far too heavy for the CPU tracer.
 _MAX_GLYPH_POINTS = 50_000
+
+
+@dataclass(frozen=True)
+class PhotorealResult:
+    """The photoreal render together with its HDR AOV passes (returned by :meth:`photoreal` when ``return_aovs``).
+
+    The AOV passes are the linear, unclipped arrays the renderer produces before tonemapping, so they can feed
+    an HDR/compositing workflow; ``image`` is the same tonemapped frame a plain :meth:`photoreal` call returns.
+
+    Attributes:
+        image: The tonemapped ``(H, W, 3)`` uint8 RGB render.
+        beauty: The linear HDR ``(H, W, 3)`` beauty pass (unclipped), as written to EXR and fed to the denoiser.
+        albedo: The ``(H, W, 3)`` albedo AOV.
+        normal: The ``(H, W, 3)`` shading-normal AOV.
+    """
+
+    image: np.ndarray
+    beauty: np.ndarray
+    albedo: np.ndarray
+    normal: np.ndarray
 
 
 def _scene_sun_direction(decoration: Any) -> tuple[float, float, float] | None:
@@ -396,6 +417,8 @@ class PhotorealMixin(_MixinBase):
         despeckle: float | None = None,
         roughness: float | None = None,
         point_radius: float | None = None,
+        exr: Any = None,
+        return_aovs: bool = False,
     ) -> Any:
         """Render the scene as a photorealistic path-traced still with Mitsuba 3, optionally denoised.
 
@@ -424,9 +447,14 @@ class PhotorealMixin(_MixinBase):
                 Disney-style ``principled`` BSDF of that roughness so the surface reads matte-to-glossy (#512).
             point_radius: Sphere radius (world units) for points-only layers such as point clouds. ``None``
                 (the default) uses a small fraction of the scene bounding-box diagonal (#510).
+            exr: Where to also write the **linear HDR beauty** as OpenEXR (``.exr``), for an HDR/compositing
+                workflow. ``None`` (the default) writes no EXR. Independent of ``path`` (the tonemapped PNG).
+            return_aovs: When ``True``, return a :class:`PhotorealResult` carrying the tonemapped image plus the
+                HDR beauty/albedo/normal AOV passes, instead of the bare uint8 image (#512).
 
         Returns:
-            The rendered ``(H, W, 3)`` uint8 RGB array; also written to ``path`` when one was given.
+            The rendered ``(H, W, 3)`` uint8 RGB array (also written to ``path`` when one was given); or, when
+            ``return_aovs=True``, a :class:`PhotorealResult` with that image plus the HDR AOV passes.
 
         Raises:
             ImportError: when the ``[photoreal]`` extra (``mitsuba`` + ``oidn``) is not installed.
@@ -518,8 +546,15 @@ class PhotorealMixin(_MixinBase):
                 mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
             )
             out = np.array(bmp)
+            if exr is not None:
+                # The linear, unclipped HDR beauty (pre-tonemap, pre-despeckle) is what an EXR workflow wants.
+                mi.Bitmap(np.ascontiguousarray(beauty)).write(str(exr))
             if path is not None:
                 bmp.write(str(path))
+            if return_aovs:
+                return PhotorealResult(
+                    image=out, beauty=beauty, albedo=albedo, normal=normal
+                )
             return out
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
