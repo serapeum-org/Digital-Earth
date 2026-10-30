@@ -683,7 +683,7 @@ class VectorMixin(_MixinBase):
         read upstream by ``pyramids-citymodels`` and handed over as a ``FeatureCollection``), with their real
         roofs and façades. Each surface is fan-triangulated and the surfaces are merged into one mesh, placed in
         the scene's display CRS — set when the scene has none, reprojected through pyramids when they are in
-        another. The fan is exact for the planar, convex faces LOD2 buildings are built from (#512 A7).
+        another. The fan is exact for the planar, convex faces LOD2 buildings are built from (A7).
 
         Args:
             data: A GeoDataFrame / pyramids ``FeatureCollection`` of 3-D ``Polygon``/``MultiPolygon`` (``Z``)
@@ -865,7 +865,7 @@ def _surface_rings(geom: Any) -> Iterator[np.ndarray]:
 
 
 def draw_buildings(scene: Any, data: Any, layer: LayerSpec) -> Any:
-    """Build the triangulated 3-D surfaces a `buildings` layer describes (LOD2 city models, #512 A7).
+    """Build the triangulated 3-D surfaces a `buildings` layer describes (LOD2 city models).
 
     Each polygon surface is fan-triangulated (exact for the planar convex faces LOD2 buildings are built from)
     and all surfaces are merged into one `PolyData`, drawn in the scene's display CRS via :meth:`_place`.

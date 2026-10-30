@@ -154,7 +154,7 @@ def _sky_emitters(
     sky: Any,
     turbidity: float,
 ) -> dict[str, Any]:
-    """Build the scene's light emitters for :func:`mitsuba.load_dict`, per the chosen sky model (#512 A2).
+    """Build the scene's light emitters for :func:`mitsuba.load_dict`, per the chosen sky model (A2).
 
     ``"constant"`` is the original pairing — a ``directional`` sun plus a flat ``constant`` sky fill, which
     gives hard shadows and no sky variation. ``"sunsky"`` replaces both with Mitsuba's physical ``sunsky``
@@ -596,16 +596,16 @@ class PhotorealMixin(_MixinBase):
             sky: ``(r, g, b)`` radiance of the constant sky fill (``sky_model="constant"`` only).
             sky_model: ``"constant"`` (the default) lights with a hard directional sun plus a flat constant sky;
                 ``"sunsky"`` uses Mitsuba's physical ``sunsky`` emitter instead — a finite sun disk that casts
-                **soft** shadows plus a physically-based sky dome — driven by the same scene sun az/el (#512 A2).
+                **soft** shadows plus a physically-based sky dome — driven by the same scene sun az/el (A2).
             turbidity: Atmospheric haze for ``sky_model="sunsky"`` (about 2 for a clear sky, up to 10 for hazy).
             water_level: World ``z`` of a reflective water plane spanning the scene; the path tracer reflects the
                 sky/terrain off it (Fresnel, strongest at grazing angles). ``None`` (the default) adds no water.
-                Needs ``max_depth`` high enough for the extra bounce (#512 A3).
+                Needs ``max_depth`` high enough for the extra bounce (A3).
             water_roughness: ``0`` (the default) is a mirror-smooth surface; ``> 0`` gives a rippled rough water.
             smoke: A 3-D ``(nz, ny, nx)`` density grid (non-negative) rendered as a volumetric smoke/cloud filling
                 the scene — a ``heterogeneous`` medium traced with ``volpath``, so it self-shadows and casts a
                 shadow on the terrain. ``None`` (the default) renders no smoke. The grid is the same kind of cube
-                :meth:`volume` takes (#512 A4).
+                :meth:`volume` takes (A4).
             smoke_scale: Extinction multiplier for ``smoke`` (optical thickness — higher reads as denser).
             smoke_albedo: Single-scattering albedo for ``smoke`` in ``[0, 1]`` (near 1 = bright cloud).
             max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower).
@@ -620,7 +620,7 @@ class PhotorealMixin(_MixinBase):
             exr: Where to also write the **linear HDR beauty** as OpenEXR (``.exr``), for an HDR/compositing
                 workflow. ``None`` (the default) writes no EXR. Independent of ``path`` (the tonemapped PNG).
             return_aovs: When ``True``, return a :class:`PhotorealResult` carrying the tonemapped image plus the
-                HDR beauty/albedo/normal AOV passes, instead of the bare uint8 image (#512).
+                HDR beauty/albedo/normal AOV passes, instead of the bare uint8 image (A1).
 
         Returns:
             The rendered ``(H, W, 3)`` uint8 RGB array (also written to ``path`` when one was given); or, when

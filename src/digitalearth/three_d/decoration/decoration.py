@@ -1750,7 +1750,7 @@ class DecorationMixin(_MixinBase):
         north_anchor: str = "top-right",
         attribution_anchor: str = "bottom-right",
     ) -> Self:
-        """Dress the scene with a cartographic plate of furniture in one call (#512 A6).
+        """Dress the scene with a cartographic plate of furniture in one call (A6).
 
         A convenience that composes the furniture a finished map usually wants — a title (and subtitle), a keyed
         legend, a ground-distance scale bar, a north arrow and a credit line — so a publication-ready plate is
