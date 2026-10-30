@@ -776,3 +776,22 @@ def test_draw_buildings_skips_a_degenerate_ring(monkeypatch):
         f"only the 3-point triangle should survive, got {mesh.n_points}"
     )
     scene.close()
+
+
+def test_buildings_triangulates_a_non_convex_face_without_overflow():
+    """A non-convex (comb) face triangulates to its true area, not a fan that spills outside it (#518 M1)."""
+    comb = [(0, 0, 0), (1, 3, 0), (2, 0, 0), (3, 3, 0), (4, 0, 0), (4, 5, 0), (0, 5, 0)]
+    scene = Scene3D(off_screen=True)
+    scene.buildings(gpd.GeoDataFrame(geometry=[Polygon(comb)]))
+    mesh, _ = scene.layers[0]
+    tris = mesh.faces.reshape(-1, 4)[:, 1:]
+    pts = mesh.points
+    area = sum(
+        0.5
+        * float(np.linalg.norm(np.cross(pts[t[1]] - pts[t[0]], pts[t[2]] - pts[t[0]])))
+        for t in tris
+    )
+    assert abs(area - 14.0) < 0.1, (
+        f"non-convex face area should be ~14 (true), got {area} (a fan gives 32)"
+    )
+    scene.close()

@@ -867,8 +867,14 @@ def _surface_rings(geom: Any) -> Iterator[np.ndarray]:
 def draw_buildings(scene: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the triangulated 3-D surfaces a `buildings` layer describes (LOD2 city models).
 
-    Each polygon surface is fan-triangulated (exact for the planar convex faces LOD2 buildings are built from)
-    and all surfaces are merged into one `PolyData`, drawn in the scene's display CRS via :meth:`_place`.
+    Each polygon surface becomes one planar polygon cell; the merged mesh is then triangulated with VTK's
+    triangle filter, which ear-clips a non-convex planar face correctly (a naive fan from one vertex spills
+    outside a non-convex face). Surfaces are drawn in the scene's display CRS via :meth:`_place`.
+
+    Only each surface's **exterior** ring is drawn: an interior ring (a hole/opening) is not carved, so a
+    surface that carries one is filled solid. LOD2 city-model surfaces rarely carry interior rings; a hole is an
+    LOD3+ concern. (The sibling :func:`draw_extruded_polygons` carves holes because 2-D footprints commonly have
+    them.)
 
     Args:
         scene: The scene being drawn into.
@@ -892,15 +898,18 @@ def draw_buildings(scene: Any, data: Any, layer: LayerSpec) -> Any:
             if count < 3:
                 continue
             points.append(ring)
-            for i in range(1, count - 1):
-                faces.extend((3, offset, offset + i, offset + i + 1))
+            # One polygon cell per face: [n, i0, i1, ..., i(n-1)]. The triangle filter below ear-clips it, so a
+            # non-convex face triangulates correctly instead of fanning outside itself.
+            faces.append(count)
+            faces.extend(range(offset, offset + count))
             offset += count
 
     if not faces:
         scene._skip_empty("buildings", "no polygon surfaces to draw")
         return None
 
-    mesh = pv.PolyData(np.vstack(points), faces=np.asarray(faces, dtype="int64"))
+    surface = pv.PolyData(np.vstack(points), faces=np.asarray(faces, dtype="int64"))
+    mesh = surface.triangulate()
     return mesh, scene.plotter.add_mesh(mesh, **props)
 
 
