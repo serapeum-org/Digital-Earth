@@ -615,6 +615,7 @@ class TestPhotorealFollowups:
     ):
         """Explicit sun_direction and point_radius override the scene-derived defaults, which are never consulted."""
         from digitalearth.three_d import photoreal as _pr
+        from digitalearth.three_d.photoreal import SkyOptions
 
         scene = _small_terrain_scene()
         scene.sun(azimuth=135.0, elevation=25.0)
@@ -631,7 +632,7 @@ class TestPhotorealFollowups:
             width=48,
             height=32,
             denoise=False,
-            sun_direction=(-0.5, 0.42, -0.76),
+            sky=SkyOptions(sun_direction=(-0.5, 0.42, -0.76)),
             point_radius=0.3,
         )
         assert img.shape == (32, 48, 3), img.shape
@@ -644,11 +645,15 @@ class TestExrAndReturnAovs:
 
     def test_return_aovs_gives_unclipped_hdr_passes(self):
         """return_aovs=True returns a PhotorealResult whose HDR beauty is unclipped (can exceed 1)."""
-        from digitalearth.three_d.photoreal import PhotorealResult
+        from digitalearth.three_d.photoreal import OutputOptions, PhotorealResult
 
         scene = _small_terrain_scene()
         res = scene.photoreal(
-            spp=8, width=64, height=48, denoise=False, return_aovs=True
+            spp=8,
+            width=64,
+            height=48,
+            denoise=False,
+            output=OutputOptions(return_aovs=True),
         )
         assert isinstance(res, PhotorealResult), type(res)
         assert res.image.dtype == np.uint8, res.image.dtype
@@ -660,9 +665,17 @@ class TestExrAndReturnAovs:
 
     def test_exr_is_written_and_default_return_is_unchanged(self, tmp_path):
         """An exr= path writes a non-empty OpenEXR file; without return_aovs the return stays the uint8 image."""
+        from digitalearth.three_d.photoreal import OutputOptions
+
         scene = _small_terrain_scene()
         exr = tmp_path / "render.exr"
-        img = scene.photoreal(spp=8, width=48, height=36, denoise=False, exr=str(exr))
+        img = scene.photoreal(
+            spp=8,
+            width=48,
+            height=36,
+            denoise=False,
+            output=OutputOptions(exr=str(exr)),
+        )
         assert exr.exists(), "the EXR must be written"
         assert exr.stat().st_size > 0, "the EXR must be non-empty"
         assert isinstance(img, np.ndarray), "the default return stays an ndarray"
@@ -698,10 +711,16 @@ class TestSkyModel:
             _sky_emitters("bogus", (0.0, 0.0, -1.0), 6.0, (0.5, 0.5, 0.5), 3.0)
 
     def test_sunsky_renders_a_non_blank_frame(self):
-        """An end-to-end sky_model='sunsky' render produces a non-blank frame."""
+        """An end-to-end sky=SkyOptions(model='sunsky') render produces a non-blank frame."""
+        from digitalearth.three_d.photoreal import SkyOptions
+
         scene = _small_terrain_scene()
         img = scene.photoreal(
-            spp=8, width=64, height=48, denoise=False, sky_model="sunsky", turbidity=3.0
+            spp=8,
+            width=64,
+            height=48,
+            denoise=False,
+            sky=SkyOptions(model="sunsky", turbidity=3.0),
         )
         assert img.shape == (48, 64, 3), img.shape
         assert int(img.max()) > 0, "the sunsky render must not be black"
@@ -730,7 +749,9 @@ class TestWater:
         assert rough["bsdf"]["alpha"] == 0.3, rough["bsdf"]
 
     def test_water_level_renders_and_differs_from_dry(self):
-        """A water_level render is non-blank and differs from the same scene with no water."""
+        """A water render is non-blank and differs from the same scene with no water."""
+        from digitalearth.three_d.photoreal import WaterOptions
+
         dry = _small_terrain_scene()
         base = dry.photoreal(spp=8, width=64, height=48, denoise=False, max_depth=10)
         dry.close()
@@ -738,7 +759,12 @@ class TestWater:
         bounds = wet.plotter.bounds
         mid_z = (bounds[4] + bounds[5]) / 2.0
         img = wet.photoreal(
-            spp=8, width=64, height=48, denoise=False, max_depth=10, water_level=mid_z
+            spp=8,
+            width=64,
+            height=48,
+            denoise=False,
+            max_depth=10,
+            water=WaterOptions(level=mid_z),
         )
         wet.close()
         assert int(img.max()) > 0, "the water render must not be black"
@@ -771,6 +797,8 @@ class TestSmoke:
 
     def test_smoke_renders_a_non_blank_frame(self):
         """A 3-D smoke grid renders a non-blank frame through the volpath integrator."""
+        from digitalearth.three_d.photoreal import SmokeOptions
+
         scene = _small_terrain_scene()
         ax = np.linspace(-1, 1, 16)
         xx, yy, zz = np.meshgrid(ax, ax, ax, indexing="ij")
@@ -781,17 +809,18 @@ class TestSmoke:
             height=48,
             denoise=False,
             max_depth=12,
-            smoke=density,
-            smoke_scale=10.0,
+            smoke=SmokeOptions(density=density, scale=10.0),
         )
         assert img.shape == (48, 64, 3), img.shape
         assert int(img.max()) > 0, "the smoke render must not be black"
         scene.close()
 
     def test_a_non_3d_smoke_grid_is_rejected(self):
-        """A non-3-D smoke grid raises ValueError before rendering."""
+        """A non-3-D smoke density grid raises ValueError before rendering."""
+        from digitalearth.three_d.photoreal import SmokeOptions
+
         scene = _small_terrain_scene()
-        flat = np.zeros((4, 4))
+        flat = SmokeOptions(density=np.zeros((4, 4)))
         with pytest.raises(ValueError, match="3-D"):
             scene.photoreal(spp=4, width=32, height=24, denoise=False, smoke=flat)
         scene.close()
