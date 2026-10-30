@@ -1434,7 +1434,7 @@ class TestSceneKw:
             f"expected (14, 9), got {tuple(tuned.fig.get_size_inches())}"
         )
 
-    def test_both_namespaces_are_honoured_in_one_call(self, dem):
+    def test_both_namespaces_are_honoured_in_one_call(self, dem, monkeypatch):
         """A scene setting and a render keyword are applied to their own objects in the same call.
 
         Test scenario:
@@ -1451,20 +1451,18 @@ class TestSceneKw:
             drawn.append(kwargs)
             return real(self, data, **kwargs)
 
-        Map.field = spy
-        try:
-            scene = qp.quickmap(
-                dem, band=1, scene_kw={"figsize": (14.0, 9.0)}, cmap="magma"
-            )
-        finally:
-            Map.field = real
+        monkeypatch.setattr(Map, "field", spy)
+        scene = qp.quickmap(
+            dem, band=1, scene_kw={"figsize": (14.0, 9.0)}, cmap="magma"
+        )
         assert tuple(scene.fig.get_size_inches()) == (14.0, 9.0), (
             f"the scene setting should reach the scene, got {tuple(scene.fig.get_size_inches())}"
         )
-        assert drawn and drawn[0].get("cmap") == "magma", (
+        assert drawn, "the builder should have been called"
+        assert drawn[0].get("cmap") == "magma", (
             f"the render keyword should reach the builder, got {drawn}"
         )
-        assert "figsize" not in (drawn[0] if drawn else {}), (
+        assert "figsize" not in drawn[0], (
             f"the scene setting must not also be offered to the builder: {drawn}"
         )
 
