@@ -130,6 +130,11 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "prisms are combined into an UnstructuredGrid, which PyVista gives no decimate_pro at all, and "
             "simplifying their outer surface would merge separate footprints into one building"
         ),
+        "buildings": (
+            "LOD2 surfaces are triangulated per face and merged into one mesh, where decimate_pro would "
+            "weld separate façades and roofs together and collapse the real roof shape; a coarser city model "
+            "comes from a lower LOD upstream, not from simplifying the surfaces after the fact"
+        ),
         "polygons": (
             "flat filled footprints are combined into an UnstructuredGrid, which PyVista gives no decimate_pro "
             "at all, and simplifying them would weld separate footprints together; coarsen the geometry "

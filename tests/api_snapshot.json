@@ -38,6 +38,7 @@
       "kinds": [
         "basemap",
         "bivariate",
+        "buildings",
         "choropleth",
         "coastlines",
         "custom:pyvista",

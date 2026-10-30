@@ -18,6 +18,7 @@ import math
 import shutil
 import tempfile
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,90 @@ _POINT_RADIUS_FRACTION = 0.004
 #: Above this many points, a cloud is subsampled before glyphing — each point becomes a 20-triangle icosphere,
 #: so the uncapped triangle count (up to the tier's 500k-point budget x 20) is far too heavy for the CPU tracer.
 _MAX_GLYPH_POINTS = 50_000
+
+
+@dataclass(frozen=True)
+class PhotorealResult:
+    """The photoreal render together with its HDR AOV passes (returned by :meth:`photoreal` when ``return_aovs``).
+
+    The AOV passes are the linear, unclipped arrays the renderer produces before tonemapping, so they can feed
+    an HDR/compositing workflow; ``image`` is the same tonemapped frame a plain :meth:`photoreal` call returns.
+
+    Attributes:
+        image: The tonemapped ``(H, W, 3)`` uint8 RGB render.
+        beauty: The linear HDR ``(H, W, 3)`` beauty pass (unclipped), as written to EXR and fed to the denoiser.
+        albedo: The ``(H, W, 3)`` albedo AOV.
+        normal: The ``(H, W, 3)`` shading-normal AOV.
+    """
+
+    image: np.ndarray
+    beauty: np.ndarray
+    albedo: np.ndarray
+    normal: np.ndarray
+
+
+@dataclass(frozen=True)
+class SkyOptions:
+    """Illumination for :meth:`photoreal` — the sun and the sky it lights the scene with.
+
+    Attributes:
+        model: ``"constant"`` (a hard directional sun plus a flat constant sky) or ``"sunsky"`` (Mitsuba's
+            physical sun disk plus sky dome, which casts soft shadows), driven by the same sun azimuth/elevation.
+        color: ``(r, g, b)`` radiance of the constant sky fill (``model="constant"`` only).
+        turbidity: Atmospheric haze for ``model="sunsky"`` (about 2 for a clear sky, up to 10 for a hazy one).
+        sun_direction: ``(x, y, z)`` the sunlight travels (from the light toward the scene). ``None`` derives it
+            from the scene's :meth:`~...decoration.DecorationMixin.sun` azimuth/elevation when one is set,
+            falling back to a fixed default otherwise.
+        sun_irradiance: Scalar sun brightness (``model="constant"`` only).
+    """
+
+    model: str = "constant"
+    color: Any = _DEFAULT_SKY
+    turbidity: float = 3.0
+    sun_direction: Any = None
+    sun_irradiance: float = 6.0
+
+
+@dataclass(frozen=True)
+class WaterOptions:
+    """A reflective water plane for :meth:`photoreal`.
+
+    Attributes:
+        level: World ``z`` of the water surface; ``None`` adds no water.
+        roughness: ``0`` is a mirror-smooth surface; ``> 0`` gives a rippled rough water.
+    """
+
+    level: float | None = None
+    roughness: float = 0.0
+
+
+@dataclass(frozen=True)
+class SmokeOptions:
+    """A volumetric smoke/cloud for :meth:`photoreal`.
+
+    Attributes:
+        density: A 3-D ``(nz, ny, nx)`` density grid (non-negative); ``None`` renders no smoke.
+        scale: Extinction multiplier (optical thickness — higher reads as denser).
+        albedo: Single-scattering albedo in ``[0, 1]`` (near 1 = bright cloud).
+    """
+
+    density: Any = None
+    scale: float = 8.0
+    albedo: float = 0.9
+
+
+@dataclass(frozen=True)
+class OutputOptions:
+    """Extra outputs for :meth:`photoreal` beyond the tonemapped image.
+
+    Attributes:
+        exr: Where to also write the linear HDR beauty as OpenEXR (``.exr``); ``None`` writes none.
+        return_aovs: When ``True``, :meth:`photoreal` returns a :class:`PhotorealResult` (image plus the HDR
+            beauty/albedo/normal passes) instead of the bare uint8 image.
+    """
+
+    exr: Any = None
+    return_aovs: bool = False
 
 
 def _scene_sun_direction(decoration: Any) -> tuple[float, float, float] | None:
@@ -124,6 +209,155 @@ def _material(roughness: float | None) -> dict[str, Any]:
             "roughness": float(roughness),
         }
     return {"type": "twosided", "material": material}
+
+
+def _sky_emitters(
+    sky_model: str,
+    sun_direction: tuple[float, float, float],
+    sun_irradiance: float,
+    sky: Any,
+    turbidity: float,
+) -> dict[str, Any]:
+    """Build the scene's light emitters for :func:`mitsuba.load_dict`, per the chosen sky model (A2).
+
+    ``"constant"`` is the original pairing — a ``directional`` sun plus a flat ``constant`` sky fill, which
+    gives hard shadows and no sky variation. ``"sunsky"`` replaces both with Mitsuba's physical ``sunsky``
+    emitter: its finite sun disk casts **soft** shadows and its sky dome supplies physically-based ambient
+    light. ``sunsky`` points *at* the sun, which is the negation of the travel direction the directional sun
+    uses, so the same scene sun azimuth/elevation drives either model.
+
+    Args:
+        sky_model: ``"constant"`` or ``"sunsky"``.
+        sun_direction: ``(x, y, z)`` the sunlight travels (from the light toward the scene).
+        sun_irradiance: Directional-sun brightness (used by ``"constant"`` only).
+        sky: ``(r, g, b)`` constant-sky radiance (used by ``"constant"`` only).
+        turbidity: Atmospheric haze for ``sunsky`` (about 2 for a clear sky, up to 10 for a hazy one).
+
+    Returns:
+        dict: the emitter entries to merge into the scene dict.
+
+    Raises:
+        ValueError: when ``sky_model`` is neither ``"constant"`` nor ``"sunsky"``.
+    """
+    if sky_model == "constant":
+        return {
+            "sun": {
+                "type": "directional",
+                "direction": [float(v) for v in sun_direction],
+                "irradiance": {"type": "rgb", "value": float(sun_irradiance)},
+            },
+            "sky": {
+                "type": "constant",
+                "radiance": {"type": "rgb", "value": [float(v) for v in sky]},
+            },
+        }
+    if sky_model == "sunsky":
+        return {
+            "environment": {
+                "type": "sunsky",
+                "sun_direction": [-float(v) for v in sun_direction],
+                "turbidity": float(turbidity),
+            }
+        }
+    raise ValueError(f"sky_model must be 'constant' or 'sunsky', got {sky_model!r}")
+
+
+def _water_shape(
+    mi: Any,
+    bounds: Any,
+    center: tuple[float, float, float],
+    water_level: float,
+    roughness: float,
+) -> dict[str, Any]:
+    """A horizontal water plane for :func:`mitsuba.load_dict` — a rectangle with a (rough) water dielectric (A3).
+
+    A Mitsuba ``rectangle`` (the unit ``xy`` square) scaled to span the scene's horizontal extent and translated
+    to ``water_level`` (recentered by ``center`` like every other shape), carrying a water ``dielectric`` BSDF so
+    the path tracer reflects the sky and terrain off it — with Fresnel reflectance that rises toward grazing
+    angles, as real water does. ``roughness > 0`` switches to ``roughdielectric`` for a rippled surface.
+
+    Args:
+        mi: The imported ``mitsuba`` module (for :class:`ScalarTransform4f`).
+        bounds: The scene ``(xmin, xmax, ymin, ymax, zmin, zmax)`` bounds.
+        center: The scene centre subtracted from every shape (see :meth:`_photoreal_center`).
+        water_level: World ``z`` of the water surface.
+        roughness: ``0`` for a mirror-smooth surface, ``> 0`` for a rough (rippled) ``roughdielectric``.
+
+    Returns:
+        dict: the ``rectangle`` water-shape spec.
+    """
+    half_x = max((bounds[1] - bounds[0]) / 2.0, 1e-6)
+    half_y = max((bounds[3] - bounds[2]) / 2.0, 1e-6)
+    z = float(water_level) - float(center[2])
+    bsdf: dict[str, Any] = (
+        {"type": "dielectric", "int_ior": "water", "ext_ior": "air"}
+        if roughness <= 0.0
+        else {
+            "type": "roughdielectric",
+            "int_ior": "water",
+            "ext_ior": "air",
+            "alpha": float(roughness),
+        }
+    )
+    return {
+        "type": "rectangle",
+        "to_world": mi.ScalarTransform4f()
+        .translate([0.0, 0.0, z])
+        .scale([half_x, half_y, 1.0]),
+        "bsdf": bsdf,
+    }
+
+
+def _smoke_medium(
+    mi: Any,
+    density: np.ndarray,
+    bounds: Any,
+    scale: float,
+    albedo: float,
+) -> dict[str, Any]:
+    """A smoke/cloud volume for :func:`mitsuba.load_dict` — a cube filled with a heterogeneous medium (A4).
+
+    The density grid becomes a Mitsuba ``gridvolume`` wrapped in a ``heterogeneous`` participating medium inside
+    a ``cube`` with a ``null`` BSDF (the cube is only the medium's bounds, not a visible surface). The cube spans
+    the scene's extent, recentred to the origin like every other shape, and the grid is mapped across the cube's
+    local ``[-1, 1]^3`` box. With the ``volpath`` integrator this scatters light, so the smoke both self-shadows
+    and casts a shadow on the terrain below. ``scale`` multiplies the extinction (optical thickness); ``albedo``
+    sets how much light scatters vs is absorbed (near 1 = bright smoke/cloud).
+
+    Args:
+        mi: The imported ``mitsuba`` module.
+        density: A 3-D ``(nz, ny, nx)`` density grid, non-negative.
+        bounds: The scene ``(xmin, xmax, ymin, ymax, zmin, zmax)`` bounds.
+        scale: Extinction multiplier (optical thickness of the medium).
+        albedo: Single-scattering albedo in ``[0, 1]``.
+
+    Returns:
+        dict: the ``cube`` smoke-shape spec with its interior medium.
+    """
+    half = [
+        max((bounds[1] - bounds[0]) / 2.0, 1e-6),
+        max((bounds[3] - bounds[2]) / 2.0, 1e-6),
+        max((bounds[5] - bounds[4]) / 2.0, 1e-6),
+    ]
+    grid = np.ascontiguousarray(np.asarray(density, dtype="float32"))
+    grid_to_world = (
+        mi.ScalarTransform4f().translate([-1.0, -1.0, -1.0]).scale([2.0, 2.0, 2.0])
+    )
+    return {
+        "type": "cube",
+        "to_world": mi.ScalarTransform4f().scale(half),
+        "bsdf": {"type": "null"},
+        "interior": {
+            "type": "heterogeneous",
+            "sigma_t": {
+                "type": "gridvolume",
+                "grid": mi.VolumeGrid(grid),
+                "to_world": grid_to_world,
+            },
+            "scale": float(scale),
+            "albedo": float(albedo),
+        },
+    }
 
 
 def _require_photoreal():
@@ -344,6 +578,38 @@ def _despeckle(color: np.ndarray, threshold: float) -> np.ndarray:
     return out
 
 
+def _tonemap(
+    mi: Any,
+    beauty: np.ndarray,
+    albedo: np.ndarray,
+    normal: np.ndarray,
+    denoise: bool,
+    despeckle: float | None,
+) -> tuple[np.ndarray, Any]:
+    """Turn the HDR beauty into an sRGB uint8 image: OIDN-denoise (or clip), optional despeckle, sRGB convert.
+
+    Args:
+        mi: The imported ``mitsuba`` module.
+        beauty: The HDR ``(H, W, 3)`` beauty pass.
+        albedo: The albedo AOV (an OIDN guide).
+        normal: The shading-normal AOV (an OIDN guide).
+        denoise: Denoise with Intel OIDN; ``False`` just clips the HDR beauty into ``[0, 1]``.
+        despeckle: Despeckle threshold applied after the denoise, or ``None`` for no despeckle.
+
+    Returns:
+        tuple: the ``(H, W, 3)`` uint8 image and the Mitsuba ``Bitmap`` it came from (so a caller can write it).
+    """
+    color = _denoise(beauty, albedo, normal) if denoise else np.clip(beauty, 0.0, 1.0)
+    if despeckle is not None:
+        # Remove the isolated bright/dark speckles a low-sample path trace leaves, after the denoise, on the
+        # LDR image where a firefly is a lone outlier against its neighbours.
+        color = _despeckle(color, float(despeckle))
+    bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
+        mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
+    )
+    return np.array(bmp), bmp
+
+
 def _split_aovs(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Split an `aov`-integrator render tensor into ``(beauty, albedo, normal)``, failing loud on a layout change.
 
@@ -389,13 +655,14 @@ class PhotorealMixin(_MixinBase):
         width: int = 1280,
         height: int = 800,
         denoise: bool = True,
-        sun_direction: Any = None,
-        sun_irradiance: float = 6.0,
-        sky: Any = _DEFAULT_SKY,
         max_depth: int = 8,
         despeckle: float | None = None,
         roughness: float | None = None,
         point_radius: float | None = None,
+        sky: SkyOptions | None = None,
+        water: WaterOptions | None = None,
+        smoke: SmokeOptions | None = None,
+        output: OutputOptions | None = None,
     ) -> Any:
         """Render the scene as a photorealistic path-traced still with Mitsuba 3, optionally denoised.
 
@@ -410,23 +677,28 @@ class PhotorealMixin(_MixinBase):
             width: Image width in pixels.
             height: Image height in pixels.
             denoise: Denoise the frame with Intel OIDN (albedo + normal guided). Needs the ``oidn`` dependency.
-            sun_direction: ``(x, y, z)`` direction the sunlight travels (from the light toward the scene).
-                ``None`` (the default) derives it from the scene's :meth:`~...decoration.DecorationMixin.sun`
-                azimuth/elevation when one is set, falling back to a fixed default otherwise (#511).
-            sun_irradiance: Scalar brightness of the sun.
-            sky: ``(r, g, b)`` radiance of the constant sky fill.
-            max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower).
+            max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower). Water and smoke
+                need it high enough for the extra bounce.
             despeckle: Remove isolated bright/dark speckles (fireflies) a low-sample path trace leaves: a pixel
                 deviating from its 3x3 neighbourhood median by more than this (in the ``[0, 1]`` output) is
                 replaced by the median, leaving edges and smooth regions untouched. ``None`` (the default) is
-                off; ``~0.2-0.4`` is a typical strength (#512).
+                off; ``~0.2-0.4`` is a typical strength.
             roughness: ``None`` renders a plain Lambertian diffuse surface; a value in ``[0, 1]`` uses a
-                Disney-style ``principled`` BSDF of that roughness so the surface reads matte-to-glossy (#512).
+                Disney-style ``principled`` BSDF of that roughness so the surface reads matte-to-glossy.
             point_radius: Sphere radius (world units) for points-only layers such as point clouds. ``None``
-                (the default) uses a small fraction of the scene bounding-box diagonal (#510).
+                (the default) uses a small fraction of the scene bounding-box diagonal.
+            sky: A :class:`SkyOptions` bundling the sun and sky — model (constant/sunsky), colour, turbidity,
+                sun direction and irradiance. ``None`` (the default) is a constant sky lit by the scene-derived
+                sun (A2, #511).
+            water: A :class:`WaterOptions` reflective water plane (level + roughness). ``None`` adds no water (A3).
+            smoke: A :class:`SmokeOptions` volumetric smoke/cloud (3-D density grid + scale + albedo), traced with
+                ``volpath`` so it self-shadows and shadows the terrain. ``None`` renders no smoke (A4).
+            output: An :class:`OutputOptions` for extra outputs — an EXR of the HDR beauty, and whether to return
+                the AOV passes. ``None`` (the default) writes only the tonemapped image (A1).
 
         Returns:
-            The rendered ``(H, W, 3)`` uint8 RGB array; also written to ``path`` when one was given.
+            The rendered ``(H, W, 3)`` uint8 RGB array (also written to ``path`` when one was given); or, when
+            ``output.return_aovs`` is set, a :class:`PhotorealResult` with that image plus the HDR AOV passes.
 
         Raises:
             ImportError: when the ``[photoreal]`` extra (``mitsuba`` + ``oidn``) is not installed.
@@ -449,7 +721,12 @@ class PhotorealMixin(_MixinBase):
         mi = _require_photoreal()
         mi.set_variant("scalar_rgb")
 
+        sky = sky or SkyOptions()
+        water = water or WaterOptions()
+        smoke = smoke or SmokeOptions()
+        output = output or OutputOptions()
         center = self._photoreal_center()
+        sun_direction = sky.sun_direction
         if sun_direction is None:
             sun_direction = (
                 _scene_sun_direction(getattr(self, "_decoration", None))
@@ -482,47 +759,89 @@ class PhotorealMixin(_MixinBase):
                 "sampler": {"type": "independent", "sample_count": int(spp)},
                 "film": {"type": "hdrfilm", "width": int(width), "height": int(height)},
             }
-            scene_dict: dict[str, Any] = {
-                "type": "scene",
-                "integrator": {
-                    "type": "aov",
-                    "aovs": "albedo:albedo,normals:sh_normal",
-                    "img": {"type": "path", "max_depth": int(max_depth)},
-                },
-                "sensor": sensor,
-                "sun": {
-                    "type": "directional",
-                    "direction": [float(v) for v in sun_direction],
-                    "irradiance": {"type": "rgb", "value": float(sun_irradiance)},
-                },
-                "sky": {
-                    "type": "constant",
-                    "radiance": {"type": "rgb", "value": [float(v) for v in sky]},
-                },
-            }
-            scene_dict.update(meshes)
-
+            scene_dict = self._photoreal_scene_dict(
+                mi, center, sensor, meshes, sun_direction, sky, water, smoke, max_depth
+            )
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
             beauty, albedo, normal = _split_aovs(arr)
-            color = (
-                _denoise(beauty, albedo, normal)
-                if denoise
-                else np.clip(beauty, 0.0, 1.0)
-            )
-            if despeckle is not None:
-                # Remove the isolated bright/dark speckles a low-sample path trace leaves, after the denoise,
-                # on the LDR image where a firefly is a lone outlier against its neighbours (#512).
-                color = _despeckle(color, float(despeckle))
-
-            bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
-                mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
-            )
-            out = np.array(bmp)
+            out, bmp = _tonemap(mi, beauty, albedo, normal, denoise, despeckle)
+            if output.exr is not None:
+                # The linear, unclipped HDR beauty (pre-tonemap, pre-despeckle) is what an EXR workflow wants.
+                mi.Bitmap(np.ascontiguousarray(beauty)).write(str(output.exr))
             if path is not None:
                 bmp.write(str(path))
+            if output.return_aovs:
+                return PhotorealResult(
+                    image=out, beauty=beauty, albedo=albedo, normal=normal
+                )
             return out
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def _photoreal_scene_dict(
+        self,
+        mi: Any,
+        center: tuple[float, float, float],
+        sensor: dict[str, Any],
+        meshes: dict[str, Any],
+        sun_direction: Any,
+        sky: SkyOptions,
+        water: WaterOptions,
+        smoke: SmokeOptions,
+        max_depth: int,
+    ) -> dict[str, Any]:
+        """Assemble the Mitsuba scene dict: the AOV integrator, the sensor, the sky emitters, the layer meshes,
+        and the optional water plane and smoke medium.
+
+        Args:
+            mi: The imported ``mitsuba`` module.
+            center: The scene centre every shape is recentred by.
+            sensor: The camera ``sensor`` sub-dict.
+            meshes: The per-layer ``ply`` shapes from :meth:`_photoreal_meshes`.
+            sun_direction: The resolved Mitsuba sun travel-direction.
+            sky: The resolved :class:`SkyOptions`.
+            water: The resolved :class:`WaterOptions`.
+            smoke: The resolved :class:`SmokeOptions`.
+            max_depth: The path-tracer bounce depth.
+
+        Returns:
+            dict: the scene dict for :func:`mitsuba.load_dict`.
+
+        Raises:
+            ValueError: when ``smoke.density`` is not a 3-D grid.
+        """
+        scene_dict: dict[str, Any] = {
+            "type": "scene",
+            "integrator": {
+                "type": "aov",
+                "aovs": "albedo:albedo,normals:sh_normal",
+                "img": {
+                    "type": "volpath" if smoke.density is not None else "path",
+                    "max_depth": int(max_depth),
+                },
+            },
+            "sensor": sensor,
+        }
+        scene_dict.update(
+            _sky_emitters(
+                sky.model, sun_direction, sky.sun_irradiance, sky.color, sky.turbidity
+            )
+        )
+        scene_dict.update(meshes)
+        if water.level is not None:
+            scene_dict["water"] = _water_shape(
+                mi, self.plotter.bounds, center, water.level, water.roughness
+            )
+        if smoke.density is not None:
+            density = np.asarray(smoke.density, dtype="float32")
+            if density.ndim != 3:
+                raise ValueError(
+                    f"smoke density must be a 3-D (nz, ny, nx) grid, got {density.ndim}-D"
+                )
+            scene_dict["smoke"] = _smoke_medium(
+                mi, density, self.plotter.bounds, smoke.scale, smoke.albedo
+            )
+        return scene_dict
 
     def _photoreal_center(self) -> tuple[float, float, float]:
         """Return the scene bounding-box centre ``(x, y, z)``, used to recenter geometry and camera."""
