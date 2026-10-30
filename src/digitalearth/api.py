@@ -1249,6 +1249,10 @@ def _scene_of(
             (3857, None)
 
             ```
+
+    See Also:
+        quickmap: The entry point that takes ``scene_kw`` and hands it to one of the four tier
+            helpers, each of which builds its scene through this function.
     """
     return scene_class(**{**seeded, **(scene_kw or {})})
 
@@ -1630,6 +1634,11 @@ def _quickmap_web(
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
         crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
+        scene_kw: Construction settings for the scene, kept out of ``**kwargs`` so no name has to
+            be guessed at (see :func:`_scene_of`). This is the tier where that matters most:
+            ``height`` is both the map's pixel height, declared by the constructor, and the
+            extrusion height ``WebMap.extrusion`` reads, so only the caller can say which one a
+            given call means.
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
         colorbar: Whether this tier's colour key is drawn, carried through :func:`_add_web_legend` rather
@@ -1781,6 +1790,9 @@ def _quickmap_3d(
             scalar bar reading `0, 1, 2 …` over its class indices. ``False`` takes the bar off. Either way a
             layer whose colour is flat gets no key and no error, as on the matplotlib and web paths.
         crs: The scene's display CRS; ``None`` takes the data's own.
+        scene_kw: Construction settings for the scene, kept out of ``**kwargs`` so no name has to
+            be guessed at (see :func:`_scene_of`) — ``window_size``, ``off_screen``, ``theme`` and
+            the rest of what ``Scene3D`` reads only while it is built.
         **kwargs: Forwarded to the chosen ``Scene3D`` builder (e.g. ``cmap``, ``z_exaggeration``,
             ``column``, ``height``, ``size``).
 
