@@ -131,7 +131,7 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "simplifying their outer surface would merge separate footprints into one building"
         ),
         "buildings": (
-            "LOD2 surfaces are fan-triangulated per face and merged into one mesh, where decimate_pro would "
+            "LOD2 surfaces are triangulated per face and merged into one mesh, where decimate_pro would "
             "weld separate façades and roofs together and collapse the real roof shape; a coarser city model "
             "comes from a lower LOD upstream, not from simplifying the surfaces after the fact"
         ),

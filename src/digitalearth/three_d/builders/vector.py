@@ -681,9 +681,11 @@ class VectorMixin(_MixinBase):
         Where :meth:`extruded_polygons` raises a flat 2-D footprint into a prism, this renders geometry that is
         already 3-D — the ``Polygon Z`` surfaces a semantic city model carries (CityGML / CityJSON / 3D Tiles,
         read upstream by ``pyramids-citymodels`` and handed over as a ``FeatureCollection``), with their real
-        roofs and façades. Each surface is fan-triangulated and the surfaces are merged into one mesh, placed in
-        the scene's display CRS — set when the scene has none, reprojected through pyramids when they are in
-        another. The fan is exact for the planar, convex faces LOD2 buildings are built from (A7).
+        roofs and façades. Each surface is triangulated (VTK ear-clips a non-convex planar face correctly) and
+        the surfaces are merged into one mesh, placed in the scene's display CRS — set when the scene has none,
+        reprojected through pyramids when they are in another. Only each surface's exterior ring is drawn: an
+        interior ring (a hole/opening) is not carved, which LOD2 surfaces rarely need (a hole is an LOD3+
+        concern) (A7).
 
         Args:
             data: A GeoDataFrame / pyramids ``FeatureCollection`` of 3-D ``Polygon``/``MultiPolygon`` (``Z``)
