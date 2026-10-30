@@ -794,8 +794,7 @@ class TestSmoke:
     def test_a_non_3d_smoke_grid_is_rejected(self):
         """A non-3-D smoke grid raises ValueError before rendering."""
         scene = _small_terrain_scene()
+        flat = np.zeros((4, 4))
         with pytest.raises(ValueError, match="3-D"):
-            scene.photoreal(
-                spp=4, width=32, height=24, denoise=False, smoke=np.zeros((4, 4))
-            )
+            scene.photoreal(spp=4, width=32, height=24, denoise=False, smoke=flat)
         scene.close()
