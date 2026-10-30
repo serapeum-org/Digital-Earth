@@ -578,6 +578,38 @@ def _despeckle(color: np.ndarray, threshold: float) -> np.ndarray:
     return out
 
 
+def _tonemap(
+    mi: Any,
+    beauty: np.ndarray,
+    albedo: np.ndarray,
+    normal: np.ndarray,
+    denoise: bool,
+    despeckle: float | None,
+) -> tuple[np.ndarray, Any]:
+    """Turn the HDR beauty into an sRGB uint8 image: OIDN-denoise (or clip), optional despeckle, sRGB convert.
+
+    Args:
+        mi: The imported ``mitsuba`` module.
+        beauty: The HDR ``(H, W, 3)`` beauty pass.
+        albedo: The albedo AOV (an OIDN guide).
+        normal: The shading-normal AOV (an OIDN guide).
+        denoise: Denoise with Intel OIDN; ``False`` just clips the HDR beauty into ``[0, 1]``.
+        despeckle: Despeckle threshold applied after the denoise, or ``None`` for no despeckle.
+
+    Returns:
+        tuple: the ``(H, W, 3)`` uint8 image and the Mitsuba ``Bitmap`` it came from (so a caller can write it).
+    """
+    color = _denoise(beauty, albedo, normal) if denoise else np.clip(beauty, 0.0, 1.0)
+    if despeckle is not None:
+        # Remove the isolated bright/dark speckles a low-sample path trace leaves, after the denoise, on the
+        # LDR image where a firefly is a lone outlier against its neighbours.
+        color = _despeckle(color, float(despeckle))
+    bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
+        mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
+    )
+    return np.array(bmp), bmp
+
+
 def _split_aovs(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Split an `aov`-integrator render tensor into ``(beauty, albedo, normal)``, failing loud on a layout change.
 
@@ -727,58 +759,12 @@ class PhotorealMixin(_MixinBase):
                 "sampler": {"type": "independent", "sample_count": int(spp)},
                 "film": {"type": "hdrfilm", "width": int(width), "height": int(height)},
             }
-            scene_dict: dict[str, Any] = {
-                "type": "scene",
-                "integrator": {
-                    "type": "aov",
-                    "aovs": "albedo:albedo,normals:sh_normal",
-                    "img": {
-                        "type": "volpath" if smoke.density is not None else "path",
-                        "max_depth": int(max_depth),
-                    },
-                },
-                "sensor": sensor,
-            }
-            scene_dict.update(
-                _sky_emitters(
-                    sky.model,
-                    sun_direction,
-                    sky.sun_irradiance,
-                    sky.color,
-                    sky.turbidity,
-                )
+            scene_dict = self._photoreal_scene_dict(
+                mi, center, sensor, meshes, sun_direction, sky, water, smoke, max_depth
             )
-            scene_dict.update(meshes)
-            if water.level is not None:
-                scene_dict["water"] = _water_shape(
-                    mi, self.plotter.bounds, center, water.level, water.roughness
-                )
-            if smoke.density is not None:
-                density = np.asarray(smoke.density, dtype="float32")
-                if density.ndim != 3:
-                    raise ValueError(
-                        f"smoke density must be a 3-D (nz, ny, nx) grid, got {density.ndim}-D"
-                    )
-                scene_dict["smoke"] = _smoke_medium(
-                    mi, density, self.plotter.bounds, smoke.scale, smoke.albedo
-                )
-
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
             beauty, albedo, normal = _split_aovs(arr)
-            color = (
-                _denoise(beauty, albedo, normal)
-                if denoise
-                else np.clip(beauty, 0.0, 1.0)
-            )
-            if despeckle is not None:
-                # Remove the isolated bright/dark speckles a low-sample path trace leaves, after the denoise,
-                # on the LDR image where a firefly is a lone outlier against its neighbours (#512).
-                color = _despeckle(color, float(despeckle))
-
-            bmp = mi.Bitmap(np.ascontiguousarray(color)).convert(
-                mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.UInt8, True
-            )
-            out = np.array(bmp)
+            out, bmp = _tonemap(mi, beauty, albedo, normal, denoise, despeckle)
             if output.exr is not None:
                 # The linear, unclipped HDR beauty (pre-tonemap, pre-despeckle) is what an EXR workflow wants.
                 mi.Bitmap(np.ascontiguousarray(beauty)).write(str(output.exr))
@@ -791,6 +777,71 @@ class PhotorealMixin(_MixinBase):
             return out
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def _photoreal_scene_dict(
+        self,
+        mi: Any,
+        center: tuple[float, float, float],
+        sensor: dict[str, Any],
+        meshes: dict[str, Any],
+        sun_direction: Any,
+        sky: SkyOptions,
+        water: WaterOptions,
+        smoke: SmokeOptions,
+        max_depth: int,
+    ) -> dict[str, Any]:
+        """Assemble the Mitsuba scene dict: the AOV integrator, the sensor, the sky emitters, the layer meshes,
+        and the optional water plane and smoke medium.
+
+        Args:
+            mi: The imported ``mitsuba`` module.
+            center: The scene centre every shape is recentred by.
+            sensor: The camera ``sensor`` sub-dict.
+            meshes: The per-layer ``ply`` shapes from :meth:`_photoreal_meshes`.
+            sun_direction: The resolved Mitsuba sun travel-direction.
+            sky: The resolved :class:`SkyOptions`.
+            water: The resolved :class:`WaterOptions`.
+            smoke: The resolved :class:`SmokeOptions`.
+            max_depth: The path-tracer bounce depth.
+
+        Returns:
+            dict: the scene dict for :func:`mitsuba.load_dict`.
+
+        Raises:
+            ValueError: when ``smoke.density`` is not a 3-D grid.
+        """
+        scene_dict: dict[str, Any] = {
+            "type": "scene",
+            "integrator": {
+                "type": "aov",
+                "aovs": "albedo:albedo,normals:sh_normal",
+                "img": {
+                    "type": "volpath" if smoke.density is not None else "path",
+                    "max_depth": int(max_depth),
+                },
+            },
+            "sensor": sensor,
+        }
+        scene_dict.update(
+            _sky_emitters(
+                sky.model, sun_direction, sky.sun_irradiance, sky.color, sky.turbidity
+            )
+        )
+        scene_dict.update(meshes)
+        if water.level is not None:
+            scene_dict["water"] = _water_shape(
+                mi, self.plotter.bounds, center, water.level, water.roughness
+            )
+        if smoke.density is not None:
+            density = np.asarray(smoke.density, dtype="float32")
+            if density.ndim != 3:
+                raise ValueError(
+                    f"smoke density must be a 3-D (nz, ny, nx) grid, got {density.ndim}-D"
+                )
+            scene_dict["smoke"] = _smoke_medium(
+                mi, density, self.plotter.bounds, smoke.scale, smoke.albedo
+            )
+        return scene_dict
 
     def _photoreal_center(self) -> tuple[float, float, float]:
         """Return the scene bounding-box centre ``(x, y, z)``, used to recenter geometry and camera."""
