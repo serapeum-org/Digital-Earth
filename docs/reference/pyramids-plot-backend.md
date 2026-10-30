@@ -126,21 +126,30 @@ scene = ds.plot(backend="3d", band=0)
 scene.colorbar().orbit("fly.gif", n_frames=60)
 ```
 
-A tier scene's construction-time settings are attributes on the built object. Adjust them there —
-they cannot be passed to the call, because a keyword goes to the render, and several names mean one
-thing to a scene and another to a builder (`height` is the HoloViz canvas height for a rasterized
-layer and the web map's pixel height):
+A tier scene's own settings go in `scene_kw`, which keeps them out of the render's keywords:
 
 ```python
-scene = ds.plot(backend="web", band=0)
-scene.style = "light"
+ds.plot(backend="web", band=0, scene_kw={"center": (31.0, 30.0), "zoom": 6, "style": "light"})
+ds.plot(backend="interactive", band=0, scene_kw={"width": 1100, "height": 700})
+ds.plot(band=0, scene_kw={"figsize": (14, 9)})                 # matplotlib
 ```
 
-!!! note "Some settings are read only while the scene is built"
-    The web tier's `zoom` and `center` are among them: a raster layer fits the view to the data's
-    extent, so assigning `scene.zoom` afterwards does not move the camera. Build the scene yourself
-    when you need to choose the view — `WebMap(zoom=6, center=(31.0, 30.0))` — and add the layer to
-    it.
+They need their own mapping because a name alone cannot say which object it is for. `height` is the
+web map's pixel height, *and* `WebMap.extrusion`'s extrusion height, *and* the Datashader canvas
+height the HoloViz tier takes out of a builder's `**opts`. So both can be asked for at once, and
+each reaches its own object:
+
+```python
+ds.plot(backend="web", scene_kw={"height": 650})   # the map is 650px tall
+polygons.plot(backend="web", height=50_000)        # the extrusion is 50km — the builder's keyword
+```
+
+A key the scene does not take is refused by the scene, naming it:
+
+```text
+ds.plot(band=0, scene_kw={"not_a_scene_option": 1})
+TypeError: GeoLayerBase.__init__() got an unexpected keyword argument 'not_a_scene_option'
+```
 
 Two things need `import digitalearth`, and no keyword can change that:
 
