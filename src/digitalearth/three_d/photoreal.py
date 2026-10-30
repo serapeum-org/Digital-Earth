@@ -198,6 +198,52 @@ def _sky_emitters(
     raise ValueError(f"sky_model must be 'constant' or 'sunsky', got {sky_model!r}")
 
 
+def _water_shape(
+    mi: Any,
+    bounds: Any,
+    center: tuple[float, float, float],
+    water_level: float,
+    roughness: float,
+) -> dict[str, Any]:
+    """A horizontal water plane for :func:`mitsuba.load_dict` — a rectangle with a (rough) water dielectric (A3).
+
+    A Mitsuba ``rectangle`` (the unit ``xy`` square) scaled to span the scene's horizontal extent and translated
+    to ``water_level`` (recentered by ``center`` like every other shape), carrying a water ``dielectric`` BSDF so
+    the path tracer reflects the sky and terrain off it — with Fresnel reflectance that rises toward grazing
+    angles, as real water does. ``roughness > 0`` switches to ``roughdielectric`` for a rippled surface.
+
+    Args:
+        mi: The imported ``mitsuba`` module (for :class:`ScalarTransform4f`).
+        bounds: The scene ``(xmin, xmax, ymin, ymax, zmin, zmax)`` bounds.
+        center: The scene centre subtracted from every shape (see :meth:`_photoreal_center`).
+        water_level: World ``z`` of the water surface.
+        roughness: ``0`` for a mirror-smooth surface, ``> 0`` for a rough (rippled) ``roughdielectric``.
+
+    Returns:
+        dict: the ``rectangle`` water-shape spec.
+    """
+    half_x = max((bounds[1] - bounds[0]) / 2.0, 1e-6)
+    half_y = max((bounds[3] - bounds[2]) / 2.0, 1e-6)
+    z = float(water_level) - float(center[2])
+    bsdf: dict[str, Any] = (
+        {"type": "dielectric", "int_ior": "water", "ext_ior": "air"}
+        if roughness <= 0.0
+        else {
+            "type": "roughdielectric",
+            "int_ior": "water",
+            "ext_ior": "air",
+            "alpha": float(roughness),
+        }
+    )
+    return {
+        "type": "rectangle",
+        "to_world": mi.ScalarTransform4f()
+        .translate([0.0, 0.0, z])
+        .scale([half_x, half_y, 1.0]),
+        "bsdf": bsdf,
+    }
+
+
 def _require_photoreal():
     """Import and return Mitsuba, or raise a clear, actionable error when the photoreal extra is missing.
 
@@ -466,6 +512,8 @@ class PhotorealMixin(_MixinBase):
         sky: Any = _DEFAULT_SKY,
         sky_model: str = "constant",
         turbidity: float = 3.0,
+        water_level: float | None = None,
+        water_roughness: float = 0.0,
         max_depth: int = 8,
         despeckle: float | None = None,
         roughness: float | None = None,
@@ -495,6 +543,10 @@ class PhotorealMixin(_MixinBase):
                 ``"sunsky"`` uses Mitsuba's physical ``sunsky`` emitter instead — a finite sun disk that casts
                 **soft** shadows plus a physically-based sky dome — driven by the same scene sun az/el (#512 A2).
             turbidity: Atmospheric haze for ``sky_model="sunsky"`` (about 2 for a clear sky, up to 10 for hazy).
+            water_level: World ``z`` of a reflective water plane spanning the scene; the path tracer reflects the
+                sky/terrain off it (Fresnel, strongest at grazing angles). ``None`` (the default) adds no water.
+                Needs ``max_depth`` high enough for the extra bounce (#512 A3).
+            water_roughness: ``0`` (the default) is a mirror-smooth surface; ``> 0`` gives a rippled rough water.
             max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower).
             despeckle: Remove isolated bright/dark speckles (fireflies) a low-sample path trace leaves: a pixel
                 deviating from its 3x3 neighbourhood median by more than this (in the ``[0, 1]`` output) is
@@ -580,6 +632,10 @@ class PhotorealMixin(_MixinBase):
                 _sky_emitters(sky_model, sun_direction, sun_irradiance, sky, turbidity)
             )
             scene_dict.update(meshes)
+            if water_level is not None:
+                scene_dict["water"] = _water_shape(
+                    mi, self.plotter.bounds, center, water_level, water_roughness
+                )
 
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
             beauty, albedo, normal = _split_aovs(arr)

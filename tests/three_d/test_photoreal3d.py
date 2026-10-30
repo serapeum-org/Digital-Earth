@@ -709,3 +709,42 @@ class TestSkyModel:
         assert img.shape == (48, 64, 3), img.shape
         assert int(img.max()) > 0, "the sunsky render must not be black"
         scene.close()
+
+
+class TestWater:
+    """`photoreal` adds a reflective water plane via water_level (#512 A3)."""
+
+    def test_water_shape_is_a_dielectric_rectangle(self):
+        """_water_shape builds a rectangle with a smooth water dielectric, or a roughdielectric when rippled."""
+        import mitsuba as mi
+
+        from digitalearth.three_d.photoreal import _water_shape
+
+        mi.set_variant("scalar_rgb")
+        smooth = _water_shape(
+            mi, (0.0, 10.0, 0.0, 8.0, 0.0, 5.0), (5.0, 4.0, 2.5), 1.0, 0.0
+        )
+        assert (
+            smooth["type"] == "rectangle" and smooth["bsdf"]["type"] == "dielectric"
+        ), smooth
+        rough = _water_shape(
+            mi, (0.0, 10.0, 0.0, 8.0, 0.0, 5.0), (5.0, 4.0, 2.5), 1.0, 0.3
+        )
+        assert (
+            rough["bsdf"]["type"] == "roughdielectric" and rough["bsdf"]["alpha"] == 0.3
+        ), rough
+
+    def test_water_level_renders_and_differs_from_dry(self):
+        """A water_level render is non-blank and differs from the same scene with no water."""
+        dry = _small_terrain_scene()
+        base = dry.photoreal(spp=8, width=64, height=48, denoise=False, max_depth=10)
+        dry.close()
+        wet = _small_terrain_scene()
+        bounds = wet.plotter.bounds
+        mid_z = (bounds[4] + bounds[5]) / 2.0
+        img = wet.photoreal(
+            spp=8, width=64, height=48, denoise=False, max_depth=10, water_level=mid_z
+        )
+        wet.close()
+        assert int(img.max()) > 0, "the water render must not be black"
+        assert not np.array_equal(img, base), "adding water must change the render"
