@@ -746,3 +746,33 @@ def test_surface_rings_preserves_z():
     rings = list(_surface_rings(Polygon([(0, 0, 1), (1, 0, 1), (1, 1, 2), (0, 1, 2)])))
     assert len(rings) == 1 and rings[0].shape[1] == 3, rings
     assert float(rings[0][:, 2].max()) == 2.0, "z is preserved"
+
+
+def test_surface_rings_lifts_a_2d_polygon_to_z_zero():
+    """A 2-D polygon (no z) yields a 3-column ring lifted onto z=0, so a mixed input still draws."""
+    from digitalearth.three_d.builders.vector import _surface_rings
+
+    rings = list(_surface_rings(Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])))
+    assert len(rings) == 1 and rings[0].shape[1] == 3, rings
+    assert float(np.abs(rings[0][:, 2]).max()) == 0.0, "a 2-D ring is lifted onto z=0"
+
+
+def test_draw_buildings_skips_a_degenerate_ring(monkeypatch):
+    """A ring with fewer than three vertices is skipped, so only the real surfaces reach the mesh."""
+    import numpy as _np
+
+    from digitalearth.three_d.builders import vector as _vec
+
+    triangle = _np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 1.0]])
+    monkeypatch.setattr(
+        _vec, "_surface_rings", lambda _geom: iter([_np.zeros((2, 3)), triangle])
+    )
+    scene = Scene3D(off_screen=True)
+    scene.buildings(
+        gpd.GeoDataFrame(geometry=[Polygon([(0, 0, 0), (1, 0, 0), (0, 1, 1)])])
+    )
+    mesh, _ = scene.layers[0]
+    assert mesh.n_points == 3, (
+        f"only the 3-point triangle should survive, got {mesh.n_points}"
+    )
+    scene.close()

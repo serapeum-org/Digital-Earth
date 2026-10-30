@@ -642,3 +642,23 @@ class TestMapPlate:
         )
         assert "attribution" not in scene._decoration, "no credit is drawn without text"
         scene.close()
+
+    def test_map_plate_draws_legend_and_scale_bar_when_asked(self):
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+
+        gdf = gpd.GeoDataFrame(
+            {"v": [1.0, 2.0]},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+            ],
+        )
+        scene = Scene3D(off_screen=True, crs=4326)
+        scene.choropleth(gdf, column="v", scheme="categorical")
+        out = scene.map_plate("Areas", legend=True, scale_bar=True, north_arrow=False)
+        assert out is scene, "map_plate must return self"
+        assert scene.plotter.camera.GetParallelProjection() == 1, (
+            "scale_bar switches to orthographic"
+        )
+        scene.close()
