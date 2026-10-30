@@ -127,3 +127,76 @@ class TestWebBackendDraw:
         assert [guide.show for guide in guides] == [flag], (
             f"colorbar={flag} must be recorded as show={flag}, got {guides}"
         )
+
+
+class TestWebSceneKw:
+    """`scene_kw` on the web tier — the scene's settings, kept out of the render's keywords."""
+
+    def test_the_two_namespaces_are_disjoint(self, dataset, mocker):
+        """`height` reaches the scene from `scene_kw` and the builder from the call itself.
+
+        Args:
+            dataset: The shared raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder.
+
+        Test scenario:
+            This is the claim the `scene_kw` design rests on. The web tier declares `height` (the
+            map's pixel height, default 500) *and* reads a `height` keyword on `WebMap.extrusion`.
+            Passed in `scene_kw` it must reach the constructor; passed bare it must reach the builder
+            and leave the scene's own height alone. Two earlier attempts inferred the destination
+            from signatures and got this backwards, turning a 50km extrusion into a 50,000-pixel map.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.api import quickmap
+        from digitalearth.web import WebMap
+
+        field = mocker.patch.object(WebMap, "field")
+
+        scened = quickmap(dataset, backend="web", band=1, scene_kw={"height": 650})
+        assert scened.height == 650, (
+            f"scene_kw's height must reach the constructor, got {scened.height}"
+        )
+
+        rendered = quickmap(dataset, backend="web", band=1, height=650)
+        assert rendered.height == 500, (
+            f"a bare height belongs to the render, so the scene keeps its default, got "
+            f"{rendered.height}"
+        )
+        assert field.call_args.kwargs.get("height") == 650, (
+            f"a bare height must reach the builder instead, got {field.call_args!r}"
+        )
+
+    @pytest.mark.parametrize("given, seeded", [(False, False), (True, True)])
+    def test_the_crs_is_seeded_only_when_one_was_given(
+        self, dataset, mocker, given, seeded
+    ):
+        """The web branch passes `crs` to the constructor only when the caller named one.
+
+        Args:
+            dataset: The shared raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder and spy the constructor.
+            given: Whether to pass `crs=4326` to `quickmap`.
+            seeded: Whether the constructor should receive a `crs` keyword.
+
+        Test scenario:
+            `_quickmap_web` builds its seeded mapping with a conditional so that an omitted `crs`
+            lets `WebMap` apply its own default instead of being handed the `_UNSET` sentinel. The
+            constructor's keywords are what distinguishes the two arms: `WebMap.crs` reads back as
+            the int 4326 either way, so asserting on it would pass even if the sentinel leaked. 4326
+            is the only value the tier accepts — it refuses any other CRS by name.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.api import quickmap
+        from digitalearth.web import WebMap
+
+        mocker.patch.object(WebMap, "field")
+        spy = mocker.patch.object(
+            WebMap, "__init__", autospec=True, side_effect=WebMap.__init__
+        )
+
+        quickmap(dataset, backend="web", band=1, **({"crs": 4326} if given else {}))
+
+        assert ("crs" in spy.call_args.kwargs) is seeded, (
+            f"given={given}: the constructor should {'' if seeded else 'not '}receive crs, got "
+            f"{spy.call_args.kwargs!r}"
+        )

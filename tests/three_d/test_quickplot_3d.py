@@ -181,3 +181,30 @@ class TestQuickplot3DBackend:
         mixed = pd.concat([pts, poly])
         with pytest.raises(TypeError, match="uniformly point, polygon, or raster"):
             quickplot(mixed, backend="3d")
+
+    def test_a_scene_setting_reaches_the_constructor(self, raster, mocker):
+        """`scene_kw` reaches `Scene3D`, which no routing allowlist ever covered.
+
+        Args:
+            raster: The projected raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder and spy the constructor.
+
+        Test scenario:
+            Two reverted designs carried a per-tier list of routable names and had no entry for this
+            tier, so none of its constructor options was reachable at all. A namespace needs no
+            entry. `window_size` is the setting asserted on because `Scene3D` exposes no `crs`
+            attribute to read back.
+        """
+        from digitalearth.api import quickmap
+        from digitalearth.three_d import Scene3D
+
+        mocker.patch.object(Scene3D, "terrain")
+        spy = mocker.patch.object(
+            Scene3D, "__init__", autospec=True, side_effect=Scene3D.__init__
+        )
+
+        quickmap(raster, backend="3d", band=1, scene_kw={"window_size": (400, 300)})
+
+        assert spy.call_args.kwargs.get("window_size") == (400, 300), (
+            f"scene_kw must reach the Scene3D constructor, got {spy.call_args.kwargs!r}"
+        )
