@@ -147,6 +147,57 @@ def _material(roughness: float | None) -> dict[str, Any]:
     return {"type": "twosided", "material": material}
 
 
+def _sky_emitters(
+    sky_model: str,
+    sun_direction: tuple[float, float, float],
+    sun_irradiance: float,
+    sky: Any,
+    turbidity: float,
+) -> dict[str, Any]:
+    """Build the scene's light emitters for :func:`mitsuba.load_dict`, per the chosen sky model (#512 A2).
+
+    ``"constant"`` is the original pairing — a ``directional`` sun plus a flat ``constant`` sky fill, which
+    gives hard shadows and no sky variation. ``"sunsky"`` replaces both with Mitsuba's physical ``sunsky``
+    emitter: its finite sun disk casts **soft** shadows and its sky dome supplies physically-based ambient
+    light. ``sunsky`` points *at* the sun, which is the negation of the travel direction the directional sun
+    uses, so the same scene sun azimuth/elevation drives either model.
+
+    Args:
+        sky_model: ``"constant"`` or ``"sunsky"``.
+        sun_direction: ``(x, y, z)`` the sunlight travels (from the light toward the scene).
+        sun_irradiance: Directional-sun brightness (used by ``"constant"`` only).
+        sky: ``(r, g, b)`` constant-sky radiance (used by ``"constant"`` only).
+        turbidity: Atmospheric haze for ``sunsky`` (about 2 for a clear sky, up to 10 for a hazy one).
+
+    Returns:
+        dict: the emitter entries to merge into the scene dict.
+
+    Raises:
+        ValueError: when ``sky_model`` is neither ``"constant"`` nor ``"sunsky"``.
+    """
+    if sky_model == "constant":
+        return {
+            "sun": {
+                "type": "directional",
+                "direction": [float(v) for v in sun_direction],
+                "irradiance": {"type": "rgb", "value": float(sun_irradiance)},
+            },
+            "sky": {
+                "type": "constant",
+                "radiance": {"type": "rgb", "value": [float(v) for v in sky]},
+            },
+        }
+    if sky_model == "sunsky":
+        return {
+            "environment": {
+                "type": "sunsky",
+                "sun_direction": [-float(v) for v in sun_direction],
+                "turbidity": float(turbidity),
+            }
+        }
+    raise ValueError(f"sky_model must be 'constant' or 'sunsky', got {sky_model!r}")
+
+
 def _require_photoreal():
     """Import and return Mitsuba, or raise a clear, actionable error when the photoreal extra is missing.
 
@@ -413,6 +464,8 @@ class PhotorealMixin(_MixinBase):
         sun_direction: Any = None,
         sun_irradiance: float = 6.0,
         sky: Any = _DEFAULT_SKY,
+        sky_model: str = "constant",
+        turbidity: float = 3.0,
         max_depth: int = 8,
         despeckle: float | None = None,
         roughness: float | None = None,
@@ -436,8 +489,12 @@ class PhotorealMixin(_MixinBase):
             sun_direction: ``(x, y, z)`` direction the sunlight travels (from the light toward the scene).
                 ``None`` (the default) derives it from the scene's :meth:`~...decoration.DecorationMixin.sun`
                 azimuth/elevation when one is set, falling back to a fixed default otherwise (#511).
-            sun_irradiance: Scalar brightness of the sun.
-            sky: ``(r, g, b)`` radiance of the constant sky fill.
+            sun_irradiance: Scalar brightness of the sun (``sky_model="constant"`` only).
+            sky: ``(r, g, b)`` radiance of the constant sky fill (``sky_model="constant"`` only).
+            sky_model: ``"constant"`` (the default) lights with a hard directional sun plus a flat constant sky;
+                ``"sunsky"`` uses Mitsuba's physical ``sunsky`` emitter instead — a finite sun disk that casts
+                **soft** shadows plus a physically-based sky dome — driven by the same scene sun az/el (#512 A2).
+            turbidity: Atmospheric haze for ``sky_model="sunsky"`` (about 2 for a clear sky, up to 10 for hazy).
             max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower).
             despeckle: Remove isolated bright/dark speckles (fireflies) a low-sample path trace leaves: a pixel
                 deviating from its 3x3 neighbourhood median by more than this (in the ``[0, 1]`` output) is
@@ -518,16 +575,10 @@ class PhotorealMixin(_MixinBase):
                     "img": {"type": "path", "max_depth": int(max_depth)},
                 },
                 "sensor": sensor,
-                "sun": {
-                    "type": "directional",
-                    "direction": [float(v) for v in sun_direction],
-                    "irradiance": {"type": "rgb", "value": float(sun_irradiance)},
-                },
-                "sky": {
-                    "type": "constant",
-                    "radiance": {"type": "rgb", "value": [float(v) for v in sky]},
-                },
             }
+            scene_dict.update(
+                _sky_emitters(sky_model, sun_direction, sun_irradiance, sky, turbidity)
+            )
             scene_dict.update(meshes)
 
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")

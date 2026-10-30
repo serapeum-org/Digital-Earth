@@ -670,3 +670,42 @@ class TestExrAndReturnAovs:
             "default return stays the uint8 image"
         )
         scene.close()
+
+
+class TestSkyModel:
+    """`photoreal` supports a physical sunsky model beside the flat constant sky (#512 A2)."""
+
+    def test_constant_and_sunsky_build_the_right_emitters(self):
+        """constant -> directional sun + constant sky; sunsky -> one sunsky emitter pointed at the sun."""
+        from digitalearth.three_d.photoreal import _sky_emitters
+
+        const = _sky_emitters(
+            "constant", (-0.5, 0.4, -0.76), 6.0, (0.5, 0.56, 0.72), 3.0
+        )
+        assert (
+            const["sun"]["type"] == "directional" and const["sky"]["type"] == "constant"
+        ), const
+        sunsky = _sky_emitters(
+            "sunsky", (-0.5, 0.4, -0.76), 6.0, (0.5, 0.56, 0.72), 3.0
+        )
+        assert sunsky["environment"]["type"] == "sunsky", sunsky
+        assert sunsky["environment"]["sun_direction"] == [0.5, -0.4, 0.76], (
+            "sunsky points at the sun (negated)"
+        )
+
+    def test_unknown_sky_model_is_rejected(self):
+        """An unknown sky_model raises ValueError naming the valid options."""
+        from digitalearth.three_d.photoreal import _sky_emitters
+
+        with pytest.raises(ValueError, match="constant"):
+            _sky_emitters("bogus", (0.0, 0.0, -1.0), 6.0, (0.5, 0.5, 0.5), 3.0)
+
+    def test_sunsky_renders_a_non_blank_frame(self):
+        """An end-to-end sky_model='sunsky' render produces a non-blank frame."""
+        scene = _small_terrain_scene()
+        img = scene.photoreal(
+            spp=8, width=64, height=48, denoise=False, sky_model="sunsky", turbidity=3.0
+        )
+        assert img.shape == (48, 64, 3), img.shape
+        assert int(img.max()) > 0, "the sunsky render must not be black"
+        scene.close()
