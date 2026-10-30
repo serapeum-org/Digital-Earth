@@ -640,7 +640,7 @@ class TestPhotorealFollowups:
 
 
 class TestExrAndReturnAovs:
-    """`photoreal` can write a linear HDR EXR and return the AOV passes (#512 A1)."""
+    """`photoreal` can write a linear HDR EXR and return the AOV passes (A1)."""
 
     def test_return_aovs_gives_unclipped_hdr_passes(self):
         """return_aovs=True returns a PhotorealResult whose HDR beauty is unclipped (can exceed 1)."""
@@ -651,12 +651,10 @@ class TestExrAndReturnAovs:
             spp=8, width=64, height=48, denoise=False, return_aovs=True
         )
         assert isinstance(res, PhotorealResult), type(res)
-        assert res.image.dtype == np.uint8 and res.image.shape == (48, 64, 3), (
-            res.image.shape
-        )
-        assert res.beauty.shape == (48, 64, 3) and res.beauty.dtype == np.float32, (
-            res.beauty.shape
-        )
+        assert res.image.dtype == np.uint8, res.image.dtype
+        assert res.image.shape == (48, 64, 3), res.image.shape
+        assert res.beauty.shape == (48, 64, 3), res.beauty.shape
+        assert res.beauty.dtype == np.float32, res.beauty.dtype
         assert float(res.beauty.max()) > 1.0, "the HDR beauty pass must be unclipped"
         scene.close()
 
@@ -665,15 +663,15 @@ class TestExrAndReturnAovs:
         scene = _small_terrain_scene()
         exr = tmp_path / "render.exr"
         img = scene.photoreal(spp=8, width=48, height=36, denoise=False, exr=str(exr))
-        assert exr.exists() and exr.stat().st_size > 0, "the EXR must be written"
-        assert isinstance(img, np.ndarray) and img.dtype == np.uint8, (
-            "default return stays the uint8 image"
-        )
+        assert exr.exists(), "the EXR must be written"
+        assert exr.stat().st_size > 0, "the EXR must be non-empty"
+        assert isinstance(img, np.ndarray), "the default return stays an ndarray"
+        assert img.dtype == np.uint8, "the default return stays the uint8 image"
         scene.close()
 
 
 class TestSkyModel:
-    """`photoreal` supports a physical sunsky model beside the flat constant sky (#512 A2)."""
+    """`photoreal` supports a physical sunsky model beside the flat constant sky (A2)."""
 
     def test_constant_and_sunsky_build_the_right_emitters(self):
         """constant -> directional sun + constant sky; sunsky -> one sunsky emitter pointed at the sun."""
@@ -712,7 +710,7 @@ class TestSkyModel:
 
 
 class TestWater:
-    """`photoreal` adds a reflective water plane via water_level (#512 A3)."""
+    """`photoreal` adds a reflective water plane via water_level (A3)."""
 
     def test_water_shape_is_a_dielectric_rectangle(self):
         """_water_shape builds a rectangle with a smooth water dielectric, or a roughdielectric when rippled."""
@@ -751,7 +749,7 @@ class TestWater:
 
 
 class TestSmoke:
-    """`photoreal` renders a volumetric smoke/cloud from a 3-D density grid (#512 A4)."""
+    """`photoreal` renders a volumetric smoke/cloud from a 3-D density grid (A4)."""
 
     def test_smoke_medium_is_a_heterogeneous_cube(self):
         """_smoke_medium builds a null-BSDF cube whose interior is a heterogeneous gridvolume medium."""
@@ -767,7 +765,8 @@ class TestSmoke:
             8.0,
             0.9,
         )
-        assert shape["type"] == "cube" and shape["bsdf"]["type"] == "null", shape
+        assert shape["type"] == "cube", shape
+        assert shape["bsdf"]["type"] == "null", shape["bsdf"]
         assert shape["interior"]["type"] == "heterogeneous", shape["interior"]
         assert shape["interior"]["sigma_t"]["type"] == "gridvolume", shape["interior"][
             "sigma_t"

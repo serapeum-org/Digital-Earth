@@ -744,7 +744,8 @@ def test_surface_rings_preserves_z():
     from digitalearth.three_d.builders.vector import _surface_rings
 
     rings = list(_surface_rings(Polygon([(0, 0, 1), (1, 0, 1), (1, 1, 2), (0, 1, 2)])))
-    assert len(rings) == 1 and rings[0].shape[1] == 3, rings
+    assert len(rings) == 1, rings
+    assert rings[0].shape[1] == 3, rings[0].shape
     assert float(rings[0][:, 2].max()) == 2.0, "z is preserved"
 
 
@@ -753,7 +754,8 @@ def test_surface_rings_lifts_a_2d_polygon_to_z_zero():
     from digitalearth.three_d.builders.vector import _surface_rings
 
     rings = list(_surface_rings(Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])))
-    assert len(rings) == 1 and rings[0].shape[1] == 3, rings
+    assert len(rings) == 1, rings
+    assert rings[0].shape[1] == 3, rings[0].shape
     assert float(np.abs(rings[0][:, 2]).max()) == 0.0, "a 2-D ring is lifted onto z=0"
 
 

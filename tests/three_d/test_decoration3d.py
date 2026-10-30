@@ -618,7 +618,7 @@ class TestTheOrientationTriadIsFigureFurniture:
 
 
 class TestMapPlate:
-    """`map_plate` composes the furniture verbs in one chainable call (#512 A6)."""
+    """`map_plate` composes the furniture verbs in one chainable call (A6)."""
 
     def test_map_plate_composes_and_returns_self(self):
         from digitalearth.base.sources import get_source
