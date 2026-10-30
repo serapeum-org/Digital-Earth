@@ -131,7 +131,16 @@ A tier scene's own settings go in `scene_kw`, which keeps them out of the render
 ```python
 ds.plot(backend="web", band=0, scene_kw={"center": (31.0, 30.0), "zoom": 6, "style": "light"})
 ds.plot(backend="interactive", band=0, scene_kw={"width": 1100, "height": 700})
-ds.plot(band=0, scene_kw={"figsize": (14, 9)})                 # matplotlib
+```
+
+`backend="matplotlib"` is not one of these: pyramids short-circuits its default to cleopatra and
+never reaches this package, so `ds.plot(scene_kw=…)` is refused by cleopatra. Use digitalearth's own
+entry point for the matplotlib tier:
+
+```python
+import digitalearth as de
+
+de.quickmap(ds, band=1, scene_kw={"figsize": (14, 9)})
 ```
 
 They need their own mapping because a name alone cannot say which object it is for. `height` is the
@@ -147,9 +156,17 @@ polygons.plot(backend="web", height=50_000)        # the extrusion is 50km — t
 A key the scene does not take is refused by the scene, naming it:
 
 ```text
-ds.plot(band=0, scene_kw={"not_a_scene_option": 1})
+de.quickmap(ds, band=1, scene_kw={"not_a_scene_option": 1})
 TypeError: GeoLayerBase.__init__() got an unexpected keyword argument 'not_a_scene_option'
 ```
+
+!!! note "`scene_kw` hands you the scene's own behaviour"
+    Its contents go to the tier's constructor unscreened, so a *value* that class does not validate
+    is not validated here either — `scene_kw={"style": 3}` builds a `WebMap` with `style == 3` and
+    fails later, as `WebMap(style=3)` does. That is deliberate: screening the values would mean this
+    layer keeping a second opinion about every tier's constructor. These names are also outside
+    `BACKEND_CAPABILITIES` and the support matrix, which answer which *capability* a tier declares —
+    a scene setting has none behind it.
 
 Two things need `import digitalearth`, and no keyword can change that:
 
