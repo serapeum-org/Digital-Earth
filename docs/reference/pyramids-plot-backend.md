@@ -150,8 +150,20 @@ each reaches its own object:
 
 ```python
 ds.plot(backend="web", scene_kw={"height": 650})   # the map is 650px tall
-polygons.plot(backend="web", height=50_000)        # the extrusion is 50km — the builder's keyword
 ```
+
+Outside `scene_kw`, `height` stays the render's, and the builder answers for it. On a polygon layer
+that answer is a refusal, because `quickmap` draws polygons through `polygons()` — `height` belongs to
+`WebMap.extrusion`, which it does not call:
+
+```text
+polygons.plot(backend="web", height=50_000)
+TypeError: VectorMixin.polygons() got an unexpected keyword argument 'height'
+```
+
+That refusal is the point: the same name reaches a different object on each side of the namespace, and
+neither side quietly swallows the other's keyword. An earlier attempt at this feature inferred the
+destination from signatures instead, and turned exactly that refusal into a 50,000-pixel map.
 
 A key the scene does not take is refused by the scene, naming it:
 
