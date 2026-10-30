@@ -615,3 +615,30 @@ class TestTheOrientationTriadIsFigureFurniture:
         assert scene.orientation_axes() is scene, (
             "orientation_axes() must return the scene so decoration chains"
         )
+
+
+class TestMapPlate:
+    """`map_plate` composes the furniture verbs in one chainable call (#512 A6)."""
+
+    def test_map_plate_composes_and_returns_self(self):
+        from digitalearth.base.sources import get_source
+
+        scene = Scene3D(off_screen=True, crs=4326)
+        scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+        out = scene.map_plate("Relief", subtitle="demo", attribution="Data: SRTM")
+        assert out is scene, "map_plate must return self (chainable)"
+        assert scene._decoration.get("north_arrow"), "the north arrow is on by default"
+        assert scene._decoration.get("attribution"), "the credit line is recorded"
+        scene.close()
+
+    def test_map_plate_pieces_are_opt_in(self):
+        from digitalearth.base.sources import get_source
+
+        scene = Scene3D(off_screen=True, crs=4326)
+        scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+        scene.map_plate(north_arrow=False)
+        assert "north_arrow" not in scene._decoration, (
+            "the arrow is omitted when disabled"
+        )
+        assert "attribution" not in scene._decoration, "no credit is drawn without text"
+        scene.close()

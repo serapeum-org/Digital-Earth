@@ -1738,6 +1738,66 @@ class DecorationMixin(_MixinBase):
         redraw_decoration(self)
         return self
 
+    def map_plate(
+        self,
+        title: str | None = None,
+        *,
+        subtitle: str | None = None,
+        attribution: str | None = None,
+        legend: bool = False,
+        scale_bar: bool = False,
+        north_arrow: bool = True,
+        north_anchor: str = "top-right",
+        attribution_anchor: str = "bottom-right",
+    ) -> Self:
+        """Dress the scene with a cartographic plate of furniture in one call (#512 A6).
+
+        A convenience that composes the furniture a finished map usually wants — a title (and subtitle), a keyed
+        legend, a ground-distance scale bar, a north arrow and a credit line — so a publication-ready plate is
+        one call instead of five. Each piece is opt-in; this only calls the individual verbs
+        (:meth:`set_title`, :meth:`legend`, :meth:`scale_bar`, :meth:`north_arrow`, :meth:`attribution`), so
+        their rules carry through unchanged — in particular ``scale_bar`` still switches the view to
+        orthographic, which is why it is off by default rather than silently reprojecting the scene.
+
+        Args:
+            title: Heading text; ``None`` draws no title.
+            subtitle: Optional sub-heading under the title.
+            attribution: Credit-line text; ``None`` draws no credit.
+            legend: Draw the keyed legend box (for the classified layers). Off by default.
+            scale_bar: Draw the ground-distance scale bar — switches the view to orthographic. Off by default.
+            north_arrow: Draw the camera-aware north arrow. On by default.
+            north_anchor: Which corner the north arrow sits in.
+            attribution_anchor: Which corner the credit line sits in.
+
+        Returns:
+            This scene, so decoration chains.
+
+        Examples:
+            - One call dresses a terrain scene with a title, a north arrow and a credit line:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True, crs=4326)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+                >>> _ = scene.map_plate("Relief", attribution="Data: SRTM")
+                >>> _ = scene.screenshot()
+                >>> scene.close()
+
+                ```
+        """
+        if title is not None:
+            self.set_title(title, subtitle=subtitle)
+        if legend:
+            self.legend()
+        if scale_bar:
+            self.scale_bar()
+        if north_arrow:
+            self.north_arrow(anchor=north_anchor)
+        if attribution is not None:
+            self.attribution(attribution, anchor=attribution_anchor)
+        return self
+
     def sun(
         self,
         *,
