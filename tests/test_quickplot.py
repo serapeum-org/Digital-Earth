@@ -1,6 +1,7 @@
 """Tests for T9.1 — quickplot/quickmap one-call entry points and module functions."""
 
 import pathlib
+import types
 
 import pytest
 
@@ -1487,6 +1488,182 @@ class TestSceneKw:
         assert tuple(qp.quickmap(dem, band=1).fig.get_size_inches()) == (8.0, 8.0), (
             "the default figure size must be unchanged"
         )
+
+    def test_the_two_namespaces_are_disjoint_on_the_web_tier(self, dem, mocker):
+        """`height` reaches the scene from `scene_kw` and the builder from the call itself.
+
+        Args:
+            dem: The raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder.
+
+        Test scenario:
+            This is the claim the design rests on, and it was checked only by hand until now. The web
+            tier declares `height` (the map's pixel height, default 500) *and* reads a `height`
+            keyword on `WebMap.extrusion`. Passed in `scene_kw` it must reach the constructor; passed
+            bare it must reach the builder and leave the scene's own height alone. Two earlier
+            attempts on this branch inferred the destination from signatures and got this backwards,
+            turning a 50km extrusion into a 50,000-pixel map.
+        """
+        pytest.importorskip("maplibre")
+        web = pytest.importorskip("digitalearth.web")
+        field = mocker.patch.object(web.WebMap, "field")
+
+        scened = qp.quickmap(dem, backend="web", band=1, scene_kw={"height": 650})
+        assert scened.height == 650, (
+            f"scene_kw's height must reach the constructor, got {scened.height}"
+        )
+
+        rendered = qp.quickmap(dem, backend="web", band=1, height=650)
+        assert rendered.height == 500, (
+            f"a bare height belongs to the render, so the scene keeps its default, got "
+            f"{rendered.height}"
+        )
+        assert field.call_args.kwargs.get("height") == 650, (
+            f"a bare height must reach the builder instead, got {field.call_args!r}"
+        )
+
+    @pytest.mark.parametrize("given, seeded", [(False, False), (True, True)])
+    def test_the_web_tier_seeds_its_crs_only_when_one_was_given(
+        self, dem, mocker, given, seeded
+    ):
+        """The web branch seeds `crs` only when the caller named one.
+
+        Args:
+            dem: The raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder.
+            given: Whether to pass `crs=4326` to `quickmap`.
+            seeded: Whether the constructor should receive a `crs` keyword.
+
+        Test scenario:
+            `_quickmap_web` builds its seeded mapping with a conditional, because `WebMap` must be
+            left to pick its own default rather than be handed the `_UNSET` sentinel. The
+            constructor's keywords are what distinguishes the two arms: `WebMap.crs` reads back as
+            the int 4326 either way, so asserting on it would pass even if the sentinel leaked. 4326
+            is the only value the tier accepts — it refuses any other CRS by name.
+        """
+        pytest.importorskip("maplibre")
+        web = pytest.importorskip("digitalearth.web")
+        mocker.patch.object(web.WebMap, "field")
+        spy = mocker.patch.object(
+            web.WebMap, "__init__", autospec=True, side_effect=web.WebMap.__init__
+        )
+
+        qp.quickmap(dem, backend="web", band=1, **({"crs": 4326} if given else {}))
+
+        assert ("crs" in spy.call_args.kwargs) is seeded, (
+            f"given={given}: the constructor should {'' if seeded else 'not '}receive crs, got "
+            f"{spy.call_args.kwargs!r}"
+        )
+
+    def test_a_scene_setting_reaches_the_interactive_constructor(self, dem, mocker):
+        """`scene_kw` reaches `InteractiveMap`, whose `width` the render never sees.
+
+        Args:
+            dem: The raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder.
+
+        Test scenario:
+            The HoloViz tier is the one where a name-based rule is provably impossible: it sizes a
+            Datashader canvas from `width`/`height` taken out of a builder's `**opts`, declaring
+            neither. So `width` must be routed by the caller, and this pins that it arrives.
+        """
+        pytest.importorskip("holoviews")
+        interactive = pytest.importorskip("digitalearth.interactive")
+        mocker.patch.object(interactive.InteractiveMap, "field")
+
+        scene = qp.quickmap(
+            dem, backend="interactive", band=1, scene_kw={"width": 1100}
+        )
+
+        assert scene.width == 1100, (
+            f"scene_kw's width must reach the constructor, got {scene.width}"
+        )
+
+    def test_a_scene_setting_reaches_the_three_d_constructor(self, dem, mocker):
+        """`scene_kw` reaches `Scene3D` too, which no allowlist ever covered.
+
+        Args:
+            dem: The raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder.
+
+        Test scenario:
+            The reverted designs carried a per-tier list of routable names and had no entry for the
+            3-D tier, so none of its constructor options were reachable at all. A namespace needs no
+            entry, and this pins that the tier is no longer the exception. `window_size` is the
+            setting asserted on because `Scene3D` exposes no `crs` attribute to read back.
+        """
+        pytest.importorskip("pyvista")
+        three_d = pytest.importorskip("digitalearth.three_d")
+        mocker.patch.object(three_d.Scene3D, "terrain")
+        spy = mocker.patch.object(
+            three_d.Scene3D,
+            "__init__",
+            autospec=True,
+            side_effect=three_d.Scene3D.__init__,
+        )
+
+        qp.quickmap(dem, backend="3d", band=1, scene_kw={"window_size": (400, 300)})
+
+        assert spy.call_args.kwargs.get("window_size") == (400, 300), (
+            f"scene_kw must reach the Scene3D constructor, got {spy.call_args.kwargs!r}"
+        )
+
+    def test_the_callers_mapping_is_not_mutated(self, dem):
+        """`_scene_of` leaves the mapping it was given exactly as it found it.
+
+        Args:
+            dem: The raster fixture.
+
+        Test scenario:
+            The helper merges rather than updates, so a caller reusing one dict across several plots
+            cannot have it filled in with another call's seeded values.
+        """
+        settings = {"figsize": (11.0, 7.0)}
+
+        with qp.quickmap(dem, band=1, scene_kw=settings):
+            pass
+
+        assert settings == {"figsize": (11.0, 7.0)}, (
+            f"the caller's mapping must be untouched, got {settings}"
+        )
+
+    def test_an_empty_mapping_behaves_as_none(self, dem):
+        """An empty `scene_kw` is the same as omitting it.
+
+        Args:
+            dem: The raster fixture.
+
+        Test scenario:
+            `None` and `{}` are distinct inputs that must not diverge: a caller building the mapping
+            programmatically can legitimately end up with an empty one, and that should not be a
+            different plot from passing nothing.
+        """
+        with qp.quickmap(dem, band=1, scene_kw={}) as empty:
+            empty_size = tuple(empty.fig.get_size_inches())
+        with qp.quickmap(dem, band=1) as omitted:
+            omitted_size = tuple(omitted.fig.get_size_inches())
+
+        assert empty_size == omitted_size, (
+            f"an empty scene_kw must match omitting it, got {empty_size} vs {omitted_size}"
+        )
+
+    def test_any_mapping_is_accepted_not_only_a_dict(self, dem):
+        """A read-only `Mapping` works, as the annotation promises.
+
+        Args:
+            dem: The raster fixture.
+
+        Test scenario:
+            The parameter is annotated `Mapping`, not `dict`, so a `MappingProxyType` — what a caller
+            gets from a frozen settings object — has to be accepted. A `dict`-only implementation
+            (one that called `.update` or `.pop`) would raise here.
+        """
+        settings = types.MappingProxyType({"figsize": (12.0, 5.0)})
+
+        with qp.quickmap(dem, band=1, scene_kw=settings) as scene:
+            size = tuple(scene.fig.get_size_inches())
+
+        assert size == (12.0, 5.0), f"a read-only Mapping must be accepted, got {size}"
 
     def test_a_caller_setting_overrides_the_backend_default(self):
         """A `scene_kw` entry wins over a default this layer would otherwise seed.
