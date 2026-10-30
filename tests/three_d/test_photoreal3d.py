@@ -748,3 +748,55 @@ class TestWater:
         wet.close()
         assert int(img.max()) > 0, "the water render must not be black"
         assert not np.array_equal(img, base), "adding water must change the render"
+
+
+class TestSmoke:
+    """`photoreal` renders a volumetric smoke/cloud from a 3-D density grid (#512 A4)."""
+
+    def test_smoke_medium_is_a_heterogeneous_cube(self):
+        """_smoke_medium builds a null-BSDF cube whose interior is a heterogeneous gridvolume medium."""
+        import mitsuba as mi
+
+        from digitalearth.three_d.photoreal import _smoke_medium
+
+        mi.set_variant("scalar_rgb")
+        shape = _smoke_medium(
+            mi,
+            np.ones((4, 5, 6), dtype="float32"),
+            (0.0, 10.0, 0.0, 8.0, 0.0, 4.0),
+            8.0,
+            0.9,
+        )
+        assert shape["type"] == "cube" and shape["bsdf"]["type"] == "null", shape
+        assert shape["interior"]["type"] == "heterogeneous", shape["interior"]
+        assert shape["interior"]["sigma_t"]["type"] == "gridvolume", shape["interior"][
+            "sigma_t"
+        ]
+
+    def test_smoke_renders_a_non_blank_frame(self):
+        """A 3-D smoke grid renders a non-blank frame through the volpath integrator."""
+        scene = _small_terrain_scene()
+        ax = np.linspace(-1, 1, 16)
+        xx, yy, zz = np.meshgrid(ax, ax, ax, indexing="ij")
+        density = np.exp(-(xx**2 + yy**2 + zz**2) * 2.5).astype("float32")
+        img = scene.photoreal(
+            spp=8,
+            width=64,
+            height=48,
+            denoise=False,
+            max_depth=12,
+            smoke=density,
+            smoke_scale=10.0,
+        )
+        assert img.shape == (48, 64, 3), img.shape
+        assert int(img.max()) > 0, "the smoke render must not be black"
+        scene.close()
+
+    def test_a_non_3d_smoke_grid_is_rejected(self):
+        """A non-3-D smoke grid raises ValueError before rendering."""
+        scene = _small_terrain_scene()
+        with pytest.raises(ValueError, match="3-D"):
+            scene.photoreal(
+                spp=4, width=32, height=24, denoise=False, smoke=np.zeros((4, 4))
+            )
+        scene.close()

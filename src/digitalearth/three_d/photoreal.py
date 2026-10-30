@@ -244,6 +244,58 @@ def _water_shape(
     }
 
 
+def _smoke_medium(
+    mi: Any,
+    density: np.ndarray,
+    bounds: Any,
+    scale: float,
+    albedo: float,
+) -> dict[str, Any]:
+    """A smoke/cloud volume for :func:`mitsuba.load_dict` — a cube filled with a heterogeneous medium (A4).
+
+    The density grid becomes a Mitsuba ``gridvolume`` wrapped in a ``heterogeneous`` participating medium inside
+    a ``cube`` with a ``null`` BSDF (the cube is only the medium's bounds, not a visible surface). The cube spans
+    the scene's extent, recentred to the origin like every other shape, and the grid is mapped across the cube's
+    local ``[-1, 1]^3`` box. With the ``volpath`` integrator this scatters light, so the smoke both self-shadows
+    and casts a shadow on the terrain below. ``scale`` multiplies the extinction (optical thickness); ``albedo``
+    sets how much light scatters vs is absorbed (near 1 = bright smoke/cloud).
+
+    Args:
+        mi: The imported ``mitsuba`` module.
+        density: A 3-D ``(nz, ny, nx)`` density grid, non-negative.
+        bounds: The scene ``(xmin, xmax, ymin, ymax, zmin, zmax)`` bounds.
+        scale: Extinction multiplier (optical thickness of the medium).
+        albedo: Single-scattering albedo in ``[0, 1]``.
+
+    Returns:
+        dict: the ``cube`` smoke-shape spec with its interior medium.
+    """
+    half = [
+        max((bounds[1] - bounds[0]) / 2.0, 1e-6),
+        max((bounds[3] - bounds[2]) / 2.0, 1e-6),
+        max((bounds[5] - bounds[4]) / 2.0, 1e-6),
+    ]
+    grid = np.ascontiguousarray(np.asarray(density, dtype="float32"))
+    grid_to_world = (
+        mi.ScalarTransform4f().translate([-1.0, -1.0, -1.0]).scale([2.0, 2.0, 2.0])
+    )
+    return {
+        "type": "cube",
+        "to_world": mi.ScalarTransform4f().scale(half),
+        "bsdf": {"type": "null"},
+        "interior": {
+            "type": "heterogeneous",
+            "sigma_t": {
+                "type": "gridvolume",
+                "grid": mi.VolumeGrid(grid),
+                "to_world": grid_to_world,
+            },
+            "scale": float(scale),
+            "albedo": float(albedo),
+        },
+    }
+
+
 def _require_photoreal():
     """Import and return Mitsuba, or raise a clear, actionable error when the photoreal extra is missing.
 
@@ -514,6 +566,9 @@ class PhotorealMixin(_MixinBase):
         turbidity: float = 3.0,
         water_level: float | None = None,
         water_roughness: float = 0.0,
+        smoke: Any = None,
+        smoke_scale: float = 8.0,
+        smoke_albedo: float = 0.9,
         max_depth: int = 8,
         despeckle: float | None = None,
         roughness: float | None = None,
@@ -547,6 +602,12 @@ class PhotorealMixin(_MixinBase):
                 sky/terrain off it (Fresnel, strongest at grazing angles). ``None`` (the default) adds no water.
                 Needs ``max_depth`` high enough for the extra bounce (#512 A3).
             water_roughness: ``0`` (the default) is a mirror-smooth surface; ``> 0`` gives a rippled rough water.
+            smoke: A 3-D ``(nz, ny, nx)`` density grid (non-negative) rendered as a volumetric smoke/cloud filling
+                the scene — a ``heterogeneous`` medium traced with ``volpath``, so it self-shadows and casts a
+                shadow on the terrain. ``None`` (the default) renders no smoke. The grid is the same kind of cube
+                :meth:`volume` takes (#512 A4).
+            smoke_scale: Extinction multiplier for ``smoke`` (optical thickness — higher reads as denser).
+            smoke_albedo: Single-scattering albedo for ``smoke`` in ``[0, 1]`` (near 1 = bright cloud).
             max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower).
             despeckle: Remove isolated bright/dark speckles (fireflies) a low-sample path trace leaves: a pixel
                 deviating from its 3x3 neighbourhood median by more than this (in the ``[0, 1]`` output) is
@@ -624,7 +685,10 @@ class PhotorealMixin(_MixinBase):
                 "integrator": {
                     "type": "aov",
                     "aovs": "albedo:albedo,normals:sh_normal",
-                    "img": {"type": "path", "max_depth": int(max_depth)},
+                    "img": {
+                        "type": "volpath" if smoke is not None else "path",
+                        "max_depth": int(max_depth),
+                    },
                 },
                 "sensor": sensor,
             }
@@ -635,6 +699,15 @@ class PhotorealMixin(_MixinBase):
             if water_level is not None:
                 scene_dict["water"] = _water_shape(
                     mi, self.plotter.bounds, center, water_level, water_roughness
+                )
+            if smoke is not None:
+                density = np.asarray(smoke, dtype="float32")
+                if density.ndim != 3:
+                    raise ValueError(
+                        f"smoke must be a 3-D (nz, ny, nx) density grid, got {density.ndim}-D"
+                    )
+                scene_dict["smoke"] = _smoke_medium(
+                    mi, density, self.plotter.bounds, smoke_scale, smoke_albedo
                 )
 
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
