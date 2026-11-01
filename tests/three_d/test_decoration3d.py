@@ -615,3 +615,50 @@ class TestTheOrientationTriadIsFigureFurniture:
         assert scene.orientation_axes() is scene, (
             "orientation_axes() must return the scene so decoration chains"
         )
+
+
+class TestMapPlate:
+    """`map_plate` composes the furniture verbs in one chainable call (A6)."""
+
+    def test_map_plate_composes_and_returns_self(self):
+        from digitalearth.base.sources import get_source
+
+        scene = Scene3D(off_screen=True, crs=4326)
+        scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+        out = scene.map_plate("Relief", subtitle="demo", attribution="Data: SRTM")
+        assert out is scene, "map_plate must return self (chainable)"
+        assert scene._decoration.get("north_arrow"), "the north arrow is on by default"
+        assert scene._decoration.get("attribution"), "the credit line is recorded"
+        scene.close()
+
+    def test_map_plate_pieces_are_opt_in(self):
+        from digitalearth.base.sources import get_source
+
+        scene = Scene3D(off_screen=True, crs=4326)
+        scene.terrain(get_source(np.add.outer(np.arange(6.0), np.arange(6.0))))
+        scene.map_plate(north_arrow=False)
+        assert "north_arrow" not in scene._decoration, (
+            "the arrow is omitted when disabled"
+        )
+        assert "attribution" not in scene._decoration, "no credit is drawn without text"
+        scene.close()
+
+    def test_map_plate_draws_legend_and_scale_bar_when_asked(self):
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+
+        gdf = gpd.GeoDataFrame(
+            {"v": [1.0, 2.0]},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+            ],
+        )
+        scene = Scene3D(off_screen=True, crs=4326)
+        scene.choropleth(gdf, column="v", scheme="categorical")
+        out = scene.map_plate("Areas", legend=True, scale_bar=True, north_arrow=False)
+        assert out is scene, "map_plate must return self"
+        assert scene.plotter.camera.GetParallelProjection() == 1, (
+            "scale_bar switches to orthographic"
+        )
+        scene.close()

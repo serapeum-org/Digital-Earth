@@ -153,6 +153,20 @@ def _add_basemap(scene):
 #: `globe` is the only one that records two: it draws the raster onto the sphere and puts the shoreline on it
 #: in the same call, which is why the tier declares a `coastlines` kind while having no standalone coastline
 #: builder (review M6 on #295). `basemap` draws from the network, so `_add_basemap` stubs its fetch seam.
+def _building_surfaces() -> gpd.GeoDataFrame:
+    """Return a few 3-D (Polygon Z) building surfaces — a wall and a roof slope.
+
+    Returns:
+        The collection `buildings` is given.
+    """
+    return gpd.GeoDataFrame(
+        geometry=[
+            Polygon([(0, 0, 0), (4, 0, 0), (4, 0, 3), (0, 0, 3)]),
+            Polygon([(0, 0, 3), (4, 0, 3), (2, 0, 5)]),
+        ]
+    )
+
+
 BUILDERS = {
     "terrain": lambda scene: scene.terrain(_dem()),
     "point_cloud": lambda scene: scene.point_cloud(_cloud()),
@@ -163,6 +177,7 @@ BUILDERS = {
     "isosurface": lambda scene: scene.isosurface(_cube(), isosurfaces=[0.5]),
     "vectors": lambda scene: scene.vectors(np.zeros((2, 3)), np.ones((2, 3))),
     "extrusion": lambda scene: scene.extruded_polygons(_polygons(), height=10.0),
+    "buildings": lambda scene: scene.buildings(_building_surfaces()),
     "lines": lambda scene: scene.lines(_lines()),
     "streamlines": lambda scene: scene.streamlines(_flow_field(), n_points=30),
     "raster": lambda scene: scene.globe(_dem()),

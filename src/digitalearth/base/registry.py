@@ -1258,6 +1258,12 @@ _BUILT_IN_KINDS = (
         "data",
     ),
     (
+        "buildings",
+        "polygons",
+        "3-D building surfaces (LOD2 city models) drawn as a triangulated mesh — 3-D buildings",
+        "data",
+    ),
+    (
         "deck_polygons",
         "polygons",
         "a large polygon table rendered on the GPU as a deck.gl layer — web deck_polygons",

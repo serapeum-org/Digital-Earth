@@ -45,6 +45,7 @@ DRAWS_WITH_KWARGS = {
     "point_cloud": "this drawer's own guard, which names the keyword and the colouring that derives it",
     "vectors": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "extruded_polygons": "`_classify_or_refuse`, which names the keyword and the scheme that derives it",
+    "buildings": "`add_mesh(mesh, **props)` — the surface carries no array, so PyVista refuses a scalars keyword",
     "points": "`add_points(cloud, scalars=SCALAR, **style, **props)` — Python's duplicate-keyword TypeError",
     "polygons": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "choropleth": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
@@ -196,6 +197,12 @@ def _draw(scene, builder: str, extra: dict):
         ),
         "extruded_polygons": lambda: scene.extruded_polygons(
             _squares(), column="pop", height=2.0, **extra
+        ),
+        "buildings": lambda: scene.buildings(
+            gpd.GeoDataFrame(
+                geometry=[Polygon([(0, 0, 0), (4, 0, 0), (4, 0, 3), (0, 0, 3)])]
+            ),
+            **extra,
         ),
         "lines": lambda: scene.lines(_lines(), column="flow", **extra),
         "streamlines": lambda: scene.streamlines(_flow_field(), n_points=30, **extra),

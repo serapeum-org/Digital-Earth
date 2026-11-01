@@ -608,6 +608,7 @@ CONTRACT_CARVE_OUTS = {
     "digitalearth.three_d.builders.terrain:TerrainMixin.terrain": _THREE_D_ACTOR,
     "digitalearth.three_d.builders.terrain:TerrainMixin.bivariate": _THREE_D_ACTOR,
     "digitalearth.three_d.builders.vector:VectorMixin.extruded_polygons": _THREE_D_ACTOR,
+    "digitalearth.three_d.builders.vector:VectorMixin.buildings": _THREE_D_ACTOR,
     "digitalearth.three_d.builders.vector:VectorMixin.vectors": _THREE_D_ACTOR,
     "digitalearth.three_d.builders.vector:VectorMixin.lines": _THREE_D_ACTOR,
     "digitalearth.three_d.builders.vector:VectorMixin.streamlines": _THREE_D_ACTOR,

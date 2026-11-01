@@ -14,6 +14,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 | `basemap` | ✓ | ✓ | ✓ | ✓ |
 | `bivariate` | — | — | — | ✓ |
 | `borders` | ✓ | — | ✓ | — |
+| `buildings` | — | — | — | ✓ |
 | `choropleth` | ✓ | ✓ | ✓ | ✓ |
 | `clusters` | — | ✓ | — | — |
 | `coastlines` | ✓ | — | ✓ | ✓ |
