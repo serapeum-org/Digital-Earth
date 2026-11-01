@@ -73,18 +73,23 @@ class _FakeScene:
 class TestRegistration:
     """The entry points pyramids discovers."""
 
-    def test_all_three_backends_are_registered(self):
-        """The installed distribution advertises exactly the three non-matplotlib backend names.
+    def test_every_tier_is_registered_under_its_own_name(self):
+        """The installed distribution advertises one name per tier, and never ``matplotlib``.
 
         Test scenario:
             Discovery reads the installed metadata, not the source tree, so this is what decides
-            whether pyramids finds us at all. ``matplotlib`` must not appear: pyramids short-circuits
-            its default to cleopatra and never resolves it here, so registering it would claim a name
-            we are never asked for.
+            whether pyramids finds us at all. All four tiers appear, the matplotlib one as ``static``
+            — the subpackage that implements it. ``matplotlib`` itself must not appear:
+            ``Dataset.plot`` branches on ``if backend != "matplotlib"`` and takes its own cleopatra
+            path before consulting the registry, so an entry point under that name would never be
+            resolved, and claiming it would suggest otherwise.
         """
         found = sorted(entry.name for entry in metadata.entry_points(group=GROUP))
-        assert found == ["3d", "interactive", "web"], (
-            f"the registered backends should be the three non-matplotlib tiers, got {found}"
+        assert found == ["3d", "interactive", "static", "web"], (
+            f"every tier should be registered under its own name, got {found}"
+        )
+        assert "matplotlib" not in found, (
+            "'matplotlib' is cleopatra's through Dataset.plot and must not be claimed here"
         )
 
     @pytest.mark.parametrize("name, expected, declared", REGISTERED)

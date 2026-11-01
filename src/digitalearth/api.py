@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator, Mapping
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from pyramids.dataset import Dataset
@@ -245,6 +246,48 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
 #:   and stays with U-3.
+#: Alternative spellings accepted for a backend name, mapped to the canonical one.
+#:
+#: ``static`` is this package's own name for the matplotlib tier — the subpackage that implements it
+#: (:mod:`digitalearth.static`) — and it is the name pyramids' plot-backend registry serves that tier
+#: under. ``"matplotlib"`` cannot be registered there: :meth:`pyramids.dataset.Dataset.plot` branches
+#: on ``if backend != "matplotlib"`` and takes its own cleopatra path before it ever consults the
+#: registry, so an entry point under that name would never be reached. The facade therefore spells
+#: this tier ``plot(backend="static")``, and that spelling has to be accepted here.
+BACKEND_ALIASES: Mapping[str, str] = MappingProxyType({"static": "matplotlib"})
+
+
+def _canonical_backend(backend: Any) -> Any:
+    """Resolve an accepted alias to the backend name the rest of this module keys on.
+
+    Args:
+        backend: The backend name as the caller spelled it. A value that is not a known alias — or
+            not a string at all — is handed back untouched, so the caller's own refusal reports it.
+
+    Returns:
+        The canonical name: ``"matplotlib"`` for ``"static"``, otherwise ``backend`` unchanged.
+
+    Examples:
+        - An alias resolves to the name the capability table is keyed on:
+            ```python
+            >>> from digitalearth.api import _canonical_backend
+            >>> _canonical_backend("static")
+            'matplotlib'
+
+            ```
+        - Every other name is handed back as it came, including an unknown one:
+            ```python
+            >>> from digitalearth.api import _canonical_backend
+            >>> _canonical_backend("web"), _canonical_backend("nope")
+            ('web', 'nope')
+
+            ```
+    """
+    return (
+        BACKEND_ALIASES.get(backend, backend) if isinstance(backend, str) else backend
+    )
+
+
 BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
     eager={
         backend: _declared_row(_DECLARATIONS[backend])
@@ -1016,10 +1059,11 @@ def quickmap(
 
             ```
     """
+    backend = _canonical_backend(backend)
     if backend not in BACKEND_CAPABILITIES:
         raise ValueError(
-            f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
-            f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
+            f"unknown backend {backend!r}; choose 'matplotlib' (or 'static'), 'interactive' "
+            f"(HoloViz), '3d' (PyVista), or 'web' (MapLibre + deck.gl)"
         )
     # Refuse before anything is built, so a rejected call never leaves a half-made figure or VTK plotter.
     _reject_unsupported(
@@ -1136,17 +1180,18 @@ def to_backend(
             >>> to_backend("anything", backend="nope")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            ValueError: unknown backend 'nope'; choose 'matplotlib' (static), ...
+            ValueError: unknown backend 'nope'; choose 'matplotlib' (or 'static'), ...
 
             ```
 
         A round-trip example — build a scene, store it, draw it again — lives on each tier's ``from_figure``
         (e.g. :meth:`digitalearth.three_d.Scene3D.from_figure`).
     """
+    backend = _canonical_backend(backend)
     if backend not in BACKEND_CAPABILITIES:
         raise ValueError(
-            f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
-            f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
+            f"unknown backend {backend!r}; choose 'matplotlib' (or 'static'), 'interactive' "
+            f"(HoloViz), '3d' (PyVista), or 'web' (MapLibre + deck.gl)"
         )
     from digitalearth.base.spec import FigureSpec
 

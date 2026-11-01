@@ -171,6 +171,7 @@ digitalearth = "digitalearth.ops.cli:main"
 # are the values a caller passes as `backend=`, and the module stays import-light because discovery
 # imports it.
 [project.entry-points."pyramids.plot_backends"]
+static = "digitalearth.pyramids_backend:static"
 interactive = "digitalearth.pyramids_backend:interactive"
 "3d" = "digitalearth.pyramids_backend:three_d"
 web = "digitalearth.pyramids_backend:web"

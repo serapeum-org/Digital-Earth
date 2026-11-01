@@ -66,6 +66,7 @@ __all__ = [
     "ANIMATION_BACKENDS",
     "BAND_ORIGIN_SHIFT",
     "interactive",
+    "static",
     "three_d",
     "web",
 ]
@@ -78,6 +79,27 @@ BAND_ORIGIN_SHIFT = 1
 #: neither can be driven from the facade's forwarded keywords alone — an animation request for it is
 #: refused by name instead of answered with a still picture or a camera spin.
 ANIMATION_BACKENDS: frozenset[str] = frozenset({"interactive", "web"})
+
+#: Why each backend outside :data:`ANIMATION_BACKENDS` cannot be animated from a plot call, in its
+#: own terms. One reason per tier, because the two differ: the 3-D tier has no verb whose arguments a
+#: plot call could supply, while the matplotlib tier has one this seam simply does not drive yet.
+#: The reason given for a backend on that branch with no entry of its own, so a tier added to
+#: :data:`BACKEND_CAPABILITIES` without one is still answered truthfully rather than with a KeyError.
+_UNANIMATABLE_DEFAULT = "this tier's animation is not driven through the seam."
+
+_UNANIMATABLE: Mapping[str, str] = MappingProxyType(
+    {
+        "3d": (
+            "the 3-D tier animates a scene with Scene3D.record (which needs an update callable) or "
+            "sweeps the camera with Scene3D.orbit, and neither can be driven from a plot call's "
+            "keywords."
+        ),
+        "static": (
+            "the matplotlib tier animates with Map.animate, which steps through a stack this seam "
+            "does not assemble for it."
+        ),
+    }
+)
 
 #: Forwarded keywords digitalearth has no way to honour, each with the reason given in the refusal.
 #: pyramids drops a defaulted argument before forwarding, so anything arriving here was set
@@ -732,24 +754,25 @@ def _refuse_unanimatable(plan: _Forwarded) -> None:
             refused separately, by :meth:`_Forwarded.destination`.
 
     Examples:
-        - The 3-D tier has no verb the seam can drive, and says which ones to use directly:
+        - Each refused tier is answered in its own terms, not another tier's:
             ```python
             >>> from digitalearth.pyramids_backend import _Forwarded, _refuse_unanimatable
-            >>> plan = _Forwarded.from_facade("3d", {"animate": True})
-            >>> try:
-            ...     _refuse_unanimatable(plan)
-            ... except ValueError as exc:
-            ...     print("Scene3D.record" in str(exc), "orbit" in str(exc))
-            True True
+            >>> for name in ("3d", "static"):
+            ...     try:
+            ...         _refuse_unanimatable(_Forwarded.from_facade(name, {"animate": True}))
+            ...     except ValueError as exc:
+            ...         reason = str(exc).split("seam: ")[1]
+            ...         print(name, "->", " ".join(reason.split()[:6]))
+            3d -> the 3-D tier animates a scene
+            static -> the matplotlib tier animates with Map.animate,
 
             ```
     """
     if plan.backend not in ANIMATION_BACKENDS:
         raise ValueError(
             f"animate(backend={plan.backend!r}) is not served through the pyramids plot-backend "
-            f"seam: the 3-D tier animates a scene with Scene3D.record (which needs an update "
-            f"callable) or sweeps the camera with Scene3D.orbit, and neither can be driven from a "
-            f"plot call's keywords. Build the scene with digitalearth and call one of them "
+            f"seam: {_UNANIMATABLE.get(plan.backend, _UNANIMATABLE_DEFAULT)} Build the scene with "
+            f"digitalearth and call it "
             f"directly."
         )
 
@@ -1464,6 +1487,59 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
     if held is not None:
         scene.set_title(held)
     return scene
+
+
+def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
+    """Render a pyramids object on the matplotlib tier, for ``plot(backend="static")``.
+
+    This is the tier :mod:`digitalearth.static` implements, and the one installed with no extra. It
+    is reached as ``"static"`` rather than ``"matplotlib"`` because
+    :meth:`pyramids.dataset.Dataset.plot` branches on ``if backend != "matplotlib"`` and takes its
+    own cleopatra path before consulting the plot-backend registry — an entry point registered under
+    that name could never be reached, so ``ds.plot(backend="matplotlib")`` stays cleopatra's and this
+    tier gets its own name.
+
+    Args:
+        obj: The pyramids object the facade was called on.
+        backend: The backend name the seam passes; defaults to the name this is registered under.
+        **kwargs: The keywords pyramids forwarded, in its own vocabulary.
+
+    Returns:
+        A :class:`~digitalearth.static.Map`, or — for an animation call — the animation this tier
+        built.
+
+    Raises:
+        ValueError: for a forwarded keyword this seam cannot serve, or an unusable band.
+
+    Examples:
+        - Reached through pyramids, which needs no extra for this tier:
+            ```python
+            >>> from pyramids.dataset import Dataset
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> scene = ds.plot(backend="static", band=0)
+            >>> type(scene).__name__
+            'Map'
+
+            ```
+        - The facade's band index is 0-based and this package's is 1-based, so it is shifted here —
+          which is why the entry point matters: reached through pyramids' import-by-name fallback
+          instead, the index would arrive unshifted and draw the wrong band:
+            ```python
+            >>> from pyramids.dataset import Dataset
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> scene = ds.plot(backend="static", band=0)
+            >>> scene.layer_ids
+            ['raster-1']
+
+            ```
+
+    See Also:
+        interactive: The same seam on the HoloViz tier.
+        three_d: The same seam on the PyVista tier.
+        web: The same seam on the MapLibre tier.
+        BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's.
+    """
+    return _render(obj, backend, kwargs)
 
 
 def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any:
