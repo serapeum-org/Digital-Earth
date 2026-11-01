@@ -13,6 +13,7 @@ test, so the whole file runs in the ``dev`` env. The tiers' own rendering is cov
 ``tests/interactive`` and ``tests/web``.
 """
 
+import dataclasses
 import importlib.metadata as metadata
 import inspect
 import subprocess
@@ -23,6 +24,8 @@ import pytest
 
 import digitalearth
 from digitalearth.pyramids_backend import (
+    _UNANIMATABLE,
+    _UNANIMATABLE_DEFAULT,
     ANIMATION_BACKENDS,
     BAND_ORIGIN_SHIFT,
     _animatable,
@@ -33,7 +36,9 @@ from digitalearth.pyramids_backend import (
     _framed,
     _netcdf_stack,
     _netcdf_variable,
+    _refuse_unanimatable,
     interactive,
+    static,
     three_d,
     web,
 )
@@ -43,6 +48,7 @@ GROUP = "pyramids.plot_backends"
 
 #: Each registered name against the callable it must load, and the module path it is declared as.
 REGISTERED = (
+    ("static", static, "digitalearth.pyramids_backend:static"),
     ("interactive", interactive, "digitalearth.pyramids_backend:interactive"),
     ("3d", three_d, "digitalearth.pyramids_backend:three_d"),
     ("web", web, "digitalearth.pyramids_backend:web"),
@@ -395,6 +401,78 @@ class TestAnimation:
         with pytest.raises(ValueError, match="Scene3D.record"):
             three_d("a-dataset", backend="3d", animate=True)
 
+    def test_a_static_animation_is_refused_naming_this_tiers_own_verb(self):
+        """``animate(backend="static")`` is refused in the matplotlib tier's terms, not the 3-D tier's.
+
+        Test scenario:
+            This message was written when ``3d`` was the only backend outside
+            :data:`ANIMATION_BACKENDS`, so it named ``Scene3D.record`` and ``Scene3D.orbit``
+            unconditionally. Registering ``static`` put a second tier on that branch and it inherited
+            the 3-D tier's reasons — a false answer. The matplotlib tier's verb is ``Map.animate``.
+        """
+        with pytest.raises(ValueError, match="Map.animate"):
+            static("a-dataset", backend="static", animate=True)
+
+    def test_each_refused_tier_is_answered_in_its_own_terms(self):
+        """The two refused tiers get different reasons, not one shared sentence.
+
+        Test scenario:
+            A single hard-coded reason is what made the ``static`` refusal wrong, so the distinctness
+            is the thing worth pinning: naming the 3-D verbs for a matplotlib call would be a
+            regression even though both calls are still refused.
+        """
+        reasons = {}
+        for name in ("3d", "static"):
+            # built above the block so only `_refuse_unanimatable` can raise inside it
+            plan = _Forwarded.from_facade(name, {"animate": True})
+            with pytest.raises(ValueError) as caught:
+                _refuse_unanimatable(plan)
+            reasons[name] = str(caught.value)
+
+        assert "Scene3D.record" in reasons["3d"], (
+            f"the 3-D refusal should name its own verbs, got {reasons['3d']!r}"
+        )
+        assert "Map.animate" in reasons["static"], (
+            f"the static refusal should name Map.animate, got {reasons['static']!r}"
+        )
+        assert "Scene3D" not in reasons["static"], (
+            f"the static refusal must not borrow the 3-D tier's verbs, got {reasons['static']!r}"
+        )
+
+    def test_a_tier_with_no_listed_reason_is_still_answered(self):
+        """A backend on the refused branch with no entry of its own gets the default, not a KeyError.
+
+        Test scenario:
+            The reason is read out of a table keyed by backend name. The first attempt indexed it
+            directly and a ``static`` call raised ``KeyError: 'static'`` instead of the refusal, so
+            the lookup is a ``.get`` with a default — which only matters for a tier added later, and
+            is therefore exercised here with a name that is deliberately not in the table.
+        """
+        plan = _Forwarded.from_facade("3d", {"animate": True})
+        unlisted = dataclasses.replace(plan, backend="a-tier-added-later")
+
+        with pytest.raises(
+            ValueError, match="not served through the pyramids plot-backend seam"
+        ):
+            _refuse_unanimatable(unlisted)
+
+    def test_the_default_reason_is_not_another_tiers(self):
+        """The fallback reason is generic, so it cannot assert something untrue about a tier.
+
+        Test scenario:
+            A default that happened to read like the 3-D or matplotlib entry would reintroduce the
+            bug it exists to prevent, just for a different tier.
+        """
+        assert "Scene3D" not in _UNANIMATABLE_DEFAULT, (
+            f"the default must not name the 3-D verbs, got {_UNANIMATABLE_DEFAULT!r}"
+        )
+        assert "Map.animate" not in _UNANIMATABLE_DEFAULT, (
+            f"the default must not name the matplotlib verb, got {_UNANIMATABLE_DEFAULT!r}"
+        )
+        assert set(_UNANIMATABLE) == {"3d", "static"}, (
+            f"expected a reason for each refused tier, got {sorted(_UNANIMATABLE)}"
+        )
+
     def test_a_web_animation_without_a_destination_is_refused(self):
         """The web tier writes its animation to a file, so a missing ``path`` is named.
 
@@ -514,6 +592,7 @@ class TestDelegation:
             for _name, fn, _declared in REGISTERED
         }
         assert defaults == {
+            "static": "static",
             "interactive": "interactive",
             "three_d": "3d",
             "web": "web",

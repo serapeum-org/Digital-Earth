@@ -187,3 +187,25 @@ class TestReplayingAFigureSeenThroughACamera:
             )
         finally:
             replayed.close()
+
+
+class TestToBackendAlias:
+    """``to_backend`` accepts the ``static`` spelling too."""
+
+    def test_the_static_alias_is_accepted(self):
+        """``to_backend(..., backend="static")`` is not refused as an unknown backend.
+
+        Test scenario:
+            `to_backend` validates the backend name at its own site, separately from `quickmap`, so
+            an alias added to one and not the other would work in a plot call and fail in a redraw.
+            Asserting it is not refused *as unknown* keeps this about the alias: whatever the stored
+            figure then does is the redraw's own business.
+        """
+        figure = _one_panel_figure()
+
+        try:
+            api.to_backend(figure, backend="static")
+        except ValueError as exc:
+            assert "unknown backend" not in str(exc), (
+                f"'static' should be an accepted spelling, got {exc}"
+            )

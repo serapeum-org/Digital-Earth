@@ -1564,3 +1564,92 @@ class TestSceneKw:
         assert qp._scene_of(Scene, {"crs": 4326}, crs=3857).crs == 4326, (
             "the caller's value must win over the seeded one"
         )
+
+
+class TestBackendAliases:
+    """``static`` is accepted as a spelling of the matplotlib backend."""
+
+    @pytest.fixture
+    def dem(self):
+        """A single-band raster to draw.
+
+        Returns:
+            The bundled accumulation raster.
+        """
+        from pyramids.dataset import Dataset
+
+        return Dataset.read_file("examples/data/acc4000.tif")
+
+    def test_the_alias_builds_the_matplotlib_scene(self, dem):
+        """``quickmap(backend="static")`` builds the same scene as ``backend="matplotlib"``.
+
+        Test scenario:
+            ``static`` is the name pyramids' registry serves this tier under, because `Dataset.plot`
+            reserves ``"matplotlib"`` for its own cleopatra path. The adapter passes that spelling
+            straight through, so it has to arrive here as a working backend name rather than an
+            unknown one.
+        """
+        with qp.quickmap(dem, band=1, backend="static") as aliased:
+            assert isinstance(aliased, Map), f"expected a Map, got {type(aliased)}"
+
+    def test_the_alias_resolves_before_the_capability_table_is_read(self):
+        """The alias is canonicalised, so the capability table needs no row of its own.
+
+        Test scenario:
+            `BACKEND_CAPABILITIES` is keyed on the canonical names and drives the support matrix. An
+            alias that reached it unresolved would be refused as unknown; one that gained a row there
+            would double-count the tier in every table built from it.
+        """
+        assert qp._canonical_backend("static") == "matplotlib", (
+            f"'static' should canonicalise to 'matplotlib', got {qp._canonical_backend('static')!r}"
+        )
+        assert "static" not in qp.BACKEND_CAPABILITIES, (
+            "the alias must not be a capability row of its own"
+        )
+
+    @pytest.mark.parametrize("name", ["matplotlib", "interactive", "3d", "web", "nope"])
+    def test_every_other_name_is_passed_through_untouched(self, name):
+        """Only a known alias is rewritten; every other name reaches the refusal as written.
+
+        Args:
+            name: A canonical backend name, or one that is not a backend at all.
+
+        Test scenario:
+            A canonicaliser that altered anything else would either hide a typo behind a working
+            backend or report the wrong name in the refusal.
+        """
+        assert qp._canonical_backend(name) == name, (
+            f"{name!r} should be unchanged, got {qp._canonical_backend(name)!r}"
+        )
+
+    def test_an_unknown_backend_is_still_refused_and_names_the_alias(self, dem):
+        """An unknown name is refused, and the refusal lists ``static`` as an accepted spelling.
+
+        Test scenario:
+            The refusal is where a caller learns the vocabulary, so it has to mention the alias now
+            that one exists — it used to gloss ``'matplotlib' (static)``, which read as a
+            description of the tier rather than a name that would work.
+        """
+        with pytest.raises(ValueError, match="unknown backend") as caught:
+            qp.quickmap(dem, band=1, backend="nope")
+
+        assert "'static'" in str(caught.value), (
+            f"the refusal should offer 'static' as a spelling, got {caught.value}"
+        )
+
+    def test_a_non_string_backend_behaves_exactly_as_before(self, dem):
+        """An unhashable backend is handed through, so its existing refusal is unchanged.
+
+        Test scenario:
+            The canonicaliser is a mapping lookup, and `BACKEND_ALIASES.get(["static"])` would raise
+            `TypeError: unhashable type: 'list'` from the alias table itself — a new failure, in a
+            new place, for an input that already had an answer. The `isinstance` guard hands a
+            non-string straight on, so the call fails where it always did: on the capability-table
+            membership test. `TypeError` here is pre-existing behaviour, verified against
+            `origin/main`, and is pinned as unchanged rather than improved.
+        """
+        assert qp._canonical_backend(["static"]) == ["static"], (
+            "a non-string backend must be handed through untouched"
+        )
+        with pytest.raises(TypeError, match="unhashable"):
+            qp.quickmap(dem, band=1, backend=["static"])
