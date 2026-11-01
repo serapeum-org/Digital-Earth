@@ -282,6 +282,10 @@ def _canonical_backend(backend: Any) -> Any:
             ('web', 'nope')
 
             ```
+
+    See Also:
+        BACKEND_ALIASES: The spellings this resolves, and why the matplotlib tier needs one.
+        BACKEND_CAPABILITIES: Keyed on the canonical names, which is what this runs before.
     """
     return (
         BACKEND_ALIASES.get(backend, backend) if isinstance(backend, str) else backend

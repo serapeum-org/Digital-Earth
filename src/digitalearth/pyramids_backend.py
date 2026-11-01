@@ -1512,24 +1512,37 @@ def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
         ValueError: for a forwarded keyword this seam cannot serve, or an unusable band.
 
     Examples:
-        - Reached through pyramids, which needs no extra for this tier:
+        - Reached through pyramids, which needs no extra for this tier. The figure is this package's
+          own 8x8 default rather than the one cleopatra sizes from the data, which is the visible
+          sign that the call arrived here and not on `ds.plot()`'s own path:
             ```python
             >>> from pyramids.dataset import Dataset
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
             >>> scene = ds.plot(backend="static", band=0)
-            >>> type(scene).__name__
-            'Map'
+            >>> tuple(float(side) for side in scene.fig.get_size_inches())
+            (8.0, 8.0)
 
             ```
-        - The facade's band index is 0-based and this package's is 1-based, so it is shifted here —
-          which is why the entry point matters: reached through pyramids' import-by-name fallback
-          instead, the index would arrive unshifted and draw the wrong band:
+        - What comes back is the tier's own scene, so its methods carry on from the plot call and its
+          layers are addressable by id:
             ```python
             >>> from pyramids.dataset import Dataset
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
             >>> scene = ds.plot(backend="static", band=0)
             >>> scene.layer_ids
             ['raster-1']
+            >>> scene.set_title("Accumulation").ax.get_title()
+            'Accumulation'
+
+            ```
+        - The facade's band index is 0-based and this package's is 1-based, so it is shifted here.
+          That is why the entry point matters rather than merely tidying: reached through pyramids'
+          import-by-name fallback instead, the index would arrive unshifted, and `band=0` would be
+          refused as out of range:
+            ```python
+            >>> from digitalearth.pyramids_backend import BAND_ORIGIN_SHIFT
+            >>> BAND_ORIGIN_SHIFT
+            1
 
             ```
 
