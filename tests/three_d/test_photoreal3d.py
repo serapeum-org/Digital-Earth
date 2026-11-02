@@ -899,3 +899,17 @@ class TestRenderDevice:
         monkeypatch.setattr(mi, "set_variant", lambda _variant: None)
         monkeypatch.setattr(_pr, "_force_backend_init", lambda _mi: None)
         assert _pr._activate_variant(mi, "gpu") == "cuda_ad_rgb"
+
+    def test_cpu_failure_does_not_advise_the_failed_device(self, monkeypatch):
+        """A cpu activation failure is wrapped without the nonsensical 'use device=cpu' fallback."""
+        import mitsuba as mi
+
+        from digitalearth.three_d import photoreal as _pr
+
+        def _boom(_variant):
+            raise RuntimeError("scalar_rgb unavailable")
+
+        monkeypatch.setattr(mi, "set_variant", _boom)
+        with pytest.raises(RuntimeError, match="device='cpu'") as exc:
+            _pr._activate_variant(mi, "cpu")
+        assert "use device='cpu'" not in str(exc.value), "cpu failure must not advise the device that failed"

@@ -431,8 +431,9 @@ def _activate_variant(mi: Any, device: str) -> str:
             "llvm": "drjit's LLVM runtime (the LLVM shared library; set DRJIT_LIBLLVM_PATH if it is installed)",
             "gpu": "an NVIDIA GPU with the CUDA runtime",
         }.get(device, "its runtime")
+        fallback = "" if device == "cpu" else "; use device='cpu'"
         raise RuntimeError(
-            f"photoreal(device={device!r}) needs {hint}, which is not available here; use device='cpu'"
+            f"photoreal(device={device!r}) needs {hint}, which is not available here{fallback}"
         ) from exc
     return variant
 
