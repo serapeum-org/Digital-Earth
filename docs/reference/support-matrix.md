@@ -7,6 +7,10 @@ drifts. -->
 What each rendering backend can draw and style, read straight from its `Capabilities`
 declaration. `✓` means the backend supports it; `—` means it does not.
 
+The columns are the names `digitalearth.quickmap` takes. Through pyramids'
+`plot(backend=...)` the matplotlib column is reached as `backend="static"`, because
+`"matplotlib"` there is pyramids' own cleopatra path -- see the plot-backend reference.
+
 ## Layer kinds
 
 | capability | matplotlib | web | interactive | 3d |
