@@ -246,6 +246,15 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 #:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
 #:   and stays with U-3.
+BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
+    eager={
+        backend: _declared_row(_DECLARATIONS[backend])
+        for backend in ("3d", "web", "interactive")
+    },
+    lazy={"matplotlib": lambda: _declared_row(_static_declaration())},
+)
+
+
 #: Alternative spellings accepted for a backend name, mapped to the canonical one.
 #:
 #: ``static`` is this package's own name for the matplotlib tier — the subpackage that implements it
@@ -291,14 +300,6 @@ def _canonical_backend(backend: Any) -> Any:
         BACKEND_ALIASES.get(backend, backend) if isinstance(backend, str) else backend
     )
 
-
-BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
-    eager={
-        backend: _declared_row(_DECLARATIONS[backend])
-        for backend in ("3d", "web", "interactive")
-    },
-    lazy={"matplotlib": lambda: _declared_row(_static_declaration())},
-)
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
 #: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.

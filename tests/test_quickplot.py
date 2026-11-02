@@ -1653,3 +1653,71 @@ class TestBackendAliases:
         )
         with pytest.raises(TypeError, match="unhashable"):
             qp.quickmap(dem, band=1, backend=["static"])
+
+
+class TestDocCommentOwnership:
+    """Each module-level `#:` block documents the symbol it sits on."""
+
+    @staticmethod
+    def _preceding_doc_comment(source: str, symbol: str) -> str:
+        """The `#:` run immediately above a module-level assignment.
+
+        Args:
+            source: The module's source text.
+            symbol: The assigned name to look above.
+
+        Returns:
+            str: the joined `#:` lines directly preceding that assignment, or `""` if it has none.
+        """
+        lines = source.splitlines()
+        index = next(
+            i
+            for i, line in enumerate(lines)
+            if line.startswith(f"{symbol}:") or line.startswith(f"{symbol} =")
+        )
+        collected = []
+        cursor = index - 1
+        while cursor >= 0 and lines[cursor].startswith("#:"):
+            collected.append(lines[cursor][2:].strip())
+            cursor -= 1
+        return " ".join(reversed(collected))
+
+    def test_the_capability_table_keeps_its_own_documentation(self):
+        """`BACKEND_CAPABILITIES`' prose stays on `BACKEND_CAPABILITIES`.
+
+        Test scenario:
+            A `#:` run attaches to the assignment that follows it, so a new constant inserted between
+            that prose and its assignment silently re-homes the whole block. It happened here: the
+            ~20-line explanation of each tier's row ended up documenting `BACKEND_ALIASES`, and the
+            module's most-referenced datum — cited by a dozen docstrings and four tests — was left
+            with no doc-comment at all. Nothing at runtime can see this, which is why it is asserted
+            against the source.
+        """
+        source = pathlib.Path(qp.__file__).read_text(encoding="utf-8")
+
+        prose = self._preceding_doc_comment(source, "BACKEND_CAPABILITIES")
+
+        assert prose, "BACKEND_CAPABILITIES must keep a doc-comment of its own"
+        assert "capab" in prose.lower() or "tier" in prose.lower(), (
+            f"the block above BACKEND_CAPABILITIES should describe the capability table, got "
+            f"{prose[:120]!r}"
+        )
+
+    def test_the_alias_table_has_its_own_documentation(self):
+        """`BACKEND_ALIASES`' prose is about aliases, not about capability rows.
+
+        Test scenario:
+            The other half of the same mistake: whatever sits above `BACKEND_ALIASES` must be its
+            own, so a reader of the rendered docs is told what the alias table is rather than how
+            each tier declares its capabilities.
+        """
+        source = pathlib.Path(qp.__file__).read_text(encoding="utf-8")
+
+        prose = self._preceding_doc_comment(source, "BACKEND_ALIASES")
+
+        assert "spelling" in prose.lower() or "alias" in prose.lower(), (
+            f"the block above BACKEND_ALIASES should describe the alias table, got {prose[:120]!r}"
+        )
+        assert "stays with U-3" not in prose, (
+            "the capability table's prose has been re-homed onto BACKEND_ALIASES"
+        )
