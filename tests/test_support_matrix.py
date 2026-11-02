@@ -49,8 +49,8 @@ _PREAMBLE = (
     "declaration. `✓` means the backend supports it; `—` means it does not.\n"
     "\n"
     "The columns are the names `digitalearth.quickmap` takes. Through pyramids'\n"
-    "`plot(backend=...)` the matplotlib column is reached as `backend=\"static\"`, because\n"
-    "`\"matplotlib\"` there is pyramids' own cleopatra path -- see the plot-backend reference.\n"
+    '`plot(backend=...)` the matplotlib column is reached as `backend="static"`, because\n'
+    '`"matplotlib"` there is pyramids\' own cleopatra path -- see the plot-backend reference.\n'
 )
 
 
