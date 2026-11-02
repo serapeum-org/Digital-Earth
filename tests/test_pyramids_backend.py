@@ -540,6 +540,64 @@ class TestAnimation:
         with pytest.raises(TypeError, match="unstructured-mesh render"):
             mesh.plot(backend=backend, variable_name="depth")
 
+    def test_an_unserved_keyword_points_at_ds_plot_not_at_a_colliding_name(
+        self, dataset
+    ):
+        """The refusal names `ds.plot()`, not `backend='matplotlib'`, which now means another tier.
+
+        Args:
+            dataset: The shared raster fixture.
+
+        Test scenario:
+            Registering this package as the matplotlib tier's renderer gave `"matplotlib"` two
+            senses: the name pyramids reserves for its own cleopatra path, and the tier this package
+            draws with. The refusal trailer used to say "render on `backend='matplotlib'`", so a
+            caller who had typed `backend='static'` was pointed at a different renderer behind a name
+            that reads like the same one. It now names the call instead. A string is all this is, so
+            a test is the only thing that keeps it true.
+        """
+        with pytest.raises(ValueError) as caught:
+            dataset.plot(backend="static", band=0, rgb_options={})
+
+        message = str(caught.value)
+        assert "ds.plot()" in message, (
+            f"the refusal should point at the call that takes it, got {message!r}"
+        )
+        assert "backend='matplotlib'" not in message, (
+            f"'matplotlib' means pyramids' own path here, not this tier — got {message!r}"
+        )
+
+    def test_a_still_plot_of_a_stack_says_why_it_landed_on_the_animate_refusal(self):
+        """`DatasetCollection.plot(backend="static")` explains the `animate(...)` wording it gets.
+
+        Test scenario:
+            `DatasetCollection.plot` forwards `animate=True` unconditionally, so a **still** plot of
+            a stack is answered by the animation refusal — a message about a call the caller did not
+            make. The reason now says so rather than leaving it to be puzzled out. Built here rather
+            than taken from a fixture because the collection is three one-band members, which no
+            shared fixture provides.
+        """
+        import numpy as np
+
+        from pyramids.dataset import Dataset, GeoReference
+        from pyramids.dataset.collection import DatasetCollection
+
+        cells = np.arange(12, dtype="float32").reshape(3, 4)
+        reference = GeoReference(geo=(0.0, 1.0, 0.0, 3.0, 0.0, -1.0), epsg=4326)
+        members = [
+            Dataset.from_array(cells + 10.0 * step, geo_ref=reference)
+            for step in range(3)
+        ]
+        stack = DatasetCollection(members[0], len(members), datasets=members)
+
+        with pytest.raises(ValueError) as caught:
+            stack.plot(backend="static")
+
+        message = str(caught.value)
+        assert "still plot of a DatasetCollection" in message, (
+            f"the reason should account for the still-plot route that lands here, got {message!r}"
+        )
+
     def test_a_label_column_is_classified_categorically_on_static(self, tmp_path):
         """A label-valued `column` draws on `static`, answered by this seam rather than the builder.
 
