@@ -258,7 +258,8 @@ class TestBuildParser:
             build_parser2.parse_args([])
 
     def test_backend_rejects_unknown_choice(self):
-        """--backend is constrained to the four quickmap dispatches; an unknown one is a usage error."""
+        """--backend takes the quickmap dispatches and the `static` alias; anything else is a usage
+        error."""
         parser = build_parser()
         with pytest.raises(SystemExit):
             parser.parse_args(["plot", "in.tif", "--backend", "bogus"])
@@ -417,6 +418,9 @@ class TestBackend:
 
 class TestBackendDispatch:
     """Tests for --backend (TD-22, #208) — the CLI drives all four quickmap backends, not just matplotlib.
+
+    The matplotlib tier answers to two spellings here, ``matplotlib`` and ``static``; see
+    ``tests/test_quickplot.py::TestBackendAliases`` for the alias itself.
 
     The forwarding is checked by spying on ``quickmap``/``Batch`` rather than rendering, so these run in the
     ``dev`` env without the interactive/web/viz3d engines: a real ``--backend web`` render needs the ``web``

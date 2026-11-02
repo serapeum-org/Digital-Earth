@@ -8,8 +8,9 @@ Two subcommands wrap the existing API so plots can be produced from a shell or a
   (:func:`~digitalearth.ops.browser.gallery`).
 
 The CLI renders headless — the matplotlib backend to ``Agg``, and ``--backend`` picks any of the four
-``quickmap`` dispatches (``matplotlib``/``interactive``/``3d``/``web``), whose scenes save to their own native
-file: a PNG for matplotlib, an HTML page for the other three (TD-22). Human-facing progress goes to ``stderr``
+``quickmap`` dispatches (``matplotlib``/``interactive``/``3d``/``web``, with ``static`` accepted as a second
+spelling of ``matplotlib``), whose scenes save to their own native file: a PNG for matplotlib, an HTML page for
+the other three (TD-22). Human-facing progress goes to ``stderr``
 so any piped ``stdout`` stays clean. This is earthkit-plots' ``cli/`` entry point, scoped to Digital-Earth's
 API.
 """

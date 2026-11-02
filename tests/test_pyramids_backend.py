@@ -44,7 +44,7 @@ from digitalearth.pyramids_backend import (
     web,
 )
 
-#: The group pyramids resolves a backend name through, and the three names we answer to.
+#: The group pyramids resolves a backend name through, and the four names we answer to.
 GROUP = "pyramids.plot_backends"
 
 #: Each registered name against the callable it must load, and the module path it is declared as.
@@ -421,12 +421,16 @@ class TestAnimation:
             static("a-dataset", backend="static", animate=True)
 
         reason = str(caught.value)
-        assert "FuncAnimation" in reason and "no path" in reason, (
-            f"the reason should name what is actually missing — a destination — got {reason!r}"
+        assert "FuncAnimation" in reason, (
+            f"the reason should name what is actually missing — the save step — got {reason!r}"
         )
         assert "does not assemble" not in reason, (
             f"the stack is not the obstacle: this seam assembles one for two other tiers, got "
             f"{reason!r}"
+        )
+        assert "forwards no destination" not in reason, (
+            f"a forwarded path= does reach this seam — plan.destination() returns it — so claiming "
+            f"otherwise is false, got {reason!r}"
         )
 
     def test_each_refused_tier_is_answered_in_its_own_terms(self):

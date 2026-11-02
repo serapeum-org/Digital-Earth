@@ -1,4 +1,4 @@
-"""Serve pyramids' ``plot(backend=…)`` seam from digitalearth's three non-matplotlib tiers.
+"""Serve pyramids' ``plot(backend=…)`` seam from digitalearth's four rendering tiers.
 
 pyramids-core resolves a non-matplotlib ``backend=`` through the ``pyramids.plot_backends``
 entry-point group: ``Dataset.plot(backend="3d")``, ``NetCDF.plot(backend="interactive")`` and the
@@ -78,8 +78,10 @@ BAND_ORIGIN_SHIFT = 1
 #: verb that animates data", which is what this said while `3d` was the only exclusion: the
 #: matplotlib tier owns `Map.animate` and is still absent, for a different reason than the 3-D tier
 #: is. :data:`_UNANIMATABLE` carries the reason per tier, and the two differ — the 3-D tier has no
-#: verb a plot call could supply the arguments for, while the matplotlib tier has one this seam does
-#: not route a destination to yet (round-1 M3/M4).
+#: verb a plot call could supply the arguments for, while the matplotlib tier has one whose result
+#: this seam does not save yet. Not a destination problem: a forwarded ``path=`` reaches
+#: :meth:`_Forwarded.destination` here exactly as it does for the web tier (round-1 M3/M4,
+#: round-2 H2).
 ANIMATION_BACKENDS: frozenset[str] = frozenset({"interactive", "web"})
 
 #: The reason used for a backend outside :data:`ANIMATION_BACKENDS` with no entry in
@@ -106,12 +108,12 @@ _UNANIMATABLE: Mapping[str, str] = MappingProxyType(
             "keywords. Build the scene with digitalearth and call one of them directly."
         ),
         "static": (
-            "the matplotlib tier's Map.animate returns a lazy matplotlib FuncAnimation and takes no "
-            "path, and the facade forwards no destination, so this seam has nowhere to put the "
-            "result and does not drive it yet. The stack itself is not the obstacle — this seam "
-            "assembles one for the other two tiers. Build the Map with digitalearth and call "
-            "Map.animate on your stack. A still plot of a DatasetCollection arrives here too, "
-            "because DatasetCollection.plot forwards animate=True either way."
+            "the matplotlib tier's Map.animate hands back a lazy matplotlib FuncAnimation and does "
+            "not write it, so saving one would be this seam's own step and it does not take it yet. "
+            "Neither the stack nor the destination is the obstacle — this seam assembles a stack for "
+            "the other two tiers, and a forwarded path= reaches it. Build the Map with digitalearth "
+            "and call Map.animate on your stack. A still plot of a DatasetCollection arrives here "
+            "too, because DatasetCollection.plot forwards animate=True either way."
         ),
     }
 )
@@ -790,7 +792,7 @@ def _refuse_unanimatable(plan: _Forwarded) -> None:
             ...         reason = str(exc).split("seam: ")[1]
             ...         print(name, "->", " ".join(reason.split()[:6]))
             3d -> the 3-D tier animates a scene
-            static -> the matplotlib tier's Map.animate returns a
+            static -> the matplotlib tier's Map.animate hands back
 
             ```
     """

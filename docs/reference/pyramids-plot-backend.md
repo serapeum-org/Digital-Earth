@@ -138,10 +138,12 @@ stack.animate(backend="web", interval=120, path="flood.gif")           # written
 - **interactive** builds a time cube and returns a Panel player, or writes a GIF/MP4 when you pass a
   `path`.
 - **web** animates only to a file, so `path=` is required; without one the call is refused by name.
-- **static** is refused by name. `Map.animate` works and takes a stack, but it returns a lazy
-  matplotlib `FuncAnimation` and takes no path, and the facade forwards no destination — so this seam
-  has nowhere to put the result and does not drive it yet. Build the `Map` with digitalearth and call
-  `Map.animate` on your stack.
+- **static** is refused by name. `Map.animate` works and takes a stack, and a forwarded `path=`
+  reaches this seam just as it does for the web tier — but `Map.animate` hands back a lazy matplotlib
+  `FuncAnimation` and does not write it, so saving one would be this seam's own step and it does not
+  take it yet. Build the `Map` with digitalearth and call `Map.animate` on your stack. A *still* plot
+  of a `DatasetCollection` lands on this refusal too, because `DatasetCollection.plot` forwards
+  `animate=True` either way.
 - **3-D** is refused by name. Its `Scene3D.record` needs a caller-supplied `update` callable and
   `Scene3D.orbit` sweeps the camera over a static scene, so neither can be driven from a plot call's
   keywords. Build the scene with digitalearth and call one of them directly.
