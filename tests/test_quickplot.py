@@ -1637,21 +1637,36 @@ class TestBackendAliases:
             f"the refusal should offer 'static' as a spelling, got {caught.value}"
         )
 
-    def test_a_non_string_backend_behaves_exactly_as_before(self, dem):
-        """An unhashable backend is handed through, so its existing refusal is unchanged.
+    def test_a_non_string_backend_is_handed_through_untouched(self):
+        """The canonicaliser does not raise on a value it cannot look up.
 
         Test scenario:
-            The canonicaliser is a mapping lookup, and `BACKEND_ALIASES.get(["static"])` would raise
+            It is a mapping lookup, and `BACKEND_ALIASES.get(["static"])` would raise
             `TypeError: unhashable type: 'list'` from the alias table itself — a new failure, in a
             new place, for an input that already had an answer. The `isinstance` guard hands a
-            non-string straight on, so the call fails where it always did: on the capability-table
-            membership test. `TypeError` here is pre-existing behaviour, verified against
-            `origin/main`, and is pinned as unchanged rather than improved.
+            non-string straight on, so the call fails where it always did.
         """
         assert qp._canonical_backend(["static"]) == ["static"], (
             "a non-string backend must be handed through untouched"
         )
-        with pytest.raises(TypeError, match="unhashable"):
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="an unhashable backend leaks TypeError from the capability-table membership test "
+        "instead of the curated ValueError every other bad backend gets; pre-existing, and an "
+        "isinstance check in front of that test would close it",
+    )
+    def test_a_non_string_backend_is_refused_like_any_other(self, dem):
+        """Every unusable `backend=` should get the same curated refusal.
+
+        Test scenario:
+            States the contract rather than the current behaviour, which is the leaked
+            `TypeError: unhashable type: 'list'`. Pinning that `TypeError` instead — as the first
+            version of this test did — would make the obvious improvement read as a regression, so
+            it is an `xfail(strict=True)`: it flips to XPASS the moment the refusal is made uniform,
+            which is the signal to delete the marker.
+        """
+        with pytest.raises(ValueError, match="unknown backend"):
             qp.quickmap(dem, band=1, backend=["static"])
 
 
