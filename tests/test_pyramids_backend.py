@@ -473,6 +473,42 @@ class TestAnimation:
             f"expected a reason for each refused tier, got {sorted(_UNANIMATABLE)}"
         )
 
+    def test_a_label_column_is_classified_categorically_on_static(self, tmp_path):
+        """A label-valued `column` draws on `static`, answered by this seam rather than the builder.
+
+        Args:
+            tmp_path: pytest temporary directory, for the geojson the fixture writes.
+
+        Test scenario:
+            `_classified` names the categorical scale for the tier that needs it told, because the
+            facade forwards no `scheme=` of its own. It had a branch for `web` and a refusal for
+            `3d`, and the new fourth backend matched neither — so a label column reached
+            `choropleth()` unchanged and failed in *its* terms (`needs column=… to name a column of
+            numbers`), which is the one thing this module exists to prevent. Colouring by a label is,
+            in `_classified`'s own words, the ordinary reason to pass `column`.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Polygon
+
+        from pyramids.feature import FeatureCollection
+
+        geoms = [Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)]
+        frame = gpd.GeoDataFrame(
+            {"zone": ["north", "south", "north"]}, geometry=geoms, crs=4326
+        )
+        path = tmp_path / "zones.geojson"
+        frame.to_file(path, driver="GeoJSON")
+        collection = FeatureCollection.read_file(str(path))
+
+        scene = collection.plot(backend="static", column="zone")
+
+        try:
+            assert scene.layer_ids, (
+                f"a layer should have been drawn, got {scene.layer_ids}"
+            )
+        finally:
+            scene.close()
+
     def test_a_web_animation_without_a_destination_is_refused(self):
         """The web tier writes its animation to a file, so a missing ``path`` is named.
 

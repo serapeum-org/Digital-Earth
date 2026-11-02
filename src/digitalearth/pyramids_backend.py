@@ -1420,9 +1420,13 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
             f"colours by a number. Draw the labels on backend='web' or 'interactive', or pass a "
             f"numeric column"
         )
-    if backend == "web":
-        # Executed: the web tier draws a label column once the scale is named categorical, and the
-        # facade forwards no `scheme`, so there is no way for the caller to say it themselves.
+    if backend in {"web", "static"}:
+        # Executed on both: each tier draws a label column once the scale is named categorical, and
+        # the facade forwards no `scheme`, so there is no way for the caller to say it themselves.
+        # `static` behaves as `web` does here rather than as `3d`: it has a categorical fill, so
+        # falling through to the builder made it answer in `choropleth()`'s terms instead of this
+        # seam's — "needs column=… to name a column of numbers" — for the ordinary reason to pass
+        # `column` at all (round-1 M1).
         draw.setdefault("scheme", "categorical")
 
 
