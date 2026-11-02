@@ -985,7 +985,8 @@ def quickmap(
             The *tier methods* also still differ in shape — a builder that takes content on
             ``matplotlib``/``web``, a visibility flag on ``interactive`` — and unifying those names is
             Core-contract work (U-3).
-        backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
+        backend: ``"matplotlib"`` (default, and also accepted as ``"static"``) returns a static
+            :class:`Map`; ``"interactive"`` returns a
             pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
             extra); ``"3d"`` returns a :class:`~digitalearth.three_d.scene3d.Scene3D` (needs the ``3d``
             extra); ``"web"`` returns a :class:`~digitalearth.web.map.WebMap` (MapLibre + deck.gl; needs the
@@ -1162,7 +1163,9 @@ def to_backend(
     Args:
         figure: The :class:`~digitalearth.base.spec.FigureSpec` to draw, from another scene's
             :attr:`figure_spec` (optionally through ``to_dict()``/``from_dict()``).
-        backend: ``"matplotlib"`` (static, the default), ``"interactive"`` (HoloViz), ``"web"``
+        backend: ``"matplotlib"`` (the default, and also accepted as ``"static"`` — the name
+            pyramids' plot-backend registry serves this tier under), ``"interactive"`` (HoloViz),
+            ``"web"``
             (MapLibre + deck.gl) or ``"3d"`` (PyVista). Validated against :data:`BACKEND_CAPABILITIES`.
         **scene_kwargs: Forwarded to the tier's constructor (e.g. ``strict``, ``figsize``, ``off_screen``).
             A ``crs=`` here overrides the one the figure's view carries on the static, interactive and 3-D

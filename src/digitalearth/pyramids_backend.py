@@ -1526,11 +1526,12 @@ def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
         **kwargs: The keywords pyramids forwarded, in its own vocabulary.
 
     Returns:
-        A :class:`~digitalearth.static.Map`, or — for an animation call — the animation this tier
-        built.
+        A :class:`~digitalearth.static.Map`.
 
     Raises:
-        ValueError: for a forwarded keyword this seam cannot serve, or an unusable band.
+        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an
+            animation call — this tier is outside :data:`ANIMATION_BACKENDS`, so `animate` is refused
+            by name rather than returning anything.
 
     Examples:
         - Reached through pyramids, which needs no extra for this tier. The figure is this package's
@@ -1571,6 +1572,8 @@ def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
         interactive: The same seam on the HoloViz tier.
         three_d: The same seam on the PyVista tier.
         web: The same seam on the MapLibre tier.
+        ANIMATION_BACKENDS: The tiers whose animation this seam drives, which does not include this
+            one — :data:`_UNANIMATABLE` carries the reason.
         BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's.
     """
     return _render(obj, backend, kwargs)
