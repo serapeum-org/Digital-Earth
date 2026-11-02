@@ -1386,9 +1386,11 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
 
     ``column`` is the ``FeatureCollection.plot`` facade's own selector, and colouring by a *label*
     column is the ordinary reason to pass it. Forwarded alone it reached the tier's classifier as a
-    number: ``could not convert string to float: 'Baden-Württemberg'`` on web and 3-D. The web tier
-    draws it once told the scale is categorical; the 3-D tier has no categorical fill at all, and
-    both ways round it produced the same unreadable message (round-2 M10).
+    number: ``could not convert string to float: 'Baden-Württemberg'`` on web and 3-D, and
+    ``choropleth() needs column=… to name a column of numbers`` on the matplotlib tier. The two tiers
+    with a categorical fill — ``web`` and ``static`` — draw it once told the scale is categorical; the
+    3-D tier has none at all, and every way round produced a message in the builder's terms rather
+    than the call's (round-2 M10, round-1 M1).
 
     Args:
         obj: The vector layer the facade was called on.
@@ -1396,10 +1398,24 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
         draw: The keywords bound for the builder, modified in place.
 
     Raises:
-        ValueError: on ``backend="3d"``, which cannot colour a label column by any route.
+        ValueError: on ``backend="3d"``, which cannot colour a label column by any route. Nothing is
+            raised for ``web`` or ``static``; the scale is named for them instead.
 
     Examples:
-        - The web tier is told the scale is categorical, so a label column draws:
+        - A tier with a categorical fill is told to use it, so a label column draws. ``static`` is
+          handled the same way as ``web`` — it has the fill, so withholding the scale only moved the
+          failure into ``choropleth()``:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _classified
+            >>> layer = {"zone": np.array(["north", "south"])}
+            >>> draw = {"column": "zone"}
+            >>> _classified(layer, "static", draw)
+            >>> draw["scheme"]
+            'categorical'
+
+            ```
+        - The web tier is told the same thing:
             ```python
             >>> import numpy as np
             >>> from digitalearth.pyramids_backend import _classified
