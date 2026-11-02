@@ -110,7 +110,8 @@ _UNANIMATABLE: Mapping[str, str] = MappingProxyType(
             "path, and the facade forwards no destination, so this seam has nowhere to put the "
             "result and does not drive it yet. The stack itself is not the obstacle — this seam "
             "assembles one for the other two tiers. Build the Map with digitalearth and call "
-            "Map.animate on your stack."
+            "Map.animate on your stack. A still plot of a DatasetCollection arrives here too, "
+            "because DatasetCollection.plot forwards animate=True either way."
         ),
     }
 )
@@ -1546,8 +1547,8 @@ def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
             ```python
             >>> from pyramids.dataset import Dataset
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
-            >>> scene = ds.plot(backend="static", band=0)
-            >>> tuple(float(side) for side in scene.fig.get_size_inches())
+            >>> with ds.plot(backend="static", band=0) as scene:
+            ...     tuple(float(side) for side in scene.fig.get_size_inches())
             (8.0, 8.0)
 
             ```
@@ -1556,21 +1557,23 @@ def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
             ```python
             >>> from pyramids.dataset import Dataset
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
-            >>> scene = ds.plot(backend="static", band=0)
-            >>> scene.layer_ids
+            >>> with ds.plot(backend="static", band=0) as scene:
+            ...     scene.layer_ids
+            ...     scene.set_title("Accumulation").ax.get_title()
             ['raster-1']
-            >>> scene.set_title("Accumulation").ax.get_title()
             'Accumulation'
 
             ```
-        - The facade's band index is 0-based and this package's is 1-based, so it is shifted here.
-          That is why the entry point matters rather than merely tidying: reached through pyramids'
-          import-by-name fallback instead, the index would arrive unshifted, and `band=0` would be
-          refused as out of range:
+        - The facade's band index is 0-based and this package's is 1-based, and the shift happens
+          here. That `band=0` draws at all is the demonstration: through pyramids' import-by-name
+          fallback the index arrives unshifted, and the tier answers `band -1 is out of range`. So
+          the entry point is what makes the call correct, not merely tidier:
             ```python
-            >>> from digitalearth.pyramids_backend import BAND_ORIGIN_SHIFT
-            >>> BAND_ORIGIN_SHIFT
-            1
+            >>> from pyramids.dataset import Dataset
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> with ds.plot(backend="static", band=0) as first_band:
+            ...     first_band.layer_ids
+            ['raster-1']
 
             ```
 

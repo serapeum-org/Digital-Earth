@@ -26,6 +26,10 @@ an entry point under that name would never be resolved. `ds.plot()` and `ds.plot
 therefore keep returning a cleopatra glyph, unchanged, and `backend="static"` is how you ask for
 this package's `Map`.
 
+`digitalearth.quickmap` accepts both spellings — `digitalearth.api.BACKEND_ALIASES` is the table, and
+`--backend static` works on the CLI too — so code moving between the facade and the package directly
+does not have to rename the backend as it goes.
+
 ```toml
 # digitalearth's pyproject.toml
 [project.entry-points."pyramids.plot_backends"]
