@@ -737,11 +737,16 @@ class _Forwarded:
         labels = rest.pop("animation_axis_values", None)
         path = rest.pop("path", None)
         # The mesh facade spells the selector `variable_name`; `quickmap` spells it `variable`.
-        # Inert as things stand, and kept deliberately: only `digitalearth.api.MESH_BACKENDS`
-        # ({"matplotlib"}) has a triangular render, so `quickmap` refuses a `UgridDataset` on all
-        # three of these tiers before any keyword is read — executed on each through the repo's mesh
-        # fixture (round-1 M1). It is the right translation the moment a tier gains that render, and
-        # `test_no_plugin_backend_draws_a_mesh_yet` fails here if one does.
+        # Live on `static` only, and that is new: `MESH_BACKENDS` is `{"matplotlib"}`, and `static`
+        # canonicalises to `matplotlib` before the mesh gate runs, so a `UgridDataset` reaches the
+        # triangular render through this rename — `plot(backend="static", variable_name=…)` shades
+        # the mesh's own faces. The other three tiers have no such render and are still refused by
+        # the gate before any keyword is read. Both halves are executed in
+        # `tests/test_pyramids_backend.py` (`..._a_ugrid_mesh_draws_on_static...` and
+        # `..._a_ugrid_mesh_is_still_refused...`), which is the coverage this translation went
+        # without until round-1 H2: the comment here used to call the path inert and name a guard
+        # test, `test_no_plugin_backend_draws_a_mesh_yet`, that had never existed in this repo — so
+        # the one event it promised to catch happened in silence.
         if "variable_name" in rest:
             rest["variable"] = rest.pop("variable_name")
         if "band" in rest:

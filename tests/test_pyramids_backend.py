@@ -489,6 +489,57 @@ class TestAnimation:
             f"expected a reason for each refused tier, got {sorted(_UNANIMATABLE)}"
         )
 
+    def test_a_ugrid_mesh_draws_on_static_and_is_refused_on_the_other_three(
+        self, ugrid_mesh
+    ):
+        """`variable_name` reaches the mesh render on `static`, and the other tiers still refuse.
+
+        Args:
+            ugrid_mesh: The repo's two-face mesh factory (a quad and a triangle).
+
+        Test scenario:
+            Registering a fourth backend made a whole input *type* drawable through
+            `plot(backend=…)` for the first time, as a side effect: `MESH_BACKENDS` is
+            `{"matplotlib"}`, `static` canonicalises to `matplotlib` before the mesh gate runs, so
+            the `variable_name` -> `variable` translation that had never executed now does. It
+            shipped with no test and a comment calling the path inert, naming a guard test
+            (`test_no_plugin_backend_draws_a_mesh_yet`) that has never existed in this repo. The
+            values are read back off the drawn collection — the quad's 10 on both of its fan
+            triangles and the triangle's 20 — so this asserts the mesh's own connectivity was used
+            and the selector really was renamed, not that *something* was drawn.
+        """
+        import numpy as np
+
+        scene = ugrid_mesh("face").plot(backend="static", variable_name="depth")
+
+        try:
+            values = np.asarray(scene.ax.collections[-1].get_array()).tolist()
+            assert values == [10.0, 10.0, 20.0], (
+                f"the mesh should be shaded on its own faces, got {values}"
+            )
+        finally:
+            scene.close()
+
+    @pytest.mark.parametrize("backend", ["3d", "web", "interactive"])
+    def test_a_ugrid_mesh_is_still_refused_where_no_tier_has_the_render(
+        self, backend, ugrid_mesh
+    ):
+        """The three tiers without a triangular render still refuse a mesh by name.
+
+        Args:
+            backend: The backend to try.
+            ugrid_mesh: The repo's two-face mesh factory.
+
+        Test scenario:
+            The other half of the contract. `static` gaining the mesh must not have opened it
+            everywhere, and the refusal must still arrive from the mesh gate — before any keyword is
+            read — rather than from a builder that does not recognise `variable`.
+        """
+        # built above the block so only `plot` can raise inside it (refusal-block tree guard)
+        mesh = ugrid_mesh("face")
+        with pytest.raises(TypeError, match="unstructured-mesh render"):
+            mesh.plot(backend=backend, variable_name="depth")
+
     def test_a_label_column_is_classified_categorically_on_static(self, tmp_path):
         """A label-valued `column` draws on `static`, answered by this seam rather than the builder.
 
