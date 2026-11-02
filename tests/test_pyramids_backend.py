@@ -684,7 +684,37 @@ class TestDelegation:
             f"quickmap received {seen['kwargs']}"
         )
 
-    @pytest.mark.parametrize("name, fn", [("web", web), ("3d", three_d)])
+    @pytest.mark.parametrize("backend", ["static", "web", "3d"])
+    def test_a_title_that_is_not_a_heading_is_refused_on_every_tier(
+        self, backend, dataset, monkeypatch
+    ):
+        """`title=3` is refused by name wherever it is passed, not only where it is routed.
+
+        @pytest.mark.parametrize("name, fn", [("web", web), ("3d", three_d)])
+            Args:
+                backend: The backend to pass `title=3` to.
+                dataset: The shared raster fixture.
+                monkeypatch: pytest fixture, used to keep the render out of this.
+
+            Test scenario:
+                The type check and the routing shared one `backend in _TITLE_AFTER_BUILD` test, so the
+                tier left out of the routing — because its builder takes `title` itself — was also left
+                out of the validation. `static` coerced `title=3` to the heading `'3'` and returned a
+                `Map`, while `web` and `3d` refused it. The comment above that guard says why it exists:
+                "two answers to the same call". There were three. The render is stubbed so this asserts
+                the refusal rather than any tier's engine.
+        """
+        import digitalearth
+
+        monkeypatch.setattr(
+            digitalearth,
+            "quickmap",
+            lambda *args, **kwargs: pytest.fail("should not render"),
+        )
+
+        with pytest.raises(ValueError, match="is not a heading"):
+            dataset.plot(backend=backend, band=0, title=3)
+
     def test_a_title_is_set_on_the_scene_where_the_builder_refuses_it(
         self, name, fn, monkeypatch
     ):

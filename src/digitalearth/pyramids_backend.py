@@ -1517,15 +1517,17 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
     # here and set on the finished scene through `set_title`, which both of those tiers own. The
     # HoloViz tier has no `set_title`, so there it stays a builder keyword, which is the route that
     # already works (round-1 H2/L6).
-    held = draw.pop("title", None) if backend in _TITLE_AFTER_BUILD else None
-    if held is not None and not isinstance(held, str):
+    # Validated for every tier, routed for only some. These were one membership test, which made the
+    # tier left out of the *routing* — because its own builder takes `title` — the tier left out of
+    # the *validation* too: `static` coerced `title=3` into the heading '3' and returned a Map while
+    # the other two refused it (round-2 M1).
+    asked = draw.get("title")
+    if asked is not None and not isinstance(asked, str):
         # Checked before the render, not after. Set on the finished scene, a bad title cost the
         # whole picture: `three_d(ds, title=3)` built the Scene3D and *then* raised, while the web
         # tier took the int and returned a map — two answers to the same call (round-2 L5).
-        raise ValueError(
-            f"title={held!r} is not a heading; pass a string (backend={backend!r} sets it on the "
-            f"finished scene)"
-        )
+        raise ValueError(f"title={asked!r} is not a heading; pass a string")
+    held = draw.pop("title", None) if backend in _TITLE_AFTER_BUILD else None
     _classified(obj, backend, draw)
     if "basemap" in draw:
         draw["basemap"] = _basemap_asked(draw["basemap"], backend)
