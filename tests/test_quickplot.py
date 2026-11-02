@@ -1650,6 +1650,31 @@ class TestBackendAliases:
             "a non-string backend must be handed through untouched"
         )
 
+    def test_an_alias_does_not_bypass_a_builders_capability_gate(self, monkeypatch):
+        """A verb's `kind` refusal is reached through an alias, not skipped by it.
+
+        Args:
+            monkeypatch: pytest fixture, used to register a throwaway alias.
+
+        Test scenario:
+            The per-verb wrappers (`field`, `contours`, …) read `backend=` themselves and look it up
+            in `BACKEND_CAPABILITIES` to decide whether that tier has the renderer the verb names.
+            The table is keyed on canonical names, so an alias found nothing, `supported` came back
+            `None`, and the whole `CapabilityError` gate was skipped — the call then worked anyway
+            because `quickmap` canonicalises downstream. Harmless for `static`, whose tier does have
+            `kind`; not harmless as an invariant. Asserted with an alias aimed at the web tier, which
+            declares no `raster_renderer`, so the refusal is the behaviour under test rather than an
+            incidental one.
+        """
+        monkeypatch.setattr(
+            qp,
+            "BACKEND_ALIASES",
+            types.MappingProxyType({**qp.BACKEND_ALIASES, "web-alias": "web"}),
+        )
+
+        with pytest.raises(qp.CapabilityError, match="does not have"):
+            qp.contours("unused-data", backend="web-alias")
+
     @pytest.mark.xfail(
         strict=True,
         reason="an unhashable backend leaks TypeError from the capability-table membership test "

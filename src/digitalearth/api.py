@@ -2013,7 +2013,12 @@ def _method(name: str, kind: str | None = None):
     renderer = name if kind is None else kind
 
     def _fn(data: PlottableData, **kwargs) -> Map:
-        backend = kwargs.get("backend", "matplotlib")
+        # Canonicalised before the lookup: `BACKEND_CAPABILITIES` is keyed on canonical names, so an
+        # alias found nothing here, `supported` came back `None`, and the gate below was skipped
+        # entirely — the call then worked because `quickmap` canonicalises downstream. This is the
+        # third site in the module that reads a caller-supplied `backend=`, and was the one the
+        # alias was not applied to (round-1 L5).
+        backend = _canonical_backend(kwargs.get("backend", "matplotlib"))
         supported = BACKEND_CAPABILITIES.get(backend)
         if supported is not None and "kind" not in supported:
             honoured = _honoured_by("kind")
