@@ -578,7 +578,6 @@ class TestAnimation:
             shared fixture provides.
         """
         import numpy as np
-
         from pyramids.dataset import Dataset, GeoReference
         from pyramids.dataset.collection import DatasetCollection
 
