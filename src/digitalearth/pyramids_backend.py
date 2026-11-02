@@ -344,9 +344,15 @@ def _refuse_unserved(backend: str, forwarded: Mapping[str, Any]) -> None:
     hit = [name for name in _UNSERVED if name in forwarded]
     if hit:
         reasons = "; ".join(f"{name}= — {_UNSERVED[name]}" for name in hit)
+        # The trailer says `ds.plot()` and not `backend='matplotlib'`, because once this package
+        # serves the matplotlib tier as `static` the two senses of "matplotlib" collide in one
+        # sentence: a caller who typed `backend='static'` was told to render on
+        # `backend='matplotlib'`, which is a different renderer (pyramids' own cleopatra path)
+        # behind a name that reads like the same tier (round-1 L3).
         raise ValueError(
             f"plot(…) cannot serve {len(hit)} argument(s) on backend={backend!r}: {reasons}. Drop "
-            f"them for this backend, or render on backend='matplotlib'."
+            f"them for this backend, or call ds.plot() with no backend — pyramids' own cleopatra "
+            f"path, which takes them."
         )
 
 
@@ -1628,6 +1634,7 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
             ```
 
     See Also:
+        static: The same seam on the matplotlib tier, which needs no extra.
         three_d: The same seam on the PyVista tier.
         web: The same seam on the MapLibre tier.
         ANIMATION_BACKENDS: Which tiers serve an ``animate`` call.
@@ -1681,6 +1688,7 @@ def three_d(obj: Any, *, backend: str = "3d", **kwargs: Any) -> Any:
             ```
 
     See Also:
+        static: The same seam on the matplotlib tier, which needs no extra.
         interactive: The same seam on the HoloViz tier, which does serve an animation.
         web: The same seam on the MapLibre tier.
         ANIMATION_BACKENDS: Why this tier is absent from it.
@@ -1734,6 +1742,7 @@ def web(obj: Any, *, backend: str = "web", **kwargs: Any) -> Any:
             ```
 
     See Also:
+        static: The same seam on the matplotlib tier, which needs no extra.
         interactive: The same seam on the HoloViz tier, whose animation needs no destination.
         three_d: The same seam on the PyVista tier.
         BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's.
