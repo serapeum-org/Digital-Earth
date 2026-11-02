@@ -772,8 +772,8 @@ class PhotorealMixin(_MixinBase):
                 ``volpath`` so it self-shadows and shadows the terrain. ``None`` renders no smoke (A4).
             output: An :class:`OutputOptions` for extra outputs — an EXR of the HDR beauty, and whether to return
                 the AOV passes. ``None`` (the default) writes only the tonemapped image (A1).
-            render: A :class:`RenderOptions` for the path-tracer engine — the `device` (cpu / llvm / gpu) and the
-                `max_depth`. ``None`` (the default) renders on the CPU (`scalar_rgb`) at ``max_depth=8`` (A5).
+            render: A :class:`RenderOptions` for the path-tracer engine — the ``device`` (cpu / llvm / gpu) and the
+                ``max_depth``. ``None`` (the default) renders on the CPU (``scalar_rgb``) at ``max_depth=8`` (A5).
 
         Returns:
             The rendered ``(H, W, 3)`` uint8 RGB array (also written to ``path`` when one was given); or, when
