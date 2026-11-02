@@ -746,7 +746,8 @@ class PhotorealMixin(_MixinBase):
 
         Every registered layer's mesh is translated into a Mitsuba triangle mesh carrying its per-vertex colours
         (mapped through the layer's lookup table), lit by a single directional sun plus a constant sky and seen
-        through the scene's current camera. The frame is path-traced on the CPU (no GPU, no display); with
+        through the scene's current camera. The frame is path-traced on the CPU by default (no GPU, no display);
+        ``render.device`` can switch to the LLVM or CUDA-GPU backend where that runtime is present (A5). With
         ``denoise=True`` a low sample count is cleaned by Intel OIDN using albedo and normal AOVs.
 
         Args:
