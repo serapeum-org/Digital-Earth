@@ -912,4 +912,6 @@ class TestRenderDevice:
         monkeypatch.setattr(mi, "set_variant", _boom)
         with pytest.raises(RuntimeError, match="device='cpu'") as exc:
             _pr._activate_variant(mi, "cpu")
-        assert "use device='cpu'" not in str(exc.value), "cpu failure must not advise the device that failed"
+        assert "use device='cpu'" not in str(exc.value), (
+            "cpu failure must not advise the device that failed"
+        )
