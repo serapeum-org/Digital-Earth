@@ -16,6 +16,7 @@ test, so the whole file runs in the ``dev`` env. The tiers' own rendering is cov
 import dataclasses
 import importlib.metadata as metadata
 import inspect
+import re
 import subprocess
 import sys
 
@@ -378,16 +379,22 @@ class TestAnimation:
         with pytest.raises(ValueError, match="frame interval in milliseconds"):
             _Forwarded.from_facade("interactive", forwarded)
 
-    def test_the_animating_backends_are_the_two_with_a_data_animation_verb(self):
-        """Only the tiers with a verb the seam can drive are listed as animating.
+    def test_the_animating_backends_are_the_two_this_seam_can_drive(self):
+        """Only the tiers whose animation this seam can drive are listed, which is not the same set.
 
         Test scenario:
-            The 3-D tier's ``record`` needs a caller-supplied ``update`` callable and its ``orbit``
-            sweeps the camera over a static scene; neither can be built from forwarded plot
-            keywords, so it is deliberately absent rather than served a still picture.
+            This used to read "the two with a data-animation verb", and that stopped being true when
+            `static` was registered: the matplotlib tier owns `Map.animate`, a data-animation verb,
+            and is still absent. What the set means is narrower — the tiers this seam can drive from
+            forwarded keywords *and* give the result somewhere to go. The 3-D tier's verbs need an
+            `update` callable a plot call cannot produce; `Map.animate` returns a lazy
+            `FuncAnimation` and takes no path (round-1 M3).
         """
         assert sorted(ANIMATION_BACKENDS) == ["interactive", "web"], (
-            f"expected the two tiers with a data-animation verb, got {sorted(ANIMATION_BACKENDS)}"
+            f"expected the two tiers this seam can drive, got {sorted(ANIMATION_BACKENDS)}"
+        )
+        assert set(_UNANIMATABLE) == {"3d", "static"}, (
+            f"every excluded tier needs its own reason, got {sorted(_UNANIMATABLE)}"
         )
 
     def test_a_three_d_animation_is_refused_naming_the_verbs_to_use_instead(self):
@@ -410,8 +417,17 @@ class TestAnimation:
             unconditionally. Registering ``static`` put a second tier on that branch and it inherited
             the 3-D tier's reasons — a false answer. The matplotlib tier's verb is ``Map.animate``.
         """
-        with pytest.raises(ValueError, match="Map.animate"):
+        with pytest.raises(ValueError, match=re.escape("Map.animate")) as caught:
             static("a-dataset", backend="static", animate=True)
+
+        reason = str(caught.value)
+        assert "FuncAnimation" in reason and "no path" in reason, (
+            f"the reason should name what is actually missing — a destination — got {reason!r}"
+        )
+        assert "does not assemble" not in reason, (
+            f"the stack is not the obstacle: this seam assembles one for two other tiers, got "
+            f"{reason!r}"
+        )
 
     def test_each_refused_tier_is_answered_in_its_own_terms(self):
         """The two refused tiers get different reasons, not one shared sentence.
@@ -488,9 +504,8 @@ class TestAnimation:
             in `_classified`'s own words, the ordinary reason to pass `column`.
         """
         gpd = pytest.importorskip("geopandas")
-        from shapely.geometry import Polygon
-
         from pyramids.feature import FeatureCollection
+        from shapely.geometry import Polygon
 
         geoms = [Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)]
         frame = gpd.GeoDataFrame(

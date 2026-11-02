@@ -74,29 +74,43 @@ __all__ = [
 #: Added to a forwarded ``band`` to turn pyramids' 0-based index into digitalearth's 1-based one.
 BAND_ORIGIN_SHIFT = 1
 
-#: The backends whose tier owns a verb that animates *data*. The 3-D tier's ``record`` needs a
-#: caller-supplied ``update`` callable and its ``orbit`` sweeps the camera over a static scene, so
-#: neither can be driven from the facade's forwarded keywords alone — an animation request for it is
-#: refused by name instead of answered with a still picture or a camera spin.
+#: The backends whose data animation this seam can drive from a plot call. Not the same as "owns a
+#: verb that animates data", which is what this said while `3d` was the only exclusion: the
+#: matplotlib tier owns `Map.animate` and is still absent, for a different reason than the 3-D tier
+#: is. :data:`_UNANIMATABLE` carries the reason per tier, and the two differ — the 3-D tier has no
+#: verb a plot call could supply the arguments for, while the matplotlib tier has one this seam does
+#: not route a destination to yet (round-1 M3/M4).
 ANIMATION_BACKENDS: frozenset[str] = frozenset({"interactive", "web"})
 
-#: Why each backend outside :data:`ANIMATION_BACKENDS` cannot be animated from a plot call, in its
-#: own terms. One reason per tier, because the two differ: the 3-D tier has no verb whose arguments a
-#: plot call could supply, while the matplotlib tier has one this seam simply does not drive yet.
-#: The reason given for a backend on that branch with no entry of its own, so a tier added to
-#: :data:`BACKEND_CAPABILITIES` without one is still answered truthfully rather than with a KeyError.
-_UNANIMATABLE_DEFAULT = "this tier's animation is not driven through the seam."
+#: The reason used for a backend outside :data:`ANIMATION_BACKENDS` with no entry in
+#: :data:`_UNANIMATABLE`. Defensive only: every name registered today that reaches that branch has an
+#: entry, so this is unreachable through any public call and exists so that adding a tier to
+#: :data:`_UNANIMATABLE`'s branch without a reason is answered rather than met with a `KeyError`
+#: (round-1 L1).
+_UNANIMATABLE_DEFAULT = (
+    "this tier's animation is not driven through the seam. Build the scene with digitalearth and "
+    "animate it there."
+)
 
+#: Why each backend outside :data:`ANIMATION_BACKENDS` cannot be animated from a plot call, in its
+#: own terms, and what to do instead. One reason per tier, because they are not the same kind of
+#: "cannot": the 3-D tier's verbs take an argument a plot call cannot produce, while the matplotlib
+#: tier's verb works and simply has nowhere to put its result. Each entry carries its own closing
+#: advice, because a single shared sentence said "call it directly" after naming the 3-D tier's two
+#: verbs (round-1 L2).
 _UNANIMATABLE: Mapping[str, str] = MappingProxyType(
     {
         "3d": (
             "the 3-D tier animates a scene with Scene3D.record (which needs an update callable) or "
             "sweeps the camera with Scene3D.orbit, and neither can be driven from a plot call's "
-            "keywords."
+            "keywords. Build the scene with digitalearth and call one of them directly."
         ),
         "static": (
-            "the matplotlib tier animates with Map.animate, which steps through a stack this seam "
-            "does not assemble for it."
+            "the matplotlib tier's Map.animate returns a lazy matplotlib FuncAnimation and takes no "
+            "path, and the facade forwards no destination, so this seam has nowhere to put the "
+            "result and does not drive it yet. The stack itself is not the obstacle — this seam "
+            "assembles one for the other two tiers. Build the Map with digitalearth and call "
+            "Map.animate on your stack."
         ),
     }
 )
@@ -764,16 +778,14 @@ def _refuse_unanimatable(plan: _Forwarded) -> None:
             ...         reason = str(exc).split("seam: ")[1]
             ...         print(name, "->", " ".join(reason.split()[:6]))
             3d -> the 3-D tier animates a scene
-            static -> the matplotlib tier animates with Map.animate,
+            static -> the matplotlib tier's Map.animate returns a
 
             ```
     """
     if plan.backend not in ANIMATION_BACKENDS:
         raise ValueError(
             f"animate(backend={plan.backend!r}) is not served through the pyramids plot-backend "
-            f"seam: {_UNANIMATABLE.get(plan.backend, _UNANIMATABLE_DEFAULT)} Build the scene with "
-            f"digitalearth and call it "
-            f"directly."
+            f"seam: {_UNANIMATABLE.get(plan.backend, _UNANIMATABLE_DEFAULT)}"
         )
 
 
