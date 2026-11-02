@@ -22,7 +22,7 @@ from typing import Any
 
 import matplotlib
 
-from digitalearth.api import quickmap
+from digitalearth.api import _canonical_backend, quickmap
 from digitalearth.ops.batch import Batch, load_input
 from digitalearth.ops.browser import gallery
 
@@ -92,9 +92,16 @@ def _add_plot_options(parser: argparse.ArgumentParser) -> None:
     """Attach the shared plotting flags (forwarded to ``quickmap``) to a subcommand parser."""
     parser.add_argument(
         "--backend",
-        choices=tuple(_NATIVE_EXT),
+        # `static` is accepted as well as `matplotlib`: it is the name pyramids' plot-backend
+        # registry serves that tier under, and `quickmap`'s own refusal advertises it, so a CLI that
+        # is a `quickmap` wrapper should not disagree with it. `main` canonicalises it before the
+        # tables keyed by backend are read, so `_NATIVE_EXT` needs no second entry (round-1 L4).
+        choices=(*_NATIVE_EXT, "static"),
         default="matplotlib",
-        help="rendering backend quickmap dispatches to (default: matplotlib)",
+        help=(
+            "rendering backend quickmap dispatches to (default: matplotlib; `static` is accepted "
+            "as the same tier)"
+        ),
     )
     parser.add_argument(
         "--crs",
@@ -302,6 +309,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "Agg", force=True
     )  # render headless to a file — set on invocation, never on import
     args = build_parser().parse_args(argv)
+    if getattr(args, "backend", None) is not None:
+        # One place, right after parsing: `_NATIVE_EXT`, `_DEFAULT_CRS` and the forwarded kwargs are
+        # all keyed on the canonical name, and doing it here keeps them from each needing an alias
+        # entry of their own.
+        args.backend = _canonical_backend(args.backend)
     try:
         exit_code: int = args.func(args)
         return exit_code
