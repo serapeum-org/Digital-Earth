@@ -441,6 +441,35 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
+  # The hardware-gated photoreal render tests (markers `gpu`/`llvm`) prove a frame actually path-traces on
+  # Mitsuba's CUDA / LLVM backends — not just that device selection dispatches. GitHub's hosted runners have
+  # neither backend, so here both tests skip cleanly and the job passes all-skipped; point this job at a
+  # self-hosted runner with an NVIDIA GPU and/or drjit's LLVM runtime to actually exercise them. They are
+  # deselected from `tests-photoreal` (via `-m 'not gpu and not llvm'`) so that job stays hardware-free.
+  tests-photoreal-hw:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: photoreal
+          activate-environment: photoreal
+          cache: true
+          version: v0.73.0
+
+      - name: Install a virtual framebuffer + software OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+
+      - name: Run the hardware-gated photoreal render tests (skip cleanly without a GPU/LLVM backend)
+        run: |
+          xvfb-run -a pixi run -e photoreal test-photoreal-hw
+
   # The interactive (HoloViz) tier needs the `interactive` extra (geoviews/holoviews/datashader/panel), which the
   # default py311/312/313 matrix does not install (so it skips those tests). Validate it here in the interactive
   # env. Bokeh/Panel render headless (to HTML; baselines use the matplotlib backend) — no display needed.
