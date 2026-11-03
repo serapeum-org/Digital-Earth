@@ -125,13 +125,14 @@ _UNANIMATABLE: Mapping[str, str] = MappingProxyType(
 #: in PyVista's terms.
 _UNSERVED: Mapping[str, str] = {
     "exclude_value": (
-        "no digitalearth entry point takes a nodata value — the matplotlib path sets its own and "
+        "no digitalearth entry point takes a nodata value — this package's own matplotlib tier "
+        "sets its own and "
         "answers a caller's with `got multiple values for keyword argument 'exclude_value'` — so "
         "mask the raster in pyramids before plotting"
     ),
     "rgb_options": (
-        "a three-band composite is built with Map.rgb_composite on the static tier, which this "
-        "seam does not reach"
+        "a three-band composite is built with Map.rgb_composite, a verb this seam does not "
+        "call"
     ),
     # Both say "0-based" deliberately: a caller following this advice passes `band=` as an extra
     # keyword, and this seam shifts whatever it is given. Advising the keyword without naming its
@@ -354,8 +355,9 @@ def _refuse_unserved(backend: str, forwarded: Mapping[str, Any]) -> None:
         # behind a name that reads like the same tier (round-1 L3).
         raise ValueError(
             f"plot(…) cannot serve {len(hit)} argument(s) on backend={backend!r}: {reasons}. Drop "
-            f"them for this backend, or call ds.plot() with no backend — pyramids' own cleopatra "
-            f"path, which takes them."
+            f"them for this backend, or make the same plot() call with no backend= — pyramids' own "
+            f"cleopatra path. Call it on the object the keyword belongs to: selectors= and axes= are "
+            f"NetCDF.plot's, and Dataset.plot refuses them."
         )
 
 
@@ -1400,8 +1402,9 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
         draw: The keywords bound for the builder, modified in place.
 
     Raises:
-        ValueError: on ``backend="3d"``, which cannot colour a label column by any route. Nothing is
-            raised for ``web`` or ``static``; the scale is named for them instead.
+        ValueError: on ``backend="3d"`` only, which cannot colour a label column by any route.
+            ``web`` and ``static`` have the scale named for them; ``interactive`` is left untouched,
+            because its own builder already reads a label column.
 
     Examples:
         - A tier with a categorical fill is told to use it, so a label column draws. ``static`` is
@@ -1459,8 +1462,8 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
     if backend == "3d":
         raise ValueError(
             f"column={column!r} holds labels, and backend='3d' has no categorical fill: it "
-            f"colours by a number. Draw the labels on backend='web' or 'interactive', or pass a "
-            f"numeric column"
+            f"colours by a number. Draw the labels on backend='static' (no extra needed), 'web' "
+            f"or 'interactive', or pass a numeric column"
         )
     if backend in {"web", "static"}:
         # Executed on both: each tier draws a label column once the scale is named categorical, and
@@ -1640,8 +1643,8 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
             >>> try:
             ...     interactive("a-dataset", backend="interactive", rgb_options={})
             ... except ValueError as exc:
-            ...     print(str(exc).split("— ")[1].split(", which")[0])
-            a three-band composite is built with Map.rgb_composite on the static tier
+            ...     print(str(exc).split("— ")[1].split(". ")[0])
+            a three-band composite is built with Map.rgb_composite, a verb this seam does not call
 
             ```
         - An animation keyword on a still plot is named rather than ignored, which is what it used

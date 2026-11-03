@@ -84,7 +84,7 @@ TypeError: "title" is an invalid keyword argument for `_common_arg_parser`
 | Refused | Do this instead |
 |---|---|
 | `exclude_value` | No entry point here takes a nodata value;<br>mask the raster in pyramids before plotting. |
-| `rgb_options` | Build the composite with `Map.rgb_composite` on the static tier. |
+| `rgb_options` | Call `Map.rgb_composite` through<br>`quickmap` or `Map`; this seam never<br>calls it. |
 | `selectors`, `axes` | Choose a NetCDF slice with `variable=` and `band=`. |
 | `bands`, `animation_axis_values`, `interval`<br>on a **still** plot | Call `animate(backend=…)` instead. |
 
@@ -235,8 +235,10 @@ On the other three it is refused before any keyword is read:
 
 ```text
 UgridDataset.plot(backend="web")
-TypeError: backend='web' has no unstructured-mesh render; draw a UgridDataset with
-backend='matplotlib', which shades each of its faces (tripcolor)
+TypeError: backend='web' has no unstructured-mesh render; draw a UgridDataset on the
+matplotlib tier, which shades each of its faces (tripcolor): quickmap(data,
+backend='matplotlib') here, or plot(backend='static') through pyramids, whose own
+'matplotlib' is cleopatra's path
 ```
 
 ## Checking what is registered

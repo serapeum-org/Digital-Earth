@@ -783,8 +783,10 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
 
     if isinstance(data, UgridDataset):
         raise TypeError(
-            f"backend={backend!r} has no unstructured-mesh render; draw a UgridDataset with "
-            f"backend='matplotlib', which shades each of its faces (tripcolor)"
+            f"backend={backend!r} has no unstructured-mesh render; draw a UgridDataset on the "
+            f"matplotlib tier, which shades each of its faces (tripcolor): "
+            f"quickmap(data, backend='matplotlib') here, or plot(backend='static') through "
+            f"pyramids, whose own 'matplotlib' is cleopatra's path"
         )
 
 
