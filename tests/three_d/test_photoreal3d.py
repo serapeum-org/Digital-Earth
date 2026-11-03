@@ -25,6 +25,77 @@ def _small_terrain_scene():
     return scene
 
 
+# Hardware-gated render helpers (shared by TestRealDeviceRender). The marker (-m gpu / -m llvm) decides
+# selection; these decide whether the backend is actually present, skipping when it is not — the same
+# runtime-capability shape importorskip uses, never an os.environ gate.
+_DEVICE_EXPECTED_VARIANT = {"gpu": "cuda_ad_rgb", "llvm": "llvm_ad_rgb"}
+
+# Max per-cell channel difference (0-255) between a device render and the cpu baseline after block-averaging
+# to a 6x6 grid. Block-averaging smooths the per-pixel RNG noise two backends never share; the bound is wide
+# enough to pass a genuine cross-backend render yet far below the gap a blank or wrong frame would open.
+_DEVICE_RENDER_TOL = 30.0
+
+
+def _require_device_or_skip(device):
+    """Activate the Mitsuba variant for ``device``, or skip the test when that backend's runtime is absent."""
+    import mitsuba as mi
+
+    from digitalearth.three_d.photoreal import _activate_variant
+
+    try:
+        return _activate_variant(mi, device)
+    except RuntimeError as exc:
+        pytest.skip(f"{device!r} backend unavailable here: {exc}")
+
+
+def _render_device(device, *, spp=16, width=48, height=36):
+    """Render the shared terrain scene on ``device`` and return the uint8 RGB frame."""
+    from digitalearth.three_d.photoreal import RenderOptions
+
+    scene = _small_terrain_scene()
+    try:
+        return scene.photoreal(
+            spp=spp,
+            width=width,
+            height=height,
+            denoise=False,
+            render=RenderOptions(device=device),
+        )
+    finally:
+        scene.close()
+
+
+def _block_mean(img, n):
+    """Downsample an (H, W, C) image to (n, n, C) floats by averaging each block (smooths per-pixel noise)."""
+    rows = np.array_split(np.arange(img.shape[0]), n)
+    cols = np.array_split(np.arange(img.shape[1]), n)
+    out = np.empty((n, n, img.shape[2]), dtype=float)
+    for i, rr in enumerate(rows):
+        for j, cc in enumerate(cols):
+            out[i, j] = (
+                img[rr[:, None], cc[None, :]].reshape(-1, img.shape[2]).mean(axis=0)
+            )
+    return out
+
+
+def _assert_device_renders_like_cpu(device):
+    """Prove a frame path-traces on ``device``: right variant active, non-blank, and close to the cpu baseline."""
+    import mitsuba as mi
+
+    expected = _require_device_or_skip(device)
+    assert expected == _DEVICE_EXPECTED_VARIANT[device], expected
+    device_img = _render_device(device)
+    assert mi.variant() == expected, (
+        f"expected {expected} active after the render, got {mi.variant()!r}"
+    )
+    assert int(device_img.max()) > 0, f"the {device} render must not be black"
+    cpu_img = _render_device("cpu")
+    diff = np.abs(_block_mean(device_img, 6) - _block_mean(cpu_img, 6)).max()
+    assert diff <= _DEVICE_RENDER_TOL, (
+        f"{device} vs cpu block-mean diff {diff:.1f} exceeds {_DEVICE_RENDER_TOL} — not the same scene"
+    )
+
+
 class TestRequirePhotoreal:
     """`_require_photoreal` guards the optional mitsuba/oidn dependencies."""
 
@@ -915,3 +986,23 @@ class TestRenderDevice:
         assert "use device='cpu'" not in str(exc.value), (
             "cpu failure must not advise the device that failed"
         )
+
+
+class TestRealDeviceRender:
+    """Hardware-gated: prove a frame actually path-traces on the CUDA / LLVM backend, not just dispatches (#529).
+
+    ``TestRenderDevice`` monkeypatches Mitsuba, so it never renders on a jit backend. These two tests do the
+    real render and are deselected from the default suite (markers ``gpu``/``llvm``); run them with
+    ``pixi run -e photoreal test-photoreal-hw`` on a machine that has the backend. Each skips cleanly when its
+    runtime is absent, so the suite stays green and hardware-free everywhere else.
+    """
+
+    @pytest.mark.gpu
+    def test_gpu_render_matches_cpu_within_tolerance(self):
+        """device="gpu" activates cuda_ad_rgb and renders the terrain like the cpu baseline (skips without a GPU)."""
+        _assert_device_renders_like_cpu("gpu")
+
+    @pytest.mark.llvm
+    def test_llvm_render_matches_cpu_within_tolerance(self):
+        """device="llvm" activates llvm_ad_rgb and renders the terrain like the cpu baseline (skips without LLVM)."""
+        _assert_device_renders_like_cpu("llvm")

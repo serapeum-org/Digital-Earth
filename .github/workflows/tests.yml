@@ -441,6 +441,43 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
+  # The hardware-gated photoreal render tests (markers `gpu`/`llvm`) prove a frame actually path-traces on
+  # Mitsuba's CUDA / LLVM backends — not just that device selection dispatches. This job apt-installs an LLVM
+  # runtime, so the `llvm` test genuinely RENDERS here (on Linux `libLLVM.so` is packaged; on Windows it is not).
+  # The `gpu` test still skips — hosted runners have no NVIDIA GPU; point this job at a self-hosted GPU runner to
+  # exercise it too. Both are deselected from `tests-photoreal`/`main` (`-m 'not gpu and not llvm'`) so those stay
+  # hardware-free; here `-m 'gpu or llvm'` collects them and llvm passes, gpu skips, so the job is green.
+  tests-photoreal-hw:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: photoreal
+          activate-environment: photoreal
+          cache: true
+          version: v0.73.0
+
+      - name: Install a virtual framebuffer + software OpenGL + the LLVM runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri libllvm18
+
+      - name: Point drjit at the LLVM shared library
+        run: |
+          LLVM_SO="$(find /usr/lib -type f -name 'libLLVM*.so*' 2>/dev/null | sort | head -1)"
+          test -n "$LLVM_SO" || { echo "::error::no libLLVM shared library found after apt install"; exit 1; }
+          echo "Using LLVM runtime: $LLVM_SO"
+          echo "DRJIT_LIBLLVM_PATH=$LLVM_SO" >> "$GITHUB_ENV"
+
+      - name: Run the hardware-gated photoreal render tests (llvm renders; gpu skips — no GPU on hosted runners)
+        run: |
+          xvfb-run -a pixi run -e photoreal test-photoreal-hw
+
   # The interactive (HoloViz) tier needs the `interactive` extra (geoviews/holoviews/datashader/panel), which the
   # default py311/312/313 matrix does not install (so it skips those tests). Validate it here in the interactive
   # env. Bokeh/Panel render headless (to HTML; baselines use the matplotlib backend) — no display needed.
