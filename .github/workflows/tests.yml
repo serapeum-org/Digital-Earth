@@ -442,10 +442,11 @@ jobs:
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
   # The hardware-gated photoreal render tests (markers `gpu`/`llvm`) prove a frame actually path-traces on
-  # Mitsuba's CUDA / LLVM backends — not just that device selection dispatches. GitHub's hosted runners have
-  # neither backend, so here both tests skip cleanly and the job passes all-skipped; point this job at a
-  # self-hosted runner with an NVIDIA GPU and/or drjit's LLVM runtime to actually exercise them. They are
-  # deselected from `tests-photoreal` (via `-m 'not gpu and not llvm'`) so that job stays hardware-free.
+  # Mitsuba's CUDA / LLVM backends — not just that device selection dispatches. This job apt-installs an LLVM
+  # runtime, so the `llvm` test genuinely RENDERS here (on Linux `libLLVM.so` is packaged; on Windows it is not).
+  # The `gpu` test still skips — hosted runners have no NVIDIA GPU; point this job at a self-hosted GPU runner to
+  # exercise it too. Both are deselected from `tests-photoreal`/`main` (`-m 'not gpu and not llvm'`) so those stay
+  # hardware-free; here `-m 'gpu or llvm'` collects them and llvm passes, gpu skips, so the job is green.
   tests-photoreal-hw:
     runs-on: ubuntu-latest
     steps:
@@ -461,12 +462,19 @@ jobs:
           cache: true
           version: v0.73.0
 
-      - name: Install a virtual framebuffer + software OpenGL
+      - name: Install a virtual framebuffer + software OpenGL + the LLVM runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri libllvm18
 
-      - name: Run the hardware-gated photoreal render tests (skip cleanly without a GPU/LLVM backend)
+      - name: Point drjit at the LLVM shared library
+        run: |
+          LLVM_SO="$(find /usr/lib -type f -name 'libLLVM*.so*' 2>/dev/null | sort | head -1)"
+          test -n "$LLVM_SO" || { echo "::error::no libLLVM shared library found after apt install"; exit 1; }
+          echo "Using LLVM runtime: $LLVM_SO"
+          echo "DRJIT_LIBLLVM_PATH=$LLVM_SO" >> "$GITHUB_ENV"
+
+      - name: Run the hardware-gated photoreal render tests (llvm renders; gpu skips — no GPU on hosted runners)
         run: |
           xvfb-run -a pixi run -e photoreal test-photoreal-hw
 
