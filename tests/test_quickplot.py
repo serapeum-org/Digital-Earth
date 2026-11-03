@@ -1675,52 +1675,6 @@ class TestBackendAliases:
         with pytest.raises(qp.CapabilityError, match="does not have"):
             qp.contours("unused-data", backend="web-alias")
 
-    def test_the_cli_accepts_the_alias_and_canonicalises_it(self, tmp_path):
-        """`--backend static` parses, renders, and picks the matplotlib file extension.
-
-        Args:
-            tmp_path: pytest temporary directory for the rendered output.
-
-        Test scenario:
-            The CLI is a `quickmap` wrapper whose `--backend` is an argparse allowlist, and it
-            rejected the spelling `quickmap`'s own refusal advertises. Accepting it means two names
-            now reach one tier, and `_NATIVE_EXT` / `_DEFAULT_CRS` are keyed on the canonical one —
-            so this asserts the whole path, not just that argparse let it through: the render
-            succeeds and the output is the matplotlib tier's `.png` rather than a `KeyError` on the
-            extension lookup.
-        """
-        from digitalearth.ops.cli import main
-
-        destination = tmp_path / "out.png"
-
-        code = main(
-            [
-                "plot",
-                "examples/data/acc4000.tif",
-                "--backend",
-                "static",
-                "-o",
-                str(destination),
-            ]
-        )
-
-        assert code == 0, f"the CLI should succeed with --backend static, got {code}"
-        assert destination.exists(), "the render should have been written"
-
-    def test_the_cli_still_refuses_a_name_that_is_not_a_backend(self):
-        """Widening the allowlist for the alias did not widen it for anything else.
-
-        Test scenario:
-            `choices` is what produces argparse's own error for a bad `--backend`, so adding a name
-            to it is the kind of change that can quietly accept more than intended.
-        """
-        from digitalearth.ops.cli import build_parser
-
-        parser = build_parser()
-
-        with pytest.raises(SystemExit):
-            parser.parse_args(["plot", "in.tif", "--backend", "nope"])
-
     @pytest.mark.xfail(
         strict=True,
         reason="an unhashable backend leaks TypeError from the capability-table membership test "

@@ -296,6 +296,57 @@ class TestVocabulary:
             f"these should pass through unchanged, got {plan.draw}"
         )
 
+    def test_a_ugrid_mesh_draws_on_static_and_is_refused_on_the_other_three(
+        self, ugrid_mesh
+    ):
+        """`variable_name` reaches the mesh render on `static`, and the other tiers still refuse.
+
+        Args:
+            ugrid_mesh: The repo's two-face mesh factory (a quad and a triangle).
+
+        Test scenario:
+            Registering a fourth backend made a whole input *type* drawable through
+            `plot(backend=…)` for the first time, as a side effect: `MESH_BACKENDS` is
+            `{"matplotlib"}`, `static` canonicalises to `matplotlib` before the mesh gate runs, so
+            the `variable_name` -> `variable` translation that had never executed now does. It
+            shipped with no test and a comment calling the path inert, naming a guard test
+            (`test_no_plugin_backend_draws_a_mesh_yet`) that has never existed in this repo. The
+            values are read back off the drawn collection — the quad's 10 on both of its fan
+            triangles and the triangle's 20 — so this asserts the mesh's own connectivity was used
+            and the selector really was renamed, not that *something* was drawn.
+        """
+        import numpy as np
+
+        scene = ugrid_mesh("face").plot(backend="static", variable_name="depth")
+
+        try:
+            values = np.asarray(scene.ax.collections[-1].get_array()).tolist()
+            assert values == [10.0, 10.0, 20.0], (
+                f"the mesh should be shaded on its own faces, got {values}"
+            )
+        finally:
+            scene.close()
+
+    @pytest.mark.parametrize("backend", ["3d", "web", "interactive"])
+    def test_a_ugrid_mesh_is_still_refused_where_no_tier_has_the_render(
+        self, backend, ugrid_mesh
+    ):
+        """The three tiers without a triangular render still refuse a mesh by name.
+
+        Args:
+            backend: The backend to try.
+            ugrid_mesh: The repo's two-face mesh factory.
+
+        Test scenario:
+            The other half of the contract. `static` gaining the mesh must not have opened it
+            everywhere, and the refusal must still arrive from the mesh gate — before any keyword is
+            read — rather than from a builder that does not recognise `variable`.
+        """
+        # built above the block so only `plot` can raise inside it (refusal-block tree guard)
+        mesh = ugrid_mesh("face")
+        with pytest.raises(TypeError, match="unstructured-mesh render"):
+            mesh.plot(backend=backend, variable_name="depth")
+
 
 class TestUnserved:
     """Keywords digitalearth cannot act on are refused in its own words."""
@@ -353,6 +404,33 @@ class TestUnserved:
         forwarded = {name: value}
         with pytest.raises(ValueError, match="only applies to an animation"):
             _Forwarded.from_facade("web", forwarded)
+
+    def test_an_unserved_keyword_points_at_ds_plot_not_at_a_colliding_name(
+        self, dataset
+    ):
+        """The refusal names `ds.plot()`, not `backend='matplotlib'`, which now means another tier.
+
+        Args:
+            dataset: The shared raster fixture.
+
+        Test scenario:
+            Registering this package as the matplotlib tier's renderer gave `"matplotlib"` two
+            senses: the name pyramids reserves for its own cleopatra path, and the tier this package
+            draws with. The refusal trailer used to say "render on `backend='matplotlib'`", so a
+            caller who had typed `backend='static'` was pointed at a different renderer behind a name
+            that reads like the same one. It now names the call instead. A string is all this is, so
+            a test is the only thing that keeps it true.
+        """
+        with pytest.raises(ValueError) as caught:
+            dataset.plot(backend="static", band=0, rgb_options={})
+
+        message = str(caught.value)
+        assert "with no backend=" in message, (
+            f"the refusal should point at the call that takes it, got {message!r}"
+        )
+        assert "backend='matplotlib'" not in message, (
+            f"'matplotlib' means pyramids' own path here, not this tier — got {message!r}"
+        )
 
 
 class TestAnimation:
@@ -493,84 +571,6 @@ class TestAnimation:
             f"expected a reason for each refused tier, got {sorted(_UNANIMATABLE)}"
         )
 
-    def test_a_ugrid_mesh_draws_on_static_and_is_refused_on_the_other_three(
-        self, ugrid_mesh
-    ):
-        """`variable_name` reaches the mesh render on `static`, and the other tiers still refuse.
-
-        Args:
-            ugrid_mesh: The repo's two-face mesh factory (a quad and a triangle).
-
-        Test scenario:
-            Registering a fourth backend made a whole input *type* drawable through
-            `plot(backend=…)` for the first time, as a side effect: `MESH_BACKENDS` is
-            `{"matplotlib"}`, `static` canonicalises to `matplotlib` before the mesh gate runs, so
-            the `variable_name` -> `variable` translation that had never executed now does. It
-            shipped with no test and a comment calling the path inert, naming a guard test
-            (`test_no_plugin_backend_draws_a_mesh_yet`) that has never existed in this repo. The
-            values are read back off the drawn collection — the quad's 10 on both of its fan
-            triangles and the triangle's 20 — so this asserts the mesh's own connectivity was used
-            and the selector really was renamed, not that *something* was drawn.
-        """
-        import numpy as np
-
-        scene = ugrid_mesh("face").plot(backend="static", variable_name="depth")
-
-        try:
-            values = np.asarray(scene.ax.collections[-1].get_array()).tolist()
-            assert values == [10.0, 10.0, 20.0], (
-                f"the mesh should be shaded on its own faces, got {values}"
-            )
-        finally:
-            scene.close()
-
-    @pytest.mark.parametrize("backend", ["3d", "web", "interactive"])
-    def test_a_ugrid_mesh_is_still_refused_where_no_tier_has_the_render(
-        self, backend, ugrid_mesh
-    ):
-        """The three tiers without a triangular render still refuse a mesh by name.
-
-        Args:
-            backend: The backend to try.
-            ugrid_mesh: The repo's two-face mesh factory.
-
-        Test scenario:
-            The other half of the contract. `static` gaining the mesh must not have opened it
-            everywhere, and the refusal must still arrive from the mesh gate — before any keyword is
-            read — rather than from a builder that does not recognise `variable`.
-        """
-        # built above the block so only `plot` can raise inside it (refusal-block tree guard)
-        mesh = ugrid_mesh("face")
-        with pytest.raises(TypeError, match="unstructured-mesh render"):
-            mesh.plot(backend=backend, variable_name="depth")
-
-    def test_an_unserved_keyword_points_at_ds_plot_not_at_a_colliding_name(
-        self, dataset
-    ):
-        """The refusal names `ds.plot()`, not `backend='matplotlib'`, which now means another tier.
-
-        Args:
-            dataset: The shared raster fixture.
-
-        Test scenario:
-            Registering this package as the matplotlib tier's renderer gave `"matplotlib"` two
-            senses: the name pyramids reserves for its own cleopatra path, and the tier this package
-            draws with. The refusal trailer used to say "render on `backend='matplotlib'`", so a
-            caller who had typed `backend='static'` was pointed at a different renderer behind a name
-            that reads like the same one. It now names the call instead. A string is all this is, so
-            a test is the only thing that keeps it true.
-        """
-        with pytest.raises(ValueError) as caught:
-            dataset.plot(backend="static", band=0, rgb_options={})
-
-        message = str(caught.value)
-        assert "with no backend=" in message, (
-            f"the refusal should point at the call that takes it, got {message!r}"
-        )
-        assert "backend='matplotlib'" not in message, (
-            f"'matplotlib' means pyramids' own path here, not this tier — got {message!r}"
-        )
-
     def test_a_still_plot_of_a_stack_says_why_it_landed_on_the_animate_refusal(self):
         """`DatasetCollection.plot(backend="static")` explains the `animate(...)` wording it gets.
 
@@ -600,41 +600,6 @@ class TestAnimation:
         assert "still plot of a DatasetCollection" in message, (
             f"the reason should account for the still-plot route that lands here, got {message!r}"
         )
-
-    def test_a_label_column_is_classified_categorically_on_static(self, tmp_path):
-        """A label-valued `column` draws on `static`, answered by this seam rather than the builder.
-
-        Args:
-            tmp_path: pytest temporary directory, for the geojson the fixture writes.
-
-        Test scenario:
-            `_classified` names the categorical scale for the tier that needs it told, because the
-            facade forwards no `scheme=` of its own. It had a branch for `web` and a refusal for
-            `3d`, and the new fourth backend matched neither — so a label column reached
-            `choropleth()` unchanged and failed in *its* terms (`needs column=… to name a column of
-            numbers`), which is the one thing this module exists to prevent. Colouring by a label is,
-            in `_classified`'s own words, the ordinary reason to pass `column`.
-        """
-        gpd = pytest.importorskip("geopandas")
-        from pyramids.feature import FeatureCollection
-        from shapely.geometry import Polygon
-
-        geoms = [Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)]
-        frame = gpd.GeoDataFrame(
-            {"zone": ["north", "south", "north"]}, geometry=geoms, crs=4326
-        )
-        path = tmp_path / "zones.geojson"
-        frame.to_file(path, driver="GeoJSON")
-        collection = FeatureCollection.read_file(str(path))
-
-        scene = collection.plot(backend="static", column="zone")
-
-        try:
-            assert scene.layer_ids, (
-                f"a layer should have been drawn, got {scene.layer_ids}"
-            )
-        finally:
-            scene.close()
 
     def test_a_web_animation_without_a_destination_is_refused(self):
         """The web tier writes its animation to a file, so a missing ``path`` is named.
@@ -1073,6 +1038,41 @@ class TestLabelValuedColumn:
         assert "scheme" not in draw, (
             f"a numeric column should not be classified: {draw}"
         )
+
+    def test_a_label_column_is_classified_categorically_on_static(self, tmp_path):
+        """A label-valued `column` draws on `static`, answered by this seam rather than the builder.
+
+        Args:
+            tmp_path: pytest temporary directory, for the geojson the fixture writes.
+
+        Test scenario:
+            `_classified` names the categorical scale for the tier that needs it told, because the
+            facade forwards no `scheme=` of its own. It had a branch for `web` and a refusal for
+            `3d`, and the new fourth backend matched neither — so a label column reached
+            `choropleth()` unchanged and failed in *its* terms (`needs column=… to name a column of
+            numbers`), which is the one thing this module exists to prevent. Colouring by a label is,
+            in `_classified`'s own words, the ordinary reason to pass `column`.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Polygon
+
+        geoms = [Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)]
+        frame = gpd.GeoDataFrame(
+            {"zone": ["north", "south", "north"]}, geometry=geoms, crs=4326
+        )
+        path = tmp_path / "zones.geojson"
+        frame.to_file(path, driver="GeoJSON")
+        collection = FeatureCollection.read_file(str(path))
+
+        scene = collection.plot(backend="static", column="zone")
+
+        try:
+            assert scene.layer_ids, (
+                f"a layer should have been drawn, got {scene.layer_ids}"
+            )
+        finally:
+            scene.close()
 
 
 class TestChoosingTheNetcdfVariable:

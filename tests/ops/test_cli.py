@@ -1,5 +1,6 @@
 """Tests for RP.11 — the digitalearth command line (digitalearth.ops.cli)."""
 
+import pathlib
 from pathlib import Path
 
 import pytest
@@ -258,11 +259,66 @@ class TestBuildParser:
             build_parser2.parse_args([])
 
     def test_backend_rejects_unknown_choice(self):
-        """--backend takes the quickmap dispatches and the `static` alias; anything else is a usage
-        error."""
+        """--backend takes the four dispatches plus the `static` alias; anything else is a usage error."""
         parser = build_parser()
         with pytest.raises(SystemExit):
             parser.parse_args(["plot", "in.tif", "--backend", "bogus"])
+
+
+class TestBackendAlias:
+    """``--backend static`` is the same tier as ``--backend matplotlib`` (#520)."""
+
+    def test_the_alias_renders_and_takes_the_matplotlib_extension(
+        self, tmp_path, monkeypatch
+    ):
+        """``--backend static`` renders, and the output is named from `_NATIVE_EXT`.
+
+        Args:
+            tmp_path: pytest temporary directory, used as the working directory.
+            monkeypatch: pytest fixture, used to run inside `tmp_path`.
+
+        Test scenario:
+            The first version of this test passed `-o`, which puts `args.output` on the left of an
+            `or` and leaves `_NATIVE_EXT[args.backend]` unreached — so the extension it asserted was
+            the one the test itself chose, not the one the table produced, and the `KeyError` the
+            lookup raised for an alias went unnoticed (round-2 M5/M6). Dropping `-o` is the only
+            form that reaches the table.
+        """
+        from digitalearth.ops.cli import main
+
+        source = tmp_path / "acc4000.tif"
+        source.write_bytes(
+            (pathlib.Path.cwd() / "examples/data/acc4000.tif").read_bytes()
+        )
+        monkeypatch.chdir(tmp_path)
+
+        code = main(["plot", "acc4000.tif", "--backend", "static"])
+
+        assert code == 0, f"the CLI should succeed with --backend static, got {code}"
+        assert (tmp_path / "acc4000.png").exists(), (
+            f"the matplotlib tier's extension should come from _NATIVE_EXT, got "
+            f"{sorted(p.name for p in tmp_path.iterdir())}"
+        )
+
+    def test_the_parsed_namespace_never_holds_the_alias(self):
+        """Canonicalisation is argparse's, so every consumer sees the canonical name.
+
+        Test scenario:
+            It used to be a fix-up inside `main`, which left the alias in the `Namespace` on every
+            other path — including the `build_parser().parse_args(...)` idiom this file uses
+            throughout. `_NATIVE_EXT[args.backend]` then raised `KeyError: 'static'`, a class
+            `_USER_FACING_ERRORS` deliberately does not catch.
+        """
+        from digitalearth.ops.cli import _NATIVE_EXT, build_parser
+
+        args = build_parser().parse_args(["plot", "in.tif", "--backend", "static"])
+
+        assert args.backend == "matplotlib", (
+            f"the Namespace should carry the canonical name, got {args.backend!r}"
+        )
+        assert _NATIVE_EXT[args.backend] == "png", (
+            "the extension table must resolve without a guard"
+        )
 
 
 class TestMain:

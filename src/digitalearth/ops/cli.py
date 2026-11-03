@@ -95,13 +95,22 @@ def _add_plot_options(parser: argparse.ArgumentParser) -> None:
         "--backend",
         # `static` is accepted as well as `matplotlib`: it is the name pyramids' plot-backend
         # registry serves that tier under, and `quickmap`'s own refusal advertises it, so a CLI that
-        # is a `quickmap` wrapper should not disagree with it. `main` canonicalises it before the
-        # tables keyed by backend are read, so `_NATIVE_EXT` needs no second entry (round-1 L4).
-        choices=(*_NATIVE_EXT, "static"),
+        # is a `quickmap` wrapper should not disagree with it (round-1 L4).
+        #
+        # The conversion is argparse's, not a fix-up afterwards. `_NATIVE_EXT`, `_DEFAULT_CRS` and
+        # the forwarded `backend=` are all keyed on the canonical name, and doing it in `main` left
+        # the parsed `Namespace` holding an alias on every other path — the one `tests/ops/test_cli.py`
+        # uses everywhere: `_cmd_plot(build_parser().parse_args([…, "--backend", "static"]))` raised
+        # `KeyError: 'static'`, which `_USER_FACING_ERRORS` deliberately does not catch, so it would
+        # have surfaced as a traceback rather than the CLI's own `error:` line (round-2 M6). With
+        # `type=` the Namespace can never hold an alias, and the three tables need no precondition.
+        type=_canonical_backend,
+        choices=tuple(_NATIVE_EXT),
         default="matplotlib",
+        metavar="{matplotlib|static,interactive,3d,web}",
         help=(
-            "rendering backend quickmap dispatches to (default: matplotlib; `static` is accepted "
-            "as the same tier)"
+            "rendering backend quickmap dispatches to (default: matplotlib; `static` is the same "
+            "tier, under the name pyramids registers it as)"
         ),
     )
     parser.add_argument(
@@ -310,11 +319,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "Agg", force=True
     )  # render headless to a file — set on invocation, never on import
     args = build_parser().parse_args(argv)
-    if getattr(args, "backend", None) is not None:
-        # One place, right after parsing: `_NATIVE_EXT`, `_DEFAULT_CRS` and the forwarded kwargs are
-        # all keyed on the canonical name, and doing it here keeps them from each needing an alias
-        # entry of their own.
-        args.backend = _canonical_backend(args.backend)
     try:
         exit_code: int = args.func(args)
         return exit_code
