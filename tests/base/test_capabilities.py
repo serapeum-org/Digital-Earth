@@ -272,7 +272,7 @@ class TestTheImportCost:
 class TestTheTwoDeclarationsDoNotContradict:
     """Review M19 — `Capabilities.absent` and `contract.PENDING` answer different questions."""
 
-    @pytest.mark.parametrize("backend", ["matplotlib", "interactive", "3d", "web"])
+    @pytest.mark.parametrize("backend", ["static", "interactive", "3d", "web"])
     def test_nothing_is_both_declined_and_pending(self, backend):
         """ "We decided against it" and "nobody has written it yet" cannot both be true of one name.
 

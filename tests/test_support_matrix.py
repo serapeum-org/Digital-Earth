@@ -29,7 +29,7 @@ SUPPORT_MATRIX_PATH = (
 
 #: The backends as columns, left to right. The default tier first, then the three extras. Guarded against the
 #: package's discovered tier set by ``tests/test_api_snapshot.py::test_the_snapshot_and_matrix_cover_every_tier``.
-BACKENDS: list[str] = ["matplotlib", "web", "interactive", "3d"]
+BACKENDS: list[str] = ["static", "web", "interactive", "3d"]
 
 #: The set-valued capability dimensions to tabulate, as (heading, capability key).
 _DIMENSIONS = (
@@ -48,10 +48,11 @@ _PREAMBLE = (
     "What each rendering backend can draw and style, read straight from its `Capabilities`\n"
     "declaration. `✓` means the backend supports it; `—` means it does not.\n"
     "\n"
-    "The columns are the four rendering tiers, under the canonical names `quickmap` keys\n"
-    "on. Through pyramids' `plot(backend=...)` the matplotlib column is reached as\n"
-    '`backend="static"`, because `"matplotlib"` there is pyramids\' own cleopatra path —\n'
-    "see [the plot-backend reference](pyramids-plot-backend.md).\n"
+    "The columns are the four rendering tiers, under the names `quickmap` keys on.\n"
+    "`matplotlib` is accepted as an alias of `static`. Through pyramids'\n"
+    '`plot(backend=...)` only `static` reaches this package — `"matplotlib"` there is\n'
+    "pyramids' own cleopatra path; see\n"
+    "[the plot-backend reference](pyramids-plot-backend.md).\n"
 )
 
 
@@ -155,7 +156,7 @@ def test_absent_section_skips_a_backend_with_nothing_absent():
         confirm ``web`` gets no heading while the others do.
     """
     caps = {
-        "matplotlib": {"absent": {"scale_bar": "a static image has no live bar"}},
+        "static": {"absent": {"scale_bar": "a static image has no live bar"}},
         "web": {"absent": {}},
         "interactive": {"absent": {"globe": "the interactive tier draws flat"}},
         "3d": {"absent": {"basemap": "a scene has no tiles to drape"}},
@@ -164,8 +165,8 @@ def test_absent_section_skips_a_backend_with_nothing_absent():
     assert "### web" not in section, (
         f"a backend with nothing absent should be skipped:\n{section}"
     )
-    assert "### matplotlib" in section, (
-        f"matplotlib has omissions and should get a heading:\n{section}"
+    assert "### static" in section, (
+        f"static has omissions and should get a heading:\n{section}"
     )
     assert "### 3d" in section, f"3d has omissions and should get a heading:\n{section}"
 

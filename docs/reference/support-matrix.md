@@ -7,14 +7,15 @@ drifts. -->
 What each rendering backend can draw and style, read straight from its `Capabilities`
 declaration. `✓` means the backend supports it; `—` means it does not.
 
-The columns are the four rendering tiers, under the canonical names `quickmap` keys
-on. Through pyramids' `plot(backend=...)` the matplotlib column is reached as
-`backend="static"`, because `"matplotlib"` there is pyramids' own cleopatra path —
-see [the plot-backend reference](pyramids-plot-backend.md).
+The columns are the four rendering tiers, under the names `quickmap` keys on.
+`matplotlib` is accepted as an alias of `static`. Through pyramids'
+`plot(backend=...)` only `static` reaches this package — `"matplotlib"` there is
+pyramids' own cleopatra path; see
+[the plot-backend reference](pyramids-plot-backend.md).
 
 ## Layer kinds
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `basemap` | ✓ | ✓ | ✓ | ✓ |
 | `bivariate` | — | — | — | ✓ |
@@ -63,7 +64,7 @@ see [the plot-backend reference](pyramids-plot-backend.md).
 
 ## Encoding channels
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `color` | — | ✓ | ✓ | ✓ |
 | `height` | — | ✓ | — | ✓ |
@@ -76,7 +77,7 @@ see [the plot-backend reference](pyramids-plot-backend.md).
 
 ## Data-driven channels
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `color` | — | ✓ | ✓ | ✓ |
 | `height` | — | ✓ | — | ✓ |
@@ -84,7 +85,7 @@ see [the plot-backend reference](pyramids-plot-backend.md).
 
 ## Classification schemes
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `categorical` | ✓ | ✓ | ✓ | ✓ |
 | `equal_interval` | ✓ | ✓ | ✓ | ✓ |
@@ -96,7 +97,7 @@ see [the plot-backend reference](pyramids-plot-backend.md).
 
 ## Features
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `animation` | ✓ | ✓ | ✓ | ✓ |
 | `attribution` | — | ✓ | — | ✓ |
@@ -128,7 +129,7 @@ see [the plot-backend reference](pyramids-plot-backend.md).
 Some entries here (for example a control a tier has no surface for) are not rows in the tables above: they are
 omissions with no positive counterpart on any backend, so they appear only in this section.
 
-### matplotlib
+### static
 
 - **`attribution`** — a credit is text placed on the figure — `text` or `stamp` — rather than a control the tier
   draws

@@ -40,7 +40,7 @@ _load = load_input
 #: caller who overrides it (``-o out.svg``, ``--ext pdf``) is handled by that tier — which writes the format
 #: or raises its own clear error for one it cannot.
 _NATIVE_EXT: dict = {
-    "matplotlib": "png",
+    "static": "png",
     "interactive": "html",
     "3d": "html",
     "web": "html",
@@ -106,7 +106,7 @@ def _add_plot_options(parser: argparse.ArgumentParser) -> None:
         # `type=` the Namespace can never hold an alias, and the three tables need no precondition.
         type=_canonical_backend,
         choices=tuple(_NATIVE_EXT),
-        default="matplotlib",
+        default="static",
         metavar="{matplotlib|static,interactive,3d,web}",
         help=(
             "rendering backend quickmap dispatches to (default: matplotlib; `static` is the same "
@@ -194,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
             >>> args.input, args.output, args.kind
             ('in.tif', 'out.png', 'contourf')
             >>> args.backend  # the default backend, preserving matplotlib behaviour
-            'matplotlib'
+            'static'
             >>> _plot_kwargs(args)["crs"]  # no --crs given, so the backend's default (3857 for matplotlib)
             3857
 

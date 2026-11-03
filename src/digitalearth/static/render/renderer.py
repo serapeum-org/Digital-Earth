@@ -408,7 +408,7 @@ def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional["DrawnLaye
             layer.kind,
             scene._held_objects,
             engine="matplotlib",
-            backend="matplotlib",
+            backend="static",
         )
     except MissingObject as error:
         if scene.strict:

@@ -16,8 +16,8 @@ styled layer is fully described only for the tier that drew it.
 
 - **3d** — the builders record their resolved keywords flat in props — size, cmap, scheme — with no fold onto
   declared channels
-- **matplotlib** — the caller's keywords stay in props['opts'] and go to cleopatra as they are; nothing on this
-  tier folds them into declared channels
+- **static** — the caller's keywords stay in props['opts'] and go to cleopatra as they are; nothing on this tier
+  folds them into declared channels
 
 ## No portable classification
 

@@ -176,7 +176,7 @@ _DECLARATIONS: Mapping[str, Capabilities] = _LazyBackendMap(
         "web": CAPABILITIES_WEB,
         "interactive": CAPABILITIES_INTERACTIVE,
     },
-    lazy={"matplotlib": _static_declaration},
+    lazy={"static": _static_declaration},
 )
 
 
@@ -251,7 +251,7 @@ BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
         backend: _declared_row(_DECLARATIONS[backend])
         for backend in ("3d", "web", "interactive")
     },
-    lazy={"matplotlib": lambda: _declared_row(_static_declaration())},
+    lazy={"static": lambda: _declared_row(_static_declaration())},
 )
 
 
@@ -263,7 +263,7 @@ BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
 #: on ``if backend != "matplotlib"`` and takes its own cleopatra path before it ever consults the
 #: registry, so an entry point under that name would never be reached. The facade therefore spells
 #: this tier ``plot(backend="static")``, and that spelling has to be accepted here.
-BACKEND_ALIASES: Mapping[str, str] = MappingProxyType({"static": "matplotlib"})
+BACKEND_ALIASES: Mapping[str, str] = MappingProxyType({"matplotlib": "static"})
 
 
 def _canonical_backend(backend: Any) -> Any:
@@ -280,8 +280,8 @@ def _canonical_backend(backend: Any) -> Any:
         - An alias resolves to the name the capability table is keyed on:
             ```python
             >>> from digitalearth.api import _canonical_backend
-            >>> _canonical_backend("static")
-            'matplotlib'
+            >>> _canonical_backend("matplotlib")
+            'static'
 
             ```
         - Every other name is handed back as it came, including an unknown one:
@@ -743,7 +743,7 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
 
 #: The backends that can draw an unstructured mesh. The static tier shades each face through cleopatra's
 #: ``MeshGlyph``; the other three have no triangular render, which is stated rather than discovered.
-MESH_BACKENDS: frozenset[str] = frozenset({"matplotlib"})
+MESH_BACKENDS: frozenset[str] = frozenset({"static"})
 
 
 def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
@@ -765,7 +765,7 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
             ```python
             >>> from digitalearth.api import MESH_BACKENDS
             >>> sorted(MESH_BACKENDS)
-            ['matplotlib']
+            ['static']
 
             ```
         - Only a mesh is refused: anything else passes on every backend, whatever it is:
@@ -923,7 +923,7 @@ def quickmap(
     basemap: bool | str | Any = False,
     coastlines: Any = _UNSET,
     colorbar: Any = _UNSET,
-    backend: str = "matplotlib",
+    backend: str = "static",
     scene_kw: Mapping[str, Any] | None = None,
     **kwargs,
 ) -> Any:
@@ -931,13 +931,13 @@ def quickmap(
 
     Args:
         data: A pyramids ``Dataset`` (raster), ``FeatureCollection`` (points/polygons) or
-            ``UgridDataset`` (an unstructured mesh, drawn on ``backend="matplotlib"`` only).
-        crs: Display CRS for the map (`backend="matplotlib"`/`"interactive"`, where it defaults to `3857`, and
+            ``UgridDataset`` (an unstructured mesh, drawn on ``backend="static"`` only).
+        crs: Display CRS for the map (`backend="static"`/`"interactive"`, where it defaults to `3857`, and
             `"web"`, which accepts only `4326`). With `backend="3d"` the scene is drawn in it; left out, the 3-D
             scene takes the data's own CRS.
         kind: Renderer for raster input (``"auto"`` → ``imshow``, which the ``field`` method draws; or
             ``contourf``/``contour``/``pcolormesh``).
-            ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
+            ``backend="static"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
             nothing) is accepted anywhere.
         variable: Which variable to draw from a NetCDF container or a UGRID mesh, either of which
@@ -946,7 +946,7 @@ def quickmap(
             renderer. Naming one for a non-NetCDF input, or one the container does not carry, is refused by
             name. To choose a slice of a variable that carries a band/time dimension, pass ``band=`` (1-based)
             alongside it; without one, the first slice is drawn and a warning names how many there were.
-        domain: Optional named region / bbox to set the extent. Honoured by ``backend="matplotlib"`` (its fixed
+        domain: Optional named region / bbox to set the extent. Honoured by ``backend="static"`` (its fixed
             extent) and by ``backend="3d"`` (it frames the camera on the region); the ``"interactive"`` and
             ``"web"`` tiers pan and zoom instead, so passing it to those is refused by name.
         basemap: The basemap to draw beneath the data: ``False`` for none, ``True`` for the backend's
@@ -959,7 +959,7 @@ def quickmap(
             warning otherwise (place tiles over other CRSes with ``Scene3D.basemap`` directly). ``basemap=False``
             is accepted anywhere.
         coastlines: When True, overlay coastlines (tolerated and warned about if the assets are
-            unreachable). ``backend="matplotlib"``/``"interactive"`` only; ``coastlines=True`` on another
+            unreachable). ``backend="static"``/``"interactive"`` only; ``coastlines=True`` on another
             backend is refused, while ``coastlines=False`` — which asks for nothing — is accepted anywhere.
         colorbar: Whether the map carries a colour key for the drawn layer. ``True`` is the default and
             adds one **if there is one to draw**; ``False`` draws none. Every backend accepts it, so the
@@ -1004,7 +1004,7 @@ def quickmap(
             mapping is the render's.
         **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``;
             ``z_exaggeration``/``height``/``size`` for ``backend="3d"``). ``column`` names a **polygon**
-            fill on ``backend="matplotlib"``: point input there is a ``Map.points``, which sizes markers
+            fill on ``backend="static"``: point input there is a ``Map.points``, which sizes markers
             by ``size_column`` instead, so ``column`` on points is refused by name rather than forwarded.
 
     Returns:
@@ -1136,9 +1136,7 @@ def quickmap(
     )
 
 
-def to_backend(
-    figure: FigureSpec, backend: str = "matplotlib", **scene_kwargs: Any
-) -> Any:
+def to_backend(figure: FigureSpec, backend: str = "static", **scene_kwargs: Any) -> Any:
     """Render an engine-neutral :class:`~digitalearth.base.spec.FigureSpec` on a chosen ``backend`` (U-6).
 
     The inverse of every tier's :attr:`figure_spec`: where that describes a built scene *as data*, this
@@ -1364,7 +1362,7 @@ def _quickmap_matplotlib(
         # Asked either way, because `colorbar=False` is a decision to record and a key to take off rather
         # than a call to skip. A map with nothing coloured by a value has no key to switch, so the gate
         # above still stands between the two. Reached through the one seam the four backends share.
-        _add_key("matplotlib", scene, visible=colorbar)
+        _add_key("static", scene, visible=colorbar)
     return scene
 
 
@@ -1781,7 +1779,7 @@ def _add_3d_key(scene: Any, *, visible: bool) -> Any:
 #: legend builder, a PyVista scalar bar. What they share is the point they are called from and the
 #: `visible=` flag carried through from `quickmap(colorbar=)` (DE-24).
 _KEY_ADDERS: dict[str, Callable[..., Any]] = {
-    "matplotlib": _add_static_key,
+    "static": _add_static_key,
     "interactive": _add_interactive_key,
     "web": _add_web_legend,
     "3d": _add_3d_key,
@@ -2020,7 +2018,7 @@ def _method(name: str, kind: str | None = None):
         # entirely — the call then worked because `quickmap` canonicalises downstream. This is the
         # third site in the module that reads a caller-supplied `backend=`, and was the one the
         # alias was not applied to (round-1 L5).
-        backend = _canonical_backend(kwargs.get("backend", "matplotlib"))
+        backend = _canonical_backend(kwargs.get("backend", "static"))
         supported = BACKEND_CAPABILITIES.get(backend)
         if supported is not None and "kind" not in supported:
             honoured = _honoured_by("kind")

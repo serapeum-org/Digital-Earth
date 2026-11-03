@@ -19,8 +19,10 @@ digitalearth registers itself for those four names in the `pyramids.plot_backend
 group, so pyramids *discovers* it rather than importing it by name. The dependency stays one-way —
 digitalearth depends on pyramids-core; pyramids never names digitalearth in its own code.
 
-The matplotlib tier is spelled `static`, after the subpackage that implements it, and not
-`matplotlib`. That name cannot be registered: `Dataset.plot` branches on
+The matplotlib tier is named `static`, after the subpackage that implements it. That is its
+canonical name throughout this package — the key `BACKEND_CAPABILITIES` is built on, the column the
+support matrix shows, and what `quickmap(backend=…)` defaults to; `matplotlib` is accepted as an
+alias of it. It also has to be the registered name, because `matplotlib` cannot be: `Dataset.plot` branches on
 `if backend != "matplotlib"` and takes its own cleopatra path *before* it consults the registry, so
 an entry point under that name would never be resolved. `ds.plot()` and `ds.plot(backend="matplotlib")`
 therefore keep returning a cleopatra glyph, unchanged, and `backend="static"` is how you ask for

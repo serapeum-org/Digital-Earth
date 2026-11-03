@@ -437,7 +437,7 @@ PENDING: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 # tier as a result, and stays here so the next unbuilt name has a home.
             }
         ),
-        "matplotlib": MappingProxyType(
+        "static": MappingProxyType(
             {
                 # `field`, `points` and `polygons` were listed here, each against the tier's own older
                 # spelling. All three are adopted at order 27a, so none is pending any more.

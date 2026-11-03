@@ -882,7 +882,7 @@ class TestBackendCapabilityRefusal:
             other would either be unreachable or escape the parameter check entirely.
         """
         assert set(qp.BACKEND_CAPABILITIES) == {
-            "matplotlib",
+            "static",
             "interactive",
             "3d",
             "web",
@@ -1580,17 +1580,22 @@ class TestBackendAliases:
 
         return Dataset.read_file("examples/data/acc4000.tif")
 
-    def test_the_alias_builds_the_matplotlib_scene(self, dem):
-        """``quickmap(backend="static")`` builds the same scene as ``backend="matplotlib"``.
+    @pytest.mark.parametrize("spelling", ["static", "matplotlib"])
+    def test_both_spellings_build_the_same_tier(self, dem, spelling):
+        """``static`` and its alias ``matplotlib`` both build this package's `Map`.
+
+        Args:
+            dem: The raster fixture.
+            spelling: The backend name to ask for.
 
         Test scenario:
-            ``static`` is the name pyramids' registry serves this tier under, because `Dataset.plot`
-            reserves ``"matplotlib"`` for its own cleopatra path. The adapter passes that spelling
-            straight through, so it has to arrive here as a working backend name rather than an
-            unknown one.
+            ``static`` is the canonical name — the one `BACKEND_CAPABILITIES` is keyed on and the one
+            pyramids' registry serves this tier under, because `Dataset.plot` reserves
+            ``"matplotlib"`` for its own cleopatra path. ``matplotlib`` stays accepted here so the
+            name this package used for four releases keeps working.
         """
-        with qp.quickmap(dem, band=1, backend="static") as aliased:
-            assert isinstance(aliased, Map), f"expected a Map, got {type(aliased)}"
+        with qp.quickmap(dem, band=1, backend=spelling) as built:
+            assert isinstance(built, Map), f"expected a Map, got {type(built)}"
 
     def test_the_alias_resolves_before_the_capability_table_is_read(self):
         """The alias is canonicalised, so the capability table needs no row of its own.
@@ -1600,14 +1605,18 @@ class TestBackendAliases:
             alias that reached it unresolved would be refused as unknown; one that gained a row there
             would double-count the tier in every table built from it.
         """
-        assert qp._canonical_backend("static") == "matplotlib", (
-            f"'static' should canonicalise to 'matplotlib', got {qp._canonical_backend('static')!r}"
+        assert qp._canonical_backend("matplotlib") == "static", (
+            "'matplotlib' should canonicalise to 'static', got "
+            f"{qp._canonical_backend('matplotlib')!r}"
         )
-        assert "static" not in qp.BACKEND_CAPABILITIES, (
+        assert "matplotlib" not in qp.BACKEND_CAPABILITIES, (
             "the alias must not be a capability row of its own"
         )
+        assert "static" in qp.BACKEND_CAPABILITIES, (
+            f"the canonical name must be the keyed one, got {sorted(qp.BACKEND_CAPABILITIES)}"
+        )
 
-    @pytest.mark.parametrize("name", ["matplotlib", "interactive", "3d", "web", "nope"])
+    @pytest.mark.parametrize("name", ["static", "interactive", "3d", "web", "nope"])
     def test_every_other_name_is_passed_through_untouched(self, name):
         """Only a known alias is rewritten; every other name reaches the refusal as written.
 

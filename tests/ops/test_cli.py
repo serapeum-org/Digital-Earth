@@ -131,10 +131,10 @@ class TestPlotKwargs:
         assert kwargs["levels"] == 8
         assert kwargs["domain"] == "europe"
 
-    def test_backend_defaults_to_matplotlib(self):
+    def test_backend_defaults_to_static(self):
         """With no --backend, quickmap is asked for the matplotlib backend — today's behaviour (TD-22)."""
         args = build_parser().parse_args(["plot", "in.tif"])
-        assert _plot_kwargs(args)["backend"] == "matplotlib", (
+        assert _plot_kwargs(args)["backend"] == "static", (
             f"default backend should be matplotlib, got {_plot_kwargs(args).get('backend')!r}"
         )
 
@@ -313,7 +313,7 @@ class TestBackendAlias:
 
         args = build_parser().parse_args(["plot", "in.tif", "--backend", "static"])
 
-        assert args.backend == "matplotlib", (
+        assert args.backend == "static", (
             f"the Namespace should carry the canonical name, got {args.backend!r}"
         )
         assert _NATIVE_EXT[args.backend] == "png", (

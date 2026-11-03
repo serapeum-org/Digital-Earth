@@ -45,7 +45,7 @@ __all__ = ["CAPABILITIES"]
 #: (contract C4). `categorical` is among them for the vector glyphs; cleopatra's `ArrayGlyph` refuses it,
 #: since a raster's cells are a continuous field rather than nominal labels.
 CAPABILITIES = Capabilities(
-    backend="matplotlib",
+    backend="static",
     kinds=frozenset(
         {
             "raster",

@@ -43,7 +43,7 @@ class TestEveryTierClassifiesTheSameWay:
             the same names. Comparing every row against the static one — rather than pairwise — names the
             offending backend in the message.
         """
-        reference = _DECLARATIONS["matplotlib"].schemes
+        reference = _DECLARATIONS["static"].schemes
         disagreeing = {
             backend: sorted(declaration.schemes.symmetric_difference(reference))
             for backend, declaration in _DECLARATIONS.items()
@@ -52,7 +52,7 @@ class TestEveryTierClassifiesTheSameWay:
         assert disagreeing == {}, f"these tiers offer other schemes: {disagreeing}"
 
     @pytest.mark.parametrize(
-        "scheme", sorted(_DECLARATIONS["matplotlib"].schemes - {"categorical"})
+        "scheme", sorted(_DECLARATIONS["static"].schemes - {"categorical"})
     )
     def test_every_declared_scheme_is_one_the_shared_classifier_knows(self, scheme):
         """The classifier behind every tier is one function, and it raises for a name it does not know.

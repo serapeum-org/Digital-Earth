@@ -329,7 +329,7 @@ class Map(
 
         A map describes itself with :attr:`~digitalearth.static.core.scene.Scene.figure_spec`, the description
         survives ``to_dict()``/``from_dict()``, and this draws it again. :func:`digitalearth.api.to_backend`
-        dispatches here for ``backend="matplotlib"``.
+        dispatches here for ``backend="static"``.
 
         Args:
             figure: The figure to draw.
