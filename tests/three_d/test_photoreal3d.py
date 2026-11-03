@@ -750,10 +750,16 @@ class TestWater:
 
     def test_water_level_renders_and_differs_from_dry(self):
         """A water render is non-blank and differs from the same scene with no water."""
-        from digitalearth.three_d.photoreal import WaterOptions
+        from digitalearth.three_d.photoreal import RenderOptions, WaterOptions
 
         dry = _small_terrain_scene()
-        base = dry.photoreal(spp=8, width=64, height=48, denoise=False, max_depth=10)
+        base = dry.photoreal(
+            spp=8,
+            width=64,
+            height=48,
+            denoise=False,
+            render=RenderOptions(max_depth=10),
+        )
         dry.close()
         wet = _small_terrain_scene()
         bounds = wet.plotter.bounds
@@ -763,7 +769,7 @@ class TestWater:
             width=64,
             height=48,
             denoise=False,
-            max_depth=10,
+            render=RenderOptions(max_depth=10),
             water=WaterOptions(level=mid_z),
         )
         wet.close()
@@ -797,7 +803,7 @@ class TestSmoke:
 
     def test_smoke_renders_a_non_blank_frame(self):
         """A 3-D smoke grid renders a non-blank frame through the volpath integrator."""
-        from digitalearth.three_d.photoreal import SmokeOptions
+        from digitalearth.three_d.photoreal import RenderOptions, SmokeOptions
 
         scene = _small_terrain_scene()
         ax = np.linspace(-1, 1, 16)
@@ -808,7 +814,7 @@ class TestSmoke:
             width=64,
             height=48,
             denoise=False,
-            max_depth=12,
+            render=RenderOptions(max_depth=12),
             smoke=SmokeOptions(density=density, scale=10.0),
         )
         assert img.shape == (48, 64, 3), img.shape
@@ -824,3 +830,88 @@ class TestSmoke:
         with pytest.raises(ValueError, match="3-D"):
             scene.photoreal(spp=4, width=32, height=24, denoise=False, smoke=flat)
         scene.close()
+
+
+class TestRenderDevice:
+    """`photoreal` renders on a selectable device; a missing LLVM/GPU backend errors clearly (A5)."""
+
+    def test_cpu_device_activates_scalar_and_renders(self):
+        """device="cpu" activates scalar_rgb and renders a non-blank frame."""
+        import mitsuba as mi
+
+        from digitalearth.three_d.photoreal import RenderOptions, _activate_variant
+
+        assert _activate_variant(mi, "cpu") == "scalar_rgb"
+        scene = _small_terrain_scene()
+        img = scene.photoreal(
+            spp=8,
+            width=48,
+            height=36,
+            denoise=False,
+            render=RenderOptions(device="cpu"),
+        )
+        assert int(img.max()) > 0, "the cpu render must not be black"
+        scene.close()
+
+    def test_unknown_device_is_rejected(self):
+        """An unknown device raises ValueError naming the valid choices."""
+        import mitsuba as mi
+
+        from digitalearth.three_d.photoreal import _activate_variant
+
+        with pytest.raises(ValueError, match="device must be one of"):
+            _activate_variant(mi, "bogus")
+
+    def test_a_backend_that_fails_to_set_is_wrapped(self, monkeypatch):
+        """When set_variant raises (no LLVM library), the raw error becomes a clear RuntimeError naming it."""
+        import mitsuba as mi
+
+        from digitalearth.three_d import photoreal as _pr
+
+        def _boom(_variant):
+            raise ImportError("LLVM-C.dll could not be found")
+
+        monkeypatch.setattr(mi, "set_variant", _boom)
+        with pytest.raises(RuntimeError, match="device='llvm'"):
+            _pr._activate_variant(mi, "llvm")
+
+    def test_a_backend_that_fails_to_init_is_wrapped(self, monkeypatch):
+        """When set_variant succeeds but the backend probe fails (no GPU), it is wrapped into a clear error."""
+        import mitsuba as mi
+
+        from digitalearth.three_d import photoreal as _pr
+
+        monkeypatch.setattr(mi, "set_variant", lambda _variant: None)
+
+        def _no_gpu(_mi):
+            raise RuntimeError("no CUDA device found")
+
+        monkeypatch.setattr(_pr, "_force_backend_init", _no_gpu)
+        with pytest.raises(RuntimeError, match="device='gpu'"):
+            _pr._activate_variant(mi, "gpu")
+
+    def test_a_working_jit_backend_returns_its_variant(self, monkeypatch):
+        """When set_variant and the backend probe both succeed, the variant name is returned."""
+        import mitsuba as mi
+
+        from digitalearth.three_d import photoreal as _pr
+
+        monkeypatch.setattr(mi, "set_variant", lambda _variant: None)
+        monkeypatch.setattr(_pr, "_force_backend_init", lambda _mi: None)
+        assert _pr._activate_variant(mi, "gpu") == "cuda_ad_rgb"
+
+    def test_cpu_failure_does_not_advise_the_failed_device(self, monkeypatch):
+        """A cpu activation failure is wrapped without the nonsensical 'use device=cpu' fallback."""
+        import mitsuba as mi
+
+        from digitalearth.three_d import photoreal as _pr
+
+        def _boom(_variant):
+            raise RuntimeError("scalar_rgb unavailable")
+
+        monkeypatch.setattr(mi, "set_variant", _boom)
+        with pytest.raises(RuntimeError, match="device='cpu'") as exc:
+            _pr._activate_variant(mi, "cpu")
+        assert "use device='cpu'" not in str(exc.value), (
+            "cpu failure must not advise the device that failed"
+        )

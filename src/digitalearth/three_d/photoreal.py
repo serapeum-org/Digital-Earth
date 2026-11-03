@@ -119,6 +119,24 @@ class OutputOptions:
     return_aovs: bool = False
 
 
+@dataclass(frozen=True)
+class RenderOptions:
+    """Path-tracer engine settings for :meth:`photoreal`.
+
+    Attributes:
+        device: Which Mitsuba backend renders the frame — ``"cpu"`` (the default; the ``scalar_rgb`` variant,
+            always available and deterministic), ``"llvm"`` (``llvm_ad_rgb``, CPU-vectorised, needs drjit's LLVM
+            runtime) or ``"gpu"`` (``cuda_ad_rgb``, needs an NVIDIA GPU with the CUDA runtime). A requested
+            backend whose runtime is absent raises a clear error naming what to install, rather than failing
+            mid-render.
+        max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower). Water and smoke need
+            it high enough for the extra bounce.
+    """
+
+    device: str = "cpu"
+    max_depth: int = 8
+
+
 def _scene_sun_direction(decoration: Any) -> tuple[float, float, float] | None:
     """Mitsuba sun travel-direction from a scene's recorded sun (azimuth/elevation), or ``None`` if none is set.
 
@@ -358,6 +376,66 @@ def _smoke_medium(
             "albedo": float(albedo),
         },
     }
+
+
+#: photoreal `device` -> the Mitsuba variant that renders it.
+_DEVICE_VARIANTS: dict[str, str] = {
+    "cpu": "scalar_rgb",
+    "llvm": "llvm_ad_rgb",
+    "gpu": "cuda_ad_rgb",
+}
+
+
+def _force_backend_init(mi: Any) -> None:
+    """Force the active jit backend (LLVM / CUDA) to initialise with a trivial eval.
+
+    ``set_variant`` for the LLVM variant raises immediately when the library is missing, but the CUDA variant
+    sets lazily — the GPU is only touched on the first operation. Evaluating one tiny array here surfaces a
+    missing GPU/runtime now, so the caller gets a clear error instead of one deep inside the render.
+
+    Args:
+        mi: The imported ``mitsuba`` module (its variant already set).
+    """
+    # pragma: no cover — needs a live jit backend (an NVIDIA GPU or the LLVM runtime), neither present on CI;
+    # the tests drive _activate_variant with this monkeypatched. Exercised on a GPU/LLVM machine.
+    import drjit as dr  # pragma: no cover
+
+    dr.eval(dr.zeros(mi.Float, 1))  # pragma: no cover
+
+
+def _activate_variant(mi: Any, device: str) -> str:
+    """Set the Mitsuba variant for a photoreal ``device``, raising a clear error when its runtime is absent.
+
+    Args:
+        mi: The imported ``mitsuba`` module.
+        device: ``"cpu"`` (``scalar_rgb``), ``"llvm"`` (``llvm_ad_rgb``) or ``"gpu"`` (``cuda_ad_rgb``).
+
+    Returns:
+        str: the activated variant name.
+
+    Raises:
+        ValueError: for an unknown ``device``.
+        RuntimeError: when the requested backend's runtime (the LLVM library, or an NVIDIA GPU) is not available.
+    """
+    if device not in _DEVICE_VARIANTS:
+        raise ValueError(
+            f"device must be one of {sorted(_DEVICE_VARIANTS)}, got {device!r}"
+        )
+    variant = _DEVICE_VARIANTS[device]
+    try:
+        mi.set_variant(variant)
+        if device != "cpu":
+            _force_backend_init(mi)
+    except Exception as exc:  # noqa: BLE001 - drjit raises when the LLVM lib or a CUDA GPU is absent
+        hint = {
+            "llvm": "drjit's LLVM runtime (the LLVM shared library; set DRJIT_LIBLLVM_PATH if it is installed)",
+            "gpu": "an NVIDIA GPU with the CUDA runtime",
+        }.get(device, "its runtime")
+        fallback = "" if device == "cpu" else "; use device='cpu'"
+        raise RuntimeError(
+            f"photoreal(device={device!r}) needs {hint}, which is not available here{fallback}"
+        ) from exc
+    return variant
 
 
 def _require_photoreal():
@@ -655,7 +733,6 @@ class PhotorealMixin(_MixinBase):
         width: int = 1280,
         height: int = 800,
         denoise: bool = True,
-        max_depth: int = 8,
         despeckle: float | None = None,
         roughness: float | None = None,
         point_radius: float | None = None,
@@ -663,12 +740,14 @@ class PhotorealMixin(_MixinBase):
         water: WaterOptions | None = None,
         smoke: SmokeOptions | None = None,
         output: OutputOptions | None = None,
+        render: RenderOptions | None = None,
     ) -> Any:
         """Render the scene as a photorealistic path-traced still with Mitsuba 3, optionally denoised.
 
         Every registered layer's mesh is translated into a Mitsuba triangle mesh carrying its per-vertex colours
         (mapped through the layer's lookup table), lit by a single directional sun plus a constant sky and seen
-        through the scene's current camera. The frame is path-traced on the CPU (no GPU, no display); with
+        through the scene's current camera. The frame is path-traced on the CPU by default (no GPU, no display);
+        ``render.device`` can switch to the LLVM or CUDA-GPU backend where that runtime is present (A5). With
         ``denoise=True`` a low sample count is cleaned by Intel OIDN using albedo and normal AOVs.
 
         Args:
@@ -677,8 +756,6 @@ class PhotorealMixin(_MixinBase):
             width: Image width in pixels.
             height: Image height in pixels.
             denoise: Denoise the frame with Intel OIDN (albedo + normal guided). Needs the ``oidn`` dependency.
-            max_depth: Maximum path-tracer bounce depth (higher = more indirect light, slower). Water and smoke
-                need it high enough for the extra bounce.
             despeckle: Remove isolated bright/dark speckles (fireflies) a low-sample path trace leaves: a pixel
                 deviating from its 3x3 neighbourhood median by more than this (in the ``[0, 1]`` output) is
                 replaced by the median, leaving edges and smooth regions untouched. ``None`` (the default) is
@@ -695,6 +772,8 @@ class PhotorealMixin(_MixinBase):
                 ``volpath`` so it self-shadows and shadows the terrain. ``None`` renders no smoke (A4).
             output: An :class:`OutputOptions` for extra outputs — an EXR of the HDR beauty, and whether to return
                 the AOV passes. ``None`` (the default) writes only the tonemapped image (A1).
+            render: A :class:`RenderOptions` for the path-tracer engine — the ``device`` (cpu / llvm / gpu) and the
+                ``max_depth``. ``None`` (the default) renders on the CPU (``scalar_rgb``) at ``max_depth=8`` (A5).
 
         Returns:
             The rendered ``(H, W, 3)`` uint8 RGB array (also written to ``path`` when one was given); or, when
@@ -719,12 +798,12 @@ class PhotorealMixin(_MixinBase):
                 ```
         """
         mi = _require_photoreal()
-        mi.set_variant("scalar_rgb")
-
         sky = sky or SkyOptions()
         water = water or WaterOptions()
         smoke = smoke or SmokeOptions()
         output = output or OutputOptions()
+        render = render or RenderOptions()
+        _activate_variant(mi, render.device)
         center = self._photoreal_center()
         sun_direction = sky.sun_direction
         if sun_direction is None:
@@ -760,7 +839,15 @@ class PhotorealMixin(_MixinBase):
                 "film": {"type": "hdrfilm", "width": int(width), "height": int(height)},
             }
             scene_dict = self._photoreal_scene_dict(
-                mi, center, sensor, meshes, sun_direction, sky, water, smoke, max_depth
+                mi,
+                center,
+                sensor,
+                meshes,
+                sun_direction,
+                sky,
+                water,
+                smoke,
+                render.max_depth,
             )
             arr = np.array(mi.render(mi.load_dict(scene_dict)), dtype="float32")
             beauty, albedo, normal = _split_aovs(arr)
