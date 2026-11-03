@@ -1597,6 +1597,57 @@ class TestBackendAliases:
         with qp.quickmap(dem, band=1, backend=spelling) as built:
             assert isinstance(built, Map), f"expected a Map, got {type(built)}"
 
+    @pytest.mark.parametrize("alias", sorted(qp.BACKEND_ALIASES))
+    def test_every_alias_resolves_to_a_real_backend(self, alias):
+        """Each alias names a canonical backend, and is not a backend itself.
+
+        Args:
+            alias: One key of `BACKEND_ALIASES`.
+
+        Test scenario:
+            Parametrised over the table rather than listed by hand, so a thirteenth alias is one row
+            and cannot be added without being checked. Both halves matter: the target has to be a
+            real capability row, or the alias resolves to something `quickmap` then refuses as
+            unknown; and the alias must *not* be a row of its own, or the tier is counted twice in
+            the support matrix and in every table built from `BACKEND_CAPABILITIES`.
+        """
+        target = qp.BACKEND_ALIASES[alias]
+
+        assert qp._canonical_backend(alias) == target, (
+            f"{alias!r} should canonicalise to {target!r}, got {qp._canonical_backend(alias)!r}"
+        )
+        assert target in qp.BACKEND_CAPABILITIES, (
+            f"{alias!r} points at {target!r}, which is not a backend: "
+            f"{sorted(qp.BACKEND_CAPABILITIES)}"
+        )
+        assert alias not in qp.BACKEND_CAPABILITIES, (
+            f"{alias!r} must be an alias, not a capability row of its own"
+        )
+
+    @pytest.mark.parametrize("alias", sorted(qp.BACKEND_ALIASES))
+    def test_every_alias_is_accepted_by_quickmap(self, alias, dem, mocker):
+        """Asking for a tier by its engine name builds that tier's scene.
+
+        Args:
+            alias: One key of `BACKEND_ALIASES`.
+            dem: The raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder so no engine is needed.
+
+        Test scenario:
+            Resolving in `_canonical_backend` is not the same as being usable: the name has to pass
+            `quickmap`'s own validation and reach the tier helper. The builders are stubbed because
+            three of the four tiers need an extra this environment does not have — what is asserted
+            is that the call is *dispatched*, not what it draws.
+        """
+        target = qp.BACKEND_ALIASES[alias]
+        if target != "static":
+            pytest.importorskip(
+                {"interactive": "holoviews", "web": "maplibre", "3d": "pyvista"}[target]
+            )
+
+        with qp.quickmap(dem, band=1, backend=alias) as built:
+            assert built is not None, f"backend={alias!r} should have built a scene"
+
     def test_the_alias_resolves_before_the_capability_table_is_read(self):
         """The alias is canonicalised, so the capability table needs no row of its own.
 

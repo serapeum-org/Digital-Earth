@@ -257,13 +257,40 @@ BACKEND_CAPABILITIES: Mapping[str, frozenset[str]] = _LazyBackendMap(
 
 #: Alternative spellings accepted for a backend name, mapped to the canonical one.
 #:
-#: ``static`` is this package's own name for the matplotlib tier — the subpackage that implements it
-#: (:mod:`digitalearth.static`) — and it is the name pyramids' plot-backend registry serves that tier
-#: under. ``"matplotlib"`` cannot be registered there: :meth:`pyramids.dataset.Dataset.plot` branches
-#: on ``if backend != "matplotlib"`` and takes its own cleopatra path before it ever consults the
-#: registry, so an entry point under that name would never be reached. The facade therefore spells
-#: this tier ``plot(backend="static")``, and that spelling has to be accepted here.
-BACKEND_ALIASES: Mapping[str, str] = MappingProxyType({"matplotlib": "static"})
+#: Each tier's canonical name is its subpackage (:mod:`digitalearth.static`,
+#: :mod:`digitalearth.interactive`, :mod:`digitalearth.web`; the 3-D tier is ``"3d"``, since
+#: ``three_d`` is only a module name because an identifier cannot start with a digit). The aliases are
+#: the **engines** those tiers draw with, which is how ``matplotlib`` came to be one: it was this
+#: package's canonical name for the static tier until the two were swapped, and it is kept because
+#: four releases of callers pass it.
+#:
+#: ``"matplotlib"`` is the one name that could not be registered with pyramids:
+#: :meth:`pyramids.dataset.Dataset.plot` branches on ``if backend != "matplotlib"`` and takes its own
+#: cleopatra path before it ever consults the registry, so an entry point under that name would never
+#: be reached — which is why the canonical name is ``static`` and the facade spells this tier
+#: ``plot(backend="static")``.
+#:
+#: An alias resolves in :func:`_canonical_backend` before :data:`BACKEND_CAPABILITIES` is read, so no
+#: alias is a capability row of its own and none appears in the support matrix.
+BACKEND_ALIASES: Mapping[str, str] = MappingProxyType(
+    {
+        # The tier's own engine, which is how `matplotlib` came to be an alias of `static` in the
+        # first place. Each tier answers to the renderer it draws with, because that is the name a
+        # caller is most likely to reach for and the one the refusal already glosses it by.
+        "matplotlib": "static",
+        "mpl": "static",
+        "holoviews": "interactive",
+        "geoviews": "interactive",
+        "holoviz": "interactive",
+        "bokeh": "interactive",
+        "pyvista": "3d",
+        "three_d": "3d",
+        "vtk": "3d",
+        "maplibre": "web",
+        "deck": "web",
+        "deckgl": "web",
+    }
+)
 
 
 def _canonical_backend(backend: Any) -> Any:
