@@ -8,8 +8,9 @@ Two subcommands wrap the existing API so plots can be produced from a shell or a
   (:func:`~digitalearth.ops.browser.gallery`).
 
 The CLI renders headless — the matplotlib backend to ``Agg``, and ``--backend`` picks any of the four
-``quickmap`` dispatches (``matplotlib``/``interactive``/``3d``/``web``), whose scenes save to their own native
-file: a PNG for matplotlib, an HTML page for the other three (TD-22). Human-facing progress goes to ``stderr``
+``quickmap`` dispatches (``matplotlib``/``interactive``/``3d``/``web``, with ``static`` accepted as a second
+spelling of ``matplotlib``), whose scenes save to their own native file: a PNG for matplotlib, an HTML page for
+the other three (TD-22). Human-facing progress goes to ``stderr``
 so any piped ``stdout`` stays clean. This is earthkit-plots' ``cli/`` entry point, scoped to Digital-Earth's
 API.
 """
@@ -22,7 +23,7 @@ from typing import Any
 
 import matplotlib
 
-from digitalearth.api import quickmap
+from digitalearth.api import _canonical_backend, quickmap
 from digitalearth.ops.batch import Batch, load_input
 from digitalearth.ops.browser import gallery
 
@@ -39,7 +40,7 @@ _load = load_input
 #: caller who overrides it (``-o out.svg``, ``--ext pdf``) is handled by that tier — which writes the format
 #: or raises its own clear error for one it cannot.
 _NATIVE_EXT: dict = {
-    "matplotlib": "png",
+    "static": "png",
     "interactive": "html",
     "3d": "html",
     "web": "html",
@@ -92,9 +93,25 @@ def _add_plot_options(parser: argparse.ArgumentParser) -> None:
     """Attach the shared plotting flags (forwarded to ``quickmap``) to a subcommand parser."""
     parser.add_argument(
         "--backend",
+        # `static` is accepted as well as `matplotlib`: it is the name pyramids' plot-backend
+        # registry serves that tier under, and `quickmap`'s own refusal advertises it, so a CLI that
+        # is a `quickmap` wrapper should not disagree with it (round-1 L4).
+        #
+        # The conversion is argparse's, not a fix-up afterwards. `_NATIVE_EXT`, `_DEFAULT_CRS` and
+        # the forwarded `backend=` are all keyed on the canonical name, and doing it in `main` left
+        # the parsed `Namespace` holding an alias on every other path — the one `tests/ops/test_cli.py`
+        # uses everywhere: `_cmd_plot(build_parser().parse_args([…, "--backend", "static"]))` raised
+        # `KeyError: 'static'`, which `_USER_FACING_ERRORS` deliberately does not catch, so it would
+        # have surfaced as a traceback rather than the CLI's own `error:` line (round-2 M6). With
+        # `type=` the Namespace can never hold an alias, and the three tables need no precondition.
+        type=_canonical_backend,
         choices=tuple(_NATIVE_EXT),
-        default="matplotlib",
-        help="rendering backend quickmap dispatches to (default: matplotlib)",
+        default="static",
+        metavar="{matplotlib|static,interactive,3d,web}",
+        help=(
+            "rendering backend quickmap dispatches to (default: matplotlib; `static` is the same "
+            "tier, under the name pyramids registers it as)"
+        ),
     )
     parser.add_argument(
         "--crs",
@@ -177,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
             >>> args.input, args.output, args.kind
             ('in.tif', 'out.png', 'contourf')
             >>> args.backend  # the default backend, preserving matplotlib behaviour
-            'matplotlib'
+            'static'
             >>> _plot_kwargs(args)["crs"]  # no --crs given, so the backend's default (3857 for matplotlib)
             3857
 

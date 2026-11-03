@@ -7,9 +7,39 @@ drifts. -->
 What each rendering backend can draw and style, read straight from its `Capabilities`
 declaration. `✓` means the backend supports it; `—` means it does not.
 
+The columns are the four rendering tiers, under the names `quickmap` keys on.
+`matplotlib` is accepted as an alias of `static`. Through pyramids'
+`plot(backend=...)` only `static` reaches this package — `"matplotlib"` there is
+pyramids' own cleopatra path; see
+[the plot-backend reference](pyramids-plot-backend.md).
+
+## Backends, extras and aliases
+
+Install a tier with `pip install 'digitalearth[<extra>]'`; `static` needs no extra, as
+it is carried by the core dependencies. An alias is accepted by `quickmap`,
+`to_backend` and the CLI — through pyramids' `plot(backend=...)` only the canonical
+names are registered, and `matplotlib` there is pyramids' own cleopatra path rather
+than this tier.
+
+| backend | extra | aliases |
+| --- | --- | --- |
+| `static` | — (core) | `matplotlib`, `mpl` |
+| `web` | `web` | `deck`, `deckgl`, `maplibre` |
+| `interactive` | `interactive` | `bokeh`, `geoviews`, `holoviews`, `holoviz` |
+| `3d` | `3d` | `pyvista`, `three_d`, `vtk` |
+
+What each tier requires — `static`'s are the package's core dependencies, the others
+only what their extra adds:
+
+- **static** — `numpy`, `pandas`, `matplotlib`, `geopandas`, `cleopatra`, `xyzservices`, `pyramids-core`, `loguru`,
+  `pyyaml`
+- **web** — `maplibre`
+- **interactive** — `geoviews`, `holoviews`, `hvplot`, `datashader`, `panel`, `cartopy`
+- **3d** — `pyvista`, `geovista`, `pointclouds`, `imageio`, `imageio-ffmpeg`
+
 ## Layer kinds
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `basemap` | ✓ | ✓ | ✓ | ✓ |
 | `bivariate` | — | — | — | ✓ |
@@ -58,7 +88,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 
 ## Encoding channels
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `color` | — | ✓ | ✓ | ✓ |
 | `height` | — | ✓ | — | ✓ |
@@ -71,7 +101,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 
 ## Data-driven channels
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `color` | — | ✓ | ✓ | ✓ |
 | `height` | — | ✓ | — | ✓ |
@@ -79,7 +109,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 
 ## Classification schemes
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `categorical` | ✓ | ✓ | ✓ | ✓ |
 | `equal_interval` | ✓ | ✓ | ✓ | ✓ |
@@ -91,7 +121,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 
 ## Features
 
-| capability | matplotlib | web | interactive | 3d |
+| capability | static | web | interactive | 3d |
 | --- | --- | --- | --- | --- |
 | `animation` | ✓ | ✓ | ✓ | ✓ |
 | `attribution` | — | ✓ | — | ✓ |
@@ -123,7 +153,7 @@ declaration. `✓` means the backend supports it; `—` means it does not.
 Some entries here (for example a control a tier has no surface for) are not rows in the tables above: they are
 omissions with no positive counterpart on any backend, so they appear only in this section.
 
-### matplotlib
+### static
 
 - **`attribution`** — a credit is text placed on the figure — `text` or `stamp` — rather than a control the tier
   draws

@@ -265,7 +265,7 @@ CANNOT_HIDE_AT_BUILD: dict[str, str] = {}
 #: channels, so both are named here with what they record instead — and both are held to it, in both
 #: directions, by :class:`TestTheTablesDescribeThePackage`.
 NO_PORTABLE_CHANNELS: dict[str, str] = {
-    "matplotlib": (
+    "static": (
         "the caller's keywords stay in props['opts'] and go to cleopatra as they are; nothing on this tier "
         "folds them into declared channels"
     ),
@@ -290,7 +290,7 @@ NO_PORTABLE_CHANNELS: dict[str, str] = {
 #: `dev` environment carries: matplotlib and cleopatra are core dependencies here, not an extra, which is the
 #: same thing said the other way round — the default tier is the one no feature gates.
 TIER_JOBS: dict[str, tuple[str, str, str]] = {
-    "matplotlib": ("main", "dev", "dev"),
+    "static": ("main", "dev", "dev"),
     "web": ("test-web", "web", "web"),
     "interactive": ("test-interactive", "interactive", "interactive"),
 }
@@ -302,7 +302,7 @@ TIER_JOBS: dict[str, tuple[str, str, str]] = {
 #: here means "this tier must contribute items in every environment". That is the intended reading: a job
 #: that collects this module at all has to collect the default tier's probes.
 TIER_ENGINES: dict[str, str] = {
-    "matplotlib": "matplotlib",
+    "static": "matplotlib",
     "web": "maplibre",
     "interactive": "geoviews",
 }
@@ -365,7 +365,7 @@ NO_PORTABLE_CLASSIFICATION: dict[str, str] = {
 #:
 #: A tier joins this tuple in the change that publishes its classification, and leaves the excuse table in the
 #: same breath — the two cannot both name it, which is what the guard checks.
-PUBLISHES_CLASSIFICATION: tuple[str, ...] = ("interactive", "matplotlib", "web")
+PUBLISHES_CLASSIFICATION: tuple[str, ...] = ("interactive", "static", "web")
 
 
 def _shipped_tiers() -> tuple[str, ...]:
@@ -650,7 +650,7 @@ def _web_frame(drawn) -> tuple:
 #: absent on purpose and says so in `PENDING`: it frames the camera through `Scene3D.domain()` rather than a
 #: Core `set_bounds`, so it has no `set_bounds` under any spelling for these readers to call.
 FRAME_READERS: dict[str, Callable[[Any], tuple]] = {
-    "matplotlib": _static_frame,
+    "static": _static_frame,
     "interactive": _interactive_frame,
     "web": _web_frame,
 }
@@ -685,7 +685,7 @@ class OutsideTheSuite:
 #:
 #: **The static tier came off.** It was here for one reason — `points` was `PENDING` under the Core spelling,
 #: because the builder was called `scatter` — and order 27a adopted the spelling, so it signs the contract
-#: directly now (:class:`TestMatplotlibMapConformance`). Its reverse branches were the two checks below; the
+#: directly now (:class:`TestStaticMapConformance`). Its reverse branches were the two checks below; the
 #: probes it inherits ask the same questions, and eleven more.
 ABSENT_TIERS: dict[str, OutsideTheSuite] = {
     "3d": OutsideTheSuite("pyvista", _scene_3d, _cloud_styled, _cloud_hidden),
@@ -1379,7 +1379,7 @@ needs_geoviews = pytest.mark.skipif(
 )
 
 
-class TestMatplotlibMapConformance(MapConformanceBase):
+class TestStaticMapConformance(MapConformanceBase):
     """The static (matplotlib) tier — the default one, and the one that draws most of the package.
 
     Gated on nothing, because matplotlib is a core dependency rather than an extra: this class collects in
@@ -1393,7 +1393,7 @@ class TestMatplotlibMapConformance(MapConformanceBase):
     which this tier now publishes off the norm its polygons are coloured through.
     """
 
-    backend = "matplotlib"
+    backend = "static"
 
     def make(self):
         """Return an empty static map.
@@ -1953,7 +1953,7 @@ class TestAnExcuseComesFromATableAndNotFromItsAbsence:
     encoding, or name the tier in NO_PORTABLE_CLASSIFICATION" — a classification defect reported against a
     tier that publishes no colour encoding for a `Scale` to hang on.
 
-    **That direction is covered by the live tier now**: `TestMatplotlibMapConformance` runs the probe, in
+    **That direction is covered by the live tier now**: `TestStaticMapConformance` runs the probe, in
     every environment, and its passing is the fix. What no tier covers is the *other* direction — that
     widening the guard's reading from one table to two did not excuse tiers no table names, which would make
     every tier's class-edge probe vacuous. That is what is asked here.

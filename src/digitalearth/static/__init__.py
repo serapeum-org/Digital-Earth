@@ -1,6 +1,6 @@
 """static — the matplotlib backend: shared-axes hosts that compose cleopatra glyphs into one figure.
 
-One of the package's four rendering backends, and the default one (``quickmap(..., backend="matplotlib")``);
+One of the package's four rendering backends, and the default one (``quickmap(..., backend="static")``; ``"matplotlib"`` is accepted as an alias);
 the others are :mod:`digitalearth.interactive` (HoloViz), :mod:`digitalearth.three_d` (PyVista) and
 :mod:`digitalearth.web` (MapLibre + deck.gl). It is the only backend installed by default — the rest are
 optional extras.

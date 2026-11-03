@@ -36,7 +36,7 @@ class TestTheDeclaration:
 
     def test_the_declaration_is_this_backend(self):
         """The row is named as `quickmap(backend=...)` spells it — `matplotlib`, not `static`."""
-        assert CAPABILITIES.backend == "matplotlib", CAPABILITIES.backend
+        assert CAPABILITIES.backend == "static", CAPABILITIES.backend
 
     def test_the_declaration_is_a_capabilities_value(self):
         """The shared type, so one support matrix can be built from every tier's row."""
@@ -151,8 +151,7 @@ class TestTheDeclaration:
         canvas = [
             backend
             for backend, declaration in _DECLARATIONS.items()
-            if backend not in ("matplotlib", "3d")
-            and declaration.supports("export_vector")
+            if backend not in ("static", "3d") and declaration.supports("export_vector")
         ]
         assert CAPABILITIES.supports("export_vector"), sorted(CAPABILITIES.features)
         # The 3-D tier gained SVG/PDF export via VTK's GL2PS writer (#494), so vector export is no longer the
@@ -196,7 +195,7 @@ class TestTheDeclaration:
         providers = sorted(
             backend
             for backend, declaration in _DECLARATIONS.items()
-            if backend != "matplotlib" and declaration.supports("layer_switcher")
+            if backend != "static" and declaration.supports("layer_switcher")
         )
         assert [name for name in providers if name not in reason] == [], (
             f"the reason should name {providers}; got {reason!r}"
@@ -216,7 +215,7 @@ class TestTheDeclaration:
         without = sorted(
             backend
             for backend, declaration in _DECLARATIONS.items()
-            if backend != "matplotlib" and not declaration.supports("layer_switcher")
+            if backend != "static" and not declaration.supports("layer_switcher")
         )
         assert [name for name in without if f"the {name} tier" in reason] == [], (
             f"the reason should not credit {without} with the widget; got {reason!r}"
@@ -249,14 +248,14 @@ class TestTheDispatcherReadsIt:
         """The six keywords `quickmap` honoured on this backend, now derived rather than written."""
         from digitalearth.api import BACKEND_CAPABILITIES
 
-        assert sorted(BACKEND_CAPABILITIES["matplotlib"]) == [
+        assert sorted(BACKEND_CAPABILITIES["static"]) == [
             "basemap",
             "coastlines",
             "colorbar",
             "crs",
             "domain",
             "kind",
-        ], BACKEND_CAPABILITIES["matplotlib"]
+        ], BACKEND_CAPABILITIES["static"]
 
     def test_every_backend_s_row_is_derived(self):
         """The hand-written row was the last one; the table is now one declaration per tier."""
@@ -278,4 +277,4 @@ class TestTheDispatcherReadsIt:
         framing = sorted(
             backend for backend, row in BACKEND_CAPABILITIES.items() if "domain" in row
         )
-        assert framing == ["3d", "matplotlib"], framing
+        assert framing == ["3d", "static"], framing

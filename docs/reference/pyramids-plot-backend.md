@@ -9,18 +9,33 @@ from pyramids.dataset import Dataset
 ds = Dataset.read_file("examples/data/acc4000.tif")
 
 ds.plot()                        # matplotlib, through cleopatra — pyramids' own path
+ds.plot(backend="static")        # a digitalearth Map (matplotlib, this package's own)
 ds.plot(backend="interactive")   # a digitalearth InteractiveMap
 ds.plot(backend="3d")            # a digitalearth Scene3D
 ds.plot(backend="web")           # a digitalearth WebMap
 ```
 
-digitalearth registers itself for those three names in the `pyramids.plot_backends` entry-point
+digitalearth registers itself for those four names in the `pyramids.plot_backends` entry-point
 group, so pyramids *discovers* it rather than importing it by name. The dependency stays one-way —
 digitalearth depends on pyramids-core; pyramids never names digitalearth in its own code.
+
+The matplotlib tier is named `static`, after the subpackage that implements it. That is its
+canonical name throughout this package — the key `BACKEND_CAPABILITIES` is built on, the column the
+support matrix shows, and what `quickmap(backend=…)` defaults to; `matplotlib` is accepted as an
+alias of it. It also has to be the registered name, because `matplotlib` cannot be: `Dataset.plot` branches on
+`if backend != "matplotlib"` and takes its own cleopatra path *before* it consults the registry, so
+an entry point under that name would never be resolved. `ds.plot()` and `ds.plot(backend="matplotlib")`
+therefore keep returning a cleopatra glyph, unchanged, and `backend="static"` is how you ask for
+this package's `Map`.
+
+`digitalearth.quickmap` accepts both spellings — `digitalearth.api.BACKEND_ALIASES` is the table, and
+`--backend static` works on the CLI too — so code moving between the facade and the package directly
+does not have to rename the backend as it goes.
 
 ```toml
 # digitalearth's pyproject.toml
 [project.entry-points."pyramids.plot_backends"]
+static = "digitalearth.pyramids_backend:static"
 interactive = "digitalearth.pyramids_backend:interactive"
 "3d" = "digitalearth.pyramids_backend:three_d"
 web = "digitalearth.pyramids_backend:web"
@@ -39,7 +54,7 @@ in. Everything else passes through untouched.
 | pyramids forwards | digitalearth takes | Why |
 |---|---|---|
 | `band=0` (0-based) | `band=1` (1-based) | 0-based upstream, 1-based here;<br>unshifted it was refused. |
-| `variable_name=` | `variable=` | The `UgridDataset` facade's spelling.<br>Inert today — see below. |
+| `variable_name=` | `variable=` | The `UgridDataset` facade's spelling.<br>Live on `static` — see below. |
 | `interval=200` (ms/frame) | `fps=5.0` | The facades describe an interval; the<br>tier verbs take a rate. |
 
 `cmap`, `variable`, a bool `colorbar` and `band` (once shifted) are forwarded to the builder as they
@@ -71,7 +86,7 @@ TypeError: "title" is an invalid keyword argument for `_common_arg_parser`
 | Refused | Do this instead |
 |---|---|
 | `exclude_value` | No entry point here takes a nodata value;<br>mask the raster in pyramids before plotting. |
-| `rgb_options` | Build the composite with `Map.rgb_composite` on the static tier. |
+| `rgb_options` | Call `Map.rgb_composite` through<br>`quickmap` or `Map`; this seam never<br>calls it. |
 | `selectors`, `axes` | Choose a NetCDF slice with `variable=` and `band=`. |
 | `bands`, `animation_axis_values`, `interval`<br>on a **still** plot | Call `animate(backend=…)` instead. |
 
@@ -79,9 +94,22 @@ The matplotlib-only styling (the typed `color` / `contour` / `cells` / `data_sty
 groups, the `points` overlay and a `ColorBar` *instance*) never reaches here at all — pyramids
 rejects those before dispatch.
 
+!!! warning "Moving from `ds.plot()` to `ds.plot(backend="static")`"
+    The two are different renderers, so the table above applies to `static` as well — even though it
+    is the same *engine* as pyramids' default. `exclude_value` and `rgb_options` are accepted by
+    `ds.plot()` and refused here:
+
+    ```text
+    ds.plot(backend="static", band=0, exclude_value=0)
+    ValueError: plot(…) cannot serve 1 argument(s) on backend='static': exclude_value= — …
+    ```
+
+    This is the first thing a caller switching over hits. `ds.plot()` keeps working exactly as it
+    did — nothing about the default path changed.
+
 ## Animation
 
-`Dataset.animate(backend=…)` and friends forward `animate=True`. Two of the three tiers can serve it:
+`Dataset.animate(backend=…)` and friends forward `animate=True`. Two of the four tiers can serve it:
 
 ```python
 from pyramids.dataset.collection import DatasetCollection
@@ -112,6 +140,12 @@ stack.animate(backend="web", interval=120, path="flood.gif")           # written
 - **interactive** builds a time cube and returns a Panel player, or writes a GIF/MP4 when you pass a
   `path`.
 - **web** animates only to a file, so `path=` is required; without one the call is refused by name.
+- **static** is refused by name. `Map.animate` works and takes a stack, and a forwarded `path=`
+  reaches this seam just as it does for the web tier — but `Map.animate` hands back a lazy matplotlib
+  `FuncAnimation` and does not write it, so saving one would be this seam's own step and it does not
+  take it yet. Build the `Map` with digitalearth and call `Map.animate` on your stack. A *still* plot
+  of a `DatasetCollection` lands on this refusal too, because `DatasetCollection.plot` forwards
+  `animate=True` either way.
 - **3-D** is refused by name. Its `Scene3D.record` needs a caller-supplied `update` callable and
   `Scene3D.orbit` sweeps the camera over a static scene, so neither can be driven from a plot call's
   keywords. Build the scene with digitalearth and call one of them directly.
@@ -133,15 +167,16 @@ ds.plot(backend="web", band=0, scene_kw={"center": (31.0, 30.0), "zoom": 6, "sty
 ds.plot(backend="interactive", band=0, scene_kw={"width": 1100, "height": 700})
 ```
 
-`backend="matplotlib"` is not one of these: pyramids short-circuits its default to cleopatra and
-never reaches this package, so `ds.plot(scene_kw=…)` is refused by cleopatra. Use digitalearth's own
-entry point for the matplotlib tier:
+The matplotlib tier takes it too, under its registered name:
 
 ```python
-import digitalearth as de
-
-de.quickmap(ds, band=1, scene_kw={"figsize": (14, 9)})
+ds.plot(backend="static", band=0, scene_kw={"figsize": (14, 9)})
 ```
+
+`backend="matplotlib"` is the one spelling that does **not** reach this package: pyramids
+short-circuits that name to cleopatra before consulting the registry, so `ds.plot(scene_kw=…)` is
+refused by cleopatra in its own words. Ask for `backend="static"` instead, or call
+`digitalearth.quickmap` directly.
 
 They need their own mapping because a name alone cannot say which object it is for. `height` is the
 web map's pixel height, *and* `WebMap.extrusion`'s extrusion height, *and* the Datashader canvas
@@ -188,16 +223,24 @@ Two things need `import digitalearth`, and no keyword can change that:
   `envelope`, `stripes`, `quantile_band`), `TexturedGlobe`, `TimeSeries`, `Climatology`, the batch
   renderer and HTML gallery (`Batch`, `gallery`), and `to_backend`.
 
-## A mesh is not drawn on these tiers
+## A mesh is drawn on `static`, and refused on the other three
 
-`UgridDataset.plot(backend=…)` is refused before any keyword is read: only the matplotlib tier has a
-triangular render, which `digitalearth.api.MESH_BACKENDS` states. That is why the `variable_name`
-translation above is inert today — the call carrying it never gets that far:
+Only the matplotlib tier has a triangular render, which `digitalearth.api.MESH_BACKENDS` states. Since
+`static` *is* that tier, a `UgridDataset` draws there — shading the mesh's own faces, not a
+re-triangulation — and that is what the `variable_name` → `variable` translation above is for:
+
+```python
+ug.plot(backend="static", variable_name="depth")   # a Map; each face carries its own value
+```
+
+On the other three it is refused before any keyword is read:
 
 ```text
 UgridDataset.plot(backend="web")
-TypeError: backend='web' has no unstructured-mesh render; draw a UgridDataset with
-backend='matplotlib', which shades each of its faces (tripcolor)
+TypeError: backend='web' has no unstructured-mesh render; draw a UgridDataset on the
+matplotlib tier, which shades each of its faces (tripcolor): quickmap(data,
+backend='matplotlib') here, or plot(backend='static') through pyramids, whose own
+'matplotlib' is cleopatra's path
 ```
 
 ## Checking what is registered
@@ -205,7 +248,7 @@ backend='matplotlib', which shades each of its faces (tripcolor)
 ```python
 from pyramids.base._plot_backends import plot_backends, resolve_plot_backend
 
-sorted(plot_backends())              # ['3d', 'interactive', 'web']
+sorted(plot_backends())              # ['3d', 'interactive', 'static', 'web']
 resolve_plot_backend("interactive")  # the callable itself, loaded from the entry point
 ```
 
@@ -224,7 +267,7 @@ tell the two apart.
     ```python
     >>> from pyramids.base._plot_backends import plot_backends, resolve_plot_backend
     >>> sorted(plot_backends())
-    ['3d', 'interactive', 'web']
+    ['3d', 'interactive', 'static', 'web']
     >>> resolve_plot_backend("interactive")
     <function interactive at ...>          # the entry point, not the fallback partial
     ```

@@ -142,7 +142,7 @@
         "std_mean"
       ]
     },
-    "matplotlib": {
+    "static": {
       "absent": [
         "attribution",
         "export_html",
@@ -155,7 +155,7 @@
         "time_slider",
         "tooltip"
       ],
-      "backend": "matplotlib",
+      "backend": "static",
       "channels": [
         "opacity",
         "size"
@@ -306,7 +306,7 @@
       "crs",
       "kind"
     ],
-    "matplotlib": [
+    "static": [
       "basemap",
       "coastlines",
       "colorbar",
@@ -539,7 +539,7 @@
         "set_bounds"
       ],
       "interactive": [],
-      "matplotlib": [],
+      "static": [],
       "web": []
     },
     "tier2": [

@@ -13,8 +13,10 @@ test, so the whole file runs in the ``dev`` env. The tiers' own rendering is cov
 ``tests/interactive`` and ``tests/web``.
 """
 
+import dataclasses
 import importlib.metadata as metadata
 import inspect
+import re
 import subprocess
 import sys
 
@@ -23,6 +25,8 @@ import pytest
 
 import digitalearth
 from digitalearth.pyramids_backend import (
+    _UNANIMATABLE,
+    _UNANIMATABLE_DEFAULT,
     ANIMATION_BACKENDS,
     BAND_ORIGIN_SHIFT,
     _animatable,
@@ -33,16 +37,19 @@ from digitalearth.pyramids_backend import (
     _framed,
     _netcdf_stack,
     _netcdf_variable,
+    _refuse_unanimatable,
     interactive,
+    static,
     three_d,
     web,
 )
 
-#: The group pyramids resolves a backend name through, and the three names we answer to.
+#: The group pyramids resolves a backend name through, and the four names we answer to.
 GROUP = "pyramids.plot_backends"
 
 #: Each registered name against the callable it must load, and the module path it is declared as.
 REGISTERED = (
+    ("static", static, "digitalearth.pyramids_backend:static"),
     ("interactive", interactive, "digitalearth.pyramids_backend:interactive"),
     ("3d", three_d, "digitalearth.pyramids_backend:three_d"),
     ("web", web, "digitalearth.pyramids_backend:web"),
@@ -73,18 +80,23 @@ class _FakeScene:
 class TestRegistration:
     """The entry points pyramids discovers."""
 
-    def test_all_three_backends_are_registered(self):
-        """The installed distribution advertises exactly the three non-matplotlib backend names.
+    def test_every_tier_is_registered_under_its_own_name(self):
+        """The installed distribution advertises one name per tier, and never ``matplotlib``.
 
         Test scenario:
             Discovery reads the installed metadata, not the source tree, so this is what decides
-            whether pyramids finds us at all. ``matplotlib`` must not appear: pyramids short-circuits
-            its default to cleopatra and never resolves it here, so registering it would claim a name
-            we are never asked for.
+            whether pyramids finds us at all. All four tiers appear, the matplotlib one as ``static``
+            — the subpackage that implements it. ``matplotlib`` itself must not appear:
+            ``Dataset.plot`` branches on ``if backend != "matplotlib"`` and takes its own cleopatra
+            path before consulting the registry, so an entry point under that name would never be
+            resolved, and claiming it would suggest otherwise.
         """
         found = sorted(entry.name for entry in metadata.entry_points(group=GROUP))
-        assert found == ["3d", "interactive", "web"], (
-            f"the registered backends should be the three non-matplotlib tiers, got {found}"
+        assert found == ["3d", "interactive", "static", "web"], (
+            f"every tier should be registered under its own name, got {found}"
+        )
+        assert "matplotlib" not in found, (
+            "'matplotlib' is cleopatra's through Dataset.plot and must not be claimed here"
         )
 
     @pytest.mark.parametrize("name, expected, declared", REGISTERED)
@@ -249,6 +261,45 @@ class TestBandOrigin:
         with pytest.raises(ValueError, match="not a 0-based band index"):
             _Forwarded.from_facade("3d", forwarded)
 
+    @pytest.mark.parametrize(
+        "facade_band, expected", [(0, 10.0), (1, 110.0), (2, 210.0)]
+    )
+    def test_the_facades_band_reaches_the_drawn_array(self, facade_band, expected):
+        """A 0-based `band` draws the band pyramids meant, read off the rendered array.
+
+        Args:
+            facade_band: The 0-based index the facade forwards.
+            expected: The constant that band carries, so the drawn band is identifiable.
+
+        Test scenario:
+            The shift is asserted everywhere else by spying on what reaches `quickmap`, which proves
+            the translation and not the outcome. This draws through the registered path on a 3-band
+            raster whose bands carry 10/110/210, and reads the value back off the matplotlib artist —
+            so an off-by-one shows up as the wrong band rather than the wrong integer. Through
+            pyramids' import-by-name fallback the same call raises `band -1 is out of range`, which
+            is what the entry point exists to prevent.
+        """
+        import numpy as np
+        from pyramids.dataset import Dataset, GeoReference
+
+        cells = np.arange(12, dtype="float32").reshape(3, 4)
+        reference = GeoReference(geo=(0.0, 1.0, 0.0, 3.0, 0.0, -1.0), epsg=4326)
+        stack = Dataset.from_array(
+            np.stack([cells + 10.0 + 100.0 * step for step in range(3)]),
+            geo_ref=reference,
+        )
+
+        scene = stack.plot(backend="static", band=facade_band)
+
+        try:
+            drawn = np.asarray(scene.ax.get_images()[-1].get_array())
+            assert float(np.nanmin(drawn)) == expected, (
+                f"facade band={facade_band} should draw the band starting at {expected}, got "
+                f"{float(np.nanmin(drawn))}"
+            )
+        finally:
+            scene.close()
+
 
 class TestVocabulary:
     """The names that differ between the facade and this package."""
@@ -283,6 +334,55 @@ class TestVocabulary:
         assert plan.draw == forwarded, (
             f"these should pass through unchanged, got {plan.draw}"
         )
+
+    def test_a_ugrid_mesh_draws_on_static(self, ugrid_mesh):
+        """`variable_name` reaches the mesh render on `static`, and the other tiers still refuse.
+
+        Args:
+            ugrid_mesh: The repo's two-face mesh factory (a quad and a triangle).
+
+        Test scenario:
+            Registering a fourth backend made a whole input *type* drawable through
+            `plot(backend=…)` for the first time, as a side effect: `MESH_BACKENDS` is
+            `{"matplotlib"}`, `static` canonicalises to `matplotlib` before the mesh gate runs, so
+            the `variable_name` -> `variable` translation that had never executed now does. It
+            shipped with no test and a comment calling the path inert, naming a guard test
+            (`test_no_plugin_backend_draws_a_mesh_yet`) that has never existed in this repo. The
+            values are read back off the drawn collection — the quad's 10 on both of its fan
+            triangles and the triangle's 20 — so this asserts the mesh's own connectivity was used
+            and the selector really was renamed, not that *something* was drawn.
+        """
+        import numpy as np
+
+        scene = ugrid_mesh("face").plot(backend="static", variable_name="depth")
+
+        try:
+            values = np.asarray(scene.ax.collections[-1].get_array()).tolist()
+            assert values == [10.0, 10.0, 20.0], (
+                f"the mesh should be shaded on its own faces, got {values}"
+            )
+        finally:
+            scene.close()
+
+    @pytest.mark.parametrize("backend", ["3d", "web", "interactive"])
+    def test_a_ugrid_mesh_is_still_refused_where_no_tier_has_the_render(
+        self, backend, ugrid_mesh
+    ):
+        """The three tiers without a triangular render still refuse a mesh by name.
+
+        Args:
+            backend: The backend to try.
+            ugrid_mesh: The repo's two-face mesh factory.
+
+        Test scenario:
+            The other half of the contract. `static` gaining the mesh must not have opened it
+            everywhere, and the refusal must still arrive from the mesh gate — before any keyword is
+            read — rather than from a builder that does not recognise `variable`.
+        """
+        # built above the block so only `plot` can raise inside it (refusal-block tree guard)
+        mesh = ugrid_mesh("face")
+        with pytest.raises(TypeError, match="unstructured-mesh render"):
+            mesh.plot(backend=backend, variable_name="depth")
 
 
 class TestUnserved:
@@ -342,6 +442,33 @@ class TestUnserved:
         with pytest.raises(ValueError, match="only applies to an animation"):
             _Forwarded.from_facade("web", forwarded)
 
+    def test_an_unserved_keyword_points_at_ds_plot_not_at_a_colliding_name(
+        self, dataset
+    ):
+        """The refusal names `ds.plot()`, not `backend='matplotlib'`, which now means another tier.
+
+        Args:
+            dataset: The shared raster fixture.
+
+        Test scenario:
+            Registering this package as the matplotlib tier's renderer gave `"matplotlib"` two
+            senses: the name pyramids reserves for its own cleopatra path, and the tier this package
+            draws with. The refusal trailer used to say "render on `backend='matplotlib'`", so a
+            caller who had typed `backend='static'` was pointed at a different renderer behind a name
+            that reads like the same one. It now names the call instead. A string is all this is, so
+            a test is the only thing that keeps it true.
+        """
+        with pytest.raises(ValueError) as caught:
+            dataset.plot(backend="static", band=0, rgb_options={})
+
+        message = str(caught.value)
+        assert "with no backend=" in message, (
+            f"the refusal should point at the call that takes it, got {message!r}"
+        )
+        assert "backend='matplotlib'" not in message, (
+            f"'matplotlib' means pyramids' own path here, not this tier — got {message!r}"
+        )
+
 
 class TestAnimation:
     """The animation calls the facades make, and the one tier that cannot serve them."""
@@ -367,16 +494,22 @@ class TestAnimation:
         with pytest.raises(ValueError, match="frame interval in milliseconds"):
             _Forwarded.from_facade("interactive", forwarded)
 
-    def test_the_animating_backends_are_the_two_with_a_data_animation_verb(self):
-        """Only the tiers with a verb the seam can drive are listed as animating.
+    def test_the_animating_backends_are_the_two_this_seam_can_drive(self):
+        """Only the tiers whose animation this seam can drive are listed, which is not the same set.
 
         Test scenario:
-            The 3-D tier's ``record`` needs a caller-supplied ``update`` callable and its ``orbit``
-            sweeps the camera over a static scene; neither can be built from forwarded plot
-            keywords, so it is deliberately absent rather than served a still picture.
+            This used to read "the two with a data-animation verb", and that stopped being true when
+            `static` was registered: the matplotlib tier owns `Map.animate`, a data-animation verb,
+            and is still absent. What the set means is narrower — the tiers this seam can drive from
+            forwarded keywords *and* give the result somewhere to go. The 3-D tier's verbs need an
+            `update` callable a plot call cannot produce; `Map.animate` returns a lazy
+            `FuncAnimation` and takes no path (round-1 M3).
         """
         assert sorted(ANIMATION_BACKENDS) == ["interactive", "web"], (
-            f"expected the two tiers with a data-animation verb, got {sorted(ANIMATION_BACKENDS)}"
+            f"expected the two tiers this seam can drive, got {sorted(ANIMATION_BACKENDS)}"
+        )
+        assert set(_UNANIMATABLE) == {"3d", "static"}, (
+            f"every excluded tier needs its own reason, got {sorted(_UNANIMATABLE)}"
         )
 
     def test_a_three_d_animation_is_refused_naming_the_verbs_to_use_instead(self):
@@ -389,6 +522,121 @@ class TestAnimation:
         """
         with pytest.raises(ValueError, match="Scene3D.record"):
             three_d("a-dataset", backend="3d", animate=True)
+
+    def test_a_static_animation_is_refused_naming_this_tiers_own_verb(self):
+        """``animate(backend="static")`` is refused in the matplotlib tier's terms, not the 3-D tier's.
+
+        Test scenario:
+            This message was written when ``3d`` was the only backend outside
+            :data:`ANIMATION_BACKENDS`, so it named ``Scene3D.record`` and ``Scene3D.orbit``
+            unconditionally. Registering ``static`` put a second tier on that branch and it inherited
+            the 3-D tier's reasons — a false answer. The matplotlib tier's verb is ``Map.animate``.
+        """
+        with pytest.raises(ValueError, match=re.escape("Map.animate")) as caught:
+            static("a-dataset", backend="static", animate=True)
+
+        reason = str(caught.value)
+        assert "FuncAnimation" in reason, (
+            f"the reason should name what is actually missing — the save step — got {reason!r}"
+        )
+        assert "does not assemble" not in reason, (
+            f"the stack is not the obstacle: this seam assembles one for two other tiers, got "
+            f"{reason!r}"
+        )
+        assert "forwards no destination" not in reason, (
+            f"a forwarded path= does reach this seam — plan.destination() returns it — so claiming "
+            f"otherwise is false, got {reason!r}"
+        )
+
+    def test_each_refused_tier_is_answered_in_its_own_terms(self):
+        """The two refused tiers get different reasons, not one shared sentence.
+
+        Test scenario:
+            A single hard-coded reason is what made the ``static`` refusal wrong, so the distinctness
+            is the thing worth pinning: naming the 3-D verbs for a matplotlib call would be a
+            regression even though both calls are still refused.
+        """
+        reasons = {}
+        for name in ("3d", "static"):
+            # built above the block so only `_refuse_unanimatable` can raise inside it
+            plan = _Forwarded.from_facade(name, {"animate": True})
+            with pytest.raises(ValueError) as caught:
+                _refuse_unanimatable(plan)
+            reasons[name] = str(caught.value)
+
+        assert "Scene3D.record" in reasons["3d"], (
+            f"the 3-D refusal should name its own verbs, got {reasons['3d']!r}"
+        )
+        assert "Map.animate" in reasons["static"], (
+            f"the static refusal should name Map.animate, got {reasons['static']!r}"
+        )
+        assert "Scene3D" not in reasons["static"], (
+            f"the static refusal must not borrow the 3-D tier's verbs, got {reasons['static']!r}"
+        )
+
+    def test_a_tier_with_no_listed_reason_is_still_answered(self):
+        """A backend on the refused branch with no entry of its own gets the default, not a KeyError.
+
+        Test scenario:
+            The reason is read out of a table keyed by backend name. The first attempt indexed it
+            directly and a ``static`` call raised ``KeyError: 'static'`` instead of the refusal, so
+            the lookup is a ``.get`` with a default — which only matters for a tier added later, and
+            is therefore exercised here with a name that is deliberately not in the table.
+        """
+        plan = _Forwarded.from_facade("3d", {"animate": True})
+        unlisted = dataclasses.replace(plan, backend="a-tier-added-later")
+
+        with pytest.raises(
+            ValueError, match="not served through the pyramids plot-backend seam"
+        ):
+            _refuse_unanimatable(unlisted)
+
+    def test_the_default_reason_is_not_another_tiers(self):
+        """The fallback reason is generic, so it cannot assert something untrue about a tier.
+
+        Test scenario:
+            A default that happened to read like the 3-D or matplotlib entry would reintroduce the
+            bug it exists to prevent, just for a different tier.
+        """
+        assert "Scene3D" not in _UNANIMATABLE_DEFAULT, (
+            f"the default must not name the 3-D verbs, got {_UNANIMATABLE_DEFAULT!r}"
+        )
+        assert "Map.animate" not in _UNANIMATABLE_DEFAULT, (
+            f"the default must not name the matplotlib verb, got {_UNANIMATABLE_DEFAULT!r}"
+        )
+        assert set(_UNANIMATABLE) == {"3d", "static"}, (
+            f"expected a reason for each refused tier, got {sorted(_UNANIMATABLE)}"
+        )
+
+    def test_a_still_plot_of_a_stack_says_why_it_landed_on_the_animate_refusal(self):
+        """`DatasetCollection.plot(backend="static")` explains the `animate(...)` wording it gets.
+
+        Test scenario:
+            `DatasetCollection.plot` forwards `animate=True` unconditionally, so a **still** plot of
+            a stack is answered by the animation refusal — a message about a call the caller did not
+            make. The reason now says so rather than leaving it to be puzzled out. Built here rather
+            than taken from a fixture because the collection is three one-band members, which no
+            shared fixture provides.
+        """
+        import numpy as np
+        from pyramids.dataset import Dataset, GeoReference
+        from pyramids.dataset.collection import DatasetCollection
+
+        cells = np.arange(12, dtype="float32").reshape(3, 4)
+        reference = GeoReference(geo=(0.0, 1.0, 0.0, 3.0, 0.0, -1.0), epsg=4326)
+        members = [
+            Dataset.from_array(cells + 10.0 * step, geo_ref=reference)
+            for step in range(3)
+        ]
+        stack = DatasetCollection(members[0], len(members), datasets=members)
+
+        with pytest.raises(ValueError) as caught:
+            stack.plot(backend="static")
+
+        message = str(caught.value)
+        assert "still plot of a DatasetCollection" in message, (
+            f"the reason should account for the still-plot route that lands here, got {message!r}"
+        )
 
     def test_a_web_animation_without_a_destination_is_refused(self):
         """The web tier writes its animation to a file, so a missing ``path`` is named.
@@ -509,10 +757,41 @@ class TestDelegation:
             for _name, fn, _declared in REGISTERED
         }
         assert defaults == {
+            "static": "static",
             "interactive": "interactive",
             "three_d": "3d",
             "web": "web",
         }, f"the defaults should match the registered names, got {defaults}"
+
+    @pytest.mark.parametrize("asked", ["static", "web", "3d"])
+    def test_a_title_that_is_not_a_heading_is_refused_on_every_tier(
+        self, asked, dataset, monkeypatch
+    ):
+        """`title=3` is refused by name wherever it is passed, not only where it is routed.
+
+        Args:
+            asked: The backend to pass `title=3` to.
+            dataset: The shared raster fixture.
+            monkeypatch: pytest fixture, used to keep the render out of this.
+
+        Test scenario:
+            The type check and the routing shared one `backend in _TITLE_AFTER_BUILD` test, so the
+            tier left out of the routing — because its own builder takes `title` — was left out of
+            the validation too. `static` coerced `title=3` into the heading `'3'` and returned a
+            `Map` while `web` and `3d` refused it. The comment above that guard gives its reason as
+            "two answers to the same call"; there were three. The render is stubbed so this asserts
+            the refusal rather than any tier's engine.
+        """
+        import digitalearth
+
+        monkeypatch.setattr(
+            digitalearth,
+            "quickmap",
+            lambda *args, **kwargs: pytest.fail("should not render"),
+        )
+
+        with pytest.raises(ValueError, match="is not a heading"):
+            dataset.plot(backend=asked, band=0, title=3)
 
 
 class TestImportWeight:
@@ -796,6 +1075,41 @@ class TestLabelValuedColumn:
         assert "scheme" not in draw, (
             f"a numeric column should not be classified: {draw}"
         )
+
+    def test_a_label_column_is_classified_categorically_on_static(self, tmp_path):
+        """A label-valued `column` draws on `static`, answered by this seam rather than the builder.
+
+        Args:
+            tmp_path: pytest temporary directory, for the geojson the fixture writes.
+
+        Test scenario:
+            `_classified` names the categorical scale for the tier that needs it told, because the
+            facade forwards no `scheme=` of its own. It had a branch for `web` and a refusal for
+            `3d`, and the new fourth backend matched neither — so a label column reached
+            `choropleth()` unchanged and failed in *its* terms (`needs column=… to name a column of
+            numbers`), which is the one thing this module exists to prevent. Colouring by a label is,
+            in `_classified`'s own words, the ordinary reason to pass `column`.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Polygon
+
+        geoms = [Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)]
+        frame = gpd.GeoDataFrame(
+            {"zone": ["north", "south", "north"]}, geometry=geoms, crs=4326
+        )
+        path = tmp_path / "zones.geojson"
+        frame.to_file(path, driver="GeoJSON")
+        collection = FeatureCollection.read_file(str(path))
+
+        scene = collection.plot(backend="static", column="zone")
+
+        try:
+            assert scene.layer_ids, (
+                f"a layer should have been drawn, got {scene.layer_ids}"
+            )
+        finally:
+            scene.close()
 
 
 class TestChoosingTheNetcdfVariable:

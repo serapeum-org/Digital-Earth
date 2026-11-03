@@ -384,4 +384,4 @@ class TestTheContract:
 
     def test_lines_is_not_pending_on_matplotlib(self):
         """The contract's PENDING table stops excusing the tier."""
-        assert "lines" not in PENDING["matplotlib"], dict(PENDING["matplotlib"])
+        assert "lines" not in PENDING["static"], dict(PENDING["static"])

@@ -187,3 +187,31 @@ class TestReplayingAFigureSeenThroughACamera:
             )
         finally:
             replayed.close()
+
+
+class TestToBackendAlias:
+    """``to_backend`` accepts the ``static`` spelling too."""
+
+    def test_the_static_alias_replays_onto_the_matplotlib_tier(self):
+        """``to_backend(..., backend="static")`` replays the figure, same as ``"matplotlib"`` does.
+
+        Test scenario:
+            `to_backend` validates the backend name at its own site, separately from `quickmap`, so
+            an alias added to one and not the other would work in a plot call and fail in a redraw.
+            The first version of this test wrapped the call in `try/except ValueError` and asserted
+            only that the message was not "unknown backend" — but the call *succeeds*, so that branch
+            never ran and the test asserted nothing about the behaviour it is named for. It passed
+            only because the call raised on `origin/main`; once the feature was in, it was a no-op.
+        """
+        from digitalearth.static import Map
+
+        figure = _one_panel_figure()
+
+        replayed = api.to_backend(figure, backend="static")
+
+        try:
+            assert isinstance(replayed, Map), (
+                f"the alias should replay onto the matplotlib tier, got {type(replayed)}"
+            )
+        finally:
+            replayed.close()

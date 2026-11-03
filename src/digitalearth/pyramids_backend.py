@@ -1,4 +1,4 @@
-"""Serve pyramids' ``plot(backend=…)`` seam from digitalearth's three non-matplotlib tiers.
+"""Serve pyramids' ``plot(backend=…)`` seam from digitalearth's four rendering tiers.
 
 pyramids-core resolves a non-matplotlib ``backend=`` through the ``pyramids.plot_backends``
 entry-point group: ``Dataset.plot(backend="3d")``, ``NetCDF.plot(backend="interactive")`` and the
@@ -66,6 +66,7 @@ __all__ = [
     "ANIMATION_BACKENDS",
     "BAND_ORIGIN_SHIFT",
     "interactive",
+    "static",
     "three_d",
     "web",
 ]
@@ -73,39 +74,82 @@ __all__ = [
 #: Added to a forwarded ``band`` to turn pyramids' 0-based index into digitalearth's 1-based one.
 BAND_ORIGIN_SHIFT = 1
 
-#: The backends whose tier owns a verb that animates *data*. The 3-D tier's ``record`` needs a
-#: caller-supplied ``update`` callable and its ``orbit`` sweeps the camera over a static scene, so
-#: neither can be driven from the facade's forwarded keywords alone — an animation request for it is
-#: refused by name instead of answered with a still picture or a camera spin.
+#: The backends whose data animation this seam can drive from a plot call. Not the same as "owns a
+#: verb that animates data", which is what this said while `3d` was the only exclusion: the
+#: matplotlib tier owns `Map.animate` and is still absent, for a different reason than the 3-D tier
+#: is. :data:`_UNANIMATABLE` carries the reason per tier, and the two differ — the 3-D tier has no
+#: verb a plot call could supply the arguments for, while the matplotlib tier has one whose result
+#: this seam does not save yet. Not a destination problem: a forwarded ``path=`` reaches
+#: :meth:`_Forwarded.destination` here exactly as it does for the web tier (round-1 M3/M4,
+#: round-2 H2).
 ANIMATION_BACKENDS: frozenset[str] = frozenset({"interactive", "web"})
+
+#: The reason used for a backend outside :data:`ANIMATION_BACKENDS` with no entry in
+#: :data:`_UNANIMATABLE`. Defensive only: every name registered today that reaches that branch has an
+#: entry, so this is unreachable through any public call. It exists for the one thing that would
+#: reach it: a new line in ``[project.entry-points."pyramids.plot_backends"]`` whose tier is left
+#: out of :data:`ANIMATION_BACKENDS` and given no reason here — answered rather than met with a
+#: `KeyError` (round-1 L1, round-2 N2).
+_UNANIMATABLE_DEFAULT = (
+    "this tier's animation is not driven through the seam. Build the scene with digitalearth and "
+    "animate it there."
+)
+
+#: Why each backend outside :data:`ANIMATION_BACKENDS` cannot be animated from a plot call, in its
+#: own terms, and what to do instead. One reason per tier, because they are not the same kind of
+#: "cannot": the 3-D tier's verbs take an argument a plot call cannot produce, while the matplotlib
+#: tier's verb works and simply has nowhere to put its result. Each entry carries its own closing
+#: advice, because a single shared sentence said "call it directly" after naming the 3-D tier's two
+#: verbs (round-1 L2).
+_UNANIMATABLE: Mapping[str, str] = MappingProxyType(
+    {
+        "3d": (
+            "the 3-D tier animates a scene with Scene3D.record (which needs an update callable) or "
+            "sweeps the camera with Scene3D.orbit, and neither can be driven from a plot call's "
+            "keywords. Build the scene with digitalearth and call one of them directly."
+        ),
+        "static": (
+            "the matplotlib tier's Map.animate hands back a lazy matplotlib FuncAnimation and does "
+            "not write it, so saving one would be this seam's own step and it does not take it yet. "
+            "Neither the stack nor the destination is the obstacle — this seam assembles a stack for "
+            "the other two tiers, and a forwarded path= reaches it. Build the Map with digitalearth "
+            "and call Map.animate on your stack. A still plot of a DatasetCollection arrives here "
+            "too, because DatasetCollection.plot forwards animate=True either way; so does a still plot "
+            "carrying path= or bands=, which only an animation can use."
+        ),
+    }
+)
 
 #: Forwarded keywords digitalearth has no way to honour, each with the reason given in the refusal.
 #: pyramids drops a defaulted argument before forwarding, so anything arriving here was set
 #: deliberately. Refusing it here names the pyramids-side keyword and what to do instead; left to
 #: the tier it is still refused, but in terms of whichever builder it reached — or, on the 3-D tier,
 #: in PyVista's terms.
-_UNSERVED: Mapping[str, str] = {
-    "exclude_value": (
-        "no digitalearth entry point takes a nodata value — the matplotlib path sets its own and "
-        "answers a caller's with `got multiple values for keyword argument 'exclude_value'` — so "
-        "mask the raster in pyramids before plotting"
-    ),
-    "rgb_options": (
-        "a three-band composite is built with Map.rgb_composite on the static tier, which this "
-        "seam does not reach"
-    ),
-    # Both say "0-based" deliberately: a caller following this advice passes `band=` as an extra
-    # keyword, and this seam shifts whatever it is given. Advising the keyword without naming its
-    # origin reintroduced #501's own off-by-one, one layer up (round-2 M7).
-    "selectors": (
-        "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
-        "not with read-time selectors"
-    ),
-    "axes": (
-        "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
-        "not by naming its axes"
-    ),
-}
+_UNSERVED: Mapping[str, str] = MappingProxyType(
+    {
+        "exclude_value": (
+            "no digitalearth entry point takes a nodata value — this package's own matplotlib tier "
+            "sets its own and "
+            "answers a caller's with `got multiple values for keyword argument 'exclude_value'` — so "
+            "mask the raster in pyramids before plotting"
+        ),
+        "rgb_options": (
+            "a three-band composite is built with Map.rgb_composite, a verb this seam does not "
+            "call"
+        ),
+        # Both say "0-based" deliberately: a caller following this advice passes `band=` as an extra
+        # keyword, and this seam shifts whatever it is given. Advising the keyword without naming its
+        # origin reintroduced #501's own off-by-one, one layer up (round-2 M7).
+        "selectors": (
+            "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
+            "not with read-time selectors"
+        ),
+        "axes": (
+            "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
+            "not by naming its axes"
+        ),
+    }
+)
 
 #: Keywords that only mean something in an animation call. Refused on a still plot in terms of the
 #: call that was made, rather than left to the tier, which answers for the builder they reached
@@ -308,9 +352,16 @@ def _refuse_unserved(backend: str, forwarded: Mapping[str, Any]) -> None:
     hit = [name for name in _UNSERVED if name in forwarded]
     if hit:
         reasons = "; ".join(f"{name}= — {_UNSERVED[name]}" for name in hit)
+        # The trailer says `ds.plot()` and not `backend='matplotlib'`, because once this package
+        # serves the matplotlib tier as `static` the two senses of "matplotlib" collide in one
+        # sentence: a caller who typed `backend='static'` was told to render on
+        # `backend='matplotlib'`, which is a different renderer (pyramids' own cleopatra path)
+        # behind a name that reads like the same tier (round-1 L3).
         raise ValueError(
             f"plot(…) cannot serve {len(hit)} argument(s) on backend={backend!r}: {reasons}. Drop "
-            f"them for this backend, or render on backend='matplotlib'."
+            f"them for this backend, or make the same plot() call with no backend= — pyramids' own "
+            f"cleopatra path. Call it on the object the keyword belongs to: selectors= and axes= are "
+            f"NetCDF.plot's, and Dataset.plot refuses them."
         )
 
 
@@ -701,11 +752,16 @@ class _Forwarded:
         labels = rest.pop("animation_axis_values", None)
         path = rest.pop("path", None)
         # The mesh facade spells the selector `variable_name`; `quickmap` spells it `variable`.
-        # Inert as things stand, and kept deliberately: only `digitalearth.api.MESH_BACKENDS`
-        # ({"matplotlib"}) has a triangular render, so `quickmap` refuses a `UgridDataset` on all
-        # three of these tiers before any keyword is read — executed on each through the repo's mesh
-        # fixture (round-1 M1). It is the right translation the moment a tier gains that render, and
-        # `test_no_plugin_backend_draws_a_mesh_yet` fails here if one does.
+        # Live on `static` only, and that is new: `MESH_BACKENDS` is `{"matplotlib"}`, and `static`
+        # canonicalises to `matplotlib` before the mesh gate runs, so a `UgridDataset` reaches the
+        # triangular render through this rename — `plot(backend="static", variable_name=…)` shades
+        # the mesh's own faces. The other three tiers have no such render and are still refused by
+        # the gate before any keyword is read. Both halves are executed in
+        # `tests/test_pyramids_backend.py` (`..._a_ugrid_mesh_draws_on_static...` and
+        # `..._a_ugrid_mesh_is_still_refused...`), which is the coverage this translation went
+        # without until round-1 H2: the comment here used to call the path inert and name a guard
+        # test, `test_no_plugin_backend_draws_a_mesh_yet`, that had never existed in this repo — so
+        # the one event it promised to catch happened in silence.
         if "variable_name" in rest:
             rest["variable"] = rest.pop("variable_name")
         if "band" in rest:
@@ -732,25 +788,24 @@ def _refuse_unanimatable(plan: _Forwarded) -> None:
             refused separately, by :meth:`_Forwarded.destination`.
 
     Examples:
-        - The 3-D tier has no verb the seam can drive, and says which ones to use directly:
+        - Each refused tier is answered in its own terms, not another tier's:
             ```python
             >>> from digitalearth.pyramids_backend import _Forwarded, _refuse_unanimatable
-            >>> plan = _Forwarded.from_facade("3d", {"animate": True})
-            >>> try:
-            ...     _refuse_unanimatable(plan)
-            ... except ValueError as exc:
-            ...     print("Scene3D.record" in str(exc), "orbit" in str(exc))
-            True True
+            >>> for name in ("3d", "static"):
+            ...     try:
+            ...         _refuse_unanimatable(_Forwarded.from_facade(name, {"animate": True}))
+            ...     except ValueError as exc:
+            ...         reason = str(exc).split("seam: ")[1]
+            ...         print(name, "->", " ".join(reason.split()[:6]))
+            3d -> the 3-D tier animates a scene
+            static -> the matplotlib tier's Map.animate hands back
 
             ```
     """
     if plan.backend not in ANIMATION_BACKENDS:
         raise ValueError(
             f"animate(backend={plan.backend!r}) is not served through the pyramids plot-backend "
-            f"seam: the 3-D tier animates a scene with Scene3D.record (which needs an update "
-            f"callable) or sweeps the camera with Scene3D.orbit, and neither can be driven from a "
-            f"plot call's keywords. Build the scene with digitalearth and call one of them "
-            f"directly."
+            f"seam: {_UNANIMATABLE.get(plan.backend, _UNANIMATABLE_DEFAULT)}"
         )
 
 
@@ -1339,9 +1394,11 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
 
     ``column`` is the ``FeatureCollection.plot`` facade's own selector, and colouring by a *label*
     column is the ordinary reason to pass it. Forwarded alone it reached the tier's classifier as a
-    number: ``could not convert string to float: 'Baden-Württemberg'`` on web and 3-D. The web tier
-    draws it once told the scale is categorical; the 3-D tier has no categorical fill at all, and
-    both ways round it produced the same unreadable message (round-2 M10).
+    number: ``could not convert string to float: 'Baden-Württemberg'`` on web and 3-D, and
+    ``choropleth() needs column=… to name a column of numbers`` on the matplotlib tier. The two tiers
+    with a categorical fill — ``web`` and ``static`` — draw it once told the scale is categorical; the
+    3-D tier has none at all, and every way round produced a message in the builder's terms rather
+    than the call's (round-2 M10, round-1 M1).
 
     Args:
         obj: The vector layer the facade was called on.
@@ -1349,10 +1406,25 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
         draw: The keywords bound for the builder, modified in place.
 
     Raises:
-        ValueError: on ``backend="3d"``, which cannot colour a label column by any route.
+        ValueError: on ``backend="3d"`` only, which cannot colour a label column by any route.
+            ``web`` and ``static`` have the scale named for them; ``interactive`` is left untouched,
+            because its own builder already reads a label column.
 
     Examples:
-        - The web tier is told the scale is categorical, so a label column draws:
+        - A tier with a categorical fill is told to use it, so a label column draws. ``static`` is
+          handled the same way as ``web`` — it has the fill, so withholding the scale only moved the
+          failure into ``choropleth()``:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.pyramids_backend import _classified
+            >>> layer = {"zone": np.array(["north", "south"])}
+            >>> draw = {"column": "zone"}
+            >>> _classified(layer, "static", draw)
+            >>> sorted(draw.items())
+            [('column', 'zone'), ('scheme', 'categorical')]
+
+            ```
+        - The web tier is told the same thing:
             ```python
             >>> import numpy as np
             >>> from digitalearth.pyramids_backend import _classified
@@ -1394,12 +1466,16 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
     if backend == "3d":
         raise ValueError(
             f"column={column!r} holds labels, and backend='3d' has no categorical fill: it "
-            f"colours by a number. Draw the labels on backend='web' or 'interactive', or pass a "
-            f"numeric column"
+            f"colours by a number. Draw the labels on backend='static' (no extra needed), 'web' "
+            f"or 'interactive', or pass a numeric column"
         )
-    if backend == "web":
-        # Executed: the web tier draws a label column once the scale is named categorical, and the
-        # facade forwards no `scheme`, so there is no way for the caller to say it themselves.
+    if backend in {"web", "static"}:
+        # Executed on both: each tier draws a label column once the scale is named categorical, and
+        # the facade forwards no `scheme`, so there is no way for the caller to say it themselves.
+        # `static` behaves as `web` does here rather than as `3d`: it has a categorical fill, so
+        # falling through to the builder made it answer in `choropleth()`'s terms instead of this
+        # seam's — "needs column=… to name a column of numbers" — for the ordinary reason to pass
+        # `column` at all (round-1 M1).
         draw.setdefault("scheme", "categorical")
 
 
@@ -1448,15 +1524,17 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
     # here and set on the finished scene through `set_title`, which both of those tiers own. The
     # HoloViz tier has no `set_title`, so there it stays a builder keyword, which is the route that
     # already works (round-1 H2/L6).
-    held = draw.pop("title", None) if backend in _TITLE_AFTER_BUILD else None
-    if held is not None and not isinstance(held, str):
+    # Validated for every tier, routed for only some. These were one membership test, which made the
+    # tier left out of the *routing* — because its own builder takes `title` — the tier left out of
+    # the *validation* too: `static` coerced `title=3` into the heading '3' and returned a Map while
+    # the other two refused it (round-2 M1).
+    asked = draw.get("title")
+    if asked is not None and not isinstance(asked, str):
         # Checked before the render, not after. Set on the finished scene, a bad title cost the
         # whole picture: `three_d(ds, title=3)` built the Scene3D and *then* raised, while the web
         # tier took the int and returned a map — two answers to the same call (round-2 L5).
-        raise ValueError(
-            f"title={held!r} is not a heading; pass a string (backend={backend!r} sets it on the "
-            f"finished scene)"
-        )
+        raise ValueError(f"title={asked!r} is not a heading; pass a string")
+    held = draw.pop("title", None) if backend in _TITLE_AFTER_BUILD else None
     _classified(obj, backend, draw)
     if "basemap" in draw:
         draw["basemap"] = _basemap_asked(draw["basemap"], backend)
@@ -1464,6 +1542,70 @@ def _render(obj: Any, backend: str, forwarded: Mapping[str, Any]) -> Any:
     if held is not None:
         scene.set_title(held)
     return scene
+
+
+def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
+    """Render a pyramids object on the matplotlib tier, for ``plot(backend="static")``.
+
+    This is the tier :mod:`digitalearth.static` implements, and the one installed with no extra. It
+    is reached as ``"static"`` rather than ``"matplotlib"`` because
+    :meth:`pyramids.dataset.Dataset.plot` branches on ``if backend != "matplotlib"`` and takes its
+    own cleopatra path before consulting the plot-backend registry — an entry point registered under
+    that name could never be reached, so ``ds.plot(backend="matplotlib")`` stays cleopatra's and this
+    tier gets its own name.
+
+    Args:
+        obj: The pyramids object the facade was called on.
+        backend: The backend name the seam passes; defaults to the name this is registered under.
+        **kwargs: The keywords pyramids forwarded, in its own vocabulary.
+
+    Returns:
+        A :class:`~digitalearth.static.Map`.
+
+    Raises:
+        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an
+            animation call — this tier is outside :data:`ANIMATION_BACKENDS`, so `animate` is refused
+            by name rather than returning anything.
+
+    Examples:
+        - Reached through pyramids, which needs no extra for this tier. The figure is this package's
+          own 8x8 default rather than the one cleopatra sizes from the data, which is the visible
+          sign that the call arrived here and not on `ds.plot()`'s own path:
+            ```python
+            >>> from pyramids.dataset import Dataset
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> with ds.plot(backend="static", band=0) as scene:
+            ...     tuple(float(side) for side in scene.fig.get_size_inches())
+            (8.0, 8.0)
+
+            ```
+        - What comes back is the tier's own scene, so its methods carry on from the plot call and its
+          layers are addressable by id:
+            ```python
+            >>> from pyramids.dataset import Dataset
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> with ds.plot(backend="static", band=0) as scene:
+            ...     scene.layer_ids
+            ...     scene.set_title("Accumulation").ax.get_title()
+            ['raster-1']
+            'Accumulation'
+
+            ```
+        - The facade's band index is 0-based and this package's is 1-based, and the shift happens
+          here — see :data:`BAND_ORIGIN_SHIFT`. That `band=0` draws at all, in the examples above, is
+          the demonstration: through pyramids' import-by-name fallback the index arrives unshifted
+          and the tier answers `band -1 is out of range`, so the entry point is what makes the call
+          correct rather than merely tidier.
+
+    See Also:
+        interactive: The same seam on the HoloViz tier.
+        three_d: The same seam on the PyVista tier.
+        web: The same seam on the MapLibre tier.
+        ANIMATION_BACKENDS: The tiers whose animation this seam drives, which does not include this
+            one — :data:`_UNANIMATABLE` carries the reason.
+        BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's.
+    """
+    return _render(obj, backend, kwargs)
 
 
 def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any:
@@ -1498,8 +1640,8 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
             >>> try:
             ...     interactive("a-dataset", backend="interactive", rgb_options={})
             ... except ValueError as exc:
-            ...     print(str(exc).split("— ")[1].split(", which")[0])
-            a three-band composite is built with Map.rgb_composite on the static tier
+            ...     print(str(exc).split("— ")[1].split(". ")[0])
+            a three-band composite is built with Map.rgb_composite, a verb this seam does not call
 
             ```
         - An animation keyword on a still plot is named rather than ignored, which is what it used
@@ -1515,6 +1657,7 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
             ```
 
     See Also:
+        static: The same seam on the matplotlib tier, which needs no extra.
         three_d: The same seam on the PyVista tier.
         web: The same seam on the MapLibre tier.
         ANIMATION_BACKENDS: Which tiers serve an ``animate`` call.
@@ -1568,6 +1711,7 @@ def three_d(obj: Any, *, backend: str = "3d", **kwargs: Any) -> Any:
             ```
 
     See Also:
+        static: The same seam on the matplotlib tier, which needs no extra.
         interactive: The same seam on the HoloViz tier, which does serve an animation.
         web: The same seam on the MapLibre tier.
         ANIMATION_BACKENDS: Why this tier is absent from it.
@@ -1621,6 +1765,7 @@ def web(obj: Any, *, backend: str = "web", **kwargs: Any) -> Any:
             ```
 
     See Also:
+        static: The same seam on the matplotlib tier, which needs no extra.
         interactive: The same seam on the HoloViz tier, whose animation needs no destination.
         three_d: The same seam on the PyVista tier.
         BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's.

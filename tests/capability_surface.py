@@ -12,7 +12,7 @@ from typing import Any
 
 #: Backend name → the module holding that tier's ``CAPABILITIES`` value. All four import engine-free.
 TIER_CAPABILITY_MODULES = {
-    "matplotlib": "digitalearth.static.capabilities",
+    "static": "digitalearth.static.capabilities",
     "web": "digitalearth.web.capabilities",
     "interactive": "digitalearth.interactive.capabilities",
     "3d": "digitalearth.three_d.capabilities",

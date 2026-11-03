@@ -144,7 +144,7 @@ class TestImportingApiDoesNotLoadTheMatplotlibTier:
             else:
                 raise AssertionError("a domain on the web tier must be refused")
 
-            assert "'matplotlib'" in message, (
+            assert "'static'" in message, (
                 "the refusal must name the tier that honours domain: " + repr(message)
             )
             assert "digitalearth.static" in sys.modules, (
@@ -158,7 +158,7 @@ class TestImportingApiDoesNotLoadTheMatplotlibTier:
                 wrapper_message = str(wrapper_error)
             else:
                 raise AssertionError("field(backend='web') must be refused")
-            assert "'matplotlib'" in wrapper_message, (
+            assert "'static'" in wrapper_message, (
                 "the wrapper refusal must also name matplotlib: " + repr(wrapper_message)
             )
             print("OK")
@@ -395,7 +395,7 @@ class TestOneKeySeam:
             key; a swapped entry would key a web map through matplotlib's colorbar. Asserted per entry by
             identity so a swap fails loudly.
         """
-        assert qp._KEY_ADDERS["matplotlib"] is qp._add_static_key
+        assert qp._KEY_ADDERS["static"] is qp._add_static_key
         assert qp._KEY_ADDERS["interactive"] is qp._add_interactive_key
         assert qp._KEY_ADDERS["web"] is qp._add_web_legend
         assert qp._KEY_ADDERS["3d"] is qp._add_3d_key
@@ -412,7 +412,7 @@ class TestOneKeySeam:
             set(qp._KEY_ADDERS).symmetric_difference(qp.BACKEND_CAPABILITIES)
         )
 
-    @pytest.mark.parametrize("backend", ["matplotlib", "interactive", "web", "3d"])
+    @pytest.mark.parametrize("backend", ["static", "interactive", "web", "3d"])
     def test_add_key_calls_the_backend_s_impl_carrying_the_flag(
         self, backend, monkeypatch
     ):
@@ -483,7 +483,7 @@ class TestLazyBackendMap:
             L2); it is kept as a plain invariant — the default tier is the full one, so a change that dropped
             a keyword from it should surface as a decision made on purpose, not slip by.
         """
-        resolved = set(qp.BACKEND_CAPABILITIES["matplotlib"])
+        resolved = set(qp.BACKEND_CAPABILITIES["static"])
         checked = set(qp._KEYWORD_CAPABILITIES)
         assert resolved == checked, sorted(resolved.symmetric_difference(checked))
 
@@ -494,20 +494,20 @@ class TestLazyBackendMap:
             The N3 helper named the deferred ``matplotlib`` tier from ``keyword in _KEYWORD_CAPABILITIES`` —
             true at every call site — so it named matplotlib for *any* checked keyword, whether or not
             matplotlib's declaration honoured it. Two keywords tell a real per-row read from that tautology:
-            ``domain``, which matplotlib honours (so it must be named), and a fabricated keyword mapped to a
+            ``domain``, which the static tier honours (so it must be named), and a fabricated keyword mapped to a
             capability **no** tier declares (so no tier — matplotlib included — may be named). The tautology
             reddens the second assertion; a helper that simply stopped naming matplotlib reddens the first.
         """
         honours_domain = qp._honoured_by("domain")
-        assert "'matplotlib'" in honours_domain, (
-            f"matplotlib honours domain, so it must be named: {honours_domain!r}"
+        assert "'static'" in honours_domain, (
+            f"the static tier honours domain, so it must be named: {honours_domain!r}"
         )
 
         monkeypatch.setitem(
             qp._KEYWORD_CAPABILITIES, "faketag", ("faketag_capability_no_tier_has",)
         )
         honours_faketag = qp._honoured_by("faketag")
-        assert "matplotlib" not in honours_faketag, (
+        assert "static" not in honours_faketag, (
             "no tier declares faketag's capability, so matplotlib must not be named: "
             f"{honours_faketag!r}"
         )

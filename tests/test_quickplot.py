@@ -882,7 +882,7 @@ class TestBackendCapabilityRefusal:
             other would either be unreachable or escape the parameter check entirely.
         """
         assert set(qp.BACKEND_CAPABILITIES) == {
-            "matplotlib",
+            "static",
             "interactive",
             "3d",
             "web",
@@ -1563,4 +1563,267 @@ class TestSceneKw:
 
         assert qp._scene_of(Scene, {"crs": 4326}, crs=3857).crs == 4326, (
             "the caller's value must win over the seeded one"
+        )
+
+
+class TestBackendAliases:
+    """``static`` is accepted as a spelling of the matplotlib backend."""
+
+    @pytest.fixture
+    def dem(self):
+        """A single-band raster to draw.
+
+        Returns:
+            The bundled accumulation raster.
+        """
+        from pyramids.dataset import Dataset
+
+        return Dataset.read_file("examples/data/acc4000.tif")
+
+    @pytest.mark.parametrize("spelling", ["static", "matplotlib"])
+    def test_both_spellings_build_the_same_tier(self, dem, spelling):
+        """``static`` and its alias ``matplotlib`` both build this package's `Map`.
+
+        Args:
+            dem: The raster fixture.
+            spelling: The backend name to ask for.
+
+        Test scenario:
+            ``static`` is the canonical name — the one `BACKEND_CAPABILITIES` is keyed on and the one
+            pyramids' registry serves this tier under, because `Dataset.plot` reserves
+            ``"matplotlib"`` for its own cleopatra path. ``matplotlib`` stays accepted here so the
+            name this package used for four releases keeps working.
+        """
+        with qp.quickmap(dem, band=1, backend=spelling) as built:
+            assert isinstance(built, Map), f"expected a Map, got {type(built)}"
+
+    @pytest.mark.parametrize("alias", sorted(qp.BACKEND_ALIASES))
+    def test_every_alias_resolves_to_a_real_backend(self, alias):
+        """Each alias names a canonical backend, and is not a backend itself.
+
+        Args:
+            alias: One key of `BACKEND_ALIASES`.
+
+        Test scenario:
+            Parametrised over the table rather than listed by hand, so a thirteenth alias is one row
+            and cannot be added without being checked. Both halves matter: the target has to be a
+            real capability row, or the alias resolves to something `quickmap` then refuses as
+            unknown; and the alias must *not* be a row of its own, or the tier is counted twice in
+            the support matrix and in every table built from `BACKEND_CAPABILITIES`.
+        """
+        target = qp.BACKEND_ALIASES[alias]
+
+        assert qp._canonical_backend(alias) == target, (
+            f"{alias!r} should canonicalise to {target!r}, got {qp._canonical_backend(alias)!r}"
+        )
+        assert target in qp.BACKEND_CAPABILITIES, (
+            f"{alias!r} points at {target!r}, which is not a backend: "
+            f"{sorted(qp.BACKEND_CAPABILITIES)}"
+        )
+        assert alias not in qp.BACKEND_CAPABILITIES, (
+            f"{alias!r} must be an alias, not a capability row of its own"
+        )
+
+    @pytest.mark.parametrize("alias", sorted(qp.BACKEND_ALIASES))
+    def test_every_alias_is_accepted_by_quickmap(self, alias, dem, mocker):
+        """Asking for a tier by its engine name builds that tier's scene.
+
+        Args:
+            alias: One key of `BACKEND_ALIASES`.
+            dem: The raster fixture.
+            mocker: pytest-mock fixture, used to stub the builder so no engine is needed.
+
+        Test scenario:
+            Resolving in `_canonical_backend` is not the same as being usable: the name has to pass
+            `quickmap`'s own validation and reach the tier helper. The builders are stubbed because
+            three of the four tiers need an extra this environment does not have — what is asserted
+            is that the call is *dispatched*, not what it draws.
+        """
+        target = qp.BACKEND_ALIASES[alias]
+        if target != "static":
+            pytest.importorskip(
+                {"interactive": "holoviews", "web": "maplibre", "3d": "pyvista"}[target]
+            )
+
+        with qp.quickmap(dem, band=1, backend=alias) as built:
+            assert built is not None, f"backend={alias!r} should have built a scene"
+
+    def test_the_alias_resolves_before_the_capability_table_is_read(self):
+        """The alias is canonicalised, so the capability table needs no row of its own.
+
+        Test scenario:
+            `BACKEND_CAPABILITIES` is keyed on the canonical names and drives the support matrix. An
+            alias that reached it unresolved would be refused as unknown; one that gained a row there
+            would double-count the tier in every table built from it.
+        """
+        assert qp._canonical_backend("matplotlib") == "static", (
+            "'matplotlib' should canonicalise to 'static', got "
+            f"{qp._canonical_backend('matplotlib')!r}"
+        )
+        assert "matplotlib" not in qp.BACKEND_CAPABILITIES, (
+            "the alias must not be a capability row of its own"
+        )
+        assert "static" in qp.BACKEND_CAPABILITIES, (
+            f"the canonical name must be the keyed one, got {sorted(qp.BACKEND_CAPABILITIES)}"
+        )
+
+    @pytest.mark.parametrize("name", ["static", "interactive", "3d", "web", "nope"])
+    def test_every_other_name_is_passed_through_untouched(self, name):
+        """Only a known alias is rewritten; every other name reaches the refusal as written.
+
+        Args:
+            name: A canonical backend name, or one that is not a backend at all.
+
+        Test scenario:
+            A canonicaliser that altered anything else would either hide a typo behind a working
+            backend or report the wrong name in the refusal.
+        """
+        assert qp._canonical_backend(name) == name, (
+            f"{name!r} should be unchanged, got {qp._canonical_backend(name)!r}"
+        )
+
+    def test_an_unknown_backend_is_still_refused_and_names_the_alias(self, dem):
+        """An unknown name is refused, and the refusal lists ``static`` as an accepted spelling.
+
+        Test scenario:
+            The refusal is where a caller learns the vocabulary, so it has to mention the alias now
+            that one exists — it used to gloss ``'matplotlib' (static)``, which read as a
+            description of the tier rather than a name that would work.
+        """
+        with pytest.raises(ValueError, match="unknown backend") as caught:
+            qp.quickmap(dem, band=1, backend="nope")
+
+        assert "'static'" in str(caught.value), (
+            f"the refusal should offer 'static' as a spelling, got {caught.value}"
+        )
+
+    def test_a_non_string_backend_is_handed_through_untouched(self):
+        """The canonicaliser does not raise on a value it cannot look up.
+
+        Test scenario:
+            It is a mapping lookup, and `BACKEND_ALIASES.get(["static"])` would raise
+            `TypeError: unhashable type: 'list'` from the alias table itself — a new failure, in a
+            new place, for an input that already had an answer. The `isinstance` guard hands a
+            non-string straight on, so the call fails where it always did.
+        """
+        assert qp._canonical_backend(["static"]) == ["static"], (
+            "a non-string backend must be handed through untouched"
+        )
+
+    def test_an_alias_does_not_bypass_a_builders_capability_gate(self, monkeypatch):
+        """A verb's `kind` refusal is reached through an alias, not skipped by it.
+
+        Args:
+            monkeypatch: pytest fixture, used to register a throwaway alias.
+
+        Test scenario:
+            The per-verb wrappers (`field`, `contours`, …) read `backend=` themselves and look it up
+            in `BACKEND_CAPABILITIES` to decide whether that tier has the renderer the verb names.
+            The table is keyed on canonical names, so an alias found nothing, `supported` came back
+            `None`, and the whole `CapabilityError` gate was skipped — the call then worked anyway
+            because `quickmap` canonicalises downstream. Harmless for `static`, whose tier does have
+            `kind`; not harmless as an invariant. Asserted with an alias aimed at the web tier, which
+            declares no `raster_renderer`, so the refusal is the behaviour under test rather than an
+            incidental one.
+        """
+        monkeypatch.setattr(
+            qp,
+            "BACKEND_ALIASES",
+            types.MappingProxyType({**qp.BACKEND_ALIASES, "web-alias": "web"}),
+        )
+
+        with pytest.raises(qp.CapabilityError, match="does not have"):
+            qp.contours("unused-data", backend="web-alias")
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="an unhashable backend leaks TypeError from the capability-table membership test "
+        "instead of the curated ValueError every other bad backend gets; pre-existing, and an "
+        "isinstance check in front of that test would close it",
+    )
+    def test_a_non_string_backend_is_refused_like_any_other(self, dem):
+        """Every unusable `backend=` should get the same curated refusal.
+
+        Test scenario:
+            States the contract rather than the current behaviour, which is the leaked
+            `TypeError: unhashable type: 'list'`. Pinning that `TypeError` instead — as the first
+            version of this test did — would make the obvious improvement read as a regression, so
+            it is an `xfail(strict=True)`: it flips to XPASS the moment the refusal is made uniform,
+            which is the signal to delete the marker.
+        """
+        with pytest.raises(ValueError, match="unknown backend"):
+            qp.quickmap(dem, band=1, backend=["static"])
+
+
+class TestDocCommentOwnership:
+    """Each module-level `#:` block documents the symbol it sits on."""
+
+    @staticmethod
+    def _preceding_doc_comment(source: str, symbol: str) -> str:
+        """The `#:` run immediately above a module-level assignment.
+
+        Args:
+            source: The module's source text.
+            symbol: The assigned name to look above.
+
+        Returns:
+            str: the joined `#:` lines directly preceding that assignment, or `""` if it has none.
+        """
+        lines = source.splitlines()
+        index = next(
+            (
+                i
+                for i, line in enumerate(lines)
+                if line.startswith(f"{symbol}:") or line.startswith(f"{symbol} =")
+            ),
+            None,
+        )
+        assert index is not None, (
+            f"{symbol} is not assigned at module level in this source"
+        )
+        collected = []
+        cursor = index - 1
+        while cursor >= 0 and lines[cursor].startswith("#:"):
+            collected.append(lines[cursor][2:].strip())
+            cursor -= 1
+        return " ".join(reversed(collected))
+
+    def test_the_capability_table_keeps_its_own_documentation(self):
+        """`BACKEND_CAPABILITIES`' prose stays on `BACKEND_CAPABILITIES`.
+
+        Test scenario:
+            A `#:` run attaches to the assignment that follows it, so a new constant inserted between
+            that prose and its assignment silently re-homes the whole block. It happened here: the
+            ~20-line explanation of each tier's row ended up documenting `BACKEND_ALIASES`, and the
+            module's most-referenced datum — cited by a dozen docstrings and four tests — was left
+            with no doc-comment at all. Nothing at runtime can see this, which is why it is asserted
+            against the source.
+        """
+        source = pathlib.Path(qp.__file__).read_text(encoding="utf-8")
+
+        prose = self._preceding_doc_comment(source, "BACKEND_CAPABILITIES")
+
+        assert prose, "BACKEND_CAPABILITIES must keep a doc-comment of its own"
+        assert "capab" in prose.lower() or "tier" in prose.lower(), (
+            f"the block above BACKEND_CAPABILITIES should describe the capability table, got "
+            f"{prose[:120]!r}"
+        )
+
+    def test_the_alias_table_has_its_own_documentation(self):
+        """`BACKEND_ALIASES`' prose is about aliases, not about capability rows.
+
+        Test scenario:
+            The other half of the same mistake: whatever sits above `BACKEND_ALIASES` must be its
+            own, so a reader of the rendered docs is told what the alias table is rather than how
+            each tier declares its capabilities.
+        """
+        source = pathlib.Path(qp.__file__).read_text(encoding="utf-8")
+
+        prose = self._preceding_doc_comment(source, "BACKEND_ALIASES")
+
+        assert "spelling" in prose.lower() or "alias" in prose.lower(), (
+            f"the block above BACKEND_ALIASES should describe the alias table, got {prose[:120]!r}"
+        )
+        assert "stays with U-3" not in prose, (
+            "the capability table's prose has been re-homed onto BACKEND_ALIASES"
         )
