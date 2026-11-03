@@ -13,7 +13,9 @@ live capabilities render, or the test fails with the diff. **To change it on pur
 run ``python -m tests.test_support_matrix`` to rewrite the page, and commit it.
 """
 
+import re
 import textwrap
+import tomllib
 from pathlib import Path
 
 from tests.capability_surface import tier_capabilities
@@ -27,9 +29,22 @@ SUPPORT_MATRIX_PATH = (
     Path(__file__).resolve().parents[1] / "docs" / "reference" / "support-matrix.md"
 )
 
+#: The repository root, for reading `pyproject.toml`.
+PROJECT_ROOT = SUPPORT_MATRIX_PATH.parents[2]
+
 #: The backends as columns, left to right. The default tier first, then the three extras. Guarded against the
 #: package's discovered tier set by ``tests/test_api_snapshot.py::test_the_snapshot_and_matrix_cover_every_tier``.
 BACKENDS: list[str] = ["static", "web", "interactive", "3d"]
+
+#: The optional-dependency group each tier installs, or `None` for the one carried by the core
+#: dependencies. Read by :func:`_backends_table` to build the install column, so the extra names and
+#: their dependency lists come from `pyproject.toml` rather than from prose that can fall behind it.
+TIER_EXTRAS: dict[str, str | None] = {
+    "static": None,
+    "web": "web",
+    "interactive": "interactive",
+    "3d": "3d",
+}
 
 #: The set-valued capability dimensions to tabulate, as (heading, capability key).
 _DIMENSIONS = (
@@ -54,6 +69,85 @@ _PREAMBLE = (
     "pyramids' own cleopatra path; see\n"
     "[the plot-backend reference](pyramids-plot-backend.md).\n"
 )
+
+
+def _requirement_names(specifiers: list[str]) -> list[str]:
+    """Reduce PEP 508 requirement strings to bare distribution names.
+
+    Args:
+        specifiers: Requirement strings as `pyproject.toml` spells them, e.g. ``"cartopy <0.26"``.
+
+    Returns:
+        list[str]: the distribution names, order preserved — version bounds, extras and environment
+            markers dropped, because the table is about *what* a tier needs rather than which
+            versions.
+    """
+    names = []
+    for specifier in specifiers:
+        head = re.split(r"[<>=!~;\[]", specifier, maxsplit=1)[0]
+        names.append(head.strip())
+    return names
+
+
+def _backends_table() -> str:
+    """Render the backends / extras / aliases section, with the dependency lists beneath it.
+
+    Returns:
+        str: a markdown section. The aliases come from :data:`digitalearth.api.BACKEND_ALIASES` and
+            the dependencies from `pyproject.toml`, so neither can fall out of step with the code. A
+            table rather than a list for the short facts, and a wrapped bullet per tier for the
+            dependencies, because a markdown row cannot wrap and the combined one ran past 120
+            columns.
+    """
+    from digitalearth.api import BACKEND_ALIASES
+
+    manifest = tomllib.loads(
+        (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    extras = manifest["project"].get("optional-dependencies", {})
+    core = _requirement_names(manifest["project"]["dependencies"])
+
+    rows, needs = [], []
+    for backend in BACKENDS:
+        extra = TIER_EXTRAS[backend]
+        aliases = sorted(
+            name for name, tier in BACKEND_ALIASES.items() if tier == backend
+        )
+        rows.append(
+            f"| `{backend}` | {'— (core)' if extra is None else f'`{extra}`'} | "
+            f"{', '.join(f'`{a}`' for a in aliases) or '—'} |"
+        )
+        listed = core if extra is None else _requirement_names(extras.get(extra, []))
+        needs.append(
+            textwrap.fill(
+                f"- **{backend}** — " + ", ".join(f"`{n}`" for n in listed),
+                width=118,
+                subsequent_indent="  ",
+                break_long_words=False,
+                break_on_hyphens=False,
+            )
+        )
+
+    return "\n".join(
+        [
+            "## Backends, extras and aliases",
+            "",
+            "Install a tier with `pip install 'digitalearth[<extra>]'`; `static` needs no extra, as",
+            "it is carried by the core dependencies. An alias is accepted by `quickmap`,",
+            "`to_backend` and the CLI — through pyramids' `plot(backend=...)` only the canonical",
+            "names are registered, and `matplotlib` there is pyramids' own cleopatra path rather",
+            "than this tier.",
+            "",
+            "| backend | extra | aliases |",
+            "| --- | --- | --- |",
+            *rows,
+            "",
+            "What each tier requires — `static`'s are the package's core dependencies, the others",
+            "only what their extra adds:",
+            "",
+            *needs,
+        ]
+    )
 
 
 def _dimension_table(heading: str, key: str, caps: dict[str, dict]) -> str:
@@ -127,7 +221,14 @@ def render_support_matrix() -> str:
     """
     caps = {backend: tier_capabilities(backend) for backend in BACKENDS}
     sections = [_dimension_table(heading, key, caps) for heading, key in _DIMENSIONS]
-    body = "\n\n".join([_PREAMBLE.rstrip(), *sections, _absent_section(caps).rstrip()])
+    body = "\n\n".join(
+        [
+            _PREAMBLE.rstrip(),
+            _backends_table(),
+            *sections,
+            _absent_section(caps).rstrip(),
+        ]
+    )
     return body + "\n"
 
 

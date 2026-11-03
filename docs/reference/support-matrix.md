@@ -13,6 +13,30 @@ The columns are the four rendering tiers, under the names `quickmap` keys on.
 pyramids' own cleopatra path; see
 [the plot-backend reference](pyramids-plot-backend.md).
 
+## Backends, extras and aliases
+
+Install a tier with `pip install 'digitalearth[<extra>]'`; `static` needs no extra, as
+it is carried by the core dependencies. An alias is accepted by `quickmap`,
+`to_backend` and the CLI — through pyramids' `plot(backend=...)` only the canonical
+names are registered, and `matplotlib` there is pyramids' own cleopatra path rather
+than this tier.
+
+| backend | extra | aliases |
+| --- | --- | --- |
+| `static` | — (core) | `matplotlib`, `mpl` |
+| `web` | `web` | `deck`, `deckgl`, `maplibre` |
+| `interactive` | `interactive` | `bokeh`, `geoviews`, `holoviews`, `holoviz` |
+| `3d` | `3d` | `pyvista`, `three_d`, `vtk` |
+
+What each tier requires — `static`'s are the package's core dependencies, the others
+only what their extra adds:
+
+- **static** — `numpy`, `pandas`, `matplotlib`, `geopandas`, `cleopatra`, `xyzservices`, `pyramids-core`, `loguru`,
+  `pyyaml`
+- **web** — `maplibre`
+- **interactive** — `geoviews`, `holoviews`, `hvplot`, `datashader`, `panel`, `cartopy`
+- **3d** — `pyvista`, `geovista`, `pointclouds`, `imageio`, `imageio-ffmpeg`
+
 ## Layer kinds
 
 | capability | static | web | interactive | 3d |
