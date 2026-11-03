@@ -1070,7 +1070,7 @@ def quickmap(
     backend = _canonical_backend(backend)
     if backend not in BACKEND_CAPABILITIES:
         raise ValueError(
-            f"unknown backend {backend!r}; choose 'matplotlib' (or 'static'), 'interactive' "
+            f"unknown backend {backend!r}; choose 'static' (or 'matplotlib'), 'interactive' "
             f"(HoloViz), '3d' (PyVista), or 'web' (MapLibre + deck.gl)"
         )
     # Refuse before anything is built, so a rejected call never leaves a half-made figure or VTK plotter.
@@ -1188,7 +1188,7 @@ def to_backend(figure: FigureSpec, backend: str = "static", **scene_kwargs: Any)
             >>> to_backend("anything", backend="nope")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            ValueError: unknown backend 'nope'; choose 'matplotlib' (or 'static'), ...
+            ValueError: unknown backend 'nope'; choose 'static' (or 'matplotlib'), ...
 
             ```
 
@@ -1198,7 +1198,7 @@ def to_backend(figure: FigureSpec, backend: str = "static", **scene_kwargs: Any)
     backend = _canonical_backend(backend)
     if backend not in BACKEND_CAPABILITIES:
         raise ValueError(
-            f"unknown backend {backend!r}; choose 'matplotlib' (or 'static'), 'interactive' "
+            f"unknown backend {backend!r}; choose 'static' (or 'matplotlib'), 'interactive' "
             f"(HoloViz), '3d' (PyVista), or 'web' (MapLibre + deck.gl)"
         )
     from digitalearth.base.spec import FigureSpec
