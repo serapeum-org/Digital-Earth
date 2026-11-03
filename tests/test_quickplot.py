@@ -1711,9 +1711,15 @@ class TestDocCommentOwnership:
         """
         lines = source.splitlines()
         index = next(
-            i
-            for i, line in enumerate(lines)
-            if line.startswith(f"{symbol}:") or line.startswith(f"{symbol} =")
+            (
+                i
+                for i, line in enumerate(lines)
+                if line.startswith(f"{symbol}:") or line.startswith(f"{symbol} =")
+            ),
+            None,
+        )
+        assert index is not None, (
+            f"{symbol} is not assigned at module level in this source"
         )
         collected = []
         cursor = index - 1

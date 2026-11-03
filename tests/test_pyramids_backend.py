@@ -261,6 +261,45 @@ class TestBandOrigin:
         with pytest.raises(ValueError, match="not a 0-based band index"):
             _Forwarded.from_facade("3d", forwarded)
 
+    @pytest.mark.parametrize(
+        "facade_band, expected", [(0, 10.0), (1, 110.0), (2, 210.0)]
+    )
+    def test_the_facades_band_reaches_the_drawn_array(self, facade_band, expected):
+        """A 0-based `band` draws the band pyramids meant, read off the rendered array.
+
+        Args:
+            facade_band: The 0-based index the facade forwards.
+            expected: The constant that band carries, so the drawn band is identifiable.
+
+        Test scenario:
+            The shift is asserted everywhere else by spying on what reaches `quickmap`, which proves
+            the translation and not the outcome. This draws through the registered path on a 3-band
+            raster whose bands carry 10/110/210, and reads the value back off the matplotlib artist —
+            so an off-by-one shows up as the wrong band rather than the wrong integer. Through
+            pyramids' import-by-name fallback the same call raises `band -1 is out of range`, which
+            is what the entry point exists to prevent.
+        """
+        import numpy as np
+        from pyramids.dataset import Dataset, GeoReference
+
+        cells = np.arange(12, dtype="float32").reshape(3, 4)
+        reference = GeoReference(geo=(0.0, 1.0, 0.0, 3.0, 0.0, -1.0), epsg=4326)
+        stack = Dataset.from_array(
+            np.stack([cells + 10.0 + 100.0 * step for step in range(3)]),
+            geo_ref=reference,
+        )
+
+        scene = stack.plot(backend="static", band=facade_band)
+
+        try:
+            drawn = np.asarray(scene.ax.get_images()[-1].get_array())
+            assert float(np.nanmin(drawn)) == expected, (
+                f"facade band={facade_band} should draw the band starting at {expected}, got "
+                f"{float(np.nanmin(drawn))}"
+            )
+        finally:
+            scene.close()
+
 
 class TestVocabulary:
     """The names that differ between the facade and this package."""
@@ -296,9 +335,7 @@ class TestVocabulary:
             f"these should pass through unchanged, got {plan.draw}"
         )
 
-    def test_a_ugrid_mesh_draws_on_static_and_is_refused_on_the_other_three(
-        self, ugrid_mesh
-    ):
+    def test_a_ugrid_mesh_draws_on_static(self, ugrid_mesh):
         """`variable_name` reaches the mesh render on `static`, and the other tiers still refuse.
 
         Args:

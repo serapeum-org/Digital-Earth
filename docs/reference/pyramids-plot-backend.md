@@ -99,7 +99,7 @@ rejects those before dispatch.
 
     ```text
     ds.plot(backend="static", band=0, exclude_value=0)
-    ValueError: plot(…) cannot serve 1 argument(s) on backend='static': exclude_value
+    ValueError: plot(…) cannot serve 1 argument(s) on backend='static': exclude_value= — …
     ```
 
     This is the first thing a caller switching over hits. `ds.plot()` keeps working exactly as it

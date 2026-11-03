@@ -86,9 +86,10 @@ ANIMATION_BACKENDS: frozenset[str] = frozenset({"interactive", "web"})
 
 #: The reason used for a backend outside :data:`ANIMATION_BACKENDS` with no entry in
 #: :data:`_UNANIMATABLE`. Defensive only: every name registered today that reaches that branch has an
-#: entry, so this is unreachable through any public call and exists so that adding a tier to
-#: :data:`_UNANIMATABLE`'s branch without a reason is answered rather than met with a `KeyError`
-#: (round-1 L1).
+#: entry, so this is unreachable through any public call. It exists for the one thing that would
+#: reach it: a new line in ``[project.entry-points."pyramids.plot_backends"]`` whose tier is left
+#: out of :data:`ANIMATION_BACKENDS` and given no reason here — answered rather than met with a
+#: `KeyError` (round-1 L1, round-2 N2).
 _UNANIMATABLE_DEFAULT = (
     "this tier's animation is not driven through the seam. Build the scene with digitalearth and "
     "animate it there."
@@ -113,7 +114,8 @@ _UNANIMATABLE: Mapping[str, str] = MappingProxyType(
             "Neither the stack nor the destination is the obstacle — this seam assembles a stack for "
             "the other two tiers, and a forwarded path= reaches it. Build the Map with digitalearth "
             "and call Map.animate on your stack. A still plot of a DatasetCollection arrives here "
-            "too, because DatasetCollection.plot forwards animate=True either way."
+            "too, because DatasetCollection.plot forwards animate=True either way; so does a still plot "
+            "carrying path= or bands=, which only an animation can use."
         ),
     }
 )
@@ -123,29 +125,31 @@ _UNANIMATABLE: Mapping[str, str] = MappingProxyType(
 #: deliberately. Refusing it here names the pyramids-side keyword and what to do instead; left to
 #: the tier it is still refused, but in terms of whichever builder it reached — or, on the 3-D tier,
 #: in PyVista's terms.
-_UNSERVED: Mapping[str, str] = {
-    "exclude_value": (
-        "no digitalearth entry point takes a nodata value — this package's own matplotlib tier "
-        "sets its own and "
-        "answers a caller's with `got multiple values for keyword argument 'exclude_value'` — so "
-        "mask the raster in pyramids before plotting"
-    ),
-    "rgb_options": (
-        "a three-band composite is built with Map.rgb_composite, a verb this seam does not "
-        "call"
-    ),
-    # Both say "0-based" deliberately: a caller following this advice passes `band=` as an extra
-    # keyword, and this seam shifts whatever it is given. Advising the keyword without naming its
-    # origin reintroduced #501's own off-by-one, one layer up (round-2 M7).
-    "selectors": (
-        "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
-        "not with read-time selectors"
-    ),
-    "axes": (
-        "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
-        "not by naming its axes"
-    ),
-}
+_UNSERVED: Mapping[str, str] = MappingProxyType(
+    {
+        "exclude_value": (
+            "no digitalearth entry point takes a nodata value — this package's own matplotlib tier "
+            "sets its own and "
+            "answers a caller's with `got multiple values for keyword argument 'exclude_value'` — so "
+            "mask the raster in pyramids before plotting"
+        ),
+        "rgb_options": (
+            "a three-band composite is built with Map.rgb_composite, a verb this seam does not "
+            "call"
+        ),
+        # Both say "0-based" deliberately: a caller following this advice passes `band=` as an extra
+        # keyword, and this seam shifts whatever it is given. Advising the keyword without naming its
+        # origin reintroduced #501's own off-by-one, one layer up (round-2 M7).
+        "selectors": (
+            "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
+            "not with read-time selectors"
+        ),
+        "axes": (
+            "a NetCDF slice is chosen here with variable= and a 0-based band= (band 0 is the first), "
+            "not by naming its axes"
+        ),
+    }
+)
 
 #: Keywords that only mean something in an animation call. Refused on a still plot in terms of the
 #: call that was made, rather than left to the tier, which answers for the builder they reached
@@ -1416,8 +1420,8 @@ def _classified(obj: Any, backend: str, draw: dict[str, Any]) -> None:
             >>> layer = {"zone": np.array(["north", "south"])}
             >>> draw = {"column": "zone"}
             >>> _classified(layer, "static", draw)
-            >>> draw["scheme"]
-            'categorical'
+            >>> sorted(draw.items())
+            [('column', 'zone'), ('scheme', 'categorical')]
 
             ```
         - The web tier is told the same thing:
@@ -1588,17 +1592,10 @@ def static(obj: Any, *, backend: str = "static", **kwargs: Any) -> Any:
 
             ```
         - The facade's band index is 0-based and this package's is 1-based, and the shift happens
-          here. That `band=0` draws at all is the demonstration: through pyramids' import-by-name
-          fallback the index arrives unshifted, and the tier answers `band -1 is out of range`. So
-          the entry point is what makes the call correct, not merely tidier:
-            ```python
-            >>> from pyramids.dataset import Dataset
-            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
-            >>> with ds.plot(backend="static", band=0) as first_band:
-            ...     first_band.layer_ids
-            ['raster-1']
-
-            ```
+          here — see :data:`BAND_ORIGIN_SHIFT`. That `band=0` draws at all, in the examples above, is
+          the demonstration: through pyramids' import-by-name fallback the index arrives unshifted
+          and the tier answers `band -1 is out of range`, so the entry point is what makes the call
+          correct rather than merely tidier.
 
     See Also:
         interactive: The same seam on the HoloViz tier.

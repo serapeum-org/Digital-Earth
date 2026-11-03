@@ -48,9 +48,10 @@ _PREAMBLE = (
     "What each rendering backend can draw and style, read straight from its `Capabilities`\n"
     "declaration. `✓` means the backend supports it; `—` means it does not.\n"
     "\n"
-    "The columns are the names `digitalearth.quickmap` takes. Through pyramids'\n"
-    '`plot(backend=...)` the matplotlib column is reached as `backend="static"`, because\n'
-    '`"matplotlib"` there is pyramids\' own cleopatra path -- see the plot-backend reference.\n'
+    "The columns are the four rendering tiers, under the canonical names `quickmap` keys\n"
+    "on. Through pyramids' `plot(backend=...)` the matplotlib column is reached as\n"
+    '`backend="static"`, because `"matplotlib"` there is pyramids\' own cleopatra path —\n'
+    "see [the plot-backend reference](pyramids-plot-backend.md).\n"
 )
 
 
