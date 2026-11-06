@@ -1,5 +1,32 @@
 # Change log
 
+## 0.15.0 (2026-11-04)
+
+### BREAKING CHANGE
+
+- the canonical backend name is `static`, not `matplotlib`. Calls
+are unaffected — `backend="matplotlib"` stilut the
+vocabulary changed: refusal messages, the support-matrix column and
+`tests/api_snapshot.json` all say `static`, atched
+error text need updating.
+- photoreal()'s max_depth moves out of the flat parameter
+list into RenderOptions. Replace photoreal(max_depth=N) with
+photoreal(render=RenderOptions(max_depth=N)). This keeps photoreal() at
+13 parameters (SonarCloud S107) and continues the 0.14.0 value-object
+reshape.
+- photoreal() groups its knobs into option objects; the 0.14.0 sun_direction, sun_irradiance and sky parameters now fold into SkyOptions (e.g. photoreal(sky=SkyOptions(model="sunsky", sun_direction=v))).
+Closes #521, #522, #523, #524, #525, #526
+Refs #509, #496
+
+### Feat
+
+- **api**: reach the static tier through plot(backend="static"), and make static the canonical name (#527)
+- **three_d**: select the photoreal render device — cpu/llvm/gpu (#528)
+- **three_d**: add photoreal effects, map_plate, and LOD2 buildings (#518)
+- **api**: add scene_kw= so a scene setting is never mistaken for a render one (#516)
+- **three_d**: photoreal point clouds, scene sun, despeckle and PBR knobs (#514)
+- **static**: draw a UGRID mesh in any display CRS, not only a coded one (#515)
+
 ## 0.14.0 (2026-10-29)
 
 ### BREAKING CHANGE
