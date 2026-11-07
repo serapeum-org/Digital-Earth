@@ -1,0 +1,6287 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Geospatial visualization package for rasters and vector data">
+      
+      
+      
+        <link rel="canonical" href="https://serapeum-org.github.io/Digital-Earth/0.13.0/reference/pyramids-plot-backend/">
+      
+      
+        <link rel="prev" href="../support-matrix/">
+      
+      
+        <link rel="next" href="../static_map/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>pyramids plot backend (plugin) - Digital-Earth</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/panzoom.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <meta name="panzoom-theme" content="material">
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#digitalearth-as-a-pyramids-plot-backend" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Digital-Earth" class="md-header__button md-logo" aria-label="Digital-Earth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Digital-Earth
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              pyramids plot backend (plugin)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/serapeum-org/Digital-Earth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    serapeum-org/Digital-Earth
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Installation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../plotarray/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Plot raster/array
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/01_sources/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../vocabulary/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../change-log/" class="md-tabs__link">
+          
+  
+  
+  About
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Digital-Earth" class="md-nav__button md-logo" aria-label="Digital-Earth" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Digital-Earth
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/serapeum-org/Digital-Earth" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    serapeum-org/Digital-Earth
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plotarray/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plot raster/array
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/01_sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1 · Sources — one uniform wrapper over every input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/02_maps_and_fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2 · Maps &amp; raster field plots
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/03_points_cells_vectors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3 · Points, cells &amp; vector fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/04_composites_and_mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4 · RGB/HSV composites &amp; unstructured meshes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/05_choropleth_and_decoration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5 · Choropleth, polygons &amp; map decoration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/06_temporal_and_series/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6 · Temporal products &amp; statistical series
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/07_quickplot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7 · One-call API — quickplot / quickmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/08_projected_globe_maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8 · Projected &amp; globe maps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/09_globe_basemaps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    9 — Globe base maps: ocean, land, lakes, rivers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/10_globe_under_the_hood/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    10 — Under the hood: how the globe frame is built
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/11_global_data_on_globe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    11 — Real global data on the globe
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/12_animated_globe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    12 — Animating data on the globe
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/13_charts_and_decorations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    13 — Charts &amp; map decorations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/14_textured_globe_3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    14 — The textured 3-D globe
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/15_layer_management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15 — Managing layers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/16_framing_and_insets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    16 — Framing, viewports and locator insets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/17_multi_panel_figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    17 — Multi-panel figures: , ,
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/18_global_decorations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    18 — Global decorations: night, distortion and tiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/19_model_grid_fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields on model grids (HEALPix, reduced-Gaussian, ORCA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_20" id="__nav_4_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Presets & styling
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Presets & styling
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/presets/01_preset_gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The cleopatra preset library, through Digital-Earth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/presets/02_domain_presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Domain presets on real data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/presets/03_palettes_and_colormaps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Palettes, scientific colormaps and colormap builders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/presets/04_color_scaling_and_terrain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Colour scaling, normalization and terrain shading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/presets/05_globe_and_projections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real climate data on the globe and in map projections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_21" id="__nav_4_21_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive web maps (HoloViz)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Interactive web maps (HoloViz)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/00_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive web maps with
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/01_raster_fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1 · Raster fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/02_vector_layers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2 · Vector layers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/03_basemaps_and_decoration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3 · Basemaps &amp; decoration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/04_flow_and_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4 · Flow fields &amp; networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/05_mesh_and_density/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5 · Meshes &amp; density
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/06_big_data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6 · Big data — Datashader &amp; COG viewports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/07_temporal_and_projections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7 · Time cubes &amp; projections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/08_interaction_and_dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8 · Interaction &amp; dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_21_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_21_10" id="__nav_4_21_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comprehensive guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_21_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_21_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Comprehensive guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/00_overview_and_data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0 - The interactive backend, at a glance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/01_raster/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1 - Raster fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/02_big_data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2 - Big data (Datashader)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/03_vectors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3 - Vector layers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/04_mesh_density/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4 - Mesh and density
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/05_temporal_animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5 - Temporal layers and animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/06_decoration_projection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6 - Basemaps, decoration and projections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/07_interaction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7 - Interaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/08_linked_layouts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8 - Linked views and layouts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/interactive/guide/09_dashboards_deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    9 - Dashboards and deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_22" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_22" id="__nav_4_22_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3-D visualization (PyVista)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_22">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    3-D visualization (PyVista)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/15_3d_visualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15 · 3-D visualization with PyVista
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/01_scene3d_basics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scene3D — the 3-D host
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/02_terrain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain — DEMs as 3-D relief
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/03_point_cloud/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Point clouds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/04_volume_isosurface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Volumes &amp; isosurfaces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/05_vectors_extruded/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector fields &amp; extruded polygons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/06_globe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Globe — data on a textured sphere
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/07_animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation — orbit &amp; frame-by-frame
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/08_raster_3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rasters in 3-D — real DEMs from every angle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/09_vector_3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vectors in 3-D — points, lines &amp; polygons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/10_gis_scene_3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A combined raster + vector GIS scene
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/11_flat_core_verbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flat Core verbs — , ,
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/12_lines_vectors_streamlines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lines, vector fields and streamlines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/13_decoration_guides_views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decoration, guides and named camera views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/14_interaction_widgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interaction — clipping, slicing, thresholding and picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/16_panels_and_serving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-panel scenes and live serving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/17_quickmap_3d_and_export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    One-call 3-D maps and exporting a scene
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/18_real_world_dem_earthlens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-world terrains fetched with earthlens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/threed/19_cartographic_furniture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartographic furniture &amp; styling (3-D)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23" id="__nav_4_23_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Static gallery
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_23_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Static gallery
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_1" id="__nav_4_23_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fields
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/01_imshow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/02_contourf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/03_contour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/04_pcolormesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/05_block/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_2" id="__nav_4_23_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Points & cells
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Points & cells
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/06_grid_points/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/07_scatter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/08_grid_cells/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    8 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_3" id="__nav_4_23_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector fields
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Vector fields
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/09_quiver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    9 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/10_streamplot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    10 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/11_barbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    11 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_4" id="__nav_4_23_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mesh (unstructured)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Mesh (unstructured)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/12_tricontourf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    12 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/13_tricontour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    13 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/14_tripcolor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    14 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_5" id="__nav_4_23_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Composites
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Composites
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/15_rgb_composite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/16_hsv_composite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    16 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_6" id="__nav_4_23_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polygons
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Polygons
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/17_choropleth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    17 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/18_shapes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    18 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/31_cartogram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    31 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_7" id="__nav_4_23_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Point aggregation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Point aggregation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/27_voronoi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    27 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/28_quadtree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    28 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/29_hexbin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    29 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/30_kde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    30 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_8" id="__nav_4_23_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lines & flows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Lines & flows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/32_lines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    32 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/33_sankey/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    33 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_9" id="__nav_4_23_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Annotation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Annotation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/34_labels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    34 —
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_10" id="__nav_4_23_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ensemble & series
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Ensemble & series
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/19_spaghetti/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    19 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/20_envelope/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    20 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/21_quantile_band/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    21 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/22_boxplot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    22 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/23_multiboxplot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    23 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/24_stripes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    24 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_23_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_23_11" id="__nav_4_23_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Temporal
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_23_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_23_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Temporal
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/25_timeseries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    25 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/static/26_climatology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    26 ·
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vocabulary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Figure vocabulary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../support-matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend support matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyramids plot backend (plugin)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyramids plot backend (plugin)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-an-adapter-and-not-just-quickmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why an adapter, and not just quickmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-refused-and-why-it-is-refused-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is refused, and why it is refused here
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-mesh-is-not-drawn-on-these-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A mesh is not drawn on these tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checking-what-is-registered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking what is registered
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pyramids_backend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="pyramids_backend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend.interactive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        interactive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend.three_d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        three_d
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend.web" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        web
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static_map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maps (matplotlib)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../static_scene/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes & multi-panel figures (matplotlib)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interactive_map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive maps (HoloViz)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../web_map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web maps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../three_d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3-D scenes (PyVista)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../basemaps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Keyed basemaps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../textured_globe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TexturedGlobe (3-D globe)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../headless_3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Headless 3-D rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving animations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stretch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Composite stretch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    About
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../change-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change-log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LICENSE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-an-adapter-and-not-just-quickmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why an adapter, and not just quickmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-refused-and-why-it-is-refused-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is refused, and why it is refused here
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-mesh-is-not-drawn-on-these-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A mesh is not drawn on these tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checking-what-is-registered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checking what is registered
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pyramids_backend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="pyramids_backend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend.interactive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        interactive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend.three_d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        three_d
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#digitalearth.pyramids_backend.web" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        web
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/serapeum-org/Digital-Earth/edit/master/docs/reference/pyramids-plot-backend.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+    
+      
+    
+    <a href="https://github.com/serapeum-org/Digital-Earth/raw/master/docs/reference/pyramids-plot-backend.md" title="View source of this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"/></svg>
+    </a>
+  
+
+
+<h1 id="digitalearth-as-a-pyramids-plot-backend"><a class="toclink" href="#digitalearth-as-a-pyramids-plot-backend">digitalearth as a pyramids plot backend</a><a class="headerlink" href="#digitalearth-as-a-pyramids-plot-backend" title="Permanent link">#</a></h1>
+<p>pyramids renders through cleopatra (matplotlib) by default. Ask any pyramids object for another
+backend and it looks for a registered renderer:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>                        <span class="c1"># matplotlib, through cleopatra — pyramids&#39; own path</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>   <span class="c1"># a digitalearth InteractiveMap</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;3d&quot;</span><span class="p">)</span>            <span class="c1"># a digitalearth Scene3D</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">)</span>           <span class="c1"># a digitalearth WebMap</span>
+</code></pre></div>
+<p>digitalearth registers itself for those three names in the <code>pyramids.plot_backends</code> entry-point
+group, so pyramids <em>discovers</em> it rather than importing it by name. The dependency stays one-way —
+digitalearth depends on pyramids-core; pyramids never names digitalearth in its own code.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># digitalearth&#39;s pyproject.toml</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">[project.entry-points.</span><span class="s2">&quot;pyramids.plot_backends&quot;</span><span class="k">]</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">interactive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;digitalearth.pyramids_backend:interactive&quot;</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="s2">&quot;3d&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;digitalearth.pyramids_backend:three_d&quot;</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">web</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;digitalearth.pyramids_backend:web&quot;</span>
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">You do not install anything extra for this</p>
+<p>A registered entry point simply wins over the fallback pyramids keeps for a plain digitalearth
+install. The difference is what happens to the <em>arguments</em> — see below.</p>
+</div>
+<h2 id="why-an-adapter-and-not-just-quickmap"><a class="toclink" href="#why-an-adapter-and-not-just-quickmap">Why an adapter, and not just <code>quickmap</code></a><a class="headerlink" href="#why-an-adapter-and-not-just-quickmap" title="Permanent link">#</a></h2>
+<p>pyramids forwards the <strong>data-selection</strong> arguments of the call it was given, in <strong>its own</strong>
+vocabulary. Three of those names mean something different here, so they are translated on the way
+in. Everything else passes through untouched.</p>
+<table>
+<thead>
+<tr>
+<th>pyramids forwards</th>
+<th>digitalearth takes</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>band=0</code> (0-based)</td>
+<td><code>band=1</code> (1-based)</td>
+<td>0-based upstream, 1-based here;<br>unshifted it was refused.</td>
+</tr>
+<tr>
+<td><code>variable_name=</code></td>
+<td><code>variable=</code></td>
+<td>The <code>UgridDataset</code> facade's spelling.<br>Inert today — see below.</td>
+</tr>
+<tr>
+<td><code>interval=200</code> (ms/frame)</td>
+<td><code>fps=5.0</code></td>
+<td>The facades describe an interval; the<br>tier verbs take a rate.</td>
+</tr>
+</tbody>
+</table>
+<p><code>cmap</code>, <code>variable</code>, a bool <code>colorbar</code> and <code>band</code> (once shifted) are forwarded to the builder as they
+arrive. Three others are not simply passed along, because the tiers differ:</p>
+<ul>
+<li><strong><code>title</code></strong> is applied through the scene, not the builder. The web and 3-D raster builders refuse
+  it (<code>RasterMixin.field() got an unexpected keyword argument 'title'</code>, and on 3-D PyVista's own
+  <code>"title" is an invalid keyword argument</code>), so it is set with <code>set_title</code> after the scene is built.
+  The HoloViz tier has no <code>set_title</code> and does accept <code>title</code>, so there it stays with the builder.</li>
+<li><strong><code>basemap</code></strong> is a verb on the scene in every tier that has one, never a constructor argument.</li>
+<li><strong><code>kind</code></strong> reaches the builder, but only the HoloViz tier has alternative raster renderers. On web
+  and 3-D a non-default <code>kind</code> is refused by that tier: <code>kind= is not supported by backend='web'</code>.</li>
+</ul>
+<p>A <code>column</code> is forwarded, and is accepted only where that tier's render takes one — on a still raster
+plot it is refused by the tier (<code>'column' is not an option Image takes on the bokeh backend</code>).</p>
+<h2 id="what-is-refused-and-why-it-is-refused-here"><a class="toclink" href="#what-is-refused-and-why-it-is-refused-here">What is refused, and why it is refused here</a><a class="headerlink" href="#what-is-refused-and-why-it-is-refused-here" title="Permanent link">#</a></h2>
+<p>pyramids drops defaulted arguments before forwarding, so anything that arrives was set deliberately.
+An argument this seam cannot honour is refused <strong>by name</strong>, in terms of the call you made. Left to
+the tier it is still refused — but for the builder it happened to reach, and on the 3-D tier in
+PyVista's terms rather than digitalearth's:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ds.plot(backend=&quot;3d&quot;, title=&quot;DEM&quot;)
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>TypeError: &quot;title&quot; is an invalid keyword argument for `_common_arg_parser`
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Refused</th>
+<th>Do this instead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>exclude_value</code></td>
+<td>No entry point here takes a nodata value;<br>mask the raster in pyramids before plotting.</td>
+</tr>
+<tr>
+<td><code>rgb_options</code></td>
+<td>Build the composite with <code>Map.rgb_composite</code> on the static tier.</td>
+</tr>
+<tr>
+<td><code>selectors</code>, <code>axes</code></td>
+<td>Choose a NetCDF slice with <code>variable=</code> and <code>band=</code>.</td>
+</tr>
+<tr>
+<td><code>bands</code>, <code>animation_axis_values</code>, <code>interval</code><br>on a <strong>still</strong> plot</td>
+<td>Call <code>animate(backend=…)</code> instead.</td>
+</tr>
+</tbody>
+</table>
+<p>The matplotlib-only styling (the typed <code>color</code> / <code>contour</code> / <code>cells</code> / <code>data_style</code> / <code>classify</code>
+groups, the <code>points</code> overlay and a <code>ColorBar</code> <em>instance</em>) never reaches here at all — pyramids
+rejects those before dispatch.</p>
+<h2 id="animation"><a class="toclink" href="#animation">Animation</a><a class="headerlink" href="#animation" title="Permanent link">#</a></h2>
+<p><code>Dataset.animate(backend=…)</code> and friends forward <code>animate=True</code>. Two of the three tiers can serve it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">stack</span> <span class="o">=</span> <span class="n">DatasetCollection</span><span class="o">.</span><span class="n">from_files</span><span class="p">([</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">)</span>                     <span class="c1"># a Panel player</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>   <span class="c1"># written to a file</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">stack</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;flood.gif&quot;</span><span class="p">)</span>           <span class="c1"># written to a file</span>
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Leave <code>interval</code> out and the speed is digitalearth's, not pyramids'</p>
+<p>With no <code>interval</code> forwarded, the tier uses digitalearth's shared <code>DEFAULT_FPS</code> of <code>3.0</code>, which
+is <strong>333 ms</strong> a frame, where a plain <code>stack.animate()</code> on matplotlib runs at pyramids' own
+default of 200 ms. Pass an <code>interval</code> when the speed matters.</p>
+<p>Whether a default <code>interval=200</code> reaches the backend at all depends on the facade:
+<code>Dataset.animate</code> declares the parameter and drops it when it is unchanged, so the backend
+cannot tell "asked for 200 ms" from "said nothing"; <code>DatasetCollection.animate</code> forwards
+<code>**kwargs</code> verbatim, so there a <code>200</code> you pass does arrive (round-2 L8).</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">The web animation needs a headless browser</p>
+<p><code>digitalearth[web]</code> does not install one, so the web example above raises until you add it:
+<code>ImportError: GIF export needs a headless browser … Install Playwright
+(pip install playwright &amp;&amp; python -m playwright install chromium) or Selenium + a driver.</code>
+The interactive tier needs nothing extra for its player (round-2 L1).</p>
+</div>
+<ul>
+<li><strong>interactive</strong> builds a time cube and returns a Panel player, or writes a GIF/MP4 when you pass a
+  <code>path</code>.</li>
+<li><strong>web</strong> animates only to a file, so <code>path=</code> is required; without one the call is refused by name.</li>
+<li><strong>3-D</strong> is refused by name. Its <code>Scene3D.record</code> needs a caller-supplied <code>update</code> callable and
+  <code>Scene3D.orbit</code> sweeps the camera over a static scene, so neither can be driven from a plot call's
+  keywords. Build the scene with digitalearth and call one of them directly.</li>
+</ul>
+<h2 id="a-mesh-is-not-drawn-on-these-tiers"><a class="toclink" href="#a-mesh-is-not-drawn-on-these-tiers">A mesh is not drawn on these tiers</a><a class="headerlink" href="#a-mesh-is-not-drawn-on-these-tiers" title="Permanent link">#</a></h2>
+<p><code>UgridDataset.plot(backend=…)</code> is refused before any keyword is read: only the matplotlib tier has a
+triangular render, which <code>digitalearth.api.MESH_BACKENDS</code> states. That is why the <code>variable_name</code>
+translation above is inert today — the call carrying it never gets that far:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>UgridDataset.plot(backend=&quot;web&quot;)
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>TypeError: backend=&#39;web&#39; has no unstructured-mesh render; draw a UgridDataset with
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>backend=&#39;matplotlib&#39;, which shades each of its faces (tripcolor)
+</code></pre></div>
+<h2 id="checking-what-is-registered"><a class="toclink" href="#checking-what-is-registered">Checking what is registered</a><a class="headerlink" href="#checking-what-is-registered" title="Permanent link">#</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>              <span class="c1"># [&#39;3d&#39;, &#39;interactive&#39;, &#39;web&#39;]</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>  <span class="c1"># the callable itself, loaded from the entry point</span>
+</code></pre></div>
+<p>A registered entry point resolves to the <strong>callable</strong> — not to its <code>module:attr</code> string, and not to
+the <code>functools.partial</code> over <code>quickmap</code> that the fallback would hand back. That difference is how you
+tell the two apart.</p>
+<div class="admonition note">
+<p class="admonition-title">Needs pyramids-core 0.73.0 or newer</p>
+<p>The <code>pyramids.plot_backends</code> group is resolved by pyramids-core's plot-backend seam, which first
+shipped in <strong>0.73.0</strong> — <code>0.72.0</code> was published after the seam merged but cut from a commit
+without it, so it carries neither <code>pyramids.base._plot_backends</code> nor the conformance kit, and
+its <code>Dataset.plot</code> has no <code>backend=</code> keyword. The declared floor is <code>&gt;=0.73.0</code> for that reason.</p>
+<p>Verified against 0.73.0:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base._plot_backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_backends</span><span class="p">,</span> <span class="n">resolve_plot_backend</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">plot_backends</span><span class="p">())</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="p">[</span><span class="s1">&#39;3d&#39;</span><span class="p">,</span> <span class="s1">&#39;interactive&#39;</span><span class="p">,</span> <span class="s1">&#39;web&#39;</span><span class="p">]</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">resolve_plot_backend</span><span class="p">(</span><span class="s2">&quot;interactive&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="o">&lt;</span><span class="n">function</span> <span class="n">interactive</span> <span class="n">at</span> <span class="o">...&gt;</span>          <span class="c1"># the entry point, not the fallback partial</span>
+</code></pre></div>
+</div>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="digitalearth.pyramids_backend" class="doc doc-heading"><a href="#digitalearth.pyramids_backend" class="toclink">
+            <code>digitalearth.pyramids_backend</code>
+
+
+</a><a href="#digitalearth.pyramids_backend" class="headerlink" title="Permanent link">#</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Serve pyramids' <code>plot(backend=…)</code> seam from digitalearth's three non-matplotlib tiers.</p>
+<p>pyramids-core resolves a non-matplotlib <code>backend=</code> through the <code>pyramids.plot_backends</code>
+entry-point group: <code>Dataset.plot(backend="3d")</code>, <code>NetCDF.plot(backend="interactive")</code> and the
+rest hand the object to whichever callable is registered under that name. This module is the
+registered end of that seam — one callable per tier, each matching the contract shape
+<code>fn(obj, *, backend, **kwargs)</code>.</p>
+<p>Registering it is not merely cosmetic. Without an entry point pyramids falls back to <em>importing</em>
+<code>digitalearth</code> by name and calling <code>quickmap</code> directly, which forwards its own vocabulary
+verbatim. Each tier then answers in its own terms, naming its internal builder rather than the call
+the caller made — and on one tier the complaint is not even digitalearth's:</p>
+<div class="highlight"><pre><span></span><code>ds.plot(backend=&quot;web&quot;, title=&quot;DEM&quot;)
+TypeError: RasterMixin.field() got an unexpected keyword argument &#39;title&#39;. Did you mean &#39;tiles&#39;?
+
+ds.plot(backend=&quot;interactive&quot;, rgb_options={})
+ValueError: &#39;rgb_options&#39; is not an option Image takes on the bokeh backend; did you mean
+[&#39;xrotation&#39;, &#39;yrotation&#39;]?
+
+ds.plot(backend=&quot;3d&quot;, title=&quot;DEM&quot;)
+TypeError: &quot;title&quot; is an invalid keyword argument for `_common_arg_parser`
+</code></pre></div>
+<p>The last is PyVista's own argument parser, surfacing to someone who wrote <code>ds.plot(backend="3d",
+title=…)</code>. So the adapter's job is to translate between the two vocabularies, to apply a frame
+keyword through the route that tier actually has, and to refuse <strong>the keywords it knows about</strong> by
+name, before a scene is half-built — not to convert silence into a message, since the tiers were
+never silent.</p>
+<p>That last qualifier is the honest scope. This module checks the keywords the facades are documented
+to forward: the ones no tier can serve (:data:<code>_UNSERVED</code>), the animation-only ones, the frame ones,
+and — on the animate path, where it knows the builder — every remaining keyword against that
+builder's signature. A keyword outside that set still reaches the tier on a <strong>still</strong> plot and is
+answered there, in the terms quoted above, because <code>quickmap</code> takes <code>**kwargs</code> and there is no
+signature to check it against (round-2 M2).</p>
+<p>Three translations are genuinely necessary, because the facade and this package count and spell
+things differently:</p>
+<ul>
+<li><strong><code>band</code> is 0-based upstream and 1-based here.</strong> pyramids documents the forwarded selector as
+  "a <strong>0-based</strong> raster band index (band <code>0</code> is the first band, not band <code>1</code>)", while
+  digitalearth's public <code>band=</code> is 1-based everywhere. Forwarded unchanged, <code>band=0</code> — what a
+  facade sends for the <em>first</em> band — was refused on every tier, though not in the same words: the
+  web and HoloViz tiers answered <code>band -1 is out of range for a 1-band dataset</code> and the 3-D tier
+  <code>Selection bands are 1-based; got 0</code> (round-2 M9). That is the off-by-one reported in #501.</li>
+<li><strong><code>variable_name</code> is this package's <code>variable</code>.</strong> The <code>UgridDataset</code> facade spells the mesh
+  selector <code>variable_name</code>; <code>quickmap</code> spells it <code>variable</code>.</li>
+<li><strong><code>interval</code> is milliseconds; the tiers take <code>fps</code>.</strong> The animation facades forward a frame
+  interval, and every digitalearth animation verb takes a rate instead.</li>
+</ul>
+<p>The module import is deliberately <strong>light</strong> — standard library only. Discovery imports every
+registered entry point, so a heavy import here would pull a drawing stack into a bare
+<code>import pyramids</code>; <code>quickmap</code> and the tier classes are imported inside the callables.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="digitalearth.pyramids_backend.interactive" class="doc doc-heading"><a href="#digitalearth.pyramids_backend.interactive" class="toclink">
+            <code class="highlight language-python"><span class="n">interactive</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s1">&#39;interactive&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+</a><a href="#digitalearth.pyramids_backend.interactive" class="headerlink" title="Permanent link">#</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Render a pyramids object on the HoloViz tier, for <code>plot(backend="interactive")</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>obj</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The <code>Dataset</code> / <code>NetCDF</code> / <code>FeatureCollection</code> / <code>UgridDataset</code> the facade was
+called on.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>backend</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The backend name the seam passes; defaults to the name this is registered under.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;interactive&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>**kwargs</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The keywords pyramids forwarded, in its own vocabulary.</p>
+              </div>
+            </td>
+            <td>
+                  <code>{}</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>An</code></td>            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>class:<code>~digitalearth.interactive.InteractiveMap</code>, or — for an animation call — its</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+<td></td>            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>player, or the path the animation was written to.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>for a forwarded keyword this seam cannot serve, or an unusable band/interval.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <ul>
+<li>Reached through pyramids, which forwards its own keywords (needs the <code>interactive</code>
+  extra, so this one is shown rather than run):
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">scene</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;DEM&quot;</span><span class="p">)</span>
+</code></pre></div></li>
+<li>A keyword this seam cannot serve is refused in digitalearth's own words, before any
+  engine is imported, and says where the capability does live:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.pyramids_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">interactive</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">...</span>     <span class="n">interactive</span><span class="p">(</span><span class="s2">&quot;a-dataset&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">rgb_options</span><span class="o">=</span><span class="p">{})</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;— &quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;, which&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">a</span> <span class="n">three</span><span class="o">-</span><span class="n">band</span> <span class="n">composite</span> <span class="ow">is</span> <span class="n">built</span> <span class="k">with</span> <span class="n">Map</span><span class="o">.</span><span class="n">rgb_composite</span> <span class="n">on</span> <span class="n">the</span> <span class="n">static</span> <span class="n">tier</span>
+</code></pre></div></li>
+<li>An animation keyword on a still plot is named rather than ignored, which is what it used
+  to be:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.pyramids_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">interactive</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="o">...</span>     <span class="n">interactive</span><span class="p">(</span><span class="s2">&quot;a-dataset&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;. &quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">interval</span><span class="o">=</span> <span class="n">only</span> <span class="n">applies</span> <span class="n">to</span> <span class="n">an</span> <span class="n">animation</span><span class="p">;</span> <span class="n">this</span> <span class="ow">is</span> <span class="n">a</span> <span class="n">still</span> <span class="n">plot</span> <span class="n">on</span> <span class="n">backend</span><span class="o">=</span><span class="s1">&#39;interactive&#39;</span>
+</code></pre></div></li>
+</ul>
+
+
+<details class="see-also" open>
+  <summary>See Also</summary>
+  <p>three_d: The same seam on the PyVista tier.
+web: The same seam on the MapLibre tier.
+ANIMATION_BACKENDS: Which tiers serve an <code>animate</code> call.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/digitalearth/pyramids_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1469">1469</a></span>
+<span class="normal"><a href="#__codelineno-0-1470">1470</a></span>
+<span class="normal"><a href="#__codelineno-0-1471">1471</a></span>
+<span class="normal"><a href="#__codelineno-0-1472">1472</a></span>
+<span class="normal"><a href="#__codelineno-0-1473">1473</a></span>
+<span class="normal"><a href="#__codelineno-0-1474">1474</a></span>
+<span class="normal"><a href="#__codelineno-0-1475">1475</a></span>
+<span class="normal"><a href="#__codelineno-0-1476">1476</a></span>
+<span class="normal"><a href="#__codelineno-0-1477">1477</a></span>
+<span class="normal"><a href="#__codelineno-0-1478">1478</a></span>
+<span class="normal"><a href="#__codelineno-0-1479">1479</a></span>
+<span class="normal"><a href="#__codelineno-0-1480">1480</a></span>
+<span class="normal"><a href="#__codelineno-0-1481">1481</a></span>
+<span class="normal"><a href="#__codelineno-0-1482">1482</a></span>
+<span class="normal"><a href="#__codelineno-0-1483">1483</a></span>
+<span class="normal"><a href="#__codelineno-0-1484">1484</a></span>
+<span class="normal"><a href="#__codelineno-0-1485">1485</a></span>
+<span class="normal"><a href="#__codelineno-0-1486">1486</a></span>
+<span class="normal"><a href="#__codelineno-0-1487">1487</a></span>
+<span class="normal"><a href="#__codelineno-0-1488">1488</a></span>
+<span class="normal"><a href="#__codelineno-0-1489">1489</a></span>
+<span class="normal"><a href="#__codelineno-0-1490">1490</a></span>
+<span class="normal"><a href="#__codelineno-0-1491">1491</a></span>
+<span class="normal"><a href="#__codelineno-0-1492">1492</a></span>
+<span class="normal"><a href="#__codelineno-0-1493">1493</a></span>
+<span class="normal"><a href="#__codelineno-0-1494">1494</a></span>
+<span class="normal"><a href="#__codelineno-0-1495">1495</a></span>
+<span class="normal"><a href="#__codelineno-0-1496">1496</a></span>
+<span class="normal"><a href="#__codelineno-0-1497">1497</a></span>
+<span class="normal"><a href="#__codelineno-0-1498">1498</a></span>
+<span class="normal"><a href="#__codelineno-0-1499">1499</a></span>
+<span class="normal"><a href="#__codelineno-0-1500">1500</a></span>
+<span class="normal"><a href="#__codelineno-0-1501">1501</a></span>
+<span class="normal"><a href="#__codelineno-0-1502">1502</a></span>
+<span class="normal"><a href="#__codelineno-0-1503">1503</a></span>
+<span class="normal"><a href="#__codelineno-0-1504">1504</a></span>
+<span class="normal"><a href="#__codelineno-0-1505">1505</a></span>
+<span class="normal"><a href="#__codelineno-0-1506">1506</a></span>
+<span class="normal"><a href="#__codelineno-0-1507">1507</a></span>
+<span class="normal"><a href="#__codelineno-0-1508">1508</a></span>
+<span class="normal"><a href="#__codelineno-0-1509">1509</a></span>
+<span class="normal"><a href="#__codelineno-0-1510">1510</a></span>
+<span class="normal"><a href="#__codelineno-0-1511">1511</a></span>
+<span class="normal"><a href="#__codelineno-0-1512">1512</a></span>
+<span class="normal"><a href="#__codelineno-0-1513">1513</a></span>
+<span class="normal"><a href="#__codelineno-0-1514">1514</a></span>
+<span class="normal"><a href="#__codelineno-0-1515">1515</a></span>
+<span class="normal"><a href="#__codelineno-0-1516">1516</a></span>
+<span class="normal"><a href="#__codelineno-0-1517">1517</a></span>
+<span class="normal"><a href="#__codelineno-0-1518">1518</a></span>
+<span class="normal"><a href="#__codelineno-0-1519">1519</a></span>
+<span class="normal"><a href="#__codelineno-0-1520">1520</a></span>
+<span class="normal"><a href="#__codelineno-0-1521">1521</a></span>
+<span class="normal"><a href="#__codelineno-0-1522">1522</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1469" name="__codelineno-0-1469"></a><span class="k">def</span><span class="w"> </span><span class="nf">interactive</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;interactive&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-1470" name="__codelineno-0-1470"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the HoloViz tier, for ``plot(backend=&quot;interactive&quot;)``.</span>
+<a id="__codelineno-0-1471" name="__codelineno-0-1471"></a>
+<a id="__codelineno-0-1472" name="__codelineno-0-1472"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1473" name="__codelineno-0-1473"></a><span class="sd">        obj: The ``Dataset`` / ``NetCDF`` / ``FeatureCollection`` / ``UgridDataset`` the facade was</span>
+<a id="__codelineno-0-1474" name="__codelineno-0-1474"></a><span class="sd">            called on.</span>
+<a id="__codelineno-0-1475" name="__codelineno-0-1475"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
+<a id="__codelineno-0-1476" name="__codelineno-0-1476"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
+<a id="__codelineno-0-1477" name="__codelineno-0-1477"></a>
+<a id="__codelineno-0-1478" name="__codelineno-0-1478"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1479" name="__codelineno-0-1479"></a><span class="sd">        An :class:`~digitalearth.interactive.InteractiveMap`, or — for an animation call — its</span>
+<a id="__codelineno-0-1480" name="__codelineno-0-1480"></a><span class="sd">        player, or the path the animation was written to.</span>
+<a id="__codelineno-0-1481" name="__codelineno-0-1481"></a>
+<a id="__codelineno-0-1482" name="__codelineno-0-1482"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1483" name="__codelineno-0-1483"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, or an unusable band/interval.</span>
+<a id="__codelineno-0-1484" name="__codelineno-0-1484"></a>
+<a id="__codelineno-0-1485" name="__codelineno-0-1485"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1486" name="__codelineno-0-1486"></a><span class="sd">        - Reached through pyramids, which forwards its own keywords (needs the ``interactive``</span>
+<a id="__codelineno-0-1487" name="__codelineno-0-1487"></a><span class="sd">          extra, so this one is shown rather than run):</span>
+<a id="__codelineno-0-1488" name="__codelineno-0-1488"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1489" name="__codelineno-0-1489"></a><span class="sd">            from pyramids.dataset import Dataset</span>
+<a id="__codelineno-0-1490" name="__codelineno-0-1490"></a>
+<a id="__codelineno-0-1491" name="__codelineno-0-1491"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-1492" name="__codelineno-0-1492"></a><span class="sd">            scene = ds.plot(backend=&quot;interactive&quot;, band=0, title=&quot;DEM&quot;)</span>
+<a id="__codelineno-0-1493" name="__codelineno-0-1493"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1494" name="__codelineno-0-1494"></a><span class="sd">        - A keyword this seam cannot serve is refused in digitalearth&#39;s own words, before any</span>
+<a id="__codelineno-0-1495" name="__codelineno-0-1495"></a><span class="sd">          engine is imported, and says where the capability does live:</span>
+<a id="__codelineno-0-1496" name="__codelineno-0-1496"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1497" name="__codelineno-0-1497"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import interactive</span>
+<a id="__codelineno-0-1498" name="__codelineno-0-1498"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1499" name="__codelineno-0-1499"></a><span class="sd">            ...     interactive(&quot;a-dataset&quot;, backend=&quot;interactive&quot;, rgb_options={})</span>
+<a id="__codelineno-0-1500" name="__codelineno-0-1500"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1501" name="__codelineno-0-1501"></a><span class="sd">            ...     print(str(exc).split(&quot;— &quot;)[1].split(&quot;, which&quot;)[0])</span>
+<a id="__codelineno-0-1502" name="__codelineno-0-1502"></a><span class="sd">            a three-band composite is built with Map.rgb_composite on the static tier</span>
+<a id="__codelineno-0-1503" name="__codelineno-0-1503"></a>
+<a id="__codelineno-0-1504" name="__codelineno-0-1504"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1505" name="__codelineno-0-1505"></a><span class="sd">        - An animation keyword on a still plot is named rather than ignored, which is what it used</span>
+<a id="__codelineno-0-1506" name="__codelineno-0-1506"></a><span class="sd">          to be:</span>
+<a id="__codelineno-0-1507" name="__codelineno-0-1507"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1508" name="__codelineno-0-1508"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import interactive</span>
+<a id="__codelineno-0-1509" name="__codelineno-0-1509"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1510" name="__codelineno-0-1510"></a><span class="sd">            ...     interactive(&quot;a-dataset&quot;, backend=&quot;interactive&quot;, interval=200)</span>
+<a id="__codelineno-0-1511" name="__codelineno-0-1511"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1512" name="__codelineno-0-1512"></a><span class="sd">            ...     print(str(exc).split(&quot;. &quot;)[0])</span>
+<a id="__codelineno-0-1513" name="__codelineno-0-1513"></a><span class="sd">            interval= only applies to an animation; this is a still plot on backend=&#39;interactive&#39;</span>
+<a id="__codelineno-0-1514" name="__codelineno-0-1514"></a>
+<a id="__codelineno-0-1515" name="__codelineno-0-1515"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1516" name="__codelineno-0-1516"></a>
+<a id="__codelineno-0-1517" name="__codelineno-0-1517"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-1518" name="__codelineno-0-1518"></a><span class="sd">        three_d: The same seam on the PyVista tier.</span>
+<a id="__codelineno-0-1519" name="__codelineno-0-1519"></a><span class="sd">        web: The same seam on the MapLibre tier.</span>
+<a id="__codelineno-0-1520" name="__codelineno-0-1520"></a><span class="sd">        ANIMATION_BACKENDS: Which tiers serve an ``animate`` call.</span>
+<a id="__codelineno-0-1521" name="__codelineno-0-1521"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1522" name="__codelineno-0-1522"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="digitalearth.pyramids_backend.three_d" class="doc doc-heading"><a href="#digitalearth.pyramids_backend.three_d" class="toclink">
+            <code class="highlight language-python"><span class="n">three_d</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s1">&#39;3d&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+</a><a href="#digitalearth.pyramids_backend.three_d" class="headerlink" title="Permanent link">#</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Render a pyramids object on the PyVista tier, for <code>plot(backend="3d")</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>obj</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The pyramids object the facade was called on.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>backend</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The backend name the seam passes; defaults to the name this is registered under.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;3d&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>**kwargs</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The keywords pyramids forwarded, in its own vocabulary.</p>
+              </div>
+            </td>
+            <td>
+                  <code>{}</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>A</code></td>            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>class:<code>~digitalearth.three_d.Scene3D</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>for a forwarded keyword this seam cannot serve, an unusable band, or an
+animation request — the 3-D tier's animation verbs cannot be driven from a plot call
+(see :data:<code>ANIMATION_BACKENDS</code>).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <ul>
+<li>Reached through pyramids (needs the <code>3d</code> extra, so this one is shown rather than run):
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">scene</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;3d&quot;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div></li>
+<li>An animation request is refused by name, and names the two verbs that do animate a scene:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.pyramids_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">three_d</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">...</span>     <span class="n">three_d</span><span class="p">(</span><span class="s2">&quot;a-dataset&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;3d&quot;</span><span class="p">,</span> <span class="n">animate</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s1">&#39;3d&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">served</span> <span class="n">through</span> <span class="n">the</span> <span class="n">pyramids</span> <span class="n">plot</span><span class="o">-</span><span class="n">backend</span> <span class="n">seam</span>
+</code></pre></div></li>
+<li>A band that is not a 0-based index is refused here rather than by the reader, far away:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.pyramids_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">three_d</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="o">...</span>     <span class="n">three_d</span><span class="p">(</span><span class="s2">&quot;a-dataset&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;3d&quot;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">band</span><span class="o">=</span><span class="mf">1.5</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">a</span> <span class="mi">0</span><span class="o">-</span><span class="n">based</span> <span class="n">band</span> <span class="n">index</span><span class="p">;</span> <span class="k">pass</span> <span class="n">an</span> <span class="n">integer</span><span class="p">,</span> <span class="n">where</span> <span class="n">the</span> <span class="n">first</span> <span class="n">band</span> <span class="ow">is</span> <span class="mi">0</span>
+</code></pre></div></li>
+</ul>
+
+
+<details class="see-also" open>
+  <summary>See Also</summary>
+  <p>interactive: The same seam on the HoloViz tier, which does serve an animation.
+web: The same seam on the MapLibre tier.
+ANIMATION_BACKENDS: Why this tier is absent from it.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/digitalearth/pyramids_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1525">1525</a></span>
+<span class="normal"><a href="#__codelineno-0-1526">1526</a></span>
+<span class="normal"><a href="#__codelineno-0-1527">1527</a></span>
+<span class="normal"><a href="#__codelineno-0-1528">1528</a></span>
+<span class="normal"><a href="#__codelineno-0-1529">1529</a></span>
+<span class="normal"><a href="#__codelineno-0-1530">1530</a></span>
+<span class="normal"><a href="#__codelineno-0-1531">1531</a></span>
+<span class="normal"><a href="#__codelineno-0-1532">1532</a></span>
+<span class="normal"><a href="#__codelineno-0-1533">1533</a></span>
+<span class="normal"><a href="#__codelineno-0-1534">1534</a></span>
+<span class="normal"><a href="#__codelineno-0-1535">1535</a></span>
+<span class="normal"><a href="#__codelineno-0-1536">1536</a></span>
+<span class="normal"><a href="#__codelineno-0-1537">1537</a></span>
+<span class="normal"><a href="#__codelineno-0-1538">1538</a></span>
+<span class="normal"><a href="#__codelineno-0-1539">1539</a></span>
+<span class="normal"><a href="#__codelineno-0-1540">1540</a></span>
+<span class="normal"><a href="#__codelineno-0-1541">1541</a></span>
+<span class="normal"><a href="#__codelineno-0-1542">1542</a></span>
+<span class="normal"><a href="#__codelineno-0-1543">1543</a></span>
+<span class="normal"><a href="#__codelineno-0-1544">1544</a></span>
+<span class="normal"><a href="#__codelineno-0-1545">1545</a></span>
+<span class="normal"><a href="#__codelineno-0-1546">1546</a></span>
+<span class="normal"><a href="#__codelineno-0-1547">1547</a></span>
+<span class="normal"><a href="#__codelineno-0-1548">1548</a></span>
+<span class="normal"><a href="#__codelineno-0-1549">1549</a></span>
+<span class="normal"><a href="#__codelineno-0-1550">1550</a></span>
+<span class="normal"><a href="#__codelineno-0-1551">1551</a></span>
+<span class="normal"><a href="#__codelineno-0-1552">1552</a></span>
+<span class="normal"><a href="#__codelineno-0-1553">1553</a></span>
+<span class="normal"><a href="#__codelineno-0-1554">1554</a></span>
+<span class="normal"><a href="#__codelineno-0-1555">1555</a></span>
+<span class="normal"><a href="#__codelineno-0-1556">1556</a></span>
+<span class="normal"><a href="#__codelineno-0-1557">1557</a></span>
+<span class="normal"><a href="#__codelineno-0-1558">1558</a></span>
+<span class="normal"><a href="#__codelineno-0-1559">1559</a></span>
+<span class="normal"><a href="#__codelineno-0-1560">1560</a></span>
+<span class="normal"><a href="#__codelineno-0-1561">1561</a></span>
+<span class="normal"><a href="#__codelineno-0-1562">1562</a></span>
+<span class="normal"><a href="#__codelineno-0-1563">1563</a></span>
+<span class="normal"><a href="#__codelineno-0-1564">1564</a></span>
+<span class="normal"><a href="#__codelineno-0-1565">1565</a></span>
+<span class="normal"><a href="#__codelineno-0-1566">1566</a></span>
+<span class="normal"><a href="#__codelineno-0-1567">1567</a></span>
+<span class="normal"><a href="#__codelineno-0-1568">1568</a></span>
+<span class="normal"><a href="#__codelineno-0-1569">1569</a></span>
+<span class="normal"><a href="#__codelineno-0-1570">1570</a></span>
+<span class="normal"><a href="#__codelineno-0-1571">1571</a></span>
+<span class="normal"><a href="#__codelineno-0-1572">1572</a></span>
+<span class="normal"><a href="#__codelineno-0-1573">1573</a></span>
+<span class="normal"><a href="#__codelineno-0-1574">1574</a></span>
+<span class="normal"><a href="#__codelineno-0-1575">1575</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1525" name="__codelineno-0-1525"></a><span class="k">def</span><span class="w"> </span><span class="nf">three_d</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;3d&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-1526" name="__codelineno-0-1526"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the PyVista tier, for ``plot(backend=&quot;3d&quot;)``.</span>
+<a id="__codelineno-0-1527" name="__codelineno-0-1527"></a>
+<a id="__codelineno-0-1528" name="__codelineno-0-1528"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1529" name="__codelineno-0-1529"></a><span class="sd">        obj: The pyramids object the facade was called on.</span>
+<a id="__codelineno-0-1530" name="__codelineno-0-1530"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
+<a id="__codelineno-0-1531" name="__codelineno-0-1531"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
+<a id="__codelineno-0-1532" name="__codelineno-0-1532"></a>
+<a id="__codelineno-0-1533" name="__codelineno-0-1533"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1534" name="__codelineno-0-1534"></a><span class="sd">        A :class:`~digitalearth.three_d.Scene3D`.</span>
+<a id="__codelineno-0-1535" name="__codelineno-0-1535"></a>
+<a id="__codelineno-0-1536" name="__codelineno-0-1536"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1537" name="__codelineno-0-1537"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an</span>
+<a id="__codelineno-0-1538" name="__codelineno-0-1538"></a><span class="sd">            animation request — the 3-D tier&#39;s animation verbs cannot be driven from a plot call</span>
+<a id="__codelineno-0-1539" name="__codelineno-0-1539"></a><span class="sd">            (see :data:`ANIMATION_BACKENDS`).</span>
+<a id="__codelineno-0-1540" name="__codelineno-0-1540"></a>
+<a id="__codelineno-0-1541" name="__codelineno-0-1541"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1542" name="__codelineno-0-1542"></a><span class="sd">        - Reached through pyramids (needs the ``3d`` extra, so this one is shown rather than run):</span>
+<a id="__codelineno-0-1543" name="__codelineno-0-1543"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1544" name="__codelineno-0-1544"></a><span class="sd">            from pyramids.dataset import Dataset</span>
+<a id="__codelineno-0-1545" name="__codelineno-0-1545"></a>
+<a id="__codelineno-0-1546" name="__codelineno-0-1546"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-1547" name="__codelineno-0-1547"></a><span class="sd">            scene = ds.plot(backend=&quot;3d&quot;, band=0)</span>
+<a id="__codelineno-0-1548" name="__codelineno-0-1548"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1549" name="__codelineno-0-1549"></a><span class="sd">        - An animation request is refused by name, and names the two verbs that do animate a scene:</span>
+<a id="__codelineno-0-1550" name="__codelineno-0-1550"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1551" name="__codelineno-0-1551"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import three_d</span>
+<a id="__codelineno-0-1552" name="__codelineno-0-1552"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1553" name="__codelineno-0-1553"></a><span class="sd">            ...     three_d(&quot;a-dataset&quot;, backend=&quot;3d&quot;, animate=True)</span>
+<a id="__codelineno-0-1554" name="__codelineno-0-1554"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1555" name="__codelineno-0-1555"></a><span class="sd">            ...     print(str(exc).split(&quot;:&quot;)[0])</span>
+<a id="__codelineno-0-1556" name="__codelineno-0-1556"></a><span class="sd">            animate(backend=&#39;3d&#39;) is not served through the pyramids plot-backend seam</span>
+<a id="__codelineno-0-1557" name="__codelineno-0-1557"></a>
+<a id="__codelineno-0-1558" name="__codelineno-0-1558"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1559" name="__codelineno-0-1559"></a><span class="sd">        - A band that is not a 0-based index is refused here rather than by the reader, far away:</span>
+<a id="__codelineno-0-1560" name="__codelineno-0-1560"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1561" name="__codelineno-0-1561"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import three_d</span>
+<a id="__codelineno-0-1562" name="__codelineno-0-1562"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1563" name="__codelineno-0-1563"></a><span class="sd">            ...     three_d(&quot;a-dataset&quot;, backend=&quot;3d&quot;, band=1.5)</span>
+<a id="__codelineno-0-1564" name="__codelineno-0-1564"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1565" name="__codelineno-0-1565"></a><span class="sd">            ...     print(exc)</span>
+<a id="__codelineno-0-1566" name="__codelineno-0-1566"></a><span class="sd">            band=1.5 is not a 0-based band index; pass an integer, where the first band is 0</span>
+<a id="__codelineno-0-1567" name="__codelineno-0-1567"></a>
+<a id="__codelineno-0-1568" name="__codelineno-0-1568"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1569" name="__codelineno-0-1569"></a>
+<a id="__codelineno-0-1570" name="__codelineno-0-1570"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-1571" name="__codelineno-0-1571"></a><span class="sd">        interactive: The same seam on the HoloViz tier, which does serve an animation.</span>
+<a id="__codelineno-0-1572" name="__codelineno-0-1572"></a><span class="sd">        web: The same seam on the MapLibre tier.</span>
+<a id="__codelineno-0-1573" name="__codelineno-0-1573"></a><span class="sd">        ANIMATION_BACKENDS: Why this tier is absent from it.</span>
+<a id="__codelineno-0-1574" name="__codelineno-0-1574"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1575" name="__codelineno-0-1575"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="digitalearth.pyramids_backend.web" class="doc doc-heading"><a href="#digitalearth.pyramids_backend.web" class="toclink">
+            <code class="highlight language-python"><span class="n">web</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s1">&#39;web&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+</a><a href="#digitalearth.pyramids_backend.web" class="headerlink" title="Permanent link">#</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Render a pyramids object on the MapLibre tier, for <code>plot(backend="web")</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>obj</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The pyramids object the facade was called on.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>backend</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The backend name the seam passes; defaults to the name this is registered under.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;web&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>**kwargs</code>
+            </td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The keywords pyramids forwarded, in its own vocabulary.</p>
+              </div>
+            </td>
+            <td>
+                  <code>{}</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>A</code></td>            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>class:<code>~digitalearth.web.WebMap</code>, or — for an animation call — the path the animation</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+<td></td>            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>was written to.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>for a forwarded keyword this seam cannot serve, an unusable band, or an
+animation call that named no <code>path</code> (the web tier animates only to a file).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <ul>
+<li>Reached through pyramids (needs the <code>web</code> extra, so this one is shown rather than run):
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">scene</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div></li>
+<li>This tier animates only to a file, so an animation with no destination says what to pass:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.pyramids_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">web</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">...</span>     <span class="n">web</span><span class="p">(</span><span class="s2">&quot;a-stack&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">animate</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">animate</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s1">&#39;web&#39;</span><span class="p">)</span> <span class="n">writes</span> <span class="n">the</span> <span class="n">animation</span> <span class="n">to</span> <span class="n">a</span> <span class="n">file</span><span class="p">,</span> <span class="n">so</span> <span class="n">it</span> <span class="n">needs</span> <span class="n">a</span> <span class="n">path</span>
+</code></pre></div></li>
+<li>Animating a single raster's bands is refused: this seam steps through a stack's members:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.pyramids_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">web</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="o">...</span>     <span class="n">web</span><span class="p">(</span><span class="s2">&quot;a-dataset&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="n">animate</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bands</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="o">...</span> <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;: &quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">this</span> <span class="n">seam</span> <span class="n">animates</span> <span class="n">a</span> <span class="n">stack</span><span class="p">,</span> <span class="n">stepping</span> <span class="n">through</span> <span class="n">its</span> <span class="n">members</span>
+</code></pre></div></li>
+</ul>
+
+
+<details class="see-also" open>
+  <summary>See Also</summary>
+  <p>interactive: The same seam on the HoloViz tier, whose animation needs no destination.
+three_d: The same seam on the PyVista tier.
+BAND_ORIGIN_SHIFT: The offset between the facade's band index and this package's.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/digitalearth/pyramids_backend.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1578">1578</a></span>
+<span class="normal"><a href="#__codelineno-0-1579">1579</a></span>
+<span class="normal"><a href="#__codelineno-0-1580">1580</a></span>
+<span class="normal"><a href="#__codelineno-0-1581">1581</a></span>
+<span class="normal"><a href="#__codelineno-0-1582">1582</a></span>
+<span class="normal"><a href="#__codelineno-0-1583">1583</a></span>
+<span class="normal"><a href="#__codelineno-0-1584">1584</a></span>
+<span class="normal"><a href="#__codelineno-0-1585">1585</a></span>
+<span class="normal"><a href="#__codelineno-0-1586">1586</a></span>
+<span class="normal"><a href="#__codelineno-0-1587">1587</a></span>
+<span class="normal"><a href="#__codelineno-0-1588">1588</a></span>
+<span class="normal"><a href="#__codelineno-0-1589">1589</a></span>
+<span class="normal"><a href="#__codelineno-0-1590">1590</a></span>
+<span class="normal"><a href="#__codelineno-0-1591">1591</a></span>
+<span class="normal"><a href="#__codelineno-0-1592">1592</a></span>
+<span class="normal"><a href="#__codelineno-0-1593">1593</a></span>
+<span class="normal"><a href="#__codelineno-0-1594">1594</a></span>
+<span class="normal"><a href="#__codelineno-0-1595">1595</a></span>
+<span class="normal"><a href="#__codelineno-0-1596">1596</a></span>
+<span class="normal"><a href="#__codelineno-0-1597">1597</a></span>
+<span class="normal"><a href="#__codelineno-0-1598">1598</a></span>
+<span class="normal"><a href="#__codelineno-0-1599">1599</a></span>
+<span class="normal"><a href="#__codelineno-0-1600">1600</a></span>
+<span class="normal"><a href="#__codelineno-0-1601">1601</a></span>
+<span class="normal"><a href="#__codelineno-0-1602">1602</a></span>
+<span class="normal"><a href="#__codelineno-0-1603">1603</a></span>
+<span class="normal"><a href="#__codelineno-0-1604">1604</a></span>
+<span class="normal"><a href="#__codelineno-0-1605">1605</a></span>
+<span class="normal"><a href="#__codelineno-0-1606">1606</a></span>
+<span class="normal"><a href="#__codelineno-0-1607">1607</a></span>
+<span class="normal"><a href="#__codelineno-0-1608">1608</a></span>
+<span class="normal"><a href="#__codelineno-0-1609">1609</a></span>
+<span class="normal"><a href="#__codelineno-0-1610">1610</a></span>
+<span class="normal"><a href="#__codelineno-0-1611">1611</a></span>
+<span class="normal"><a href="#__codelineno-0-1612">1612</a></span>
+<span class="normal"><a href="#__codelineno-0-1613">1613</a></span>
+<span class="normal"><a href="#__codelineno-0-1614">1614</a></span>
+<span class="normal"><a href="#__codelineno-0-1615">1615</a></span>
+<span class="normal"><a href="#__codelineno-0-1616">1616</a></span>
+<span class="normal"><a href="#__codelineno-0-1617">1617</a></span>
+<span class="normal"><a href="#__codelineno-0-1618">1618</a></span>
+<span class="normal"><a href="#__codelineno-0-1619">1619</a></span>
+<span class="normal"><a href="#__codelineno-0-1620">1620</a></span>
+<span class="normal"><a href="#__codelineno-0-1621">1621</a></span>
+<span class="normal"><a href="#__codelineno-0-1622">1622</a></span>
+<span class="normal"><a href="#__codelineno-0-1623">1623</a></span>
+<span class="normal"><a href="#__codelineno-0-1624">1624</a></span>
+<span class="normal"><a href="#__codelineno-0-1625">1625</a></span>
+<span class="normal"><a href="#__codelineno-0-1626">1626</a></span>
+<span class="normal"><a href="#__codelineno-0-1627">1627</a></span>
+<span class="normal"><a href="#__codelineno-0-1628">1628</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1578" name="__codelineno-0-1578"></a><span class="k">def</span><span class="w"> </span><span class="nf">web</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;web&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-0-1579" name="__codelineno-0-1579"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Render a pyramids object on the MapLibre tier, for ``plot(backend=&quot;web&quot;)``.</span>
+<a id="__codelineno-0-1580" name="__codelineno-0-1580"></a>
+<a id="__codelineno-0-1581" name="__codelineno-0-1581"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-1582" name="__codelineno-0-1582"></a><span class="sd">        obj: The pyramids object the facade was called on.</span>
+<a id="__codelineno-0-1583" name="__codelineno-0-1583"></a><span class="sd">        backend: The backend name the seam passes; defaults to the name this is registered under.</span>
+<a id="__codelineno-0-1584" name="__codelineno-0-1584"></a><span class="sd">        **kwargs: The keywords pyramids forwarded, in its own vocabulary.</span>
+<a id="__codelineno-0-1585" name="__codelineno-0-1585"></a>
+<a id="__codelineno-0-1586" name="__codelineno-0-1586"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-1587" name="__codelineno-0-1587"></a><span class="sd">        A :class:`~digitalearth.web.WebMap`, or — for an animation call — the path the animation</span>
+<a id="__codelineno-0-1588" name="__codelineno-0-1588"></a><span class="sd">        was written to.</span>
+<a id="__codelineno-0-1589" name="__codelineno-0-1589"></a>
+<a id="__codelineno-0-1590" name="__codelineno-0-1590"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-1591" name="__codelineno-0-1591"></a><span class="sd">        ValueError: for a forwarded keyword this seam cannot serve, an unusable band, or an</span>
+<a id="__codelineno-0-1592" name="__codelineno-0-1592"></a><span class="sd">            animation call that named no ``path`` (the web tier animates only to a file).</span>
+<a id="__codelineno-0-1593" name="__codelineno-0-1593"></a>
+<a id="__codelineno-0-1594" name="__codelineno-0-1594"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-1595" name="__codelineno-0-1595"></a><span class="sd">        - Reached through pyramids (needs the ``web`` extra, so this one is shown rather than run):</span>
+<a id="__codelineno-0-1596" name="__codelineno-0-1596"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1597" name="__codelineno-0-1597"></a><span class="sd">            from pyramids.dataset import Dataset</span>
+<a id="__codelineno-0-1598" name="__codelineno-0-1598"></a>
+<a id="__codelineno-0-1599" name="__codelineno-0-1599"></a><span class="sd">            ds = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
+<a id="__codelineno-0-1600" name="__codelineno-0-1600"></a><span class="sd">            scene = ds.plot(backend=&quot;web&quot;, band=0, colorbar=True)</span>
+<a id="__codelineno-0-1601" name="__codelineno-0-1601"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1602" name="__codelineno-0-1602"></a><span class="sd">        - This tier animates only to a file, so an animation with no destination says what to pass:</span>
+<a id="__codelineno-0-1603" name="__codelineno-0-1603"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1604" name="__codelineno-0-1604"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import web</span>
+<a id="__codelineno-0-1605" name="__codelineno-0-1605"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1606" name="__codelineno-0-1606"></a><span class="sd">            ...     web(&quot;a-stack&quot;, backend=&quot;web&quot;, animate=True)</span>
+<a id="__codelineno-0-1607" name="__codelineno-0-1607"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1608" name="__codelineno-0-1608"></a><span class="sd">            ...     print(str(exc).split(&quot;;&quot;)[0])</span>
+<a id="__codelineno-0-1609" name="__codelineno-0-1609"></a><span class="sd">            animate(backend=&#39;web&#39;) writes the animation to a file, so it needs a path</span>
+<a id="__codelineno-0-1610" name="__codelineno-0-1610"></a>
+<a id="__codelineno-0-1611" name="__codelineno-0-1611"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1612" name="__codelineno-0-1612"></a><span class="sd">        - Animating a single raster&#39;s bands is refused: this seam steps through a stack&#39;s members:</span>
+<a id="__codelineno-0-1613" name="__codelineno-0-1613"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-1614" name="__codelineno-0-1614"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.pyramids_backend import web</span>
+<a id="__codelineno-0-1615" name="__codelineno-0-1615"></a><span class="sd">            &gt;&gt;&gt; try:</span>
+<a id="__codelineno-0-1616" name="__codelineno-0-1616"></a><span class="sd">            ...     web(&quot;a-dataset&quot;, backend=&quot;web&quot;, animate=True, bands=[0, 1])</span>
+<a id="__codelineno-0-1617" name="__codelineno-0-1617"></a><span class="sd">            ... except ValueError as exc:</span>
+<a id="__codelineno-0-1618" name="__codelineno-0-1618"></a><span class="sd">            ...     print(str(exc).split(&quot;: &quot;)[1].split(&quot;.&quot;)[0])</span>
+<a id="__codelineno-0-1619" name="__codelineno-0-1619"></a><span class="sd">            this seam animates a stack, stepping through its members</span>
+<a id="__codelineno-0-1620" name="__codelineno-0-1620"></a>
+<a id="__codelineno-0-1621" name="__codelineno-0-1621"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-1622" name="__codelineno-0-1622"></a>
+<a id="__codelineno-0-1623" name="__codelineno-0-1623"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-1624" name="__codelineno-0-1624"></a><span class="sd">        interactive: The same seam on the HoloViz tier, whose animation needs no destination.</span>
+<a id="__codelineno-0-1625" name="__codelineno-0-1625"></a><span class="sd">        three_d: The same seam on the PyVista tier.</span>
+<a id="__codelineno-0-1626" name="__codelineno-0-1626"></a><span class="sd">        BAND_ORIGIN_SHIFT: The offset between the facade&#39;s band index and this package&#39;s.</span>
+<a id="__codelineno-0-1627" name="__codelineno-0-1627"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1628" name="__codelineno-0-1628"></a>    <span class="k">return</span> <span class="n">_render</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../support-matrix/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Backend support matrix">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Backend support matrix
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../static_map/" class="md-footer__link md-footer__link--next" aria-label="Next: Maps (matplotlib)">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Maps (matplotlib)
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/serapeum-org/Digital-Earth" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.footer", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.code.copy", "content.code.annotate", "content.action.edit", "content.action.view", "content.tooltips", "search.highlight", "search.suggest", "toc.follow", "announce.dismiss"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike", "version_selector": true}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/javascripts/panzoom.min.js"></script>
+      
+        <script src="../../assets/javascripts/zoompan.js"></script>
+      
+    
+  </body>
+</html>
