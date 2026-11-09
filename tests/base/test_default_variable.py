@@ -207,3 +207,67 @@ class TestDrawableVariableNames:
         assert default_variable(container) == "temp", (
             f"a projected store's planar variable must be drawable, got {default_variable(container)!r}"
         )
+
+
+class TestAGroupedStore:
+    """A sub-group view reports bare variable names while its metadata is keyed by full store path.
+
+    pyramids documents that shape, and it is the one the first version of this module got wrong: dimension
+    names and coordinate keys were stripped of their group path but the variable lookup was not, so every
+    lookup missed, nothing classified, and the answer fell back to the declared first — the bounds array the
+    module exists to skip.
+    """
+
+    def test_a_bare_name_still_finds_its_path_keyed_metadata(self):
+        """Classification survives the two sides naming the same variable differently.
+
+        Test scenario:
+            `variable_names` reports `["time_bnds", "sst"]` while `metadata.variables` is keyed
+            `forecast/time_bnds` / `forecast/sst`. The drawable answer must still be `sst`, not the fallback.
+        """
+        from digitalearth.base.sources.variable import (
+            default_variable,
+            drawable_variable_names,
+        )
+
+        container = _container(
+            ["time_bnds", "sst"],
+            {
+                "forecast/lat": _Info(["/forecast/lat"], {"axis": "Y"}),
+                "forecast/lon": _Info(["/forecast/lon"], {"axis": "X"}),
+                "forecast/time_bnds": _Info(["/forecast/time", "/forecast/nbnds"]),
+                "forecast/sst": _Info(
+                    ["/forecast/time", "/forecast/lat", "/forecast/lon"]
+                ),
+            },
+        )()
+
+        assert drawable_variable_names(container) == ["sst"], (
+            f"a bare name must match its path-keyed metadata, got {drawable_variable_names(container)}"
+        )
+        assert default_variable(container) == "sst", (
+            f"expected the drawable variable, got {default_variable(container)!r}"
+        )
+
+    def test_a_path_qualified_name_finds_bare_metadata_too(self):
+        """The same normalisation works when it is the names that carry the path.
+
+        Test scenario:
+            The mismatch can run the other way — `variable_names` reporting `forecast/sst` against metadata
+            keyed `sst`. Normalising both sides rather than one covers both.
+        """
+        from digitalearth.base.sources.variable import default_variable
+
+        container = _container(
+            ["forecast/time_bnds", "forecast/sst"],
+            {
+                "lat": LAT,
+                "lon": LON,
+                "time_bnds": _Info(["time", "nbnds"]),
+                "sst": _Info(["time", "lat", "lon"]),
+            },
+        )()
+
+        assert default_variable(container) == "forecast/sst", (
+            f"the answer must keep the name the container reported, got {default_variable(container)!r}"
+        )

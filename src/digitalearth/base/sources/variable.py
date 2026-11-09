@@ -50,6 +50,23 @@ HORIZONTAL_STANDARD_NAMES = frozenset(
 _PLANE = 2
 
 
+def _bare(name: Any) -> str:
+    """One name with any group path stripped, so the two sides of a lookup can be compared.
+
+    A grouped store names the same variable two ways: a sub-group view reports a bare ``sst`` from
+    ``variable_names`` while ``metadata.variables`` is keyed by the full store path ``forecast/sst``, and the
+    mismatch can run either way. Every side of the comparison — the declared names, the metadata keys and the
+    dimension lists — goes through here, so none of them is normalised while another is not.
+
+    Args:
+        name: A variable, coordinate or dimension name, with or without a leading group path.
+
+    Returns:
+        The name after the last ``/``.
+    """
+    return str(name).rsplit("/", maxsplit=1)[-1]
+
+
 def _attributes(info: Any) -> dict:
     """The CF attributes pyramids read off one variable, as a plain mapping.
 
@@ -78,7 +95,7 @@ def _horizontal_dimensions(variables: Any) -> set:
         axis = str(attributes.get("axis", "")).upper()
         standard = str(attributes.get("standard_name", "")).lower()
         if axis in HORIZONTAL_AXES or standard in HORIZONTAL_STANDARD_NAMES:
-            horizontal.add(str(name).rsplit("/", maxsplit=1)[-1])
+            horizontal.add(_bare(name))
     return horizontal
 
 
@@ -168,9 +185,12 @@ def drawable_variable_names(data: Any) -> list:
     horizontal = _horizontal_dimensions(variables)
     if not horizontal:
         return []
+    described = {}
+    for key, info in (variables or {}).items():
+        described.setdefault(_bare(key), info)
     drawable = []
     for name in names:
-        info = (variables or {}).get(name)
+        info = described.get(_bare(name))
         if info is None:
             continue
         if len(_dimensions_of(info) & horizontal) >= _PLANE:
