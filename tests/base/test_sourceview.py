@@ -299,7 +299,7 @@ class TestRereading:
         view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
         again = view.reread(
             ViewRequest(
-                bounds=Bounds.from_bbox(list(ref.open().bbox), crs=view.crs),
+                bounds=Bounds.from_bbox(list(ref.open().total_bounds), crs=view.crs),
                 budget=10_000,
             )
         )
@@ -363,7 +363,7 @@ class TestARereadIsStillGeoreferenced:
         ref = DataRef(str(RASTER))
         dataset = ref.open()
         view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
-        bbox = list(dataset.bbox)
+        bbox = list(dataset.total_bounds)
         again = view.reread(
             ViewRequest(bounds=Bounds.from_bbox(bbox, crs=view.crs), budget=10_000)
         )
@@ -387,7 +387,8 @@ class TestARereadIsStillGeoreferenced:
         view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
         again = view.reread(
             ViewRequest(
-                bounds=Bounds.from_bbox(list(dataset.bbox), crs=view.crs), budget=4096
+                bounds=Bounds.from_bbox(list(dataset.total_bounds), crs=view.crs),
+                budget=4096,
             )
         )
         assert again.y.values[0] > again.y.values[-1], (
@@ -503,7 +504,8 @@ class TestARereadIsStillGeoreferenced:
         view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
         again = view.reread(
             ViewRequest(
-                bounds=Bounds.from_bbox(list(dataset.bbox), crs=view.crs), budget=4096
+                bounds=Bounds.from_bbox(list(dataset.total_bounds), crs=view.crs),
+                budget=4096,
             )
         )
         assert again.metadata("variable") == view.metadata("variable"), (
@@ -990,7 +992,9 @@ class TestTheRemainingWindowArms:
         ref = DataRef(str(RASTER))
         dataset = ref.open()
         view = SourceView.of(dataset, ref=ref)
-        in_wgs84 = Bounds.from_bbox(list(dataset.bbox), crs=view.crs).to_crs(4326)
+        in_wgs84 = Bounds.from_bbox(list(dataset.total_bounds), crs=view.crs).to_crs(
+            4326
+        )
         again = view.reread(ViewRequest(bounds=in_wgs84, budget=4096))
         assert again.crs == view.crs, (
             f"the view must report the CRS its cells are in, got {again.crs}"

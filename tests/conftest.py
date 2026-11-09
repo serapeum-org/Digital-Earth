@@ -78,7 +78,7 @@ def _grib_like_dataset(
 ) -> Dataset:
     """Build an in-memory pyramids ``Dataset`` whose bands carry GRIB message metadata.
 
-    Built entirely through pyramids — ``Dataset.from_array`` for the raster and the ``band_meta_data`` setter
+    Built entirely through pyramids — ``Dataset.from_array`` for the raster and the ``band_metadata`` setter
     for the per-band metadata — so no raster/GDAL handling leaks into the tests. The real GRIB *driver*
     (``libgdal-grib``) is absent in CI, so GRIB files cannot be opened here (pyramids' own GRIB doctests are
     ``+SKIP``); but ``pyramids.grib.grib_band_metadata`` only *decodes* the ``GRIB_*`` band-metadata keys, so
@@ -116,7 +116,7 @@ def _grib_like_dataset(
                 "GRIB_DISCIPLINE": "0",
             }
         per_band.append(message)
-    grid.band_meta_data = per_band
+    grid.band_metadata = per_band
     return grid
 
 
@@ -145,7 +145,7 @@ def grib_dataset_unitonly() -> Dataset:
     grid = Dataset.from_array(
         np.arange(12, dtype="float32").reshape(3, 4), geo_ref=reference
     )
-    grid.band_meta_data = [{"GRIB_UNIT": "[K]"}]
+    grid.band_metadata = [{"GRIB_UNIT": "[K]"}]
     return grid
 
 
@@ -173,7 +173,7 @@ def ugrid_mesh():
 
     Returns:
         Callable: ``build(location="face", node_x=None, steps=1, epsg=None)`` → a pyramids
-        ``UgridDataset``. ``location`` is ``"face"`` or ``"node"``; ``node_x`` overrides the node x
+        ``MeshDataset``. ``location`` is ``"face"`` or ``"node"``; ``node_x`` overrides the node x
         coordinates (pass non-finite ones to make a mesh no projection can place); ``steps`` > 1 gives the
         variable a leading time axis, which is the shape UGRID model output normally has; ``epsg`` makes
         the mesh declare a CRS, which is what puts it on the reprojecting path; ``second`` adds a second
@@ -181,7 +181,7 @@ def ugrid_mesh():
     """
     import numpy as np
     from pyramids.netcdf.ugrid.connectivity import Connectivity
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
     from pyramids.netcdf.ugrid.mesh import Mesh2d
     from pyramids.netcdf.ugrid.models import MeshVariable
 
@@ -242,7 +242,7 @@ def ugrid_mesh():
             from pyramids.base.crs import crs_from_user_input
 
             wkt = crs_from_user_input(epsg).to_wkt()
-        return UgridDataset(
+        return MeshDataset(
             mesh=mesh, data_variables=held, global_attributes={}, crs_wkt=wkt
         )
 

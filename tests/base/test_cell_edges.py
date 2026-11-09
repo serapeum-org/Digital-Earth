@@ -51,8 +51,8 @@ class TestTheRule:
         dataset = Dataset.read_file(RASTER)
         source = get_source(dataset)
         edges = Bounds.cell_edges(source.x.values, source.y.values, crs=dataset.epsg)
-        assert edges.as_bbox() == pytest.approx(list(dataset.bbox)), (
-            f"{edges.as_bbox()} is not the raster's {list(dataset.bbox)}"
+        assert edges.as_bbox() == pytest.approx(list(dataset.total_bounds)), (
+            f"{edges.as_bbox()} is not the raster's {list(dataset.total_bounds)}"
         )
 
     def test_it_still_equals_the_bbox_after_a_warp(self):
@@ -62,8 +62,8 @@ class TestTheRule:
         warped = Dataset.read_file(RASTER).to_crs(3857)
         source = get_source(warped)
         edges = Bounds.cell_edges(source.x.values, source.y.values, crs=3857)
-        assert edges.as_bbox() == pytest.approx(list(warped.bbox), rel=1e-9), (
-            f"{edges.as_bbox()} is not the warped raster's {list(warped.bbox)}"
+        assert edges.as_bbox() == pytest.approx(list(warped.total_bounds), rel=1e-9), (
+            f"{edges.as_bbox()} is not the warped raster's {list(warped.total_bounds)}"
         )
 
     def test_a_descending_axis_covers_the_same_rectangle(self):

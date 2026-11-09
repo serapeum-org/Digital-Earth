@@ -43,7 +43,7 @@ things differently:
   facade sends for the *first* band — was refused on every tier, though not in the same words: the
   web and HoloViz tiers answered ``band -1 is out of range for a 1-band dataset`` and the 3-D tier
   ``Selection bands are 1-based; got 0`` (round-2 M9). That is the off-by-one reported in #501.
-* **``variable_name`` is this package's ``variable``.** The ``UgridDataset`` facade spells the mesh
+* **``variable_name`` is this package's ``variable``.** The ``MeshDataset`` facade spells the mesh
   selector ``variable_name``; ``quickmap`` spells it ``variable``.
 * **``interval`` is milliseconds; the tiers take ``fps``.** The animation facades forward a frame
   interval, and every digitalearth animation verb takes a rate instead.
@@ -753,7 +753,7 @@ class _Forwarded:
         path = rest.pop("path", None)
         # The mesh facade spells the selector `variable_name`; `quickmap` spells it `variable`.
         # Live on `static` only, and that is new: `MESH_BACKENDS` is `{"matplotlib"}`, and `static`
-        # canonicalises to `matplotlib` before the mesh gate runs, so a `UgridDataset` reaches the
+        # canonicalises to `matplotlib` before the mesh gate runs, so a `MeshDataset` reaches the
         # triangular render through this rename — `plot(backend="static", variable_name=…)` shades
         # the mesh's own faces. The other three tiers have no such render and are still refused by
         # the gate before any keyword is read. Both halves are executed in
@@ -1612,7 +1612,7 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
     """Render a pyramids object on the HoloViz tier, for ``plot(backend="interactive")``.
 
     Args:
-        obj: The ``Dataset`` / ``NetCDF`` / ``FeatureCollection`` / ``UgridDataset`` the facade was
+        obj: The ``Dataset`` / ``NetCDF`` / ``FeatureCollection`` / ``MeshDataset`` the facade was
             called on.
         backend: The backend name the seam passes; defaults to the name this is registered under.
         **kwargs: The keywords pyramids forwarded, in its own vocabulary.

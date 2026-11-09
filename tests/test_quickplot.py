@@ -1237,7 +1237,7 @@ def test_quickmap_variable_refuses_a_non_netcdf_input():
     import numpy as np
 
     grid = np.zeros((4, 4))
-    with pytest.raises(ValueError, match="selects a NetCDF or UgridDataset variable"):
+    with pytest.raises(ValueError, match="selects a NetCDF or MeshDataset variable"):
         digitalearth.quickmap(grid, variable="t2m", backend="matplotlib")
 
 
@@ -1248,7 +1248,7 @@ def test_quickmap_draws_a_pinned_netcdf_variable():
 
 
 def test_quickmap_draws_a_ugrid_mesh_on_the_static_tier(ugrid_mesh):
-    """``quickmap`` draws a UgridDataset, shading each of the mesh's own faces (#499 gap 2).
+    """``quickmap`` draws a MeshDataset, shading each of the mesh's own faces (#499 gap 2).
 
     Test scenario:
         The drawn collection's values are read back: the quad's 10 appears on both of its fan triangles
@@ -1288,7 +1288,7 @@ def test_quickmap_refuses_a_mesh_on_a_backend_with_no_mesh_render(backend, ugrid
 
 
 def test_input_kind_calls_a_ugrid_dataset_a_mesh(ugrid_mesh):
-    """The input gate classifies a UgridDataset as the ``mesh`` family the kind registry already names."""
+    """The input gate classifies a MeshDataset as the ``mesh`` family the kind registry already names."""
     assert qp._input_kind(ugrid_mesh("face"), "quickmap") == "mesh"
 
 

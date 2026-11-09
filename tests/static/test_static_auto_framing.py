@@ -175,7 +175,7 @@ class TestNoneFitsTheData:
         raster = _raster()
         flat.field(raster)
         flat.set_bounds(None)
-        west, south, east, north = raster.bbox
+        west, south, east, north = raster.total_bounds
         (xmin, xmax), (ymin, ymax) = _limits(flat)
         assert (xmin, xmax, ymin, ymax) == pytest.approx((west, east, south, north)), (
             _limits(flat)

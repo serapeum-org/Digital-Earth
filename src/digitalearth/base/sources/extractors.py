@@ -56,7 +56,7 @@ DRAWABLE_FAMILIES: Mapping[str, str] = MappingProxyType(
         "raster": "a pyramids Dataset (a NetCDF or a DatasetCollection counts as one)",
         "array": "a 2-D numpy array",
         "vector": "a pyramids FeatureCollection",
-        "mesh": "a pyramids UgridDataset (an unstructured mesh)",
+        "mesh": "a pyramids MeshDataset (an unstructured mesh)",
     }
 )
 
@@ -111,13 +111,13 @@ def _is_mesh(data: Any) -> bool:
         data: The candidate.
 
     Returns:
-        `True` for a pyramids `UgridDataset`. Matched by type, like the raster test, because that is how
+        `True` for a pyramids `MeshDataset`. Matched by type, like the raster test, because that is how
         :func:`extract` chooses the branch — a mesh is told apart from a raster by *being* one, not by
         exposing a member a raster lacks.
     """
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
 
-    return isinstance(data, UgridDataset)
+    return isinstance(data, MeshDataset)
 
 
 #: How each family is recognised. Keyed by the same names as :data:`DRAWABLE_FAMILIES`, so a family with a
@@ -344,7 +344,7 @@ def extract(
         return _from_feature(data, metadata, crs=crs)
     if isinstance(data, np.ndarray):
         return _from_numpy(data, x, y, metadata, crs=crs)
-    # Last, not first: a UgridDataset is no subclass of any branch above, so the order is free — and
+    # Last, not first: a MeshDataset is no subclass of any branch above, so the order is free — and
     # testing it here keeps the ugrid subpackage unimported for a raster or vector extraction that does
     # not come through `quickmap`, whose own input gate imports it on every call anyway.
     if _is_mesh(data):
@@ -547,8 +547,8 @@ def _from_raster(
     """
     idx = band - 1
     z = read_masked_band(ds, band)
-    band_meta = _band_item(ds.band_meta_data, idx) or {}
-    dataset_meta = getattr(ds, "meta_data", None)
+    band_meta = _band_item(ds.band_metadata, idx) or {}
+    dataset_meta = getattr(ds, "metadata", None)
     grib = _grib_identity(ds, band_meta, idx)
     # Gate the GRIB_UNIT fallback on GRIB *detection*, not on the decoded identity being non-empty: a band that
     # decodes to no identity/time keys still declares its unit, and GRIB_UNIT is not matched by the `units` step.
@@ -588,7 +588,7 @@ def _from_raster(
 def _variable_attributes(nc: Any, variable: str | None) -> dict:
     """The CF attributes pyramids read off one NetCDF variable, as a plain mapping.
 
-    ``NetCDF.meta_data`` is a ``NetCDFMetadata`` whose ``variables`` hold one ``VariableInfo`` per variable,
+    ``NetCDF.metadata`` is a ``NetCDFMetadata`` whose ``variables`` hold one ``VariableInfo`` per variable,
     carrying the file's own attribute list (``standard_name``, ``long_name``, …) plus a resolved ``unit``.
     That is the public per-variable accessor, so nothing here reaches for ``netCDF4`` or GDAL.
 
@@ -600,7 +600,7 @@ def _variable_attributes(nc: Any, variable: str | None) -> dict:
         The variable's attributes, with the resolved ``unit`` folded in as ``units`` when the attribute list
         itself carries none. An empty dict when the container exposes no such metadata.
     """
-    variables = getattr(getattr(nc, "meta_data", None), "variables", None)
+    variables = getattr(getattr(nc, "metadata", None), "variables", None)
     if variables is None:
         return {}
     infos = variables.values() if isinstance(variables, Mapping) else variables
@@ -860,7 +860,7 @@ def _fan_values(values: np.ndarray, mesh: Any, triangles: np.ndarray) -> np.ndar
 def _mesh_step(values: np.ndarray, named: str, band: int, expected: int) -> np.ndarray:
     """Reduce a temporal or layered mesh variable to the single step ``band`` names.
 
-    ``UgridDataset.masked_values`` keeps a variable's full shape, and UGRID model output normally carries a
+    ``MeshDataset.masked_values`` keeps a variable's full shape, and UGRID model output normally carries a
     leading time axis — so ``(n_steps, n_elements)`` is the common case, not the exception. A surface render
     colours one value per element, so the step is taken here: letting a 2-D array through reached the
     fan-spread as a bare numpy broadcast error for face data, and built a ``MeshSource`` with a 2-D ``z``
@@ -910,7 +910,7 @@ def _from_ugrid(
     band: int = DEFAULT_BAND,
     crs: Any = None,
 ) -> MeshSource:
-    """Build a :class:`MeshSource` from a pyramids ``UgridDataset`` variable (defaults to the first).
+    """Build a :class:`MeshSource` from a pyramids ``MeshDataset`` variable (defaults to the first).
 
     The geometry comes from pyramids rather than being rebuilt here: ``Mesh2d.fan_triangles`` cuts every
     face — triangle, quad or larger polygon — into triangles with pure numpy, which is both the one shape
@@ -919,7 +919,7 @@ def _from_ugrid(
     mis-assign face-located values onto them.
 
     Args:
-        ug: The pyramids ``UgridDataset`` to read.
+        ug: The pyramids ``MeshDataset`` to read.
         variable: The data variable to draw; ``None`` takes the first.
         metadata: Extra metadata merged over the derived keys (the caller wins).
         band: 1-based step to draw from a variable carrying a time (or layer) axis.
@@ -939,11 +939,11 @@ def _from_ugrid(
     carried = list(ug.data_variable_names)
     if variable is None:
         if not carried:
-            raise ValueError("UgridDataset has no data variables to plot")
+            raise ValueError("MeshDataset has no data variables to plot")
         variable = carried[0]
     elif variable not in carried:
         raise ValueError(
-            f"variable={variable!r} is not in this UgridDataset, which carries {carried}"
+            f"variable={variable!r} is not in this MeshDataset, which carries {carried}"
         )
     held = ug.data_vars[variable]
     location = getattr(held, "location", None)

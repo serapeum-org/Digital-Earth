@@ -249,7 +249,7 @@ def _netcdf_with_identity(standard_name, units, variable="var123"):
         variable: The variable's (deliberately opaque) name.
 
     Returns:
-        pyramids.netcdf.NetCDF: the container, with the attributes readable through ``meta_data``.
+        pyramids.netcdf.NetCDF: the container, with the attributes readable through ``metadata``.
     """
     from pyramids.dataset import Dataset, GeoReference
     from pyramids.netcdf import NetCDF

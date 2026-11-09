@@ -528,7 +528,7 @@ class TestWarpingOnlyTheWindow:
         from pyramids.dataset import Dataset
 
         dataset = Dataset.read_file(RASTER)
-        west, south, east, north = dataset.bbox
+        west, south, east, north = dataset.total_bounds
         m = InteractiveMap(crs=dataset.epsg)
         m.large_image(dataset, dynamic=True, max_pixels=64 * 64)
         stream = next(s for s in m.layers[0].streams if isinstance(s, RangeXY))

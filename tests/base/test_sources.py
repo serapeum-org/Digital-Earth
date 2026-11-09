@@ -336,17 +336,17 @@ class TestExtractorHelpers:
         """A container exposing no per-variable metadata reports no attributes at all.
 
         Test scenario:
-            ``_variable_attributes`` reaches ``meta_data.variables`` through ``getattr``, so a container
+            ``_variable_attributes`` reaches ``metadata.variables`` through ``getattr``, so a container
             with neither must answer with an empty mapping — the CF lookups then simply find nothing,
             instead of the extractor failing on data it can still read values from.
         """
         from digitalearth.base.sources.extractors import _variable_attributes
 
         class _NoMetadata:
-            """A container that exposes values but no ``meta_data``."""
+            """A container that exposes values but no ``metadata``."""
 
         assert _variable_attributes(_NoMetadata(), "acc") == {}, (
-            "a container with no meta_data must report no attributes"
+            "a container with no metadata must report no attributes"
         )
 
     def test_variable_attributes_is_empty_for_a_variable_it_does_not_describe(self):
@@ -374,10 +374,10 @@ class TestExtractorHelpers:
         from dataclasses import replace
 
         nc = _netcdf_container()
-        metadata = nc.meta_data
+        metadata = nc.metadata
         variables = dict(metadata.variables)
         variables["acc"] = replace(variables["acc"], unit="m3/s")
-        nc.meta_data = replace(metadata, variables=variables)
+        nc.metadata = replace(metadata, variables=variables)
         assert "units" not in variables["acc"].attributes, (
             "the case under test is a unit slot with no units attribute beside it"
         )
@@ -801,7 +801,7 @@ class TestRasterIdentity:
             case-sensitive.
         """
         ds = _small_raster()
-        ds.meta_data = {"STANDARD_NAME": "air_pressure_at_mean_sea_level"}
+        ds.metadata = {"STANDARD_NAME": "air_pressure_at_mean_sea_level"}
         src = get_source(ds, band=1)
         assert src.metadata("standard_name") == "air_pressure_at_mean_sea_level", (
             f"an upper-cased key should still be read, got {src.metadata('standard_name')!r}"
@@ -990,16 +990,16 @@ def test_ugrid_source_records_the_mesh_in_metadata(ugrid_mesh):
 def test_ugrid_variable_not_carried_is_refused(ugrid_mesh):
     """Naming a variable the mesh does not carry is refused, listing the ones it does."""
     mesh = ugrid_mesh("face")
-    with pytest.raises(ValueError, match="is not in this UgridDataset"):
+    with pytest.raises(ValueError, match="is not in this MeshDataset"):
         get_source(mesh, variable="nope")
 
 
 def test_ugrid_without_data_variables_is_refused(ugrid_mesh):
     """A mesh with no data variables is refused rather than drawn as a blank surface."""
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
 
     mesh = ugrid_mesh("face").mesh
-    empty = UgridDataset(mesh=mesh, data_variables={}, global_attributes={})
+    empty = MeshDataset(mesh=mesh, data_variables={}, global_attributes={})
     with pytest.raises(ValueError, match="no data variables"):
         get_source(empty)
 
@@ -1007,11 +1007,11 @@ def test_ugrid_without_data_variables_is_refused(ugrid_mesh):
 def test_ugrid_variable_on_an_uncolourable_location_is_refused(ugrid_mesh):
     """A variable on an edge is refused: a surface render colours nodes or faces, nothing else."""
     import numpy as np
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
     from pyramids.netcdf.ugrid.models import MeshVariable
 
     mesh = ugrid_mesh("face").mesh
-    edged = UgridDataset(
+    edged = MeshDataset(
         mesh=mesh,
         data_variables={
             "e": MeshVariable(
@@ -1035,11 +1035,11 @@ def test_ugrid_explicit_variable_name_is_read(ugrid_mesh):
         The face-located and node-located variables differ in both length and location, so the one that
         was read is identifiable from the result alone.
     """
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
     from pyramids.netcdf.ugrid.models import MeshVariable
 
     face = ugrid_mesh("face")
-    both = UgridDataset(
+    both = MeshDataset(
         mesh=face.mesh,
         data_variables={
             "depth": face.data_vars["depth"],
@@ -1328,7 +1328,7 @@ def test_pinned_variable_units_come_from_its_band_when_its_metadata_has_none():
     class _SubsetWithBandUnit:
         attrs: dict = {}
         band_units = ["K"]
-        meta_data = None
+        metadata = None
 
     attributes = _netcdf_attributes(_SubsetWithBandUnit(), "t2m", True)
     assert attributes.get("units") == "K", (

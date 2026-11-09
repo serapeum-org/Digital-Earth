@@ -629,7 +629,7 @@ class SourceView(Source):
         Returns:
             The window, or `None` when there is no rectangle to name: the request gives no region, and
             either names no usable size (no budget, and not both of width and height) or meets an object
-            with no `bbox` of its own to window that size against.
+            with no extent of its own to window that size against.
         """
         bbox = request.as_bbox()
         if bbox is not None:
@@ -640,8 +640,15 @@ class SourceView(Source):
             return window
         # A size with no region still has to be honoured: the object *can* window, so skipping here
         # returned the whole raster — blowing a budget silently, or handing a caller who asked for a 4x3
-        # canvas all 13x14 cells. The source's own bbox is the region.
-        source_bbox = getattr(data, "bbox", None)
+        # canvas all 13x14 cells. The source's own extent is the region.
+        #
+        # `total_bounds` is the canonical name; pyramids renamed `bbox` to it (pyramids-core 0.75.0) and
+        # keeps `bbox` as a deprecated alias. `data` here is any duck-typed raster, including a
+        # third-party reader that still declares only `bbox`, so fall back rather than silently window
+        # nothing — a missing extent returns None below and skips the window entirely.
+        source_bbox = getattr(data, "total_bounds", None)
+        if source_bbox is None:
+            source_bbox = getattr(data, "bbox", None)
         # A full canvas counts; half of one does not. `_shape` cannot use a lone width, so windowing on
         # one read a 64x64 floor square that honoured nothing the caller named.
         canvas = request.width is not None and request.height is not None

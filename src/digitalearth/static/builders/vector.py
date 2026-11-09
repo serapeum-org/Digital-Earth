@@ -1230,7 +1230,7 @@ def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
 
     Args:
         scene: The map being drawn on.
-        data: The pyramids ``Dataset`` (its cells become points), ``FeatureCollection`` or ``UgridDataset``
+        data: The pyramids ``Dataset`` (its cells become points), ``FeatureCollection`` or ``MeshDataset``
             the layer draws.
         layer: The layer's description, whose ``via`` names the triangulated render.
 
@@ -2780,7 +2780,7 @@ class VectorMixin(_MixinBase):
     def _placed_mesh(self, data: Any) -> Any:
         """Put a UGRID mesh into the display CRS.
 
-        A mesh is warped with ``UgridDataset.to_crs``, which (pyramids-core >= 0.73.0, #1404) accepts the
+        A mesh is warped with ``MeshDataset.to_crs``, which (pyramids-core >= 0.73.0, #1404) accepts the
         display CRS in any form ``pyproj.CRS.from_user_input`` takes — an EPSG code, a ``"+proj=..."``
         string, WKT, an ``"ESRI:..."`` code — so the display CRS is handed over as written, exactly as every
         other family does. An orthographic, Robinson or Mollweide display CRS is no longer a special case:
@@ -2788,7 +2788,7 @@ class VectorMixin(_MixinBase):
         them are then dropped downstream (:func:`_placeable_triangles`), like any other off-view geometry.
 
         Args:
-            data: The pyramids ``UgridDataset`` to place.
+            data: The pyramids ``MeshDataset`` to place.
 
         Returns:
             The mesh in the display CRS, or the mesh untouched when it declares no CRS of its own or is
@@ -2814,7 +2814,7 @@ class VectorMixin(_MixinBase):
         "triangulate these points yourself".
 
         Args:
-            data: A pyramids ``Dataset``, ``FeatureCollection`` or ``UgridDataset``.
+            data: A pyramids ``Dataset``, ``FeatureCollection`` or ``MeshDataset``.
             band: 1-based step to draw from a mesh variable carrying a time (or layer) axis. Ignored for
                 scattered input, whose value belongs to the point.
 
@@ -2829,9 +2829,9 @@ class VectorMixin(_MixinBase):
                 to contour, no data variables on the mesh, or a variable on a location a surface render
                 cannot colour.
         """
-        from pyramids.netcdf.ugrid.dataset import UgridDataset
+        from pyramids.netcdf.ugrid.dataset import MeshDataset
 
-        if isinstance(data, UgridDataset):
+        if isinstance(data, MeshDataset):
             src = get_source(self._placed_mesh(data), band=band)
             if not isinstance(src, MeshSource):
                 # The mesh branch of the extractor answers with a MeshSource, which is what carries the
@@ -2865,7 +2865,7 @@ class VectorMixin(_MixinBase):
 
         Args:
             data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
-                ``UgridDataset`` — which keeps its **own** ``face_node_connectivity`` instead of being
+                ``MeshDataset`` — which keeps its **own** ``face_node_connectivity`` instead of being
                 re-triangulated — or a path or URL to one. It is recorded as the layer's source as given,
                 so only a path-backed
                 layer can be written down.
@@ -2934,7 +2934,7 @@ class VectorMixin(_MixinBase):
 
         Args:
             data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
-                node-located ``UgridDataset`` — or a path or URL to one. Only a path-backed layer can be
+                node-located ``MeshDataset`` — or a path or URL to one. Only a path-backed layer can be
                 written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
@@ -2980,7 +2980,7 @@ class VectorMixin(_MixinBase):
 
         Args:
             data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
-                node-located ``UgridDataset`` — or a path or URL to one. Only a path-backed layer can be
+                node-located ``MeshDataset`` — or a path or URL to one. Only a path-backed layer can be
                 written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed
@@ -3025,7 +3025,7 @@ class VectorMixin(_MixinBase):
 
         Args:
             data: A pyramids ``Dataset`` (its cells become points), a ``FeatureCollection``, or a
-                ``UgridDataset`` (drawn on its own ``face_node_connectivity``) — or a path or URL to one.
+                ``MeshDataset`` (drawn on its own ``face_node_connectivity``) — or a path or URL to one.
                 Only a path-backed layer can be written down.
             name: The caller's own name for the layer, used as its id and its label; ``None``
                 (default) generates one from the kind, and a name already on the figure is suffixed

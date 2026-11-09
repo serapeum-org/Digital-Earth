@@ -700,7 +700,7 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
             ...     _pinned_variable(np.zeros((2, 2)), "t2m")
             ... except ValueError as error:
             ...     print(error)
-            variable='t2m' selects a NetCDF or UgridDataset variable, but the input is a ndarray
+            variable='t2m' selects a NetCDF or MeshDataset variable, but the input is a ndarray
 
             ```
         - Asking for nothing leaves the input exactly as it came:
@@ -716,22 +716,22 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
     if variable is None:
         return data
     from pyramids.netcdf import NetCDF
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
 
-    if isinstance(data, UgridDataset):
+    if isinstance(data, MeshDataset):
         # A mesh is narrowed by dropping the others rather than by pinning one: `_from_ugrid` draws the
         # first variable, so a single-variable mesh *is* the selection, and it keeps the variable's name,
         # units and standard name — which a pinned NetCDF subset cannot (review M4).
         carried = list(data.data_variable_names)
         if variable not in carried:
             raise ValueError(
-                f"variable={variable!r} is not in this UgridDataset, which carries {carried}"
+                f"variable={variable!r} is not in this MeshDataset, which carries {carried}"
             )
         others = [held for held in carried if held != variable]
         return data.drop_variables(others) if others else data
     if not isinstance(data, NetCDF):
         raise ValueError(
-            f"variable={variable!r} selects a NetCDF or UgridDataset variable, but the input is a "
+            f"variable={variable!r} selects a NetCDF or MeshDataset variable, but the input is a "
             f"{type(data).__name__}"
         )
     from pyramids.netcdf import Variable
@@ -784,7 +784,7 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
         backend: The backend name, already validated.
 
     Raises:
-        TypeError: when ``data`` is a ``UgridDataset`` and ``backend`` is not one of
+        TypeError: when ``data`` is a ``MeshDataset`` and ``backend`` is not one of
             :data:`MESH_BACKENDS`.
 
     Examples:
@@ -806,11 +806,11 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
     """
     if backend in MESH_BACKENDS:
         return
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
 
-    if isinstance(data, UgridDataset):
+    if isinstance(data, MeshDataset):
         raise TypeError(
-            f"backend={backend!r} has no unstructured-mesh render; draw a UgridDataset on the "
+            f"backend={backend!r} has no unstructured-mesh render; draw a MeshDataset on the "
             f"matplotlib tier, which shades each of its faces (tripcolor): "
             f"quickmap(data, backend='matplotlib') here, or plot(backend='static') through "
             f"pyramids, whose own 'matplotlib' is cleopatra's path"
@@ -836,19 +836,19 @@ def _input_kind(data: PlottableData, caller: str) -> str:
         caller: Public function name to blame in a refusal — ``"quickmap"`` or ``"quickplot"``.
 
     Returns:
-        ``"raster"`` for a ``Dataset``; ``"mesh"`` for a ``UgridDataset``; ``"points"``, ``"lines"`` or
+        ``"raster"`` for a ``Dataset``; ``"mesh"`` for a ``MeshDataset``; ``"points"``, ``"lines"`` or
         ``"polygons"`` for a uniform ``FeatureCollection``; ``"mixed"`` for one whose geometry types
         disagree.
 
     Raises:
         ValueError: when a ``FeatureCollection`` is empty. Without this guard the all-``True`` result of an
             empty ``geom_type`` check reads as polygons and the map draws nothing, silently.
-        TypeError: when ``data`` is none of a ``Dataset``, a ``UgridDataset`` or a ``FeatureCollection``.
+        TypeError: when ``data`` is none of a ``Dataset``, a ``MeshDataset`` or a ``FeatureCollection``.
     """
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
 
-    # Before the Dataset branch for clarity only — a UgridDataset is not a Dataset subclass, unlike NetCDF.
-    if isinstance(data, UgridDataset):
+    # Before the Dataset branch for clarity only — a MeshDataset is not a Dataset subclass, unlike NetCDF.
+    if isinstance(data, MeshDataset):
         return "mesh"
     if isinstance(data, Dataset):
         return "raster"
@@ -958,7 +958,7 @@ def quickmap(
 
     Args:
         data: A pyramids ``Dataset`` (raster), ``FeatureCollection`` (points/polygons) or
-            ``UgridDataset`` (an unstructured mesh, drawn on ``backend="static"`` only).
+            ``MeshDataset`` (an unstructured mesh, drawn on ``backend="static"`` only).
         crs: Display CRS for the map (`backend="static"`/`"interactive"`, where it defaults to `3857`, and
             `"web"`, which accepts only `4326`). With `backend="3d"` the scene is drawn in it; left out, the 3-D
             scene takes the data's own CRS.
@@ -1049,8 +1049,8 @@ def quickmap(
             backend honours it. Also for a ``variable`` the input does not carry (or names on an input
             with no variables to choose from), and for a ``kind`` other than ``"tripcolor"`` on a mesh,
             which has only the one render.
-        TypeError: if ``data`` is none of a ``Dataset``, a ``FeatureCollection`` or a ``UgridDataset``;
-            for a ``UgridDataset`` on any backend but ``"matplotlib"``, which is the only tier with a
+        TypeError: if ``data`` is none of a ``Dataset``, a ``FeatureCollection`` or a ``MeshDataset``;
+            for a ``MeshDataset`` on any backend but ``"matplotlib"``, which is the only tier with a
             triangular render (:data:`MESH_BACKENDS`); and, on ``backend="3d"``, for a line
             ``FeatureCollection`` too, which has no 3-D builder.
 

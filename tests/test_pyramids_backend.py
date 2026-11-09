@@ -305,7 +305,7 @@ class TestVocabulary:
     """The names that differ between the facade and this package."""
 
     def test_the_mesh_selector_is_renamed_to_this_packages_spelling(self):
-        """``variable_name`` (the UgridDataset facade) becomes ``variable`` (``quickmap``).
+        """``variable_name`` (the MeshDataset facade) becomes ``variable`` (``quickmap``).
 
         Test scenario:
             Forwarded unchanged it reached cleopatra, which refused it by listing its own accepted

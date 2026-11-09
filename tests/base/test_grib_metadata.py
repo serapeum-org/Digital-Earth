@@ -123,18 +123,18 @@ class TestGribCacheInvalidation:
     """Reassigning a dataset's band metadata in place is not served a stale cached decode."""
 
     def test_in_place_mutation_is_not_served_stale(self, grib_dataset):
-        """After band_meta_data is reassigned on the same Dataset, the identity refreshes with the units.
+        """After band_metadata is reassigned on the same Dataset, the identity refreshes with the units.
 
         Test scenario:
             The per-dataset decode cache is keyed by Dataset identity with no invalidation. Reassigning
-            band_meta_data in place and re-reading returned the stale cached identity (element stayed 'TMP')
+            band_metadata in place and re-reading returned the stale cached identity (element stayed 'TMP')
             while units re-read fresh from GRIB_UNIT — an internally inconsistent Source. The identity must
             refresh too.
         """
         first = get_source(grib_dataset)
         assert first.metadata("element") == "TMP"
         assert first.units == "C"
-        grib_dataset.band_meta_data = [
+        grib_dataset.band_metadata = [
             {
                 "GRIB_ELEMENT": "PRES",
                 "GRIB_SHORT_NAME": "0-SFC",

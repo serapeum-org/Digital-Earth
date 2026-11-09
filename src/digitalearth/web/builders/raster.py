@@ -343,7 +343,7 @@ def _lonlat_bounds(dataset: Any) -> Bounds:
     Raises:
         ValueError: when the extent cannot be expressed in lon/lat, in ``Bounds.to_crs``' own words.
     """
-    return Bounds.from_bbox(list(dataset.bbox), dataset.epsg).to_crs(4326)
+    return Bounds.from_bbox(list(dataset.total_bounds), dataset.epsg).to_crs(4326)
 
 
 def _tile_index(lon: float, lat: float, zoom: int) -> tuple[int, int]:
@@ -746,7 +746,7 @@ def _windowed_raster(web_map: Any, data: Any, *, route: str, caller: str) -> Any
             `GeoDataFrame`. The inline route takes the first two (they are values already in memory, and it
             encodes the whole band as one image), so this is the one place the two routes' inputs differ, and
             it is refused by name here rather than as ``cannot build a Source from Source`` out of the
-            colour-limit scan or ``no attribute 'bbox'`` out of the extent (review R2-L12).
+            colour-limit scan or ``no attribute 'total_bounds'`` out of the extent (review R2-L12).
     """
     from pyramids.dataset import Dataset
 

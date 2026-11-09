@@ -167,7 +167,7 @@ The triangles come from pyramids (`Mesh2d.fan_triangles`, which cuts every face 
 polygon — with pure numpy), not from a triangulation computed here. Re-triangulating the nodes would invent
 faces the mesh does not have and paint face-located values onto them.
 
-**Which backends draw one.** A `UgridDataset` is accepted by `quickmap(backend="matplotlib")`, which draws it
+**Which backends draw one.** A `MeshDataset` is accepted by `quickmap(backend="matplotlib")`, which draws it
 with `tripcolor` — each face shaded its own colour. The interactive, web and 3-D tiers have no triangular
 render, so they refuse a mesh by name rather than drawing it as something else. Note this is about the mesh
 *input*: the `unstructured` row of the [support matrix](support-matrix.md) is about the triangulated **verbs**
