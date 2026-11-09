@@ -14,15 +14,18 @@ A bounds array has no spatial plane, so it is not something a map can draw at al
 therefore the first variable that *is* drawable, which is stable under either ordering.
 
 Drawability is decided from the container's own public metadata: a variable is drawable when its dimensions
-include one of the axes the store marks as its eastings *and* one it marks as its northings (CF ``axis`` of
-``X``/``Y``, or a ``standard_name`` naming either). Counting any two horizontal names instead would call a
-staggered store's ``(xi_rho, xi_u)`` variable drawable, which spans no northing at all. pyramids answers this exact question internally — on the
+include a dimension spanned by a coordinate the store marks as its eastings *and* one spanned by a
+coordinate it marks as its northings (CF ``axis`` of ``X``/``Y``, or a ``standard_name`` naming either).
+Reading the dimensions a horizontal coordinate spans, rather than the coordinate's own name, is what lets a
+curvilinear store classify: ROMS' ``lat_rho``/``lon_rho`` span ``(eta_rho, xi_rho)`` and nothing is named
+``lat``. Requiring one of *each* axis rather than any two horizontal names is what refuses a staggered
+store's ``(xi_rho, xi_u)`` variable, which spans no northing at all. pyramids answers this exact question internally — on the
 installed 0.75.0, ``NetCDF._spatial_variable_names()`` returns ``['sst']`` for the container above — but the
 method is private, so it is not consumed here. If it is ever published, this module collapses to a delegation.
 
-When nothing can be classified — a curvilinear store whose coordinates are 2-D auxiliary arrays, or a
-container exposing no metadata — the first declared name is returned, which is what every reader did before.
-That keeps this strictly no worse than the previous behaviour on a store it cannot read.
+When nothing can be classified — a container exposing no metadata, or one marking neither axis — the first
+declared name is returned, which is what every reader did before. That keeps this strictly no worse than the
+previous behaviour on a store it cannot read.
 
 It is a leaf like :mod:`digitalearth.base.sources.bandname`: pyramids metadata in through ``getattr``, a plain
 string out, no renderer and no cycle.
@@ -111,9 +114,17 @@ def _horizontal_dimensions(variables: Any) -> tuple:
         axis = str(attributes.get("axis", "")).upper()
         standard = str(attributes.get("standard_name", "")).lower()
         if axis == X_AXIS or standard in X_STANDARD_NAMES:
-            x_names.add(_bare(name))
+            spans = x_names
         elif axis == Y_AXIS or standard in Y_STANDARD_NAMES:
-            y_names.add(_bare(name))
+            spans = y_names
+        else:
+            continue
+        # The *dimensions* the coordinate spans, not its own name, because those are what a data variable
+        # references. For a 1-D `lat` over `lat` the two are the same; for a curvilinear store they are not
+        # — ROMS' `lat_rho` spans `(eta_rho, xi_rho)` and nothing is called `lat` at all, so matching on the
+        # coordinate's name found no horizontal dimension and every variable fell through to the fallback.
+        # A coordinate whose dimensions are not declared contributes its own name, as before.
+        spans |= _dimensions_of(info) or {_bare(name)}
     return x_names, y_names
 
 

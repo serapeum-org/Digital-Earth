@@ -383,3 +383,67 @@ class TestAVariablesSequence:
         assert default_variable(container) == "sst", (
             f"a sequence-shaped variables mapping must classify too, got {default_variable(container)!r}"
         )
+
+
+class TestACurvilinearStore:
+    """A store whose horizontal coordinates are 2-D auxiliary arrays rather than dimensions.
+
+    A ROMS-style curvilinear grid names its coordinates `lat_rho` / `lon_rho`, each spanning `(eta, xi)`, and
+    its data variables span `(time, eta, xi)`. Nothing is called `lat` or `lon`, so classifying by the
+    coordinate's own *name* found no horizontal dimension and the answer fell back to the first declared
+    name — a bounds array, silently, which is the defect this module exists to prevent.
+    """
+
+    def test_a_2d_coordinate_lends_its_own_dimensions(self):
+        """The data variable over the curvilinear grid is drawable; the bounds array is not.
+
+        Test scenario:
+            `lat_rho` and `lon_rho` each span `(eta_rho, xi_rho)`, so those are the dimensions a data
+            variable references. Reading a horizontal coordinate's dimensions rather than its name is what
+            makes `temp` classify while `time_bnds` does not.
+        """
+        from digitalearth.base.sources.variable import (
+            default_variable,
+            drawable_variable_names,
+        )
+
+        container = _container(
+            ["time_bnds", "temp"],
+            {
+                "lat_rho": _Info(["eta_rho", "xi_rho"], {"standard_name": "latitude"}),
+                "lon_rho": _Info(["eta_rho", "xi_rho"], {"standard_name": "longitude"}),
+                "time_bnds": _Info(["time", "nbnds"]),
+                "temp": _Info(["time", "eta_rho", "xi_rho"]),
+            },
+        )()
+
+        assert drawable_variable_names(container) == ["temp"], (
+            f"a curvilinear data variable must classify, got {drawable_variable_names(container)}"
+        )
+        assert default_variable(container) == "temp", (
+            f"expected the data variable, not the bounds array, got {default_variable(container)!r}"
+        )
+
+    def test_a_coordinate_named_differently_from_its_dimension(self):
+        """A 1-D coordinate whose name differs from its dimension still contributes the dimension.
+
+        Test scenario:
+            A store may call the coordinate `latitude` while the dimension it spans is `y`. Data variables
+            reference `y`, not `latitude`, so the dimension is the name that has to be matched.
+        """
+        from digitalearth.base.sources.variable import default_variable
+
+        container = _container(
+            ["bounds", "elevation"],
+            {
+                "latitude": _Info(["y"], {"standard_name": "latitude"}),
+                "longitude": _Info(["x"], {"standard_name": "longitude"}),
+                "bounds": _Info(["time", "nv"]),
+                "elevation": _Info(["y", "x"]),
+            },
+        )()
+
+        assert default_variable(container) == "elevation", (
+            f"the dimension, not the coordinate's name, is what data variables reference; "
+            f"got {default_variable(container)!r}"
+        )
