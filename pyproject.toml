@@ -532,6 +532,16 @@ channels = ["conda-forge"]
 # refuses Python >=3.10. arm64 also matches CI (GitHub macos-latest is Apple Silicon).
 platforms = ["win-64", "linux-64", "osx-arm64"]
 
+# macOS 14 is the floor so that PyPI wheels tagged `macosx_14_0_arm64` are eligible. pyproj publishes its
+# arm64 wheels only at that tag, and pixi's lower default made them ineligible, so the solve fell back to
+# `pyproj-3.7.2.tar.gz` and built from source — which needs a `proj` executable in the environment. That used
+# to be supplied accidentally by the conda GDAL this project no longer declares, so the source build started
+# failing on macOS with "proj executable not found". Declaring the floor selects the wheel instead, which is
+# both correct and faster. This constrains only pixi's own environments, never the published wheel: a PyPI
+# consumer on an older macOS still gets whatever wheel pip picks for their system.
+[tool.pixi.system-requirements]
+macos = "14.0"
+
 
 [tool.pixi.pypi-dependencies]
 digitalearth = { path = ".", editable = true }
