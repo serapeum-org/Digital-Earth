@@ -62,7 +62,7 @@ def _bare(name: Any) -> str:
     return str(name).rsplit("/", maxsplit=1)[-1]
 
 
-def _described(variables: Any) -> list:
+def _described(variables: Any) -> list[tuple[str, Any]]:
     """The ``(name, info)`` pairs of a container's variable metadata, from either shape it comes in.
 
     pyramids hands back a mapping of name to ``VariableInfo``, but a container may expose a plain sequence
@@ -80,12 +80,12 @@ def _described(variables: Any) -> list:
     if isinstance(variables, Mapping):
         return list(variables.items())
     return [
-        (getattr(info, "full_name", None) or getattr(info, "name", ""), info)
+        (str(getattr(info, "full_name", None) or getattr(info, "name", "") or ""), info)
         for info in variables
     ]
 
 
-def _attributes(info: Any) -> dict:
+def _attributes(info: Any) -> dict[str, Any]:
     """The CF attributes pyramids read off one variable, as a plain mapping.
 
     Args:
@@ -97,7 +97,7 @@ def _attributes(info: Any) -> dict:
     return dict(getattr(info, "attributes", None) or {})
 
 
-def _horizontal_dimensions(variables: Any) -> tuple:
+def _horizontal_dimensions(variables: Any) -> tuple[set[str], set[str]]:
     """The dimension names carrying each of the two horizontal axes.
 
     Args:
@@ -108,7 +108,8 @@ def _horizontal_dimensions(variables: Any) -> tuple:
         Either may be empty when the store marks none, which is the signal to fall back rather than to
         conclude nothing is drawable.
     """
-    x_names, y_names = set(), set()
+    x_names: set[str] = set()
+    y_names: set[str] = set()
     for name, info in _described(variables):
         attributes = _attributes(info)
         axis = str(attributes.get("axis", "")).upper()
@@ -128,7 +129,7 @@ def _horizontal_dimensions(variables: Any) -> tuple:
     return x_names, y_names
 
 
-def _dimensions_of(info: Any) -> set:
+def _dimensions_of(info: Any) -> set[str]:
     """One variable's dimension names, with any group path stripped.
 
     Args:
@@ -144,7 +145,7 @@ def _dimensions_of(info: Any) -> set:
     }
 
 
-def drawable_variable_names(data: Any) -> list:
+def drawable_variable_names(data: Any) -> list[str]:
     """The container's variables that have a map plane, in the order the container declares them.
 
     Args:
@@ -207,17 +208,42 @@ def drawable_variable_names(data: Any) -> list:
     See Also:
         default_variable: Picks the first of these, falling back to the first declared name.
     """
-    names = [str(name) for name in (getattr(data, "variable_names", None) or [])]
+    return _drawable(
+        _declared(data), getattr(getattr(data, "metadata", None), "variables", None)
+    )
+
+
+def _declared(data: Any) -> list[str]:
+    """The variable names a container declares, in its own order.
+
+    Args:
+        data: Anything exposing ``variable_names``.
+
+    Returns:
+        The names as strings. Empty for a subset already pinned to one variable, which reports none.
+    """
+    return [str(name) for name in (getattr(data, "variable_names", None) or [])]
+
+
+def _drawable(names: list[str], variables: Any) -> list[str]:
+    """Which of `names` the metadata shows to have a map plane.
+
+    Args:
+        names: The declared names, in the container's order.
+        variables: The container's variable metadata, in either shape :func:`_described` accepts.
+
+    Returns:
+        The drawable names, in declaration order.
+    """
     if not names:
         return []
-    variables = getattr(getattr(data, "metadata", None), "variables", None)
     x_names, y_names = _horizontal_dimensions(variables)
     if not (x_names and y_names):
         return []
-    described = {}
+    described: dict[str, Any] = {}
     for key, info in _described(variables):
         described.setdefault(_bare(key), info)
-    drawable = []
+    drawable: list[str] = []
     for name in names:
         info = described.get(_bare(name))
         if info is None:
@@ -279,8 +305,12 @@ def default_variable(data: Any) -> str | None:
 
             ```
     """
-    drawable = drawable_variable_names(data)
-    if drawable:
-        return drawable[0]
-    names = [str(name) for name in (getattr(data, "variable_names", None) or [])]
-    return names[0] if names else None
+    # `variable_names` is read once and handed to the classifier: on a large or remote store each read
+    # walks it, and the fallback path used to read it a second time after `drawable_variable_names` had.
+    names = _declared(data)
+    if not names:
+        return None
+    drawable = _drawable(
+        names, getattr(getattr(data, "metadata", None), "variables", None)
+    )
+    return drawable[0] if drawable else names[0]

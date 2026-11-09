@@ -34,17 +34,24 @@ class TestTheDeclaredOrderPremise:
         """`variable_names` reports the bounds array first, which is what makes the default wrong.
 
         Test scenario:
-            Under 0.75 the order is the store's. If a future pyramids drops CF non-data arrays from
-            `variable_names`, or this fixture is replaced, this test fails and says so rather than letting
-            the three tests below pass for the wrong reason.
+            The tests below are only meaningful while the store reports a non-drawable array *before* its
+            data, so that is what is asserted — rather than the exact list, which would also fail on an
+            upstream improvement. If a future pyramids drops CF non-data arrays from `variable_names`, the
+            bounds array simply stops being reported and this says so, naming what it saw.
         """
         names = list(container.variable_names)
 
-        assert names == ["time_bnds", "sst"], (
-            f"the premise of this module changed: variable_names is {names}"
+        assert "sst" in names, (
+            f"the fixture must still carry its data variable, got {names}"
+        )
+        assert names and names[0] != "sst", (
+            f"these tests need a non-drawable name reported before the data; variable_names is {names}. "
+            "If pyramids now filters CF non-data arrays, the default-variable rule is no longer load-bearing "
+            "for this fixture and this module needs a store that still exercises it."
         )
         assert sorted(names) != names, (
-            "the declared order must differ from the sorted one to be a real test"
+            f"the declared order must differ from the sorted one, or 0.75's reordering changed nothing "
+            f"here and these tests would pass under either rule; got {names}"
         )
 
 
@@ -133,9 +140,10 @@ class TestDrawableVariableNames:
         """A declared name absent from `metadata.variables` cannot be classified, so it is passed over.
 
         Test scenario:
-            A container may declare a name its metadata does not carry — a grouped store whose
-            `variable_names` reports a path the mapping keys differently. Skipping it leaves the next
-            drawable variable as the answer, rather than treating the undescribed one as drawable.
+            A container may declare a name its metadata genuinely does not carry, so there are no
+            dimensions to classify it by. Skipping it leaves the next drawable variable as the answer,
+            rather than treating the undescribed one as drawable. This is *not* the grouped-store case —
+            a bare name against path-keyed metadata is matched, and `TestAGroupedStore` covers it.
         """
         from digitalearth.base.sources.variable import (
             default_variable,
