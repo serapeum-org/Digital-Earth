@@ -395,7 +395,7 @@ class SourceView(Source):
                 are honoured; the axes it may not name are listed under Raises.
             request: The region/resolution/budget wanted. Applied through pyramids' windowed read when the
                 object exposes one (`read_part`) and the request names a region, a budget, or a full canvas
-                (both `width` and `height`) — a size with no region windows against the source's own `bbox`.
+                (both `width` and `height`) — a size with no region windows against the source's own extent.
                 A request naming none of those, or one given for an object that cannot window, is recorded
                 but not enforced: a reader that cannot window is not a reason to refuse the read. A `budget`
                 on `selection` is folded in first, the smaller of the two winning — see :meth:`_budgeted` —
