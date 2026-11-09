@@ -556,6 +556,13 @@ platforms = ["win-64", "linux-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
 digitalearth = { path = ".", editable = true }
+# A vector-IO backend for geopandas, which conda-forge's geopandas-base no longer pulls in. It is needed only
+# by the handful of tests that round-trip through `gpd.read_file` / `gdf.to_file`; every other read in the
+# package goes through pyramids. Taken from PyPI, not conda: the conda build depends on libgdal-core, which
+# installs a second GDAL/PROJ beside the one pyramids vendors and breaks every EPSG lookup — see the note in
+# `[tool.pixi.dependencies]`. The PyPI wheel carries its own libraries inside the package and exports no
+# PROJ_DATA, so the vendored stack stays the only one on the environment's search path.
+pyogrio = ">=0.12.1"
 
 [tool.pixi.tasks]
 main = { cmd = "pytest -vvv -m 'not mpl and not gpu and not llvm' --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite (the `mpl` visual-regression tests are deselected — without `--mpl` they compare nothing; run them via `test-images`)" }
@@ -674,15 +681,15 @@ python = "3.13.*"
 # 3.14 is outside the supported range and many GIS deps (gdal, pyproj, ...) have
 # no 3.14 wheels yet, forcing source builds. py311/py312/py313 override this.
 python = ">=3.11,<3.14"
-# 3.13.3 is a floor, not a preference: pyramids-core 0.75.0 vendors PROJ 9.9.0, whose proj.db layout is
-# 1.7, and pyramids points PROJ_LIB at this conda tree's share/proj whenever one exists. libgdal-core
-# 3.13.3 is the first build pinning proj >=9.9.0; against 3.13.2 (proj 9.8.1, layout 1.6) the vendored
-# PROJ refuses the older database and every EPSG lookup raises at runtime.
+# NO conda `gdal` here, and no conda `pyogrio`, deliberately. pyramids-core vendors its own GDAL and PROJ
+# (`pyramids/_vendor/osgeo` plus `pyramids/_data/{gdal_data,proj_data}`), and `from osgeo import ...`
+# resolves to that vendored copy — the conda GDAL was never the one being imported. Declaring either package
+# installs a *second* GDAL/PROJ into the environment, whose activation exports PROJ_DATA at
+# `<env>/Library/share/proj`; the vendored PROJ then reads that database instead of the one it ships, and
+# refuses it whenever the two layouts differ (`DATABASE.LAYOUT.VERSION.MINOR = 6 whereas a number >= 7 is
+# expected`, raised on every EPSG lookup). Pinning the conda GDAL forward only makes the two happen to agree,
+# which is luck that breaks again on the next PROJ layout bump. Keeping conda free of GDAL removes the
+# conflict instead: import pyramids and the vendored stack is the only one present.
 #
-# This is a workaround for the override, not a fix for it — reported upstream as
-# serapeum-org/pyramids-core#1498. Once pyramids aims its vendored PROJ at the data it ships, the floor is
-# only about what GDAL itself needs again and can come back down.
-gdal = ">=3.13.3,<4"
-# Conda-forge's geopandas-base no longer pulls in a vector-IO backend.
-# pyogrio is required for GeoDataFrame.to_file / read_file.
-pyogrio = ">=0.12.1"
+# pyogrio is a PyPI dependency instead (see `[tool.pixi.pypi-dependencies]`), because its conda build pulls
+# libgdal-core, which is the same second GDAL by another route.
