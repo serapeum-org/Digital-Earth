@@ -678,6 +678,10 @@ python = ">=3.11,<3.14"
 # 1.7, and pyramids points PROJ_LIB at this conda tree's share/proj whenever one exists. libgdal-core
 # 3.13.3 is the first build pinning proj >=9.9.0; against 3.13.2 (proj 9.8.1, layout 1.6) the vendored
 # PROJ refuses the older database and every EPSG lookup raises at runtime.
+#
+# This is a workaround for the override, not a fix for it — reported upstream as
+# serapeum-org/pyramids-core#1498. Once pyramids aims its vendored PROJ at the data it ships, the floor is
+# only about what GDAL itself needs again and can come back down.
 gdal = ">=3.13.3,<4"
 # Conda-forge's geopandas-base no longer pulls in a vector-IO backend.
 # pyogrio is required for GeoDataFrame.to_file / read_file.
