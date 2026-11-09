@@ -97,6 +97,12 @@ dependencies = [
 photoreal = [
     "mitsuba >=3.9",
     "oidn >=0.2",
+    # `oidn` ships libOpenImageDenoise but links the Intel TBB runtime from the environment rather than
+    # bundling it, and the `mitsuba`/drjit path tracer needs it too, so `import oidn` fails without it
+    # ("libtbb.so.12: cannot open shared object file"). PyPI publishes TBB for Linux and Windows only, so
+    # the marker excludes macOS — where no wheel exists and the dependency would make the extra
+    # uninstallable. macOS users of this extra need TBB from their own package manager (brew install tbb).
+    "tbb >=2021.13 ; sys_platform != 'darwin'",
 ]
 # Interactive-2D tier (HoloViz: GeoViews -> HoloViews -> Bokeh, + Datashader + Panel). cartopy/pyproj arrive
 # transitively under geoviews as *its* deps and are never imported by us — pyramids stays the only GIS engine
@@ -202,7 +208,12 @@ dev = [
     "pytest-mpl>=0.17.0",
     # Pinned, not floored: the `lint` task and the ruff-pre-commit hook must agree, so this tracks
     # `rev: v0.15.22` in .pre-commit-config.yaml. Bump both together.
-    "ruff ==0.15.22"
+    "ruff ==0.15.22",
+    # A vector-IO backend for geopandas. Test-only: `src/` touches geopandas purely as a type (the
+    # `GeoDataFrame` pyramids hands back), while the tests round-trip through `gpd.read_file` /
+    # `gdf.to_file`. Deliberately NOT the conda build, whose `libgdal-core` dependency installs a second
+    # GDAL/PROJ beside the one pyramids vendors — see the note in `[tool.pixi.dependencies]`.
+    "pyogrio >=0.12.1",
 ]
 docs = [
     "mkdocs >=1.6.1",
@@ -556,13 +567,6 @@ platforms = ["win-64", "linux-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
 digitalearth = { path = ".", editable = true }
-# A vector-IO backend for geopandas, which conda-forge's geopandas-base no longer pulls in. It is needed only
-# by the handful of tests that round-trip through `gpd.read_file` / `gdf.to_file`; every other read in the
-# package goes through pyramids. Taken from PyPI, not conda: the conda build depends on libgdal-core, which
-# installs a second GDAL/PROJ beside the one pyramids vendors and breaks every EPSG lookup — see the note in
-# `[tool.pixi.dependencies]`. The PyPI wheel carries its own libraries inside the package and exports no
-# PROJ_DATA, so the vendored stack stays the only one on the environment's search path.
-pyogrio = ">=0.12.1"
 
 [tool.pixi.tasks]
 main = { cmd = "pytest -vvv -m 'not mpl and not gpu and not llvm' --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite (the `mpl` visual-regression tests are deselected — without `--mpl` they compare nothing; run them via `test-images`)" }
@@ -617,20 +621,6 @@ doctests-3d = { cmd = "pytest --doctest-modules src/digitalearth/three_d -p no:c
 doctests-web = { cmd = "pytest --doctest-modules src/digitalearth/web -p no:cacheprovider", description = "run the web (MapLibre + deck.gl) doctests, which the `doctests` task ignores because they import maplibre. Needs the web env" }
 
 
-# numba (pulled by datashader in the interactive tier) caps numpy at <2.5; conda-forge otherwise resolves
-# numpy 2.5.x for the interactive solve-group, which leaves no installable numba, so uv backtracks numba into
-# a legacy llvmlite that has no cp313 wheel and whose setup.py refuses Python >=3.10. Cap numpy here and scope
-# this feature to the interactive env only, so the lean envs stay on the latest numpy.
-[tool.pixi.feature.numba-numpy.dependencies]
-numpy = "<2.5"
-
-# The PyPI `oidn` wheel ships libOpenImageDenoise but links the Intel TBB runtime (libtbb.so.12) from the
-# environment; the `mitsuba`/drjit path tracer needs it too. Provide it as a conda-forge dependency so the
-# `photoreal` env carries libtbb on every platform (otherwise `import oidn` fails on CI Linux with
-# "libtbb.so.12: cannot open shared object file").
-[tool.pixi.feature.photoreal.dependencies]
-tbb = "*"
-
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
@@ -639,23 +629,22 @@ notebook = { features = ["notebook"], solve-group = "default" }
 # imports the documented modules at build time, and docs/reference/*.md references three_d.scene3d,
 # three_d.app.headless, interactive.map and web.map, so VTK, the HoloViz stack and MapLibre must all import or
 # the build fails - this holds even though the pyvista notebooks are excluded from execution. Second, the
-# interactive and web notebooks that DO execute (notebooks-path) need their runtimes. `numba-numpy` rides
-# along because the interactive feature needs numpy <2.5 (see the note on that feature). Its own
-# solve-group, so resolving four stacks together can never move the single-backend envs' versions.
-docs = { features = ["docs", "3d", "interactive", "web", "numba-numpy"], solve-group = "docs" }
+# interactive and web notebooks that DO execute (notebooks-path) need their runtimes. Its own solve-group, so
+# resolving four stacks together can never move the single-backend envs' versions.
+docs = { features = ["docs", "3d", "interactive", "web"], solve-group = "docs" }
 # 3D tier (PyVista). Uses the `3d` feature that pixi derives from the `[3d]` optional-dependencies extra.
 # Separate solve-group so VTK stays out of the lean default/dev envs. Run: pixi run -e viz3d test-3d
 viz3d = { features = ["dev", "3d"], solve-group = "viz3d" }
 # Interactive tier (HoloViz). Uses the `interactive` feature pixi derives from the `[interactive]` extra.
 # Separate solve-group so geoviews/datashader/panel stay out of default/dev. Run: pixi run -e interactive test-interactive
-interactive = { features = ["dev", "interactive", "numba-numpy"], solve-group = "interactive" }
+interactive = { features = ["dev", "interactive"], solve-group = "interactive" }
 # Web tier (MapLibre + deck.gl). Uses the `web` feature pixi derives from the `[web]` extra. Separate solve-group
 # so maplibre stays out of default/dev. Run: pixi run -e web test-web
 web = { features = ["dev", "web"], solve-group = "web" }
 # Every backend in one environment, so a test can build the same figure on two tiers and compare them
 # live. Deliberately its own solve-group: it is the only env where VTK, the HoloViz stack and MapLibre
 # are resolved together, and it must not be able to move the single-backend envs' versions.
-all = { features = ["dev", "3d", "interactive", "web", "numba-numpy"], solve-group = "all" }
+all = { features = ["dev", "3d", "interactive", "web"], solve-group = "all" }
 # Photorealistic path tracing (Mitsuba + OIDN) on top of the 3-D tier. Its own solve-group so the heavy
 # path-tracer wheels stay out of viz3d/default/dev. Run: pixi run -e photoreal test-photoreal
 photoreal = { features = ["dev", "3d", "photoreal"], solve-group = "photoreal" }
