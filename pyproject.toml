@@ -594,6 +594,19 @@ build-dist = { cmd = "python -m build", description = "Build sdist and wheel for
 publish-pypi = { cmd = "twine upload --non-interactive --repository pypi dist/*", depends-on = ["build-dist"], description = "Build and upload package to PyPI" }
 docs-serve = { cmd = "mkdocs serve", description = "Serve the documentation locally" }
 docs-build = { cmd = "mkdocs build", description = "Build the documentation site" }
+docs-build-strict = { cmd = "mkdocs build --strict", description = """
+    Build the docs with warnings-as-errors — the CI gate (github-pages-mkdocs.yml build-strict) that fails a
+    PR on a broken nav entry, dangling anchor or malformed docstring before anything merges. The caller passes
+    the site dir (CI uses --site-dir /tmp/site)
+""" }
+docs-version-list = { cmd = "mike list", description = """
+    List the mike-published documentation versions on gh-pages — the deploy-release prune step reads this to
+    compute which version directories to retain
+""" }
+docs-version-delete = { cmd = "mike delete --push", description = """
+    Delete mike-published documentation version(s) from gh-pages and push — the deploy-release retention step
+    appends the stale version names to this
+""" }
 cz-changelog = { cmd = "cz changelog", description = "Generate changelog using Commitizen" }
 cz-bump = { cmd = "cz bump", description = "Bump version using Commitizen" }
 mypy = { cmd = "mypy", description = "Run mypy type checking" }

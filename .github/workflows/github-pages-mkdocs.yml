@@ -54,7 +54,7 @@ jobs:
         verify-lock: false
 
     - name: Build docs with --strict
-      run: pixi run -e docs mkdocs build --strict --site-dir /tmp/site
+      run: pixi run -e docs docs-build-strict --site-dir /tmp/site
 
     # A pull request builds the site but no longer publishes it (#533): each PR deploy was a full site
     # commit on the shared `gh-pages` branch, and those commits are what grew the branch to 1,270 commits
@@ -186,7 +186,7 @@ jobs:
           git fetch origin gh-pages
           git branch -f gh-pages FETCH_HEAD
 
-          pixi run -e docs mike list | awk '{print $1}' | sort -u > /tmp/mike-all
+          pixi run -e docs docs-version-list | awk '{print $1}' | sort -u > /tmp/mike-all
           # `sort -V` is load-bearing: a lexical sort ranks 0.9.0 above 0.11.0 and would retain the wrong
           # five. Only X.Y.Z entries count as releases, so `develop` and any alias-only row fall through
           # to the delete set rather than consuming a retention slot.
@@ -204,7 +204,7 @@ jobs:
           fi
           echo "retaining $(tr '\n' ' ' < /tmp/mike-keep)"
           echo "deleting: $stale"
-          if pixi run -e docs mike delete --push $stale; then
+          if pixi run -e docs docs-version-delete $stale; then
             exit 0
           fi
           echo "::warning::prune lost a gh-pages push race (attempt ${attempt}/3); retrying"
