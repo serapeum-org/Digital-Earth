@@ -57,6 +57,47 @@ def _off_source(error: BaseException) -> bool:
     return "OutOfBounds" in type(error).__name__
 
 
+def _source_extent(data: Any) -> Any:
+    """The source's own extent, under whichever name it declares, or `None` when it has none.
+
+    `total_bounds` is the canonical name; pyramids renamed `bbox` to it in pyramids-core 0.75.0 and keeps
+    `bbox` as a deprecated alias. `data` is any duck-typed raster, so both are tried in that order.
+
+    A canonical name that *raises* counts as not declared, not as a failed read. `data` is any duck-typed
+    object a caller handed in, not necessarily a pyramids raster, and a partial implementation that declares
+    a property and raises `NotImplementedError` from it is the ordinary Python idiom for "declared but not
+    provided". Absence itself arrives as `AttributeError`. Those two are swallowed; anything else is a real
+    failure in a reader that does answer the question, and propagates rather than being hidden by quietly
+    windowing against a different box.
+
+    This is deliberately *not* justified by `RasterBase`: both `bbox` and `total_bounds` are abstract there,
+    so a subclass implementing only one of them cannot be instantiated at all —
+    `TypeError: Can't instantiate abstract class ... without an implementation for abstract methods` — and
+    were it somehow constructed, the inherited body is a bare `pass`, which returns `None` and is caught by
+    the plain absence check anyway.
+
+    One limitation is worth knowing: an `AttributeError` raised from *inside* a present property cannot be
+    told apart from the property being absent, so such a reader falls through to `bbox` instead of
+    reporting. Distinguishing them would mean inspecting the class rather than reading the attribute, which
+    does not help the duck types this exists for.
+
+    Args:
+        data: The opened object.
+
+    Returns:
+        The four edges in bbox order, as whatever type the source declares them in (`total_bounds` is a NumPy
+        array, `bbox` a list), or `None` when neither name answers.
+    """
+    for name in ("total_bounds", "bbox"):
+        try:
+            extent = getattr(data, name)
+        except (AttributeError, NotImplementedError):
+            continue
+        if extent is not None:
+            return extent
+    return None
+
+
 class SourceView(Source):
     """A materialised view of data, carrying the reference and slice it was read from.
 
@@ -395,7 +436,7 @@ class SourceView(Source):
                 are honoured; the axes it may not name are listed under Raises.
             request: The region/resolution/budget wanted. Applied through pyramids' windowed read when the
                 object exposes one (`read_part`) and the request names a region, a budget, or a full canvas
-                (both `width` and `height`) — a size with no region windows against the source's own `bbox`.
+                (both `width` and `height`) — a size with no region windows against the source's own extent.
                 A request naming none of those, or one given for an object that cannot window, is recorded
                 but not enforced: a reader that cannot window is not a reason to refuse the read. A `budget`
                 on `selection` is folded in first, the smaller of the two winning — see :meth:`_budgeted` —
@@ -629,7 +670,7 @@ class SourceView(Source):
         Returns:
             The window, or `None` when there is no rectangle to name: the request gives no region, and
             either names no usable size (no budget, and not both of width and height) or meets an object
-            with no `bbox` of its own to window that size against.
+            with no extent of its own to window that size against.
         """
         bbox = request.as_bbox()
         if bbox is not None:
@@ -640,8 +681,11 @@ class SourceView(Source):
             return window
         # A size with no region still has to be honoured: the object *can* window, so skipping here
         # returned the whole raster — blowing a budget silently, or handing a caller who asked for a 4x3
-        # canvas all 13x14 cells. The source's own bbox is the region.
-        source_bbox = getattr(data, "bbox", None)
+        # canvas all 13x14 cells. The source's own extent is the region.
+        #
+        # Either spelling, and a canonical name that raises counts as absent — see `_source_extent`. A
+        # missing extent returns None below and skips the window entirely.
+        source_bbox = _source_extent(data)
         # A full canvas counts; half of one does not. `_shape` cannot use a lone width, so windowing on
         # one read a 64x64 floor square that honoured nothing the caller named.
         canvas = request.width is not None and request.height is not None

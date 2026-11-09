@@ -1,6 +1,6 @@
 """Tests for :class:`digitalearth.base.sources.mesh.MeshSource` — the unstructured-mesh value object.
 
-The extraction that *builds* one from a pyramids ``UgridDataset`` is covered in ``test_sources.py``; this
+The extraction that *builds* one from a pyramids ``MeshDataset`` is covered in ``test_sources.py``; this
 file covers the container itself: what it validates, and what it hands back.
 """
 

@@ -299,7 +299,7 @@ class TestRereading:
         view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
         again = view.reread(
             ViewRequest(
-                bounds=Bounds.from_bbox(list(ref.open().bbox), crs=view.crs),
+                bounds=Bounds.from_bbox(list(ref.open().total_bounds), crs=view.crs),
                 budget=10_000,
             )
         )
@@ -363,7 +363,7 @@ class TestARereadIsStillGeoreferenced:
         ref = DataRef(str(RASTER))
         dataset = ref.open()
         view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
-        bbox = list(dataset.bbox)
+        bbox = list(dataset.total_bounds)
         again = view.reread(
             ViewRequest(bounds=Bounds.from_bbox(bbox, crs=view.crs), budget=10_000)
         )
@@ -387,7 +387,8 @@ class TestARereadIsStillGeoreferenced:
         view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
         again = view.reread(
             ViewRequest(
-                bounds=Bounds.from_bbox(list(dataset.bbox), crs=view.crs), budget=4096
+                bounds=Bounds.from_bbox(list(dataset.total_bounds), crs=view.crs),
+                budget=4096,
             )
         )
         assert again.y.values[0] > again.y.values[-1], (
@@ -503,7 +504,8 @@ class TestARereadIsStillGeoreferenced:
         view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
         again = view.reread(
             ViewRequest(
-                bounds=Bounds.from_bbox(list(dataset.bbox), crs=view.crs), budget=4096
+                bounds=Bounds.from_bbox(list(dataset.total_bounds), crs=view.crs),
+                budget=4096,
             )
         )
         assert again.metadata("variable") == view.metadata("variable"), (
@@ -990,7 +992,9 @@ class TestTheRemainingWindowArms:
         ref = DataRef(str(RASTER))
         dataset = ref.open()
         view = SourceView.of(dataset, ref=ref)
-        in_wgs84 = Bounds.from_bbox(list(dataset.bbox), crs=view.crs).to_crs(4326)
+        in_wgs84 = Bounds.from_bbox(list(dataset.total_bounds), crs=view.crs).to_crs(
+            4326
+        )
         again = view.reread(ViewRequest(bounds=in_wgs84, budget=4096))
         assert again.crs == view.crs, (
             f"the view must report the CRS its cells are in, got {again.crs}"
@@ -1444,3 +1448,185 @@ def _out_of_bounds() -> Exception:
         """Named, not imported: the module matches by name so the tier does not depend on where it lives."""
 
     return OutOfBoundsError("the window is outside the raster")
+
+
+class TestTheWindowFromTheSourcesOwnExtent:
+    """`_window_for` takes the region off the source when the request names a size but no rectangle.
+
+    pyramids-core 0.75.0 renamed `bbox` to `total_bounds` and kept `bbox` as a deprecated alias, so the
+    lookup prefers the canonical name and falls back for a duck-typed reader that declares only the old one.
+    Without the fallback such a reader would window nothing at all, silently, rather than its own extent.
+    """
+
+    class _Canonical:
+        """A raster declaring its extent under pyramids' canonical name."""
+
+        epsg = 4326
+        total_bounds = np.array([0.0, 0.0, 4.0, 4.0])
+
+    class _LegacyOnly:
+        """A raster declaring only `bbox`, as a reader written before the rename does."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+
+    class _Both:
+        """A raster declaring both names, with a deliberately wrong `bbox` so precedence is observable."""
+
+        epsg = 4326
+        total_bounds = np.array([0.0, 0.0, 4.0, 4.0])
+        bbox = (99.0, 99.0, 100.0, 100.0)
+
+    class _Extentless:
+        """A raster declaring neither name."""
+
+        epsg = 4326
+
+    class _RaisingCanonical:
+        """A raster whose `total_bounds` is declared but raises, as a partial implementation does.
+
+        This is a plain duck type, not a `RasterBase` subclass: both `bbox` and `total_bounds` are abstract
+        there, so a subclass implementing only one cannot be instantiated. What this models is the reader
+        `SourceView` actually accepts — any object with the right members, including one that declares a
+        property it does not provide.
+        """
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+
+        @property
+        def total_bounds(self):
+            """Refuse the read the way an unimplemented abstract property does.
+
+            Raises:
+                NotImplementedError: always.
+            """
+            raise NotImplementedError("total_bounds is not implemented by this reader")
+
+    @pytest.mark.parametrize(
+        "raster",
+        [_Canonical, _LegacyOnly, _Both],
+        ids=["total_bounds", "bbox-only", "both-prefers-total_bounds"],
+    )
+    def test_a_size_only_request_windows_the_sources_own_extent(self, raster):
+        """Either spelling supplies the region, and `total_bounds` wins when both are declared.
+
+        Args:
+            raster: A stand-in raster declaring the canonical name, only the legacy one, or both.
+
+        Test scenario:
+            A `ViewRequest` carrying a budget names no rectangle, so `_window_for` has to read the extent
+            off the source. All three stubs describe the same 0,0,4,4 box under `total_bounds`, so the
+            `_Both` case reading 0,0,4,4 rather than its 99,99,100,100 `bbox` is what pins the precedence.
+        """
+        window = SourceView._window_for(raster(), ViewRequest(budget=4096))
+
+        assert window is not None, (
+            "a budget with no rectangle must still window the source's own extent"
+        )
+        assert (window.xmin, window.ymin, window.xmax, window.ymax) == (
+            0.0,
+            0.0,
+            4.0,
+            4.0,
+        ), f"expected the source's own 0,0,4,4 extent, got {window}"
+        assert window.crs == 4326, (
+            f"the window must carry the source's own CRS, got {window.crs}"
+        )
+
+    def test_a_source_with_neither_name_names_no_window(self):
+        """A source declaring no extent at all cannot be windowed, and says so with `None`.
+
+        Test scenario:
+            Neither `total_bounds` nor `bbox` is present, so there is no region to honour the size
+            against; `_window_for` returns `None` and the read is left unwindowed rather than guessing.
+        """
+        assert (
+            SourceView._window_for(self._Extentless(), ViewRequest(budget=4096)) is None
+        ), "a source declaring neither total_bounds nor bbox cannot be windowed"
+
+    def test_a_canonical_name_that_raises_falls_back_to_the_legacy_one(self):
+        """A `total_bounds` that cannot be read is treated as absent, not allowed to escape.
+
+        Test scenario:
+            A duck-typed reader may declare `total_bounds` and raise from it. Keying the fallback on
+            `is None` alone let that `NotImplementedError` out of `_window_for` and failed the whole read,
+            where the reader had a perfectly good `bbox` to window against.
+        """
+        window = SourceView._window_for(
+            self._RaisingCanonical(), ViewRequest(budget=4096)
+        )
+
+        assert window is not None, (
+            "a raising total_bounds must fall back to bbox, not fail the read"
+        )
+        assert (window.xmin, window.ymin, window.xmax, window.ymax) == (
+            0.0,
+            0.0,
+            4.0,
+            4.0,
+        ), f"expected the legacy bbox's 0,0,4,4 extent, got {window}"
+
+
+class TestTheExtentFallbackThroughTheReadItself:
+    """The same fallback, driven through `SourceView.of` rather than the private helper.
+
+    The tests above pin `_window_for`, which is where the decision lives, but a stub with no `read_part`
+    cannot show that the window actually reaches the reader. A real `Dataset` already covers the canonical
+    name end to end (`TestRereading` rereads `acc4000.tif` on a bare budget, and a pyramids raster declares
+    `total_bounds`). This covers the other arm: a reader declaring only the deprecated `bbox` still has its
+    own extent handed to `read_part`.
+    """
+
+    class _LegacyRecording:
+        """A windowing raster that declares only `bbox` and records the window it is asked for."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 8.0, 8.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 8.0, 0.0, -1.0)
+        no_data_value = (-9999.0,)
+
+        def __init__(self):
+            """Start with no recorded reads."""
+            self.windows = []
+
+        def read_part(self, *, bbox, dst_width, dst_height, bbox_crs=None, band=0):
+            """Record the window and return a canvas of that size.
+
+            Args:
+                bbox: The window asked for.
+                dst_width: Cells across.
+                dst_height: Cells down.
+                bbox_crs: The window's CRS.
+                band: The 0-based band.
+
+            Returns:
+                A canvas of the requested size.
+            """
+            self.windows.append(tuple(float(edge) for edge in bbox))
+            return np.full((dst_height, dst_width), 1.0)
+
+    def test_a_budget_alone_windows_a_legacy_reader_against_its_own_bbox(self):
+        """A size-only request reaches `read_part` with the reader's own extent as the window.
+
+        Test scenario:
+            `ViewRequest(budget=...)` names no rectangle, so the window can only come from the source. This
+            reader declares `bbox` and not `total_bounds`, so the fallback is the only way it gets one — and
+            the assertion is on what `read_part` actually received, not on the helper's return value.
+        """
+        source = self._LegacyRecording()
+        ref = DataRef.to_object(source, name="legacy-extent-view")
+        SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(budget=16),
+        )
+
+        assert source.windows, (
+            "a budget-only request must still window, so read_part must be called"
+        )
+        assert source.windows[0] == (0.0, 0.0, 8.0, 8.0), (
+            f"expected the reader's own bbox as the window, got {source.windows[0]}"
+        )

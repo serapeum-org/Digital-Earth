@@ -255,11 +255,11 @@ def _two_triangle_mesh(location="node", node_x=None):
         node_x: Overrides the node x coordinates.
 
     Returns:
-        The pyramids ``UgridDataset``.
+        The pyramids ``MeshDataset``.
     """
     import numpy as np
     from pyramids.netcdf.ugrid.connectivity import Connectivity
-    from pyramids.netcdf.ugrid.dataset import UgridDataset
+    from pyramids.netcdf.ugrid.dataset import MeshDataset
     from pyramids.netcdf.ugrid.mesh import Mesh2d
     from pyramids.netcdf.ugrid.models import MeshVariable
 
@@ -281,7 +281,7 @@ def _two_triangle_mesh(location="node", node_x=None):
         else np.array([10.0, 20.0])
     )
     name = "zs" if location == "node" else "depth"
-    return UgridDataset(
+    return MeshDataset(
         mesh=mesh,
         data_variables={
             name: MeshVariable(

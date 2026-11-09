@@ -17,7 +17,7 @@ vector data, built on top of [cleopatra](https://github.com/serapeum-org/cleopat
 - Overlay vector points on raster maps with configurable size, color, and labels.
 - Draw a NetCDF variable, choosing which one with `variable=` and which slice of a
   band/time dimension with `band=` (1-based).
-- Draw an unstructured **UGRID mesh** (`pyramids.netcdf.ugrid.UgridDataset`) on its own
+- Draw an unstructured **UGRID mesh** (`pyramids.netcdf.ugrid.MeshDataset`) on its own
   faces — see [`MeshSource`](reference/vocabulary.md) for which backends take one.
 
 ## Installation
@@ -68,10 +68,10 @@ m = quickmap(nc, variable="t2m", band=3)
 An unstructured mesh is drawn the same way, shaded face by face:
 
 ```python
-from pyramids.netcdf.ugrid.dataset import UgridDataset
+from pyramids.netcdf.ugrid.dataset import MeshDataset
 from digitalearth import quickmap
 
-mesh = UgridDataset.read_file("river_channel_ugrid.nc")
+mesh = MeshDataset.read_file("river_channel_ugrid.nc")
 m = quickmap(mesh, variable="bathymetry")
 ```
 

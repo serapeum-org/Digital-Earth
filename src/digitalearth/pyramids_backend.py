@@ -43,7 +43,7 @@ things differently:
   facade sends for the *first* band — was refused on every tier, though not in the same words: the
   web and HoloViz tiers answered ``band -1 is out of range for a 1-band dataset`` and the 3-D tier
   ``Selection bands are 1-based; got 0`` (round-2 M9). That is the off-by-one reported in #501.
-* **``variable_name`` is this package's ``variable``.** The ``UgridDataset`` facade spells the mesh
+* **``variable_name`` is this package's ``variable``.** The ``MeshDataset`` facade spells the mesh
   selector ``variable_name``; ``quickmap`` spells it ``variable``.
 * **``interval`` is milliseconds; the tiers take ``fps``.** The animation facades forward a frame
   interval, and every digitalearth animation verb takes a rate instead.
@@ -753,7 +753,7 @@ class _Forwarded:
         path = rest.pop("path", None)
         # The mesh facade spells the selector `variable_name`; `quickmap` spells it `variable`.
         # Live on `static` only, and that is new: `MESH_BACKENDS` is `{"matplotlib"}`, and `static`
-        # canonicalises to `matplotlib` before the mesh gate runs, so a `UgridDataset` reaches the
+        # canonicalises to `matplotlib` before the mesh gate runs, so a `MeshDataset` reaches the
         # triangular render through this rename — `plot(backend="static", variable_name=…)` shades
         # the mesh's own faces. The other three tiers have no such render and are still refused by
         # the gate before any keyword is read. Both halves are executed in
@@ -990,16 +990,29 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
             '<sst>'
 
             ```
-        - With none named it takes the first, which is what the still path draws too:
+        - With none named it takes the first *drawable* one, which is what the still path draws too. This
+          store declares its bounds array first, and a bounds array has no plane to draw:
             ```python
             >>> from digitalearth.pyramids_backend import _Forwarded, _netcdf_variable
+            >>> class Info:
+            ...     def __init__(self, dimensions, attributes=None):
+            ...         self.dimensions = dimensions
+            ...         self.attributes = attributes or {}
+            >>> class Metadata:
+            ...     variables = {
+            ...         "lat": Info(["lat"], {"axis": "Y"}),
+            ...         "lon": Info(["lon"], {"axis": "X"}),
+            ...         "time_bnds": Info(["time", "nbnds"]),
+            ...         "sst": Info(["time", "lat", "lon"]),
+            ...     }
             >>> class Container:
             ...     variable_names = ["time_bnds", "sst"]
+            ...     metadata = Metadata()
             ...     def get_variable(self, name):
             ...         return f"<{name}>"
             >>> plan = _Forwarded.from_facade("interactive", {"animate": True})
             >>> _netcdf_variable(Container(), plan)
-            '<time_bnds>'
+            '<sst>'
 
             ```
         - A variable already pinned out of its container is used as it is:
@@ -1014,6 +1027,10 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
 
             ```
     """
+    # Imported here, not at module scope: this module is what pyramids imports to discover the entry
+    # points, so it stays import-light (see the module docstring).
+    from digitalearth.base.sources.variable import default_variable
+
     named = plan.draw.get("variable")
     carried = list(getattr(nc, "variable_names", None) or [])
     if not carried:
@@ -1021,8 +1038,9 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
         # is the same test `base.sources.extractors` makes of a subset.
         return nc
     if named is None:
-        # The same choice the still path makes, so `plot` and `animate` draw the same variable.
-        named = next(iter(carried))
+        # The same choice the still path makes, through the same helper, so `plot` and `animate` draw the
+        # same variable rather than agreeing only while both spell it `variable_names[0]`.
+        named = default_variable(nc)
     return nc.get_variable(named)
 
 
@@ -1612,7 +1630,7 @@ def interactive(obj: Any, *, backend: str = "interactive", **kwargs: Any) -> Any
     """Render a pyramids object on the HoloViz tier, for ``plot(backend="interactive")``.
 
     Args:
-        obj: The ``Dataset`` / ``NetCDF`` / ``FeatureCollection`` / ``UgridDataset`` the facade was
+        obj: The ``Dataset`` / ``NetCDF`` / ``FeatureCollection`` / ``MeshDataset`` the facade was
             called on.
         backend: The backend name the seam passes; defaults to the name this is registered under.
         **kwargs: The keywords pyramids forwarded, in its own vocabulary.

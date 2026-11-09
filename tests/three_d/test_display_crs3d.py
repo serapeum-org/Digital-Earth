@@ -42,7 +42,7 @@ def _centre_point(dem: Dataset, crs) -> FeatureCollection:
     import geopandas as gpd
     from shapely.geometry import Point
 
-    xmin, ymin, xmax, ymax = dem.bbox
+    xmin, ymin, xmax, ymax = dem.total_bounds
     frame = gpd.GeoDataFrame(
         {"v": [1.0]},
         geometry=[Point((xmin + xmax) / 2, (ymin + ymax) / 2)],

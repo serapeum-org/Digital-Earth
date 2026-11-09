@@ -54,7 +54,7 @@ in. Everything else passes through untouched.
 | pyramids forwards | digitalearth takes | Why |
 |---|---|---|
 | `band=0` (0-based) | `band=1` (1-based) | 0-based upstream, 1-based here;<br>unshifted it was refused. |
-| `variable_name=` | `variable=` | The `UgridDataset` facade's spelling.<br>Live on `static` — see below. |
+| `variable_name=` | `variable=` | The `MeshDataset` facade's spelling.<br>Live on `static` — see below. |
 | `interval=200` (ms/frame) | `fps=5.0` | The facades describe an interval; the<br>tier verbs take a rate. |
 
 `cmap`, `variable`, a bool `colorbar` and `band` (once shifted) are forwarded to the builder as they
@@ -226,7 +226,7 @@ Two things need `import digitalearth`, and no keyword can change that:
 ## A mesh is drawn on `static`, and refused on the other three
 
 Only the matplotlib tier has a triangular render, which `digitalearth.api.MESH_BACKENDS` states. Since
-`static` *is* that tier, a `UgridDataset` draws there — shading the mesh's own faces, not a
+`static` *is* that tier, a `MeshDataset` draws there — shading the mesh's own faces, not a
 re-triangulation — and that is what the `variable_name` → `variable` translation above is for:
 
 ```python
@@ -236,8 +236,8 @@ ug.plot(backend="static", variable_name="depth")   # a Map; each face carries it
 On the other three it is refused before any keyword is read:
 
 ```text
-UgridDataset.plot(backend="web")
-TypeError: backend='web' has no unstructured-mesh render; draw a UgridDataset on the
+MeshDataset.plot(backend="web")
+TypeError: backend='web' has no unstructured-mesh render; draw a MeshDataset on the
 matplotlib tier, which shades each of its faces (tripcolor): quickmap(data,
 backend='matplotlib') here, or plot(backend='static') through pyramids, whose own
 'matplotlib' is cleopatra's path
@@ -256,13 +256,16 @@ A registered entry point resolves to the **callable** — not to its `module:att
 the `functools.partial` over `quickmap` that the fallback would hand back. That difference is how you
 tell the two apart.
 
-!!! note "Needs pyramids-core 0.73.0 or newer"
+!!! note "The seam arrived in pyramids-core 0.73.0"
     The `pyramids.plot_backends` group is resolved by pyramids-core's plot-backend seam, which first
     shipped in **0.73.0** — `0.72.0` was published after the seam merged but cut from a commit
     without it, so it carries neither `pyramids.base._plot_backends` nor the conformance kit, and
-    its `Dataset.plot` has no `backend=` keyword. The declared floor is `>=0.73.0` for that reason.
+    its `Dataset.plot` has no `backend=` keyword. So 0.73.0 is the oldest release this seam resolves
+    on; the declared floor is higher (`>=0.75.0`) for an unrelated reason — this package uses the
+    names 0.75.0 canonicalised (`metadata`, `band_metadata`, `nearest_cell`, `total_bounds`,
+    `MeshDataset`), which do not exist on 0.73.0.
 
-    Verified against 0.73.0:
+    Verified against 0.75.0:
 
     ```python
     >>> from pyramids.base._plot_backends import plot_backends, resolve_plot_backend
