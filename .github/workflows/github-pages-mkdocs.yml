@@ -24,42 +24,53 @@ on:
 # executed notebooks in .jupyter_cache, keyed on the notebooks plus src/**/*.py and pyproject.toml, so a
 # source change re-runs the whole set on the next deploy.
 jobs:
-  deploy-pr:
+  # Gate every deploy on a warnings-as-errors build. The mkdocs-deploy action builds non-strict, so a
+  # broken nav entry, a dangling anchor or a malformed docstring would publish silently - this fails the
+  # run instead. mkdocstrings imports the documented modules at build time, so the gate needs the `docs`
+  # env's full rendering stack (3d / interactive / web); mkdocs.yml sets mkdocs-jupyter `execute: false`,
+  # so the notebooks render from their committed outputs and no kernel (hence no xvfb/OpenGL) is needed
+  # here - unlike the deploy jobs, which re-execute them.
+  build-strict:
+    runs-on: ubuntu-latest
+    # Only reads the tree; the write scopes the workflow grants are for the deploy jobs, not for this one.
+    permissions:
+      contents: read
+    steps:
+    # No explicit ref: checkout's own default is the merge commit on a pull_request rather than the fork's
+    # head, so fork-controlled code never reaches a job that could be given write scopes by mistake.
+    - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+    # The same environment the deploy jobs get: mkdocs-deploy calls this action internally with these
+    # inputs, so reusing it here keeps the gate and the deploy on one environment instead of letting a
+    # hand-installed toolchain drift from the one that actually publishes.
+    - uses: serapeum-org/github-actions/actions/python-setup/pixi@13e2d4fd050748da242c62dfb3b3abe40f71dfb3 # pixi/v1.2.2
+      with:
+        environments: 'docs'
+        activate-environment: 'docs'
+        version: 'v0.73.0'
+        verify-lock: false
+
+    - name: Build docs with --strict
+      run: pixi run -e docs docs-build-strict --site-dir /tmp/site
+
+    # A pull request builds the site but no longer publishes it (#533): each PR deploy was a full site
+    # commit on the shared `gh-pages` branch, and those commits are what grew the branch to 1,270 commits
+    # and the repository past 10 GB. The --strict build above is the gate, and reviewers who want to look
+    # at the rendered pages download them from here instead of visiting a published preview.
+    - name: Upload the built site for review
       if: github.event_name == 'pull_request'
-      runs-on: ubuntu-latest
-      steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          fetch-depth: 0
-
-      - name: Virtual framebuffer + software OpenGL (so the 3-D notebooks render during the build)
-        run: |
-            sudo apt-get update
-            sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
-            Xvfb :99 -screen 0 1280x1024x24 >/dev/null 2>&1 &
-            echo "DISPLAY=:99" >> "$GITHUB_ENV"
-
-      - uses: serapeum-org/github-actions/actions/mkdocs-deploy@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # mkdocs/v1.3.1
-        with:
-          trigger: 'pull_request'
-          package-manager: 'pixi'
-          package-manager-version: 'v0.73.0'
-          install-groups: 'docs'
-          notebooks-path: 'docs/examples'
-          # Excluded from the execution, so these render from their committed outputs:
-          #   - 18_global_decorations draws a basemap(), which pulls XYZ tiles from a live service.
-          #   - web/web_maps is a web-tier MapLibre notebook, absent from the nav; excluded so the
-          #     deploy does not execute a browser-dependent page that is not published anyway.
-          # Everything else executes. The one other notebook that reaches a tile service,
-          # 14_textured_globe_3d, falls back to committed data if the fetch fails, so a deploy is
-          # never blocked by a third-party host being down.
-          notebooks-exclude: |
-            18_global_decorations.ipynb
-            web/web_maps.ipynb
-          deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: site-pr-${{ github.event.pull_request.number }}
+        path: /tmp/site
+        retention-days: 7
 
   deploy-main:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-strict
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -100,6 +111,7 @@ jobs:
       (github.event_name == 'workflow_run'
        && github.event.workflow_run.conclusion == 'success'
        && github.event.workflow_run.head_repository.fork == false)
+    needs: build-strict
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -142,3 +154,61 @@ jobs:
         deploy-token: ${{ secrets.ACTIONS_DEPLOY_TOKEN }}
         release-tag: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
         mike-alias: 'latest'
+
+    # Retain `main` plus the RETAIN_RELEASES most recent releases, and delete anything else - older
+    # releases, and the now-frozen `develop` that the removed PR deploy used to publish.
+    #
+    # Why a cap at all: each version directory is a full copy of the site (~170 MB here), so retaining
+    # every release is what grew the published site to 2.74 GB across 16 directories. On earthlens the
+    # same unbounded growth took its site to 9.7 GB, at which point GitHub Pages stopped building at all
+    # and the current release's docs were silently never published. GitHub documents a 1 GB published-site
+    # limit, but that is not the observed threshold (earthlens built fine at 1.39 GB); treat multi-GB as
+    # the danger zone. If a release ever fails to publish, lower RETAIN_RELEASES before anything else.
+    #
+    # `main` is always retained: deploy-main republishes it on every push, so deleting it here would only
+    # have it return minutes later.
+    #
+    # Auth comes from the checkout above, the same way the deploy's own pushes work. mike runs through
+    # `pixi run -e docs` because the mkdocs-deploy step above installed that env earlier in this job.
+    - name: Prune superseded documentation versions
+      env:
+        KEEP_VERSION: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
+        RETAIN_RELEASES: '5'
+      run: |
+        if [ -z "$KEEP_VERSION" ]; then
+          echo "::error::no release version resolved; refusing to prune"
+          exit 1
+        fi
+        # Re-sync, recompute and retry as a unit: a concurrent main deploy moves gh-pages, which makes
+        # mike's fast-forward push lose the race, and the stale list computed against the old tip must not
+        # be reused.
+        for attempt in 1 2 3; do
+          git fetch origin gh-pages
+          git branch -f gh-pages FETCH_HEAD
+
+          pixi run -e docs docs-version-list | awk '{print $1}' | sort -u > /tmp/mike-all
+          # `sort -V` is load-bearing: a lexical sort ranks 0.9.0 above 0.11.0 and would retain the wrong
+          # five. Only X.Y.Z entries count as releases, so `develop` and any alias-only row fall through
+          # to the delete set rather than consuming a retention slot.
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' /tmp/mike-all \
+            | sort -rV | head -n "$RETAIN_RELEASES" > /tmp/mike-keep-releases
+          # KEEP_VERSION is listed explicitly as a floor: the release that was just deployed must survive
+          # even if it somehow sorts outside the top RETAIN_RELEASES.
+          { echo main; echo "$KEEP_VERSION"; cat /tmp/mike-keep-releases; } \
+            | grep -v '^$' | sort -u > /tmp/mike-keep
+          stale=$(comm -23 /tmp/mike-all /tmp/mike-keep | tr '\n' ' ')
+
+          if [ -z "$stale" ]; then
+            echo "nothing to prune; retaining $(tr '\n' ' ' < /tmp/mike-keep)"
+            exit 0
+          fi
+          echo "retaining $(tr '\n' ' ' < /tmp/mike-keep)"
+          echo "deleting: $stale"
+          if pixi run -e docs docs-version-delete $stale; then
+            exit 0
+          fi
+          echo "::warning::prune lost a gh-pages push race (attempt ${attempt}/3); retrying"
+          sleep $(( attempt * 3 ))
+        done
+        echo "::error::could not prune superseded documentation versions after 3 attempts"
+        exit 1
