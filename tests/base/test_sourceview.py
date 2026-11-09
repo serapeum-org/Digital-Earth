@@ -1448,3 +1448,78 @@ def _out_of_bounds() -> Exception:
         """Named, not imported: the module matches by name so the tier does not depend on where it lives."""
 
     return OutOfBoundsError("the window is outside the raster")
+
+
+class TestTheWindowFromTheSourcesOwnExtent:
+    """`_window_for` takes the region off the source when the request names a size but no rectangle.
+
+    pyramids-core 0.75.0 renamed `bbox` to `total_bounds` and kept `bbox` as a deprecated alias, so the
+    lookup prefers the canonical name and falls back for a duck-typed reader that declares only the old one.
+    Without the fallback such a reader would window nothing at all, silently, rather than its own extent.
+    """
+
+    class _Canonical:
+        """A raster declaring its extent under pyramids' canonical name."""
+
+        epsg = 4326
+        total_bounds = np.array([0.0, 0.0, 4.0, 4.0])
+
+    class _LegacyOnly:
+        """A raster declaring only `bbox`, as a reader written before the rename does."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+
+    class _Both:
+        """A raster declaring both names, with a deliberately wrong `bbox` so precedence is observable."""
+
+        epsg = 4326
+        total_bounds = np.array([0.0, 0.0, 4.0, 4.0])
+        bbox = (99.0, 99.0, 100.0, 100.0)
+
+    class _Extentless:
+        """A raster declaring neither name."""
+
+        epsg = 4326
+
+    @pytest.mark.parametrize(
+        "raster",
+        [_Canonical, _LegacyOnly, _Both],
+        ids=["total_bounds", "bbox-only", "both-prefers-total_bounds"],
+    )
+    def test_a_size_only_request_windows_the_sources_own_extent(self, raster):
+        """Either spelling supplies the region, and `total_bounds` wins when both are declared.
+
+        Args:
+            raster: A stand-in raster declaring the canonical name, only the legacy one, or both.
+
+        Test scenario:
+            A `ViewRequest` carrying a budget names no rectangle, so `_window_for` has to read the extent
+            off the source. All three stubs describe the same 0,0,4,4 box under `total_bounds`, so the
+            `_Both` case reading 0,0,4,4 rather than its 99,99,100,100 `bbox` is what pins the precedence.
+        """
+        window = SourceView._window_for(raster(), ViewRequest(budget=4096))
+
+        assert window is not None, (
+            "a budget with no rectangle must still window the source's own extent"
+        )
+        assert (window.xmin, window.ymin, window.xmax, window.ymax) == (
+            0.0,
+            0.0,
+            4.0,
+            4.0,
+        ), f"expected the source's own 0,0,4,4 extent, got {window}"
+        assert window.crs == 4326, (
+            f"the window must carry the source's own CRS, got {window.crs}"
+        )
+
+    def test_a_source_with_neither_name_names_no_window(self):
+        """A source declaring no extent at all cannot be windowed, and says so with `None`.
+
+        Test scenario:
+            Neither `total_bounds` nor `bbox` is present, so there is no region to honour the size
+            against; `_window_for` returns `None` and the read is left unwindowed rather than guessing.
+        """
+        assert (
+            SourceView._window_for(self._Extentless(), ViewRequest(budget=4096)) is None
+        ), "a source declaring neither total_bounds nor bbox cannot be windowed"
