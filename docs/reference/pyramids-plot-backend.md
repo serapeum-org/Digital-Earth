@@ -256,7 +256,7 @@ A registered entry point resolves to the **callable** — not to its `module:att
 the `functools.partial` over `quickmap` that the fallback would hand back. That difference is how you
 tell the two apart.
 
-!!! note "Needs pyramids-core 0.73.0 or newer"
+!!! note "The seam arrived in pyramids-core 0.73.0"
     The `pyramids.plot_backends` group is resolved by pyramids-core's plot-backend seam, which first
     shipped in **0.73.0** — `0.72.0` was published after the seam merged but cut from a commit
     without it, so it carries neither `pyramids.base._plot_backends` nor the conformance kit, and

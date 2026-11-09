@@ -31,8 +31,9 @@ def band_field_name(data: Any, band: int = DEFAULT_BAND) -> str:
 
     Read straight off the raster's ``band_names``/``variable_names``, never invented and never obtained by
     warping the band again. A pyramids ``Dataset``'s band carries its own name; a ``NetCDF`` has variables
-    rather than bands, and the display extractor takes the **first** of them, so that is the one a colour key
-    would explain. Both are read with ``getattr``, so an input declaring neither list simply falls back.
+    rather than bands, and the display extractor takes the first of them that has a map plane, so that is the
+    one a colour key would explain — see :func:`~digitalearth.base.sources.variable.default_variable`,
+    which both read. Both lists are reached with ``getattr``, so an input declaring neither falls back.
 
     Args:
         data: The raster the layer draws — a pyramids ``Dataset`` / ``NetCDF`` / ``Source``, a path, or a bare
@@ -40,8 +41,8 @@ def band_field_name(data: Any, band: int = DEFAULT_BAND) -> str:
         band: The 1-based band the layer colours by.
 
     Returns:
-        The band's name, the first drawable variable's name, or :data:`UNNAMED_BAND` — never an empty string, which an
-        :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field name.
+        The band's name, the first drawable variable's name, or :data:`UNNAMED_BAND` — never an empty
+        string, which an :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field name.
 
     Examples:
         - A band with a name returns it:

@@ -118,8 +118,8 @@ class InteractionMixin(_MixinBase):
         """Click a cell to pull a time series from a ``DatasetCollection`` at that point (DI.7).
 
         Returns a ``DynamicMap`` whose ``Tap`` callback reads each member's value at the clicked cell
-        (via pyramids ``nearest_cell``) and plots the series — the most-requested
-        interactive feature over a static map. Needs a live kernel/server.
+        (via pyramids ``nearest_cell``) and plots the series — the most-requested interactive feature
+        over a static map. Needs a live kernel/server.
 
         Args:
             collection: A pyramids ``DatasetCollection`` whose members are time steps.
@@ -141,8 +141,8 @@ class InteractionMixin(_MixinBase):
         members = collection.datasets
 
         def _profile(x: float, y: float) -> Any:
-            # pyramids' nearest_cell wants a GeoDataFrame/FeatureCollection; build the
-            # single clicked point through pyramids (no shapely/geopandas import here, DX.3).
+            # pyramids' nearest_cell wants a GeoDataFrame/FeatureCollection; build the single clicked
+            # point through pyramids (no shapely/geopandas import here, DX.3).
             from pyramids.feature.geometry import point_collection
 
             point = point_collection([(x, y)], crs=self.crs)
