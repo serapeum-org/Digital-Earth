@@ -91,3 +91,119 @@ class TestTheDefaultIsDrawable:
         assert band_field_name(container, 1) == "sst", (
             f"expected the colour key to name the drawn variable, got {band_field_name(container, 1)!r}"
         )
+
+
+class _Info:
+    """A stand-in for pyramids' ``VariableInfo``, carrying only what drawability is decided from."""
+
+    def __init__(self, dimensions, attributes=None):
+        """Record the variable's dimensions and CF attributes.
+
+        Args:
+            dimensions: The variable's dimension names.
+            attributes: Its CF attributes, or ``None`` for none.
+        """
+        self.dimensions = dimensions
+        self.attributes = attributes or {}
+
+
+def _container(names, variables):
+    """Build a stand-in container declaring `names` and describing `variables`.
+
+    Args:
+        names: What ``variable_names`` reports, in declaration order.
+        variables: The ``metadata.variables`` mapping.
+
+    Returns:
+        type: A class exposing the container surface drawability is read from.
+    """
+    metadata = type("Metadata", (), {"variables": variables})
+    return type("Container", (), {"variable_names": names, "metadata": metadata()})
+
+
+#: A geographic pair, marked the way CF marks them.
+LAT = _Info(["lat"], {"axis": "Y"})
+LON = _Info(["lon"], {"axis": "X"})
+
+
+class TestDrawableVariableNames:
+    """Which variables `drawable_variable_names` considers drawable, and which it skips."""
+
+    def test_a_name_its_metadata_does_not_describe_is_skipped(self):
+        """A declared name absent from `metadata.variables` cannot be classified, so it is passed over.
+
+        Test scenario:
+            A container may declare a name its metadata does not carry — a grouped store whose
+            `variable_names` reports a path the mapping keys differently. Skipping it leaves the next
+            drawable variable as the answer, rather than treating the undescribed one as drawable.
+        """
+        from digitalearth.base.sources.variable import (
+            default_variable,
+            drawable_variable_names,
+        )
+
+        container = _container(
+            ["undescribed", "sst"],
+            {"lat": LAT, "lon": LON, "sst": _Info(["time", "lat", "lon"])},
+        )()
+
+        assert drawable_variable_names(container) == ["sst"], (
+            f"the undescribed name must be skipped, got {drawable_variable_names(container)}"
+        )
+        assert default_variable(container) == "sst", (
+            "and the answer is the next drawable one"
+        )
+
+    def test_a_store_whose_variables_are_all_flat_reports_none_drawable(self):
+        """With no variable carrying both horizontal axes, nothing is drawable and the first is used.
+
+        Test scenario:
+            Every declared variable spans time alone, so none has a plane. `drawable_variable_names` is
+            empty and `default_variable` falls back to the declared first rather than returning nothing —
+            a container with variables always answers with one of them.
+        """
+        from digitalearth.base.sources.variable import (
+            default_variable,
+            drawable_variable_names,
+        )
+
+        container = _container(
+            ["time_bnds", "climatology_bounds"],
+            {
+                "lat": LAT,
+                "lon": LON,
+                "time_bnds": _Info(["time", "nbnds"]),
+                "climatology_bounds": _Info(["time", "nv"]),
+            },
+        )()
+
+        assert drawable_variable_names(container) == [], (
+            f"a store with no planar variable has none drawable, got {drawable_variable_names(container)}"
+        )
+        assert default_variable(container) == "time_bnds", (
+            "with nothing drawable the declared first is still the answer"
+        )
+
+    def test_a_projected_store_is_classified_by_its_standard_names(self):
+        """A store naming projected axes by `standard_name` rather than `axis` is still classified.
+
+        Test scenario:
+            Not every store declares `axis`. A projected grid naming its coordinates
+            `projection_x_coordinate` / `projection_y_coordinate` carries the same plane, so the variable
+            spanning them is drawable.
+        """
+        from digitalearth.base.sources.variable import default_variable
+
+        container = _container(
+            ["bounds", "temp"],
+            {
+                "x": _Info(["x"], {"standard_name": "projection_x_coordinate"}),
+                "y": _Info(["y"], {"standard_name": "projection_y_coordinate"}),
+                "bounds": _Info(["time", "nv"]),
+                "temp": _Info(["time", "y", "x"]),
+            },
+        )()
+
+        assert default_variable(container) == "temp", (
+            f"a projected store's planar variable must be drawable, got {default_variable(container)!r}"
+        )
