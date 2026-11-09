@@ -41,6 +41,7 @@ from digitalearth.base.points import PointArrays
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.mesh import MESH_LOCATIONS, MeshSource
 from digitalearth.base.sources.source import Source
+from digitalearth.base.sources.variable import default_variable
 from digitalearth.base.spec import DEFAULT_BAND, DataRef, Selection
 from digitalearth.base.types import PlottableData, RasterLike
 
@@ -258,7 +259,9 @@ def extract(
         band: 1-based band index for raster/collection inputs, or the slice/step for a NetCDF or mesh
             variable that carries one. Drawing the first of several is noted at WARNING, so a multi-step
             variable never reduces to one field in silence.
-        variable: Variable name for ``NetCDF`` inputs (defaults to the first variable).
+        variable: Variable name for ``NetCDF`` inputs (defaults to the first *drawable* variable — see
+            :func:`~digitalearth.base.sources.variable.default_variable`, which skips an array with no
+            map plane, such as a CF bounds array a store may declare first).
         x: Optional x coordinates for a raw numpy array (defaults to pixel indices).
         y: Optional y coordinates for a raw numpy array (defaults to pixel indices).
         metadata: Extra metadata merged into the resulting ``Source``.
@@ -688,10 +691,12 @@ def _netcdf_variable(nc: Any, variable: str | None, pinned: bool) -> str | None:
     if variable is not None:
         return variable
     if not pinned:
-        names: list[str] = list(nc.variable_names)
-        if not names:
+        # `default_variable` rather than `variable_names[0]`: 0.75 returns the store's declaration order, so
+        # the first name can be a CF bounds array with no plane to draw (see base/sources/variable.py).
+        chosen = default_variable(nc)
+        if chosen is None:
             raise ValueError("NetCDF has no variables to plot")
-        return names[0]
+        return chosen
     # The subset knows which variable it is. Recovering the name is what keeps the identity the style
     # matcher reads (`metadata("variable")`), the interactive colorbar label, and the slice messages — all
     # of which went blank when the name was dropped here (round-1 H1).

@@ -990,16 +990,29 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
             '<sst>'
 
             ```
-        - With none named it takes the first, which is what the still path draws too:
+        - With none named it takes the first *drawable* one, which is what the still path draws too. This
+          store declares its bounds array first, and a bounds array has no plane to draw:
             ```python
             >>> from digitalearth.pyramids_backend import _Forwarded, _netcdf_variable
+            >>> class Info:
+            ...     def __init__(self, dimensions, attributes=None):
+            ...         self.dimensions = dimensions
+            ...         self.attributes = attributes or {}
+            >>> class Metadata:
+            ...     variables = {
+            ...         "lat": Info(["lat"], {"axis": "Y"}),
+            ...         "lon": Info(["lon"], {"axis": "X"}),
+            ...         "time_bnds": Info(["time", "nbnds"]),
+            ...         "sst": Info(["time", "lat", "lon"]),
+            ...     }
             >>> class Container:
             ...     variable_names = ["time_bnds", "sst"]
+            ...     metadata = Metadata()
             ...     def get_variable(self, name):
             ...         return f"<{name}>"
             >>> plan = _Forwarded.from_facade("interactive", {"animate": True})
             >>> _netcdf_variable(Container(), plan)
-            '<time_bnds>'
+            '<sst>'
 
             ```
         - A variable already pinned out of its container is used as it is:
@@ -1014,6 +1027,10 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
 
             ```
     """
+    # Imported here, not at module scope: this module is what pyramids imports to discover the entry
+    # points, so it stays import-light (see the module docstring).
+    from digitalearth.base.sources.variable import default_variable
+
     named = plan.draw.get("variable")
     carried = list(getattr(nc, "variable_names", None) or [])
     if not carried:
@@ -1021,8 +1038,9 @@ def _netcdf_variable(nc: Any, plan: _Forwarded) -> Any:
         # is the same test `base.sources.extractors` makes of a subset.
         return nc
     if named is None:
-        # The same choice the still path makes, so `plot` and `animate` draw the same variable.
-        named = next(iter(carried))
+        # The same choice the still path makes, through the same helper, so `plot` and `animate` draw the
+        # same variable rather than agreeing only while both spell it `variable_names[0]`.
+        named = default_variable(nc)
     return nc.get_variable(named)
 
 

@@ -16,6 +16,7 @@ renderer and no cycle.
 
 from typing import Any
 
+from digitalearth.base.sources.variable import default_variable
 from digitalearth.base.spec import DEFAULT_BAND
 
 #: What a band with no name of its own is called, so a colour :class:`~digitalearth.base.spec.encoding.Encoding`
@@ -39,7 +40,7 @@ def band_field_name(data: Any, band: int = DEFAULT_BAND) -> str:
         band: The 1-based band the layer colours by.
 
     Returns:
-        The band's name, the first variable's name, or :data:`UNNAMED_BAND` — never an empty string, which an
+        The band's name, the first drawable variable's name, or :data:`UNNAMED_BAND` — never an empty string, which an
         :class:`~digitalearth.base.spec.encoding.Encoding` refuses as a field name.
 
     Examples:
@@ -52,7 +53,7 @@ def band_field_name(data: Any, band: int = DEFAULT_BAND) -> str:
             'slope'
 
             ```
-        - With no band names, the first variable name stands in:
+        - With no band names, the first drawable variable's name stands in:
             ```python
             >>> from digitalearth.base.sources.bandname import band_field_name
             >>> class _NetCDF:
@@ -72,10 +73,9 @@ def band_field_name(data: Any, band: int = DEFAULT_BAND) -> str:
     names = list(getattr(data, "band_names", None) or [])
     if 1 <= band <= len(names) and names[band - 1]:
         return str(names[band - 1])
-    # `next(iter(...), None)` rather than `variables[0]` guarded by `if variables`: the two are the same value,
-    # and the second reads as an unguarded subscript to a reviewer scanning for one (SonarCloud raises S6552 on
-    # it as a possible `IndexError`, which the short-circuit already makes impossible). It is the **first**
-    # variable specifically — not the first non-empty one — because that is the one the display extractor takes,
-    # which is what makes this name agree with the drawn value dimension.
-    first = next(iter(getattr(data, "variable_names", None) or []), None)
+    # The variable the display extractor draws, read through the same helper rather than re-deriving it, so
+    # this name agrees with the drawn value dimension by construction. It is deliberately not
+    # `variable_names[0]`: pyramids 0.75 returns the store's declaration order, so the first name can be a CF
+    # bounds array the extractor skips (see base/sources/variable.py).
+    first = default_variable(data)
     return str(first) if first else UNNAMED_BAND

@@ -1115,20 +1115,23 @@ class TestLabelValuedColumn:
 class TestChoosingTheNetcdfVariable:
     """Which variable a NetCDF animation slices, and when there is no axis to slice."""
 
-    def test_a_container_with_no_named_variable_uses_its_first(self):
+    def test_a_container_with_no_named_variable_uses_its_first_drawable(self):
         """With no ``variable`` forwarded, the same one the still path draws is animated.
 
         Test scenario:
             ``plot`` and ``animate`` must agree about which variable they mean, or the same call
-            differing only in ``animate=`` would draw two different fields.
+            differing only in ``animate=`` would draw two different fields. The expected name is written
+            out rather than read back as ``variable_names[0]``: this container declares
+            ``["time_bnds", "sst"]``, so comparing against the list's own first element asserted nothing
+            and went on passing when the answer moved to the bounds array.
         """
         from pyramids.netcdf import NetCDF
 
         nc = NetCDF.read_file("examples/data/global/ersstv5.nc")
         plan = _Forwarded.from_facade("interactive", {"animate": True})
         chosen = _netcdf_variable(nc, plan)
-        assert chosen._source_var_name == list(nc.variable_names)[0], (
-            f"expected the container's first variable, got {chosen._source_var_name!r}"
+        assert chosen._source_var_name == "sst", (
+            f"expected the drawable variable, got {chosen._source_var_name!r}"
         )
 
     def test_a_variable_already_pinned_is_used_as_it_is(self):
