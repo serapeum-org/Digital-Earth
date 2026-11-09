@@ -28,6 +28,7 @@ It is a leaf like :mod:`digitalearth.base.sources.bandname`: pyramids metadata i
 string out, no renderer and no cycle.
 """
 
+from collections.abc import Mapping
 from typing import Any
 
 #: CF ``axis`` values naming the two horizontal axes. ``T`` and ``Z`` are deliberately absent: a variable
@@ -58,6 +59,29 @@ def _bare(name: Any) -> str:
     return str(name).rsplit("/", maxsplit=1)[-1]
 
 
+def _described(variables: Any) -> list:
+    """The ``(name, info)`` pairs of a container's variable metadata, from either shape it comes in.
+
+    pyramids hands back a mapping of name to ``VariableInfo``, but a container may expose a plain sequence
+    of infos instead — :func:`digitalearth.base.sources.extractors._variable_attributes` already tolerates
+    both, so this package expects both. A sequence's names are read off the infos themselves.
+
+    Args:
+        variables: A mapping of name to info, a sequence of infos, or ``None``.
+
+    Returns:
+        The pairs, or an empty list when there is no metadata to read.
+    """
+    if variables is None:
+        return []
+    if isinstance(variables, Mapping):
+        return list(variables.items())
+    return [
+        (getattr(info, "full_name", None) or getattr(info, "name", ""), info)
+        for info in variables
+    ]
+
+
 def _attributes(info: Any) -> dict:
     """The CF attributes pyramids read off one variable, as a plain mapping.
 
@@ -82,7 +106,7 @@ def _horizontal_dimensions(variables: Any) -> tuple:
         conclude nothing is drawable.
     """
     x_names, y_names = set(), set()
-    for name, info in (variables or {}).items():
+    for name, info in _described(variables):
         attributes = _attributes(info)
         axis = str(attributes.get("axis", "")).upper()
         standard = str(attributes.get("standard_name", "")).lower()
@@ -180,7 +204,7 @@ def drawable_variable_names(data: Any) -> list:
     if not (x_names and y_names):
         return []
     described = {}
-    for key, info in (variables or {}).items():
+    for key, info in _described(variables):
         described.setdefault(_bare(key), info)
     drawable = []
     for name in names:

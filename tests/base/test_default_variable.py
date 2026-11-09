@@ -329,3 +329,57 @@ class TestAPlaneNeedsBothAxes:
         assert drawable_variable_names(container) == ["field"], (
             f"a (lat, lat) variable has no plane, got {drawable_variable_names(container)}"
         )
+
+
+class TestAVariablesSequence:
+    """`metadata.variables` as a sequence of infos rather than a mapping."""
+
+    def test_a_sequence_of_infos_classifies_like_a_mapping(self):
+        """A non-mapping `variables` is read by iterating it, not by calling `.items()`.
+
+        Test scenario:
+            `base/sources/extractors.py` already tolerates both shapes
+            (`variables.values() if isinstance(variables, Mapping) else variables`), so a container handing
+            back a sequence is a shape this package expects. Calling `.items()` on it raised
+            `AttributeError: 'list' object has no attribute 'items'` out of all three readers, where the
+            previous one-liner could not fail at all.
+        """
+        from digitalearth.base.sources.variable import default_variable
+
+        class _Named:
+            """An info that knows its own name, as pyramids' VariableInfo does."""
+
+            def __init__(self, name, dimensions, attributes=None):
+                """Record the name, dimensions and CF attributes.
+
+                Args:
+                    name: The variable's name.
+                    dimensions: Its dimension names.
+                    attributes: Its CF attributes, or ``None`` for none.
+                """
+                self.name = name
+                self.full_name = name
+                self.dimensions = dimensions
+                self.attributes = attributes or {}
+
+        metadata = type(
+            "Metadata",
+            (),
+            {
+                "variables": [
+                    _Named("lat", ["lat"], {"axis": "Y"}),
+                    _Named("lon", ["lon"], {"axis": "X"}),
+                    _Named("time_bnds", ["time", "nbnds"]),
+                    _Named("sst", ["time", "lat", "lon"]),
+                ]
+            },
+        )
+        container = type(
+            "Container",
+            (),
+            {"variable_names": ["time_bnds", "sst"], "metadata": metadata()},
+        )()
+
+        assert default_variable(container) == "sst", (
+            f"a sequence-shaped variables mapping must classify too, got {default_variable(container)!r}"
+        )
