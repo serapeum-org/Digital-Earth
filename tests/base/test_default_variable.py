@@ -136,6 +136,24 @@ LON = _Info(["lon"], {"axis": "X"})
 class TestDrawableVariableNames:
     """Which variables `drawable_variable_names` considers drawable, and which it skips."""
 
+    def test_a_pinned_subset_has_no_drawable_names(self):
+        """A container declaring no variables reports none drawable, rather than consulting its metadata.
+
+        Test scenario:
+            A subset already pinned to one variable reports no `variable_names` because it *is* the
+            variable. `default_variable` answers `None` for that shape, but `drawable_variable_names` is
+            public and can be asked directly, so its own empty case is pinned here.
+        """
+        from digitalearth.base.sources.variable import drawable_variable_names
+
+        pinned = _container(
+            [], {"lat": LAT, "lon": LON, "sst": _Info(["lat", "lon"])}
+        )()
+
+        assert drawable_variable_names(pinned) == [], (
+            f"a container declaring no variables has none drawable, got {drawable_variable_names(pinned)}"
+        )
+
     def test_a_name_its_metadata_does_not_describe_is_skipped(self):
         """A declared name absent from `metadata.variables` cannot be classified, so it is passed over.
 
