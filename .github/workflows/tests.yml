@@ -230,7 +230,7 @@ jobs:
     # 26.0, and under llvmpipe 26.0 two VTK geometry-filter paths render blank -- `extruded_polygons`
     # (baseline comes back pure white) and `clip_plane()` on a ray-cast volume. pyvista 0.48.4 / VTK
     # 9.6.2 are unchanged, so the break is in the unpinned apt GL stack below, not in our code or deps.
-    # Drop the pin once those two renders are correct on Mesa 26; 24.04 runners will be retired first.
+    # Drop the pin once those two renders are correct on Mesa 26 (#538); 24.04 runners retire first.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -368,7 +368,7 @@ jobs:
     # 26.0, and under llvmpipe 26.0 two VTK geometry-filter paths render blank -- `extruded_polygons`
     # (baseline comes back pure white) and `clip_plane()` on a ray-cast volume. pyvista 0.48.4 / VTK
     # 9.6.2 are unchanged, so the break is in the unpinned apt GL stack below, not in our code or deps.
-    # Drop the pin once those two renders are correct on Mesa 26; 24.04 runners will be retired first.
+    # Drop the pin once those two renders are correct on Mesa 26 (#538); 24.04 runners retire first.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
