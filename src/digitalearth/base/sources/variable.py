@@ -19,9 +19,11 @@ coordinate it marks as its northings (CF ``axis`` of ``X``/``Y``, or a ``standar
 Reading the dimensions a horizontal coordinate spans, rather than the coordinate's own name, is what lets a
 curvilinear store classify: ROMS' ``lat_rho``/``lon_rho`` span ``(eta_rho, xi_rho)`` and nothing is named
 ``lat``. Requiring one of *each* axis rather than any two horizontal names is what refuses a staggered
-store's ``(xi_rho, xi_u)`` variable, which spans no northing at all. pyramids answers this exact question internally — on the
-installed 0.75.0, ``NetCDF._spatial_variable_names()`` returns ``['sst']`` for the container above — but the
-method is private, so it is not consumed here. If it is ever published, this module collapses to a delegation.
+store's ``(xi_rho, xi_u)`` variable, which spans no northing at all.
+
+pyramids answers this exact question internally — on the installed 0.75.0, ``NetCDF._spatial_variable_names()``
+returns ``['sst']`` for the container above — but the method is private, so it is not consumed here. If it is
+ever published, this module collapses to a delegation.
 
 When nothing can be classified — a container exposing no metadata, or one marking neither axis — the first
 declared name is returned, which is what every reader did before. That keeps this strictly no worse than the
@@ -190,6 +192,27 @@ def drawable_variable_names(data: Any) -> list[str]:
             ...     }
             >>> class Container:
             ...     variable_names = ["temp"]
+            ...     metadata = Metadata()
+            >>> drawable_variable_names(Container())
+            ['temp']
+
+            ```
+        - A curvilinear store classifies too, because a coordinate lends the dimensions it spans rather
+          than its own name — nothing here is called ``lat`` or ``lon``:
+            ```python
+            >>> class Info:
+            ...     def __init__(self, dimensions, attributes=None):
+            ...         self.dimensions = dimensions
+            ...         self.attributes = attributes or {}
+            >>> class Metadata:
+            ...     variables = {
+            ...         "lat_rho": Info(["eta_rho", "xi_rho"], {"standard_name": "latitude"}),
+            ...         "lon_rho": Info(["eta_rho", "xi_rho"], {"standard_name": "longitude"}),
+            ...         "time_bnds": Info(["time", "nbnds"]),
+            ...         "temp": Info(["time", "eta_rho", "xi_rho"]),
+            ...     }
+            >>> class Container:
+            ...     variable_names = ["time_bnds", "temp"]
             ...     metadata = Metadata()
             >>> drawable_variable_names(Container())
             ['temp']
