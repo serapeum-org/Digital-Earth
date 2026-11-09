@@ -1482,6 +1482,25 @@ class TestTheWindowFromTheSourcesOwnExtent:
 
         epsg = 4326
 
+    class _RaisingCanonical:
+        """A raster whose `total_bounds` raises, as an unimplemented abstract property does.
+
+        pyramids-core 0.75 made `total_bounds` abstract on `RasterBase`, so a third-party subclass that
+        implemented only `bbox` reaches this shape: the canonical name exists but cannot be read.
+        """
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+
+        @property
+        def total_bounds(self):
+            """Refuse the read the way an unimplemented abstract property does.
+
+            Raises:
+                NotImplementedError: always.
+            """
+            raise NotImplementedError("total_bounds is not implemented by this reader")
+
     @pytest.mark.parametrize(
         "raster",
         [_Canonical, _LegacyOnly, _Both],
@@ -1523,3 +1542,26 @@ class TestTheWindowFromTheSourcesOwnExtent:
         assert (
             SourceView._window_for(self._Extentless(), ViewRequest(budget=4096)) is None
         ), "a source declaring neither total_bounds nor bbox cannot be windowed"
+
+    def test_a_canonical_name_that_raises_falls_back_to_the_legacy_one(self):
+        """A `total_bounds` that cannot be read is treated as absent, not allowed to escape.
+
+        Test scenario:
+            0.75 made `total_bounds` abstract on `RasterBase`, so a reader implementing only `bbox` has the
+            canonical name present but raising. Keying the fallback on `is None` alone let that
+            `NotImplementedError` out of `_window_for` and failed the whole read, where the reader had a
+            perfectly good `bbox` to window against.
+        """
+        window = SourceView._window_for(
+            self._RaisingCanonical(), ViewRequest(budget=4096)
+        )
+
+        assert window is not None, (
+            "a raising total_bounds must fall back to bbox, not fail the read"
+        )
+        assert (window.xmin, window.ymin, window.xmax, window.ymax) == (
+            0.0,
+            0.0,
+            4.0,
+            4.0,
+        ), f"expected the legacy bbox's 0,0,4,4 extent, got {window}"
