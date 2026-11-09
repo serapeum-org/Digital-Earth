@@ -107,6 +107,59 @@ def drawable_variable_names(data: Any) -> list:
     Returns:
         The drawable names. Empty when the container declares none, or when its metadata does not mark a
         horizontal axis — the caller cannot tell those two apart and should fall back either way.
+
+    Examples:
+        - A store declaring a bounds array beside its data reports only the data:
+            ```python
+            >>> class Info:
+            ...     def __init__(self, dimensions, attributes=None):
+            ...         self.dimensions = dimensions
+            ...         self.attributes = attributes or {}
+            >>> class Metadata:
+            ...     variables = {
+            ...         "lat": Info(["lat"], {"axis": "Y"}),
+            ...         "lon": Info(["lon"], {"axis": "X"}),
+            ...         "time_bnds": Info(["time", "nbnds"]),
+            ...         "sst": Info(["time", "lat", "lon"]),
+            ...     }
+            >>> class Container:
+            ...     variable_names = ["time_bnds", "sst"]
+            ...     metadata = Metadata()
+            >>> drawable_variable_names(Container())
+            ['sst']
+
+            ```
+        - A projected store is classified from its ``standard_name`` when it declares no ``axis``:
+            ```python
+            >>> class Info:
+            ...     def __init__(self, dimensions, attributes=None):
+            ...         self.dimensions = dimensions
+            ...         self.attributes = attributes or {}
+            >>> class Metadata:
+            ...     variables = {
+            ...         "x": Info(["x"], {"standard_name": "projection_x_coordinate"}),
+            ...         "y": Info(["y"], {"standard_name": "projection_y_coordinate"}),
+            ...         "temp": Info(["time", "y", "x"]),
+            ...     }
+            >>> class Container:
+            ...     variable_names = ["temp"]
+            ...     metadata = Metadata()
+            >>> drawable_variable_names(Container())
+            ['temp']
+
+            ```
+        - A container whose metadata marks no horizontal axis reports nothing, which is the signal to fall
+          back rather than a claim that nothing is drawable:
+            ```python
+            >>> class Bare:
+            ...     variable_names = ["first", "second"]
+            >>> drawable_variable_names(Bare())
+            []
+
+            ```
+
+    See Also:
+        default_variable: Picks the first of these, falling back to the first declared name.
     """
     names = [str(name) for name in (getattr(data, "variable_names", None) or [])]
     if not names:
