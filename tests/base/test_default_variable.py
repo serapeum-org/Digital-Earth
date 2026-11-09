@@ -271,3 +271,61 @@ class TestAGroupedStore:
         assert default_variable(container) == "forecast/sst", (
             f"the answer must keep the name the container reported, got {default_variable(container)!r}"
         )
+
+
+class TestAPlaneNeedsBothAxes:
+    """A map plane is one X axis and one Y axis, not any two horizontal names."""
+
+    def test_a_variable_over_two_x_axes_is_not_drawable(self):
+        """A staggered store's two X coordinates do not make a plane between them.
+
+        Test scenario:
+            A staggered (Arakawa-C / ROMS-style) store declares more than one X coordinate — `xi_rho` and
+            `xi_u` both carry `axis: X`. A variable spanning both of them spans no Y at all, so it has no
+            plane; counting "any two horizontal names" called it drawable and would have drawn it.
+        """
+        from digitalearth.base.sources.variable import (
+            default_variable,
+            drawable_variable_names,
+        )
+
+        container = _container(
+            ["u_flux", "temp"],
+            {
+                "xi_rho": _Info(["xi_rho"], {"axis": "X"}),
+                "xi_u": _Info(["xi_u"], {"axis": "X"}),
+                "eta_rho": _Info(["eta_rho"], {"axis": "Y"}),
+                "u_flux": _Info(["xi_rho", "xi_u"]),
+                "temp": _Info(["eta_rho", "xi_rho"]),
+            },
+        )()
+
+        assert drawable_variable_names(container) == ["temp"], (
+            f"only the variable spanning an X and a Y has a plane, got {drawable_variable_names(container)}"
+        )
+        assert default_variable(container) == "temp", (
+            f"expected the variable with a real plane, got {default_variable(container)!r}"
+        )
+
+    def test_a_variable_over_the_same_axis_twice_is_not_drawable(self):
+        """Spanning one axis twice is not a plane either.
+
+        Test scenario:
+            A degenerate `(lat, lat)` variable intersects the horizontal names twice over, which a count of
+            two satisfied. Requiring one on each axis refuses it.
+        """
+        from digitalearth.base.sources.variable import drawable_variable_names
+
+        container = _container(
+            ["square", "field"],
+            {
+                "lat": LAT,
+                "lon": LON,
+                "square": _Info(["lat", "lat"]),
+                "field": _Info(["lat", "lon"]),
+            },
+        )()
+
+        assert drawable_variable_names(container) == ["field"], (
+            f"a (lat, lat) variable has no plane, got {drawable_variable_names(container)}"
+        )

@@ -14,8 +14,9 @@ A bounds array has no spatial plane, so it is not something a map can draw at al
 therefore the first variable that *is* drawable, which is stable under either ordering.
 
 Drawability is decided from the container's own public metadata: a variable is drawable when its dimensions
-include at least two of the axes the store marks as horizontal (CF ``axis`` of ``X``/``Y``, or a
-``standard_name`` naming a horizontal coordinate). pyramids answers this exact question internally — on the
+include one of the axes the store marks as its eastings *and* one it marks as its northings (CF ``axis`` of
+``X``/``Y``, or a ``standard_name`` naming either). Counting any two horizontal names instead would call a
+staggered store's ``(xi_rho, xi_u)`` variable drawable, which spans no northing at all. pyramids answers this exact question internally — on the
 installed 0.75.0, ``NetCDF._spatial_variable_names()`` returns ``['sst']`` for the container above — but the
 method is private, so it is not consumed here. If it is ever published, this module collapses to a delegation.
 
@@ -29,25 +30,15 @@ string out, no renderer and no cycle.
 
 from typing import Any
 
-#: CF ``axis`` values that mark a horizontal (map-plane) coordinate. ``T`` and ``Z`` are deliberately absent:
-#: a variable over time and depth alone has no plane to draw.
-HORIZONTAL_AXES = frozenset({"X", "Y"})
+#: CF ``axis`` values naming the two horizontal axes. ``T`` and ``Z`` are deliberately absent: a variable
+#: over time and depth alone has no plane to draw.
+X_AXIS = "X"
+Y_AXIS = "Y"
 
-#: CF ``standard_name`` values for a horizontal coordinate, for a store that names them but declares no
-#: ``axis``. Both the geographic and the projected spellings, since either can carry the map plane.
-HORIZONTAL_STANDARD_NAMES = frozenset(
-    {
-        "latitude",
-        "longitude",
-        "grid_latitude",
-        "grid_longitude",
-        "projection_x_coordinate",
-        "projection_y_coordinate",
-    }
-)
-
-#: How many horizontal axes a variable needs before it can be drawn: both of them, or it has no plane.
-_PLANE = 2
+#: CF ``standard_name`` values for each horizontal axis, for a store that names its coordinates but declares
+#: no ``axis``. Geographic, rotated-pole and projected spellings, since any of them can carry the map plane.
+X_STANDARD_NAMES = frozenset({"longitude", "grid_longitude", "projection_x_coordinate"})
+Y_STANDARD_NAMES = frozenset({"latitude", "grid_latitude", "projection_y_coordinate"})
 
 
 def _bare(name: Any) -> str:
@@ -79,24 +70,27 @@ def _attributes(info: Any) -> dict:
     return dict(getattr(info, "attributes", None) or {})
 
 
-def _horizontal_dimensions(variables: Any) -> set:
-    """The names of the dimensions that carry the map plane.
+def _horizontal_dimensions(variables: Any) -> tuple:
+    """The dimension names carrying each of the two horizontal axes.
 
     Args:
         variables: The container's ``metadata.variables`` mapping, name to ``VariableInfo``.
 
     Returns:
-        The coordinate names the store marks as horizontal. Empty when it marks none, which is the signal to
-        fall back rather than to conclude nothing is drawable.
+        ``(x_names, y_names)`` — the coordinate names the store marks as its eastings and its northings.
+        Either may be empty when the store marks none, which is the signal to fall back rather than to
+        conclude nothing is drawable.
     """
-    horizontal = set()
+    x_names, y_names = set(), set()
     for name, info in (variables or {}).items():
         attributes = _attributes(info)
         axis = str(attributes.get("axis", "")).upper()
         standard = str(attributes.get("standard_name", "")).lower()
-        if axis in HORIZONTAL_AXES or standard in HORIZONTAL_STANDARD_NAMES:
-            horizontal.add(_bare(name))
-    return horizontal
+        if axis == X_AXIS or standard in X_STANDARD_NAMES:
+            x_names.add(_bare(name))
+        elif axis == Y_AXIS or standard in Y_STANDARD_NAMES:
+            y_names.add(_bare(name))
+    return x_names, y_names
 
 
 def _dimensions_of(info: Any) -> set:
@@ -182,8 +176,8 @@ def drawable_variable_names(data: Any) -> list:
     if not names:
         return []
     variables = getattr(getattr(data, "metadata", None), "variables", None)
-    horizontal = _horizontal_dimensions(variables)
-    if not horizontal:
+    x_names, y_names = _horizontal_dimensions(variables)
+    if not (x_names and y_names):
         return []
     described = {}
     for key, info in (variables or {}).items():
@@ -193,7 +187,8 @@ def drawable_variable_names(data: Any) -> list:
         info = described.get(_bare(name))
         if info is None:
             continue
-        if len(_dimensions_of(info) & horizontal) >= _PLANE:
+        dimensions = _dimensions_of(info)
+        if dimensions & x_names and dimensions & y_names:
             drawable.append(name)
     return drawable
 
