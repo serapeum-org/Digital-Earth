@@ -261,7 +261,9 @@ tell the two apart.
     shipped in **0.73.0** — `0.72.0` was published after the seam merged but cut from a commit
     without it, so it carries neither `pyramids.base._plot_backends` nor the conformance kit, and
     its `Dataset.plot` has no `backend=` keyword. So 0.73.0 is the oldest release this seam resolves
-    on; the declared floor is higher (`>=0.75.0`) for an unrelated reason — 0.75.0's vendored PROJ.
+    on; the declared floor is higher (`>=0.75.0`) for an unrelated reason — this package uses the
+    names 0.75.0 canonicalised (`metadata`, `band_metadata`, `nearest_cell`, `total_bounds`,
+    `MeshDataset`), which do not exist on 0.73.0.
 
     Verified against 0.75.0:
 
