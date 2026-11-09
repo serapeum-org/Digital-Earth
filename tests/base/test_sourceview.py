@@ -1565,3 +1565,67 @@ class TestTheWindowFromTheSourcesOwnExtent:
             4.0,
             4.0,
         ), f"expected the legacy bbox's 0,0,4,4 extent, got {window}"
+
+
+class TestTheExtentFallbackThroughTheReadItself:
+    """The same fallback, driven through `SourceView.of` rather than the private helper.
+
+    The tests above pin `_window_for`, which is where the decision lives, but a stub with no `read_part`
+    cannot show that the window actually reaches the reader. A real `Dataset` already covers the canonical
+    name end to end (`TestRereading` rereads `acc4000.tif` on a bare budget, and a pyramids raster declares
+    `total_bounds`). This covers the other arm: a reader declaring only the deprecated `bbox` still has its
+    own extent handed to `read_part`.
+    """
+
+    class _LegacyRecording:
+        """A windowing raster that declares only `bbox` and records the window it is asked for."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 8.0, 8.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 8.0, 0.0, -1.0)
+        no_data_value = (-9999.0,)
+
+        def __init__(self):
+            """Start with no recorded reads."""
+            self.windows = []
+
+        def read_part(self, *, bbox, dst_width, dst_height, bbox_crs=None, band=0):
+            """Record the window and return a canvas of that size.
+
+            Args:
+                bbox: The window asked for.
+                dst_width: Cells across.
+                dst_height: Cells down.
+                bbox_crs: The window's CRS.
+                band: The 0-based band.
+
+            Returns:
+                A canvas of the requested size.
+            """
+            self.windows.append(tuple(float(edge) for edge in bbox))
+            return np.full((dst_height, dst_width), 1.0)
+
+    def test_a_budget_alone_windows_a_legacy_reader_against_its_own_bbox(self):
+        """A size-only request reaches `read_part` with the reader's own extent as the window.
+
+        Test scenario:
+            `ViewRequest(budget=...)` names no rectangle, so the window can only come from the source. This
+            reader declares `bbox` and not `total_bounds`, so the fallback is the only way it gets one — and
+            the assertion is on what `read_part` actually received, not on the helper's return value.
+        """
+        source = self._LegacyRecording()
+        ref = DataRef.to_object(source, name="legacy-extent-view")
+        SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(budget=16),
+        )
+
+        assert source.windows, (
+            "a budget-only request must still window, so read_part must be called"
+        )
+        assert source.windows[0] == (0.0, 0.0, 8.0, 8.0), (
+            f"expected the reader's own bbox as the window, got {source.windows[0]}"
+        )
