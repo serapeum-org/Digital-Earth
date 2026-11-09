@@ -63,11 +63,23 @@ def _source_extent(data: Any) -> Any:
     `total_bounds` is the canonical name; pyramids renamed `bbox` to it in pyramids-core 0.75.0 and keeps
     `bbox` as a deprecated alias. `data` is any duck-typed raster, so both are tried in that order.
 
-    A canonical name that *raises* counts as not declared, not as a failed read: 0.75 made `total_bounds`
-    abstract on `RasterBase`, so a third-party reader implementing only `bbox` has the attribute present and
-    unusable. Only `AttributeError` and `NotImplementedError` are swallowed — those two mean "this reader
-    does not answer that question". Anything else is a real failure in a reader that does answer it, and is
-    left to propagate rather than silently windowing against a different box.
+    A canonical name that *raises* counts as not declared, not as a failed read. `data` is any duck-typed
+    object a caller handed in, not necessarily a pyramids raster, and a partial implementation that declares
+    a property and raises `NotImplementedError` from it is the ordinary Python idiom for "declared but not
+    provided". Absence itself arrives as `AttributeError`. Those two are swallowed; anything else is a real
+    failure in a reader that does answer the question, and propagates rather than being hidden by quietly
+    windowing against a different box.
+
+    This is deliberately *not* justified by `RasterBase`: both `bbox` and `total_bounds` are abstract there,
+    so a subclass implementing only one of them cannot be instantiated at all —
+    `TypeError: Can't instantiate abstract class ... without an implementation for abstract methods` — and
+    were it somehow constructed, the inherited body is a bare `pass`, which returns `None` and is caught by
+    the plain absence check anyway.
+
+    One limitation is worth knowing: an `AttributeError` raised from *inside* a present property cannot be
+    told apart from the property being absent, so such a reader falls through to `bbox` instead of
+    reporting. Distinguishing them would mean inspecting the class rather than reading the attribute, which
+    does not help the duck types this exists for.
 
     Args:
         data: The opened object.

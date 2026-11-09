@@ -1483,10 +1483,12 @@ class TestTheWindowFromTheSourcesOwnExtent:
         epsg = 4326
 
     class _RaisingCanonical:
-        """A raster whose `total_bounds` raises, as an unimplemented abstract property does.
+        """A raster whose `total_bounds` is declared but raises, as a partial implementation does.
 
-        pyramids-core 0.75 made `total_bounds` abstract on `RasterBase`, so a third-party subclass that
-        implemented only `bbox` reaches this shape: the canonical name exists but cannot be read.
+        This is a plain duck type, not a `RasterBase` subclass: both `bbox` and `total_bounds` are abstract
+        there, so a subclass implementing only one cannot be instantiated. What this models is the reader
+        `SourceView` actually accepts — any object with the right members, including one that declares a
+        property it does not provide.
         """
 
         epsg = 4326
@@ -1547,10 +1549,9 @@ class TestTheWindowFromTheSourcesOwnExtent:
         """A `total_bounds` that cannot be read is treated as absent, not allowed to escape.
 
         Test scenario:
-            0.75 made `total_bounds` abstract on `RasterBase`, so a reader implementing only `bbox` has the
-            canonical name present but raising. Keying the fallback on `is None` alone let that
-            `NotImplementedError` out of `_window_for` and failed the whole read, where the reader had a
-            perfectly good `bbox` to window against.
+            A duck-typed reader may declare `total_bounds` and raise from it. Keying the fallback on
+            `is None` alone let that `NotImplementedError` out of `_window_for` and failed the whole read,
+            where the reader had a perfectly good `bbox` to window against.
         """
         window = SourceView._window_for(
             self._RaisingCanonical(), ViewRequest(budget=4096)
