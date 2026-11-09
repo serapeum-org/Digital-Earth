@@ -44,7 +44,8 @@ class TestTheDeclaredOrderPremise:
         assert "sst" in names, (
             f"the fixture must still carry its data variable, got {names}"
         )
-        assert names and names[0] != "sst", (
+        assert names, "the fixture must report its variables at all"
+        assert names[0] != "sst", (
             f"these tests need a non-drawable name reported before the data; variable_names is {names}. "
             "If pyramids now filters CF non-data arrays, the default-variable rule is no longer load-bearing "
             "for this fixture and this module needs a store that still exercises it."

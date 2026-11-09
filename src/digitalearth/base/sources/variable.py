@@ -116,18 +116,16 @@ def _horizontal_dimensions(variables: Any) -> tuple[set[str], set[str]]:
         attributes = _attributes(info)
         axis = str(attributes.get("axis", "")).upper()
         standard = str(attributes.get("standard_name", "")).lower()
-        if axis == X_AXIS or standard in X_STANDARD_NAMES:
-            spans = x_names
-        elif axis == Y_AXIS or standard in Y_STANDARD_NAMES:
-            spans = y_names
-        else:
-            continue
         # The *dimensions* the coordinate spans, not its own name, because those are what a data variable
         # references. For a 1-D `lat` over `lat` the two are the same; for a curvilinear store they are not
         # — ROMS' `lat_rho` spans `(eta_rho, xi_rho)` and nothing is called `lat` at all, so matching on the
         # coordinate's name found no horizontal dimension and every variable fell through to the fallback.
         # A coordinate whose dimensions are not declared contributes its own name, as before.
-        spans |= _dimensions_of(info) or {_bare(name)}
+        spanned = _dimensions_of(info) or {_bare(name)}
+        if axis == X_AXIS or standard in X_STANDARD_NAMES:
+            x_names |= spanned
+        elif axis == Y_AXIS or standard in Y_STANDARD_NAMES:
+            y_names |= spanned
     return x_names, y_names
 
 
