@@ -2780,7 +2780,7 @@ class VectorMixin(_MixinBase):
     def _placed_mesh(self, data: Any) -> Any:
         """Put a UGRID mesh into the display CRS.
 
-        A mesh is warped with ``MeshDataset.to_crs``, which (pyramids-core >= 0.73.0, #1404) accepts the
+        A mesh is warped with ``MeshDataset.to_crs``, which (since pyramids-core 0.73.0, #1404) accepts the
         display CRS in any form ``pyproj.CRS.from_user_input`` takes — an EPSG code, a ``"+proj=..."``
         string, WKT, an ``"ESRI:..."`` code — so the display CRS is handed over as written, exactly as every
         other family does. An orthographic, Robinson or Mollweide display CRS is no longer a special case:

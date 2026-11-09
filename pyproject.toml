@@ -165,9 +165,11 @@ digitalearth = "digitalearth.ops.cli:main"
 # the renderer for these four names. `matplotlib` is deliberately not among them: `Dataset.plot`
 # branches on `if backend != "matplotlib"` and takes its own cleopatra path before it consults the
 # registry, so an entry point under that name could never be resolved — this tier is served as
-# `static`, after the subpackage that implements it. The seam first shipped in pyramids-core 0.73.0,
-# which is why the floor is `>=0.73.0`: 0.72.0 was published after it merged but was cut from a commit
-# without it. Without the entry point pyramids falls back to importing `digitalearth` by name and
+# `static`, after the subpackage that implements it. The seam first shipped in pyramids-core 0.73.0 —
+# 0.72.0 was published after it merged but was cut from a commit without it — so 0.73.0 is the oldest
+# release this entry point can resolve on. The declared floor is higher than that (see the dependency
+# above) for an unrelated reason: 0.75.0's vendored PROJ. Without the entry point pyramids falls back
+# to importing `digitalearth` by name and
 # calling `quickmap` directly, which forwards its own vocabulary verbatim — a registered entry point
 # wins over that fallback and goes through `pyramids_backend`, which translates the two vocabularies
 # (notably the 0-based `band` the facade sends against the 1-based one `quickmap` takes). The names
