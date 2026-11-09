@@ -58,7 +58,7 @@ dependencies = [
     # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is
     # one repackaging away from a ModuleNotFoundError raised from inside basemap().
     "xyzservices >=2023.10.0",
-    "pyramids-core >=0.73.0",
+    "pyramids-core >=0.75.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -672,7 +672,11 @@ python = "3.13.*"
 # 3.14 is outside the supported range and many GIS deps (gdal, pyproj, ...) have
 # no 3.14 wheels yet, forcing source builds. py311/py312/py313 override this.
 python = ">=3.11,<3.14"
-gdal = ">=3.13.0,<4"
+# 3.13.3 is a floor, not a preference: pyramids-core 0.75.0 vendors PROJ 9.9.0, whose proj.db layout is
+# 1.7, and pyramids points PROJ_LIB at this conda tree's share/proj whenever one exists. libgdal-core
+# 3.13.3 is the first build pinning proj >=9.9.0; against 3.13.2 (proj 9.8.1, layout 1.6) the vendored
+# PROJ refuses the older database and every EPSG lookup raises at runtime.
+gdal = ">=3.13.3,<4"
 # Conda-forge's geopandas-base no longer pulls in a vector-IO backend.
 # pyogrio is required for GeoDataFrame.to_file / read_file.
 pyogrio = ">=0.12.1"
