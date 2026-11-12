@@ -143,9 +143,9 @@ class InteractionMixin(_MixinBase):
         def _profile(x: float, y: float) -> Any:
             # pyramids' nearest_cell wants a GeoDataFrame/FeatureCollection; build the single clicked
             # point through pyramids (no shapely/geopandas import here, DX.3).
-            from pyramids.feature.geometry import point_collection
+            from pyramids.feature import FeatureCollection
 
-            point = point_collection([(x, y)], crs=self.crs)
+            point = FeatureCollection.from_xyz([x], [y], crs=self.crs)
             series = []
             for member in members:
                 ds = (
