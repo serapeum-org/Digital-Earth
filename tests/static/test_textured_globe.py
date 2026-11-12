@@ -312,9 +312,11 @@ class TestFromDataset:
 
     def test_nodata_is_transparent_even_under_an_opaque_bad_colour(self):
         """matplotlib's default 'bad' colour is already transparent, so only an opaque one tests our own
-        masking. A colormap with set_bad opaque must still leave nodata see-through."""
-        cmap = resolve_colormap("viridis").copy()
-        cmap.set_bad("red", alpha=1.0)
+        masking. A colormap whose bad colour is fully opaque must still leave nodata see-through."""
+        # `with_extremes` rather than `set_bad`, which matplotlib 3.11 marks PendingDeprecationWarning. It
+        # returns a new colormap instead of mutating, so the `.copy()` the old spelling needed is gone. The
+        # explicit RGBA keeps alpha=1.0 visible, since full opacity is the whole point of this test.
+        cmap = resolve_colormap("viridis").with_extremes(bad=(1.0, 0.0, 0.0, 1.0))
         arr = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
         ds = Dataset.from_array(
             arr=arr,

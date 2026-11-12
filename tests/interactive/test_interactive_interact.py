@@ -112,7 +112,7 @@ class TestHoverAndTap:
         tap = next(s for s in dmap.streams if isinstance(s, streams.Tap))
         # tap at the centre of the dataset's extent (display CRS)
         merc = dataset.to_crs(3857)
-        xmin, ymin, xmax, ymax = merc.bbox if hasattr(merc, "bbox") else (0, 0, 1, 1)
+        xmin, ymin, xmax, ymax = merc.total_bounds
         tap.event(x=(xmin + xmax) / 2, y=(ymin + ymax) / 2)
         curve = dmap[()]
         assert isinstance(curve, hv.Curve)
