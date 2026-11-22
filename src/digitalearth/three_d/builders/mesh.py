@@ -22,6 +22,13 @@ The layer is described from its source (the ``Mesh2d`` itself) and rebuilt by :f
 a ``LayerSpec`` and a slot in the figure like every other 3-D layer: it is in ``layer_ids``, and is removable,
 hideable and re-describable by id. numpy is imported lazily and PyVista only inside the drawer; importing the
 tier needs neither.
+
+**The ``Mesh2d`` is held as an in-memory object source, not recorded as values**, so the layer redraws in this
+process (``Scene3D.from_figure(scene.figure_spec)``) but a mesh scene cannot be ``figure_spec.to_dict()``-d or
+``save_bundle``-d — the same object-source limitation an in-memory-sourced ``terrain`` has. This diverges on
+purpose from the web tier, whose :class:`~digitalearth.web.builders.mesh.MeshMixin` records the triangle rings
+as plain values precisely so its layer survives a JSON round trip; the 3-D tier keeps the connectivity on the
+``Mesh2d`` and triangulates at draw time instead.
 """
 
 from typing import TYPE_CHECKING, Any
