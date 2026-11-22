@@ -248,5 +248,19 @@ class TestQuickmapRoutesAMeshHere:
         """Only 'auto'/'trimesh' render a mesh here; another kind is refused by name, not drawn wrong."""
         import digitalearth
 
+        mesh = ugrid_mesh("face")
         with pytest.raises(ValueError, match="not a renderer for a mesh"):
-            digitalearth.quickmap(ugrid_mesh("face"), backend="interactive", kind="contourf")
+            digitalearth.quickmap(mesh, backend="interactive", kind="contourf")
+
+    def test_ds_plot_routes_through_the_pyramids_seam(self, ugrid_mesh):
+        """DoD #544: ds.plot(variable, backend="interactive") reaches trimesh end-to-end.
+
+        Test scenario:
+            pyramids' MeshDataset.plot forwards backend= to digitalearth.quickmap, with no digitalearth
+            import by the caller. With the gate derived and the interactive branch routed, a mesh plotted
+            this way must build an InteractiveMap TriMesh rather than be refused.
+        """
+        mesh = ugrid_mesh("face")
+        scene = mesh.plot("depth", backend="interactive")
+        assert isinstance(scene, InteractiveMap)
+        assert isinstance(scene.layers[0], gv.TriMesh), f"got {type(scene.layers[0])}"

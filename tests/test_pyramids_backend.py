@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 import digitalearth
-import digitalearth.api
+from digitalearth import api as _de_api
 from digitalearth.pyramids_backend import (
     _UNANIMATABLE,
     _UNANIMATABLE_DEFAULT,
@@ -47,13 +47,6 @@ from digitalearth.pyramids_backend import (
 
 #: The group pyramids resolves a backend name through, and the four names we answer to.
 GROUP = "pyramids.plot_backends"
-
-#: The backends with no unstructured-mesh render, **derived** from :data:`~digitalearth.api.MESH_BACKENDS` so a
-#: tier that gains the render (static, then interactive #544, then web #547) leaves this list rather than being
-#: struck off by hand — the same derivation the quickmap rejection test uses.
-_NO_MESH_BACKENDS = sorted(
-    set(digitalearth.api.BACKEND_CAPABILITIES) - digitalearth.api.MESH_BACKENDS
-)
 
 #: Each registered name against the callable it must load, and the module path it is declared as.
 REGISTERED = (
@@ -309,6 +302,11 @@ class TestBandOrigin:
             scene.close()
 
 
+# Backends with no triangular render, derived so a tier that gains one drops out automatically
+# (parallels test_quickplot._NO_MESH_RENDER). Interactive now renders a mesh; only 3d/web remain.
+_NO_MESH_RENDER = sorted(set(_de_api.BACKEND_CAPABILITIES) - _de_api.MESH_BACKENDS)
+
+
 class TestVocabulary:
     """The names that differ between the facade and this package."""
 
@@ -373,9 +371,9 @@ class TestVocabulary:
             scene.close()
 
     @pytest.mark.skipif(
-        not _NO_MESH_BACKENDS, reason="every backend now declares a mesh render"
+        not _NO_MESH_RENDER, reason="every backend now declares a mesh render"
     )
-    @pytest.mark.parametrize("backend", _NO_MESH_BACKENDS or [None])
+    @pytest.mark.parametrize("backend", _NO_MESH_RENDER or [None])
     def test_a_ugrid_mesh_is_still_refused_where_no_tier_has_the_render(
         self, backend, ugrid_mesh
     ):
