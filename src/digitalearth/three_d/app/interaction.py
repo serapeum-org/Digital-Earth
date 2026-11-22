@@ -70,10 +70,15 @@ class InteractionMixin(_MixinBase):
     ) -> Any:
         """Add an interactive clip-plane widget over a layer's mesh and return its actor.
 
+        When the clipped layer is a ``volume``, the cut surface is drawn unlit (``lighting=False`` by default),
+        because a clipped volume carries no normals and a strict GL (Mesa 26 llvmpipe) renders a normal-less
+        surface blank; unlit flat shading shows the cross-section's mapped colour instead. A clipped surface
+        layer keeps its own normals and is left lit. Pass ``lighting=`` explicitly to override either default.
+
         Args:
             layer_id: The layer to clip.
             normal: The clipping plane's normal.
-            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh_clip_plane`.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh_clip_plane` (e.g. ``lighting``, ``cmap``).
 
         Returns:
             The clipped-mesh actor PyVista produced.
