@@ -32,6 +32,7 @@ from digitalearth.three_d import Scene3D  # noqa: E402
 from digitalearth.three_d.builders.point_cloud import SCALAR  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
 from digitalearth.three_d.render.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
+from tests.three_d._ugrid_helpers import bare_ugrid_mesh  # noqa: E402
 
 #: The committed raster the surface builders are given. Read from the repo root, as the rest of the suite does.
 DEM_PATH = "examples/data/acc4000.tif"
@@ -120,6 +121,16 @@ def _dem():
     return Dataset.read_file(DEM_PATH)
 
 
+def _mesh():
+    """Return a two-face UGRID mesh (a quad and a triangle) for the ``trimesh`` builder.
+
+    Returns:
+        A pyramids `Mesh2d` — the same shape the shared ``ugrid_mesh`` fixture builds, so the three fan
+        triangles the quad and triangle cut into are the mesh's own faces.
+    """
+    return bare_ugrid_mesh()
+
+
 def _add_basemap(scene):
     """Record a `basemap` layer without touching the network.
 
@@ -173,6 +184,7 @@ BUILDERS = {
     "points": lambda scene: scene.points(_cloud()),
     "polygons": lambda scene: scene.polygons(_polygons()),
     "choropleth": lambda scene: scene.choropleth(_polygons(), column="value"),
+    "mesh": lambda scene: scene.trimesh(_mesh()),
     "volume": lambda scene: scene.volume(_cube()),
     "isosurface": lambda scene: scene.isosurface(_cube(), isosurfaces=[0.5]),
     "vectors": lambda scene: scene.vectors(np.zeros((2, 3)), np.ones((2, 3))),

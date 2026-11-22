@@ -32,6 +32,7 @@ from shapely.geometry import LineString, Point, Polygon
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.core.base import classified_scalars
+from tests.three_d._ugrid_helpers import bare_ugrid_mesh
 
 #: The keyword every derived colour style pins, and so the one a pinned caller value would be overwritten by.
 #: Read out of `classified_scalars` rather than written here, which is what ties this to the code that derives
@@ -49,6 +50,10 @@ DRAWS_WITH_KWARGS = {
     "points": "`add_points(cloud, scalars=SCALAR, **style, **props)` — Python's duplicate-keyword TypeError",
     "polygons": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "choropleth": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
+    "trimesh": (
+        "`add_mesh(surface, color=..., **props)` — the surface carries no data array, so a scalars= name it "
+        "does not hold is refused by PyVista (a scalars=<array> would be accepted, but the test passes a name)"
+    ),
     "lines": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "streamlines": "`add_mesh(mesh, scalars=_SPEED, **props)` — Python's duplicate-keyword TypeError",
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
@@ -163,6 +168,15 @@ def _lines():
     )
 
 
+def _mesh():
+    """Return a two-face UGRID mesh (a quad and a triangle).
+
+    Returns:
+        The pyramids `Mesh2d` a `trimesh` layer is built from.
+    """
+    return bare_ugrid_mesh()
+
+
 def _grid():
     """Return a small `ImageData` carrying a cell field.
 
@@ -209,6 +223,7 @@ def _draw(scene, builder: str, extra: dict):
         "points": lambda: scene.points(_point_gdf(), column="pop", **extra),
         "polygons": lambda: scene.polygons(_squares(), column="pop", **extra),
         "choropleth": lambda: scene.choropleth(_squares(), column="pop", **extra),
+        "trimesh": lambda: scene.trimesh(_mesh(), **extra),
         "volume": lambda: scene.volume(_cube(), **extra),
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),

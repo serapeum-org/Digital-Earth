@@ -43,6 +43,7 @@ DRAWN_KINDS: tuple[str, ...] = (
     "points",
     "polygons",
     "choropleth",
+    "mesh",
     "volume",
     "isosurface",
     "vectors",
@@ -116,6 +117,7 @@ def drawer_for(kind: str) -> Any:
     from digitalearth.three_d.builders import (
         flat,
         globe,
+        mesh,
         point_cloud,
         terrain,
         vector,
@@ -129,6 +131,7 @@ def drawer_for(kind: str) -> Any:
         "points": flat.draw_points,
         "polygons": flat.draw_polygons,
         "choropleth": flat.draw_polygons,
+        "mesh": mesh.draw_trimesh,
         "volume": volume.draw_volume,
         "isosurface": volume.draw_isosurface,
         "vectors": vector.draw_vectors,

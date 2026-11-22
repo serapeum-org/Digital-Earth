@@ -47,6 +47,7 @@
         "isosurface",
         "labels",
         "lines",
+        "mesh",
         "point_cloud",
         "points",
         "polygons",

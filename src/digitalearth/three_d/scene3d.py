@@ -8,6 +8,8 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
 - :class:`~digitalearth.three_d.builders.point_cloud.PointCloudMixin` → :meth:`point_cloud` (scattered points / LiDAR).
 - :class:`~digitalearth.three_d.builders.flat.FlatMixin` → :meth:`points` / :meth:`polygons` / :meth:`choropleth` (the
   flat Core features, drawn on the ground plane under the 3-D scene).
+- :class:`~digitalearth.three_d.builders.mesh.MeshMixin` → :meth:`trimesh` (an unstructured UGRID ``Mesh2d`` drawn as
+  one PyVista surface — the unstructured counterpart of :meth:`terrain`).
 - :class:`~digitalearth.three_d.builders.volume.VolumeMixin` → :meth:`volume` / :meth:`isosurface` (3-D scalar fields).
 - :class:`~digitalearth.three_d.builders.vector.VectorMixin` → :meth:`vectors` / :meth:`extruded_polygons`.
 - :class:`~digitalearth.three_d.builders.globe.GlobeMixin` → :meth:`globe` (global field on a textured sphere, via the
@@ -33,6 +35,7 @@ from digitalearth.three_d.app.interaction import InteractionMixin
 from digitalearth.three_d.app.serve import ServeMixin
 from digitalearth.three_d.builders.flat import FlatMixin
 from digitalearth.three_d.builders.globe import GlobeMixin
+from digitalearth.three_d.builders.mesh import MeshMixin
 from digitalearth.three_d.builders.point_cloud import PointCloudMixin
 from digitalearth.three_d.builders.terrain import TerrainMixin
 from digitalearth.three_d.builders.vector import VectorMixin
@@ -50,6 +53,7 @@ class Scene3D(
     TerrainMixin,
     PointCloudMixin,
     FlatMixin,
+    MeshMixin,
     VolumeMixin,
     VectorMixin,
     GlobeMixin,

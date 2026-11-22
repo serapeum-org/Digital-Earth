@@ -31,6 +31,12 @@ CAPABILITIES = Capabilities(
             "points",
             "polygons",
             "choropleth",
+            # An unstructured UGRID mesh drawn as one PyVista surface — the mesh's own faces (pyramids'
+            # `fan_triangles`), flat-filled because a bare `Mesh2d` has no value table, with optional relief
+            # from `node_z` (#546). The unstructured counterpart of `terrain`, and the 3-D sibling of the
+            # static `tripcolor` and the interactive/web `trimesh`. Declaring it here is what adds `"3d"` to
+            # the derived `MESH_BACKENDS` the mesh gate reads.
+            "mesh",
             "volume",
             "isosurface",
             "vectors",

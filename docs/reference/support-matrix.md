@@ -65,7 +65,7 @@ only what their extra adds:
 | `lakes` | ✓ | — | ✓ | — |
 | `land` | ✓ | — | ✓ | — |
 | `lines` | ✓ | ✓ | ✓ | ✓ |
-| `mesh` | ✓ | ✓ | ✓ | — |
+| `mesh` | ✓ | ✓ | ✓ | ✓ |
 | `model` | — | ✓ | — | — |
 | `nightshade` | ✓ | — | — | — |
 | `ocean` | ✓ | — | ✓ | — |
