@@ -12,6 +12,7 @@ without touching this composition. Builder methods return ``self`` so calls chai
 """
 
 from digitalearth.web.builders.bigdata import BigDataMixin
+from digitalearth.web.builders.mesh import MeshMixin
 from digitalearth.web.builders.raster import RasterMixin
 from digitalearth.web.builders.threed import ThreeDMixin
 from digitalearth.web.builders.vector import VectorMixin
@@ -26,6 +27,7 @@ class WebMap(
     RasterMixin,
     VectorMixin,
     BigDataMixin,
+    MeshMixin,
     ThreeDMixin,
     TemporalMixin,
     DecorationMixin,

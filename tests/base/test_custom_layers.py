@@ -203,7 +203,9 @@ class TestWhatC7DoesNotCover:
         ("static", "digitalearth.static.render.renderer", "terrain"),
         ("interactive", "digitalearth.interactive.render.renderer", "terrain"),
         ("3d", "digitalearth.three_d.render.renderer", "hexbin"),
-        ("web", "digitalearth.web.render.renderer", "mesh"),
+        # `mesh` was the web tier's undrawn kind until #547 gave it a deck.gl render; `vectors` (a u/v arrow
+        # field) is what it still has no MapLibre primitive for.
+        ("web", "digitalearth.web.render.renderer", "vectors"),
     ]
 
     @classmethod

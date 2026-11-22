@@ -1776,7 +1776,19 @@ def _quickmap_web(
     seeded = {} if crs is _UNSET else {"crs": crs}
     scene = _scene_of(WebMap, scene_kw, **seeded)
     family = _input_kind(data, "quickplot")
-    if family == "raster":
+    if family == "mesh":
+        # The `trimesh` builder (and the tier's declared `mesh` kind) route a MeshDataset to the web mesh
+        # render, unwrapped to its `Mesh2d`, closing #547. `kind` is forwarded through **kwargs only on a
+        # direct call; `quickmap` refuses a non-auto `kind` on this tier upstream (no `raster_renderer`), so
+        # this guard is the belt-and-braces for both paths and mirrors the interactive mesh branch.
+        kind = kwargs.pop("kind", "auto")
+        if kind not in ("auto", "trimesh"):
+            raise ValueError(
+                f"kind={kind!r} is not a renderer for a mesh on backend='web'; it draws a mesh with "
+                f"'trimesh', which shades each face as a deck.gl polygon"
+            )
+        scene.trimesh(_mesh_of(data), **kwargs)
+    elif family == "raster":
         scene.field(data, **kwargs)
     elif family == "polygons":
         _draw_polygons(scene, data, kwargs)

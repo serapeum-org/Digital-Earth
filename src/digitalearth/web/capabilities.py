@@ -6,9 +6,10 @@ something a caller found out by calling it. This module is the tier's own answer
 MapLibre, so a dispatcher can consult it before it decides which backend to build.
 
 The `absent` half is where the web tier differs most from the others. It pans and zooms, so there is no extent
-to set; its colour key is a builder that takes content rather than a toggle; and the field and mesh renderings
-the matplotlib tier offers have no MapLibre equivalent, which is a decision about what this tier is for rather
-than a gap somebody has yet to fill.
+to set; its colour key is a builder that takes content rather than a toggle; and the u/v vector-field and
+streamline renderings the matplotlib tier offers have no MapLibre equivalent, which is a decision about what
+this tier is for rather than a gap somebody has yet to fill. A UGRID mesh's own faces, by contrast, are drawn
+here — as a deck.gl polygon overlay, through the `mesh` kind (#547).
 
 **One capability here is conditional, and stays a tier check.** `display_crs` is declared — every layer is
 drawn in one CRS the caller may name — but the only value this tier accepts is EPSG:4326
@@ -47,6 +48,9 @@ CAPABILITIES = Capabilities(
             "extrusion",
             "terrain",
             "model",
+            # A UGRID mesh's triangulated faces, drawn as a deck.gl polygon overlay — the web sibling of the
+            # static tripcolor and interactive trimesh renders (#547).
+            "mesh",
             "text",
             "graticule",
             "basemap",
@@ -109,10 +113,10 @@ CAPABILITIES = Capabilities(
         ),
         "vectors": "MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier",
         "streamlines": "there is no streamline primitive to trace a field with in a browser",
-        "mesh": "a raster is drawn as an image rather than as cells, which is what a tile pipeline expects",
         "unstructured": (
-            "triangulated data has no MapLibre layer type, so neither the scattered-points renders "
-            "nor a UGRID mesh input can be drawn here; both go to the static tier"
+            "a scattered point collection has no MapLibre layer type to triangulate into, so a Delaunay "
+            "mesh of points goes to the static tier; a UGRID mesh's own faces are drawn through the 'mesh' "
+            "kind"
         ),
         "north_arrow": (
             "the navigation control's compass already shows the bearing, and turns the map back to north when "

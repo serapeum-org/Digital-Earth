@@ -326,6 +326,7 @@ class TestComposedClassMro:
                     "RasterMixin",
                     "VectorMixin",
                     "BigDataMixin",
+                    "MeshMixin",
                     "ThreeDMixin",
                     "TemporalMixin",
                     "DecorationMixin",
