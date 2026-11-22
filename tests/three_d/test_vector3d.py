@@ -144,39 +144,27 @@ def test_extruded_polygons_public_path_carves_holes():
     scene.close()
 
 
-def test_extrude_ring_carries_point_normals():
-    """A solid prism carries outward point normals so a strict GL lights it, not blank (#538).
+def test_extruded_polygons_merged_mesh_is_drawn_unlit():
+    """The public builder draws the prisms unlit so llvmpipe shows their colour, not black (#538).
 
-    VTK's ``extrude()`` output has no normals; under Mesa 26 llvmpipe an unlit surface rendered pure white.
-    The prism must now carry point normals, as the Mitsuba path's `_triangulated_surface` already ensures.
-    """
-    ring = np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]], dtype=float)
-    prism = _extrude_ring(ring, 0.5)
-    assert "Normals" in prism.point_data, list(prism.point_data)
-    assert bool(np.isfinite(prism.point_data["Normals"]).all())
-    assert prism.bounds[5] == pytest.approx(0.5)
-
-
-def test_extrude_polygon_carries_point_normals():
-    """A holed prism carries outward point normals too (#538), its carved volume unchanged."""
-    exterior = np.array([[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]], dtype=float)
-    hole = np.array([[1, 1], [3, 1], [3, 3], [1, 3], [1, 1]], dtype=float)
-    prism = _extrude_polygon(exterior, [hole], 2.0)
-    assert "Normals" in prism.point_data, list(prism.point_data)
-    assert bool(np.isfinite(prism.point_data["Normals"]).all())
-    assert prism.volume == pytest.approx(24.0)
-
-
-def test_extruded_polygons_merged_mesh_carries_point_normals():
-    """The public builder's merged prism mesh carries point normals through the combine (#538).
-
-    The surface handed to ``add_mesh`` is what Mesa 26 failed to light; it must carry normals so the plotter
-    draws the lit prisms instead of a blank white frame.
+    Under Mesa 26's llvmpipe a lit extruded prism rendered blank/black; `draw_extruded_polygons` defaults
+    ``lighting=False`` so each face shows its mapped colour flat. A caller's own ``lighting`` still wins.
     """
     scene = Scene3D(off_screen=True)
-    scene.extruded_polygons(_squares(), height="pop", column="pop")
-    merged = scene.layers[0][0]
-    assert "Normals" in merged.point_data, list(merged.point_data)
+    actor = scene.extruded_polygons(_squares(), height="pop", column="pop")
+    assert actor.prop.lighting is False, "extruded prisms must default to unlit"
+    scene.close()
+
+
+def test_extruded_polygons_lets_a_caller_force_lighting():
+    """A caller's own ``lighting`` wins over the unlit default (#538)."""
+    scene = Scene3D(off_screen=True)
+    actor = scene.extruded_polygons(
+        _squares(), height="pop", column="pop", lighting=True
+    )
+    assert actor.prop.lighting is True, (
+        "an explicit lighting= must override the unlit default"
+    )
     scene.close()
 
 
