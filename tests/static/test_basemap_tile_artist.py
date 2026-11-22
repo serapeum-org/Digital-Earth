@@ -252,17 +252,23 @@ class TestAddTilesWrapper:
             f"an omitted source should forward as None: {captured['source']!r}"
         )
 
-    def test_a_pyproj_crs_object_renders_end_to_end(self, offline_tiles):
-        """A `Map` built with a pyproj CRS object draws a basemap through the real cleopatra tiler (#545 L5).
+    def test_a_pyproj_crs_object_renders_end_to_end_without_raising(
+        self, offline_tiles
+    ):
+        """A `Map` built with a pyproj CRS object runs the whole real render without raising (#545 L5).
 
         Args:
             offline_tiles: Stubs only cleopatra's HTTP fetch, so the real tile path runs offline.
 
         Test scenario:
-            The boundary test proves the wrapper forwards a CRS object unchanged; this proves the whole
-            render survives one. `Map(crs=<pyproj CRS>)` frames a Web-Mercator extent over Berlin and draws a
-            basemap, so cleopatra's real `_add_tiles` stringifies and reprojects the object (not a stub) and
-            leaves exactly one `AxesImage` — the end-to-end path `scene.crs` can take in real use.
+            The recorder boundary tests prove the wrapper forwards a CRS *object* without validating it; this
+            is the end-to-end complement — `Map(crs=<pyproj CRS>)` frames a Web-Mercator extent over Berlin and
+            draws a basemap, so cleopatra's real `_add_tiles` stringifies and reprojects the object (not a stub)
+            and leaves one `AxesImage`. Its guard is that the object survives the full pipeline *without
+            raising*: a regression routing the display CRS through `GeoMixin.crs`'s setter would raise
+            `TypeError` here (that setter rejects a non-int/str/None — verified). The one-`AxesImage` count is a
+            smoke assertion, not a CRS check: offline, a dropped CRS would still stitch one mosaic, so the two
+            boundary tests — not this one — are what pin the CRS value itself.
         """
         from pyramids.base.crs import crs_from_user_input
 
