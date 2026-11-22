@@ -369,9 +369,10 @@ class TestTrimeshDrawer:
             A pipeline that cannot lose a layer silently gets the same refusal the 2-D tiers raise.
         """
         strict = Scene3D(off_screen=True, strict=True)
+        undrawable = _bare_mesh(node_x=[np.inf] * 5)
         try:
             with pytest.raises(OffLimbError, match="trimesh"):
-                strict.trimesh(_bare_mesh(node_x=[np.inf] * 5))
+                strict.trimesh(undrawable)
         finally:
             strict.close()
 
