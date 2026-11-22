@@ -185,3 +185,87 @@ class TestCleopatra046ImportDrift:
         images = [image for image in scene.ax.images if isinstance(image, AxesImage)]
         scene.close()
         assert len(images) == 1, scene.ax.images
+
+
+class TestAddTilesWrapper:
+    """The static tier's `decoration.add_tiles` wrapper over cleopatra 0.46's `GeoMixin.add_tiles` (#545).
+
+    These pin the wrapper's forwarding contract directly, without the network: cleopatra's own
+    `_add_tiles` (the single implementation `GeoMixin.add_tiles` delegates to) is replaced with a recorder,
+    so what the static tier actually hands cleopatra is observable.
+    """
+
+    @staticmethod
+    def _recording_tiler(monkeypatch):
+        """Replace cleopatra's `_add_tiles` with a recorder and return the captured-call dict.
+
+        Args:
+            monkeypatch: pytest's patcher, which restores the real `_add_tiles` at teardown.
+
+        Returns:
+            dict: Populated with ``ax``/``source``/``crs``/``kwargs`` when the wrapper calls the tiler.
+        """
+        from cleopatra.basemap import tiles as cleo_tiles
+
+        captured: dict = {}
+
+        def fake_add_tiles(ax, source=None, *, crs=None, **kwargs):
+            captured.update(ax=ax, source=source, crs=crs, kwargs=kwargs)
+            return ax
+
+        monkeypatch.setattr(cleo_tiles, "_add_tiles", fake_add_tiles)
+        return captured
+
+    def test_forwards_axes_source_crs_and_kwargs_and_returns_the_axes(
+        self, monkeypatch
+    ):
+        """Axes, source, crs and extra keywords reach cleopatra unchanged, and the axes is returned.
+
+        Args:
+            monkeypatch: pytest's patcher for the recording tiler.
+
+        Test scenario:
+            The wrapper binds a `_TileHost` to the axes and forwards every argument straight through to
+            cleopatra's tiler, returning whatever it returns (the axes). The axes is a plain sentinel so the
+            identity checks cannot pass by coincidence.
+        """
+        from digitalearth.static.builders.decoration import add_tiles
+
+        captured = self._recording_tiler(monkeypatch)
+        sentinel_ax = object()
+        result = add_tiles(sentinel_ax, source="OSM", crs=3857, zoom=5, alpha=0.5)
+        assert result is sentinel_ax, f"the wrapper did not return the axes: {result!r}"
+        assert captured["ax"] is sentinel_ax, f"axes not forwarded: {captured['ax']!r}"
+        assert captured["source"] == "OSM", (
+            f"source not forwarded: {captured['source']!r}"
+        )
+        assert captured["crs"] == 3857, f"crs not forwarded: {captured['crs']!r}"
+        assert captured["kwargs"] == {"zoom": 5, "alpha": 0.5}, (
+            f"extra keywords not forwarded verbatim: {captured['kwargs']!r}"
+        )
+
+    def test_a_crs_object_passes_through_without_being_validated(self, monkeypatch):
+        """A pyproj CRS object reaches the tiler untouched — GeoMixin's int/str/None validator is bypassed.
+
+        Args:
+            monkeypatch: pytest's patcher for the recording tiler.
+
+        Test scenario:
+            The removed free function took `crs` as-is, so a CRS object worked. `GeoMixin.crs`'s setter
+            rejects anything but an int/str/None, so routing the display CRS through `self.crs` would break
+            that. The wrapper leaves `self.crs` unset and passes `crs=` explicitly, so the exact object
+            arrives at cleopatra — this guards that path.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        from digitalearth.static.builders.decoration import add_tiles
+
+        captured = self._recording_tiler(monkeypatch)
+        crs_object = crs_from_user_input("+proj=robin")
+        add_tiles(object(), source=None, crs=crs_object)
+        assert captured["crs"] is crs_object, (
+            f"the CRS object was converted or dropped instead of passed through: {captured['crs']!r}"
+        )
+        assert captured["source"] is None, (
+            f"an omitted source should forward as None: {captured['source']!r}"
+        )
