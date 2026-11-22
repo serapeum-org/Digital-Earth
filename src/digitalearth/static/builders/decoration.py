@@ -39,6 +39,7 @@ from typing import (
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import numpy as np
+from cleopatra.basemap.geo import GeoMixin
 from cleopatra.basemap.ogc import WMSProvider, WMTSProvider
 from cleopatra.basemap.reference import add_features, natural_earth
 from cleopatra.basemap.solar import (
@@ -50,7 +51,6 @@ from cleopatra.basemap.solar import (
     subsolar_point,
     tissot_circles,
 )
-from cleopatra.basemap.tiles import add_tiles
 from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import PolyCollection
 from matplotlib.colors import to_rgba
@@ -774,7 +774,7 @@ def _resolve_tile_source(source: Any) -> Any:
             recorded in its place, already known not to be a keyed preset.
 
     Returns:
-        The provider name or object to hand ``cleopatra.basemap.tiles.add_tiles``.
+        The provider name or object to hand cleopatra's ``GeoMixin.add_tiles`` glyph method.
 
     Raises:
         ValueError: when a recorded OGC provider names a kind this version cannot rebuild.
@@ -1366,6 +1366,54 @@ def _frame_from(scene: Any, extent: Sequence[float] | None) -> None:
     xmin, xmax, ymin, ymax = (float(value) for value in extent)
     scene.ax.set_xlim(xmin, xmax)
     scene.ax.set_ylim(ymin, ymax)
+
+
+class _TileHost(GeoMixin):
+    """A :class:`~cleopatra.basemap.geo.GeoMixin` host that drapes XYZ tiles on an axes we own.
+
+    cleopatra 0.46 moved the web-tile overlay from the free function
+    ``cleopatra.basemap.tiles.add_tiles`` to :meth:`GeoMixin.add_tiles`, a glyph method whose
+    documented use is on a glyph bound to its own ``self.ax``. The static tier draws a basemap on
+    a :class:`~digitalearth.static.core.scene.Scene`'s axes rather than through a cleopatra glyph,
+    so this minimal host — cleopatra's own documented pattern for an existing axes — carries that
+    axes and leaves ``self.crs`` at its ``None`` default. The display CRS is passed to
+    :meth:`~GeoMixin.add_tiles` explicitly, exactly as the removed free function received it, so
+    cleopatra's assignment-time CRS validator (which accepts only an ``int``/``str``/``None``) is
+    never in the path and a CRS object reaches the tiler as before.
+
+    Args:
+        ax: The matplotlib axes the tiles are drawn on.
+    """
+
+    def __init__(self, ax: Any) -> None:
+        self.ax = ax
+
+
+def add_tiles(
+    ax: Any, source: Any | None = None, *, crs: Any = None, **kwargs: Any
+) -> Any:
+    """Drape a web-tile basemap on ``ax`` through cleopatra 0.46's ``GeoMixin.add_tiles``.
+
+    cleopatra 0.46 removed the free function ``cleopatra.basemap.tiles.add_tiles`` the static tier
+    used, replacing it with the :meth:`GeoMixin.add_tiles` glyph method. This keeps the static
+    tier's own stable seam — a module-level ``add_tiles`` the basemap drawer calls and the suite
+    patches — so the cleopatra-version coupling lives in this one wrapper rather than at every call
+    site and in every test. ``source`` and ``crs`` are forwarded unchanged to cleopatra (``crs``
+    straight to the tiler, never through ``GeoMixin``'s assignment-time validator), so a CRS object
+    reaches it exactly as the old free function received it.
+
+    Args:
+        ax: The matplotlib axes to draw the tiles on.
+        source: The tile provider (name or ``xyzservices.TileProvider``), or ``None`` for cleopatra's
+            own default.
+        crs: The display CRS the tiles are placed in, forwarded to cleopatra as given.
+        **kwargs: Further keywords forwarded to cleopatra's tiler (``zoom``, ``alpha``,
+            ``attribution``, ...).
+
+    Returns:
+        The axes the tiles were drawn on, as cleopatra returns it for chaining.
+    """
+    return _TileHost(ax).add_tiles(source=source, crs=crs, **kwargs)
 
 
 def draw_basemap(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
@@ -3604,7 +3652,7 @@ class DecorationMixin(_MixinBase):
         visible: bool = True,
         **kwargs: Any,
     ) -> Self:
-        """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
+        """Add an XYZ-tile basemap to the axes via cleopatra's ``GeoMixin.add_tiles`` in the display CRS.
 
         ``provider`` is passed through to cleopatra unchanged — a provider name or an
         ``xyzservices.TileProvider`` — with two additions. The name of a **keyed** basemap preset (see

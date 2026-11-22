@@ -1,7 +1,7 @@
 """Keyed-XYZ basemap definitions — the *provider* half of a tile basemap, with no renderer in sight.
 
 Every backend can already render a tile source it is handed: the static tier passes an
-``xyzservices.TileProvider`` to ``cleopatra.basemap.tiles.add_tiles``, the web tier emits a MapLibre raster
+``xyzservices.TileProvider`` to cleopatra's ``GeoMixin.add_tiles`` glyph method, the web tier emits a MapLibre raster
 source from a URL, and the interactive tier builds a GeoViews ``WMTS`` from either. What none of them owns is
 the *definition* of a *keyed* service — one that needs a credential, resolves a time-varying dataset id, and
 covers only part of the world. That definition is pure data, so it lives here and every backend reads the same

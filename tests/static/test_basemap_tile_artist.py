@@ -142,3 +142,46 @@ class TestWhatABasemapLayerHandsBack:
         assert tiled.basemap("OSM", name="second", zoom=8) is tiled, (
             "basemap did not chain"
         )
+
+
+class TestCleopatra046ImportDrift:
+    """Regression guard for #545 — the static tier must import and tile under the installed cleopatra.
+
+    cleopatra 0.46 removed the free function `cleopatra.basemap.tiles.add_tiles` the static tier draped
+    tiles with, so `import digitalearth.static` failed at a fresh install while the shipped `pixi.lock`
+    (pinned to the older cleopatra) hid it from CI. These run against whatever cleopatra the environment
+    resolves, so a future tile-API move breaks the suite here rather than at a downstream install.
+    """
+
+    def test_the_static_tier_imports_under_the_installed_cleopatra(self):
+        """`from digitalearth.static import Map` — the exact import #545 reported broken — must succeed.
+
+        Test scenario:
+            The break was an `ImportError` raised at module load of `digitalearth.static.builders.decoration`
+            (a top-level `from cleopatra.basemap.tiles import add_tiles`), which propagated to `Map`. Importing
+            the tier's public entry point here fails loudly if that surface drifts again.
+        """
+        from digitalearth.static import Map as StaticMap
+
+        assert StaticMap is Map, (
+            "the static tier's Map export is not the package-root Map"
+        )
+
+    def test_a_basemap_renders_through_the_migrated_add_tiles_seam(self, offline_tiles):
+        """A default basemap draws via `decoration.add_tiles` -> `GeoMixin.add_tiles` on real cleopatra.
+
+        Args:
+            offline_tiles: Stubs only cleopatra's HTTP fetch, so the real 0.46 tile path runs offline.
+
+        Test scenario:
+            The capability #545's import break removed is tiling, not merely importing. Drawing a basemap
+            must leave exactly one real `AxesImage` on the axes, proving the migrated seam reaches cleopatra's
+            current glyph-method tiler and renders — against whatever cleopatra version CI resolved.
+        """
+        scene = Map(domain=BERLIN)
+        scene.ax.set_xlim(BERLIN[0], BERLIN[2])
+        scene.ax.set_ylim(BERLIN[1], BERLIN[3])
+        scene.basemap("OSM", zoom=8)
+        images = [image for image in scene.ax.images if isinstance(image, AxesImage)]
+        scene.close()
+        assert len(images) == 1, scene.ax.images
