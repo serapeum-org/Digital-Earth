@@ -295,13 +295,13 @@ class TestMeshSurface:
         Test scenario:
             A mesh drawn with a per-node ``node_z`` array and a declared CRS is rebuilt from its own
             ``figure_spec`` through ``Scene3D.from_figure``. The redraw must reproduce the three cells, the
-            z relief (max 9.0, carried as a ``$ref`` in the stored props), and the display CRS the builder
-            adopted — the guard behind the module/drawer docstring claim that a stored figure draws the same
-            surface again.
+            z relief (max 9.0, carried as a ``$ref`` in the stored props because ``node_z`` is an
+            ``np.ndarray``), and the display CRS the builder adopted — the guard behind the module/drawer
+            docstring claim that a stored figure draws the same surface again.
         """
         from digitalearth.base.spec.bounds import same_crs
 
-        scene.trimesh(_bare_mesh(epsg=4326), node_z=[0.0, 0.0, 0.0, 0.0, 9.0])
+        scene.trimesh(_bare_mesh(epsg=4326), node_z=np.array([0.0, 0.0, 0.0, 0.0, 9.0]))
         again = Scene3D.from_figure(scene.figure_spec, off_screen=True)
         try:
             poly, _ = again.layers[-1]
