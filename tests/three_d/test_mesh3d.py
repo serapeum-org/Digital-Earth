@@ -23,6 +23,7 @@ from digitalearth.three_d.builders.mesh import (  # noqa: E402
     _elevation,
     _mesh_surface,
 )
+from tests.three_d._ugrid_helpers import bare_ugrid_mesh as _bare_mesh  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -32,42 +33,6 @@ def _force_off_screen():
     pv.OFF_SCREEN = True
     yield
     pv.OFF_SCREEN = prev
-
-
-def _bare_mesh(node_x=None, node_y=None, epsg=None):
-    """Build a two-face UGRID ``Mesh2d`` (a quad and a triangle) directly, bypassing the MeshDataset wrapper.
-
-    Args:
-        node_x: Node x coordinates; ``None`` uses the shared fixture's ``[0, 1, 1, 0, 2]`` (pass non-finite
-            ones to make a mesh a projection drops).
-        node_y: Node y coordinates; ``None`` uses ``[0, 0, 1, 1, 0.5]``.
-        epsg: An EPSG code the mesh declares as its CRS; ``None`` leaves it unreferenced.
-
-    Returns:
-        A pyramids ``Mesh2d`` whose quad and triangle fan-cut into three triangles.
-    """
-    from pyramids.netcdf.ugrid.connectivity import Connectivity
-    from pyramids.netcdf.ugrid.mesh import Mesh2d
-
-    mesh = Mesh2d(
-        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0])
-        if node_x is None
-        else np.asarray(node_x, dtype="float64"),
-        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5])
-        if node_y is None
-        else np.asarray(node_y, dtype="float64"),
-        face_node_connectivity=Connectivity(
-            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
-            fill_value=-1,
-            cf_role="face_node_connectivity",
-            original_start_index=0,
-        ),
-    )
-    if epsg is not None:
-        from pyramids.base.crs import crs_from_user_input
-
-        mesh.crs = crs_from_user_input(epsg)
-    return mesh
 
 
 @pytest.fixture

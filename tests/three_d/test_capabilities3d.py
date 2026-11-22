@@ -32,6 +32,7 @@ from digitalearth.three_d import Scene3D  # noqa: E402
 from digitalearth.three_d.builders.point_cloud import SCALAR  # noqa: E402
 from digitalearth.three_d.capabilities import CAPABILITIES  # noqa: E402
 from digitalearth.three_d.render.renderer import DRAWN_KINDS, drawer_for  # noqa: E402
+from tests.three_d._ugrid_helpers import bare_ugrid_mesh  # noqa: E402
 
 #: The committed raster the surface builders are given. Read from the repo root, as the rest of the suite does.
 DEM_PATH = "examples/data/acc4000.tif"
@@ -127,19 +128,7 @@ def _mesh():
         A pyramids `Mesh2d` — the same shape the shared ``ugrid_mesh`` fixture builds, so the three fan
         triangles the quad and triangle cut into are the mesh's own faces.
     """
-    from pyramids.netcdf.ugrid.connectivity import Connectivity
-    from pyramids.netcdf.ugrid.mesh import Mesh2d
-
-    return Mesh2d(
-        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
-        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
-        face_node_connectivity=Connectivity(
-            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
-            fill_value=-1,
-            cf_role="face_node_connectivity",
-            original_start_index=0,
-        ),
-    )
+    return bare_ugrid_mesh()
 
 
 def _add_basemap(scene):

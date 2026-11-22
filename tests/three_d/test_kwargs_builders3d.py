@@ -32,6 +32,7 @@ from shapely.geometry import LineString, Point, Polygon
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.core.base import classified_scalars
+from tests.three_d._ugrid_helpers import bare_ugrid_mesh
 
 #: The keyword every derived colour style pins, and so the one a pinned caller value would be overwritten by.
 #: Read out of `classified_scalars` rather than written here, which is what ties this to the code that derives
@@ -173,19 +174,7 @@ def _mesh():
     Returns:
         The pyramids `Mesh2d` a `trimesh` layer is built from.
     """
-    from pyramids.netcdf.ugrid.connectivity import Connectivity
-    from pyramids.netcdf.ugrid.mesh import Mesh2d
-
-    return Mesh2d(
-        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
-        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
-        face_node_connectivity=Connectivity(
-            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
-            fill_value=-1,
-            cf_role="face_node_connectivity",
-            original_start_index=0,
-        ),
-    )
+    return bare_ugrid_mesh()
 
 
 def _grid():
