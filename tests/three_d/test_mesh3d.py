@@ -311,6 +311,21 @@ class TestMeshSurface:
         finally:
             again.close()
 
+    def test_a_skipped_mesh_does_not_adopt_the_scenes_crs(self, scene):
+        """A mesh that places no face must not leave its CRS on the scene (review L2).
+
+        Args:
+            scene: The off-screen scene fixture.
+
+        Test scenario:
+            An all-non-finite mesh that declares EPSG:4326 is the scene's first CRS-bearing input but draws
+            nothing. The scene keeps no layer and must keep no display CRS either, so a later real layer in
+            another CRS is not reprojected toward a CRS no drawn layer ever used.
+        """
+        scene.trimesh(_bare_mesh(node_x=[np.inf] * 5, epsg=4326))
+        assert scene.layer_ids == [], scene.layer_ids
+        assert scene.display_crs is None, scene.display_crs
+
     def test_a_mesh_with_no_drawable_face_returns_none(self, scene):
         """When every node is non-finite, ``_mesh_surface`` returns ``None`` (the drawer then skips).
 

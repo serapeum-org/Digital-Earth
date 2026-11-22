@@ -200,7 +200,9 @@ def _mesh_surface(scene: Any, mesh: Any, node_z: Any) -> Any:
 
     Args:
         scene: The scene being drawn into. Its ``display_crs`` is adopted from the mesh when the scene has
-            none yet, mirroring :meth:`~digitalearth.three_d.core.base.Scene3DBase._place` for a warpable input.
+            none yet **and the mesh places at least one face**, mirroring
+            :meth:`~digitalearth.three_d.core.base.Scene3DBase._place` for a warpable input; a mesh that draws
+            nothing leaves the scene's CRS untouched.
         mesh: A pyramids ``Mesh2d`` (``node_x`` / ``node_y`` / ``fan_triangles``, and an optional ``crs``).
         node_z: The elevation argument from :meth:`MeshMixin.trimesh`, resolved by :func:`_elevation`.
 
@@ -216,17 +218,20 @@ def _mesh_surface(scene: Any, mesh: Any, node_z: Any) -> Any:
     x = np.asarray(mesh.node_x, dtype="float64")
     y = np.asarray(mesh.node_y, dtype="float64")
     held = getattr(mesh, "crs", None)
-    if held is not None:
-        if scene.display_crs is None:
-            # The first layer carrying a CRS sets the scene's, exactly as `_place` does for a warpable input.
-            scene.display_crs = held
-        elif not same_crs(held, scene.display_crs):
-            from pyramids.base.crs import reproject_coordinates
+    # Reproject only when the scene already draws in another CRS — this reads `display_crs`, it does not set
+    # it. Adoption (setting the scene's CRS from this mesh) is deferred past the drawable check below, so a
+    # mesh that places no face leaves the scene's CRS untouched (review L2).
+    if (
+        held is not None
+        and scene.display_crs is not None
+        and not same_crs(held, scene.display_crs)
+    ):
+        from pyramids.base.crs import reproject_coordinates
 
-            xs, ys = reproject_coordinates(
-                list(x), list(y), from_crs=held, to_crs=scene.display_crs
-            )
-            x, y = np.asarray(xs, dtype="float64"), np.asarray(ys, dtype="float64")
+        xs, ys = reproject_coordinates(
+            list(x), list(y), from_crs=held, to_crs=scene.display_crs
+        )
+        x, y = np.asarray(xs, dtype="float64"), np.asarray(ys, dtype="float64")
     z = _elevation(node_z, len(x))
     triangles = np.asarray(mesh.fan_triangles, dtype=np.intp)
     finite = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
@@ -234,6 +239,11 @@ def _mesh_surface(scene: Any, mesh: Any, node_z: Any) -> Any:
     triangles = triangles[drawable]
     if len(triangles) == 0:
         return None
+    # The mesh draws at least one face, so now adopt its CRS as the scene's when the scene has none yet —
+    # the first drawn layer carrying a CRS sets it, exactly as `_place` does for a warpable input, but a
+    # skipped mesh (returned above) never reaches here and so never sets it.
+    if held is not None and scene.display_crs is None:
+        scene.display_crs = held
     # Re-index to only the nodes the drawable triangles use, so a dropped (non-finite) node leaves no stray
     # point to stretch the surface's bounds. `searchsorted` maps each old index to its position in `used`.
     used = np.unique(triangles)
