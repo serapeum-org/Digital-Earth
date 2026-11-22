@@ -768,9 +768,20 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
     return pinned
 
 
-#: The backends that can draw an unstructured mesh. The static tier shades each face through cleopatra's
-#: ``MeshGlyph``; the other three have no triangular render, which is stated rather than discovered.
-MESH_BACKENDS: frozenset[str] = frozenset({"static"})
+#: The backends that can draw an unstructured mesh, **derived** from each tier's own
+#: :class:`~digitalearth.base.capabilities.Capabilities` (the ``"mesh"`` kind it declares) rather than
+#: hardcoded, so a tier gains a mesh render by declaring the kind in its own ``capabilities.py`` and no
+#: edit to this line is needed. ``static`` is named directly as the constant baseline — it has always
+#: shaded each face through cleopatra's ``MeshGlyph``, and reading its declaration eagerly would load
+#: matplotlib at import (DE-24) — while the three engine tiers are read from their eager declarations.
+MESH_BACKENDS: frozenset[str] = frozenset(
+    {"static"}
+    | {
+        name
+        for name in ("interactive", "3d", "web")
+        if _DECLARATIONS[name].supports("mesh")
+    }
+)
 
 
 def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
@@ -788,11 +799,12 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
             :data:`MESH_BACKENDS`.
 
     Examples:
-        - The static tier is the one that draws a mesh, so it is the one this lets through:
+        - The static tier is always among those this lets through — it is the baseline mesh renderer,
+          and a tier added to :data:`MESH_BACKENDS` joins it here:
             ```python
             >>> from digitalearth.api import MESH_BACKENDS
-            >>> sorted(MESH_BACKENDS)
-            ['static']
+            >>> "static" in MESH_BACKENDS
+            True
 
             ```
         - Only a mesh is refused: anything else passes on every backend, whatever it is:
@@ -810,11 +822,26 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
 
     if isinstance(data, MeshDataset):
         raise TypeError(
-            f"backend={backend!r} has no unstructured-mesh render; draw a MeshDataset on the "
-            f"matplotlib tier, which shades each of its faces (tripcolor): "
-            f"quickmap(data, backend='matplotlib') here, or plot(backend='static') through "
-            f"pyramids, whose own 'matplotlib' is cleopatra's path"
+            f"backend={backend!r} has no unstructured-mesh render; draw a MeshDataset on a tier that "
+            f"does — {sorted(MESH_BACKENDS)} — e.g. quickmap(data, backend='static'), which shades each "
+            f"face through cleopatra (pyramids' own 'matplotlib' path)"
         )
+
+
+def _mesh_of(data: Any) -> Any:
+    """Return the ``Mesh2d`` a ``MeshDataset`` wraps, for the engine tiers' mesh builders.
+
+    The interactive, 3-D and web tiers draw a mesh from the bare ``Mesh2d`` — connectivity plus node
+    coordinates — rather than from the ``MeshDataset`` wrapper the static ``tripcolor`` path takes, so every
+    tier unwraps it the same way here (#544 / #546 / #547).
+
+    Args:
+        data: The normalised input — a ``MeshDataset`` on this path.
+
+    Returns:
+        Its ``mesh`` (a ``pyramids.netcdf.ugrid.Mesh2d``).
+    """
+    return data.mesh
 
 
 def _input_kind(data: PlottableData, caller: str) -> str:
@@ -1050,8 +1077,8 @@ def quickmap(
             with no variables to choose from), and for a ``kind`` other than ``"tripcolor"`` on a mesh,
             which has only the one render.
         TypeError: if ``data`` is none of a ``Dataset``, a ``FeatureCollection`` or a ``MeshDataset``;
-            for a ``MeshDataset`` on any backend but ``"matplotlib"``, which is the only tier with a
-            triangular render (:data:`MESH_BACKENDS`); and, on ``backend="3d"``, for a line
+            for a ``MeshDataset`` on a backend that declares no mesh render (:data:`MESH_BACKENDS` lists
+            the tiers that do); and, on ``backend="3d"``, for a line
             ``FeatureCollection`` too, which has no 3-D builder.
 
     Examples:
@@ -1568,7 +1595,16 @@ def _quickmap_interactive(
 
     scene = _scene_of(InteractiveMap, scene_kw, crs=crs)
     family = _input_kind(data, "quickplot")
-    if family == "raster":
+    if family == "mesh":
+        # The `trimesh` builder (and the tier's declared `mesh` kind) already existed; this routes a
+        # MeshDataset to it, unwrapped to its `Mesh2d`, closing #544.
+        if kind not in ("auto", "trimesh"):
+            raise ValueError(
+                f"kind={kind!r} is not a renderer for a mesh on backend='interactive'; it draws a mesh "
+                f"with 'trimesh', which shades each face"
+            )
+        scene.trimesh(_mesh_of(data), **kwargs)
+    elif family == "raster":
         _draw_interactive_raster(scene, data, kind, kwargs)
     elif family == "polygons":
         _draw_polygons(scene, data, kwargs)

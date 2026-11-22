@@ -225,3 +225,42 @@ class TestKde:
         m.kde(point_fc, filled=False)
         plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
         assert plot["filled"] is False
+
+
+class TestQuickmapRoutesAMeshHere:
+    """#544 — quickmap(mesh, backend="interactive") reaches InteractiveMap.trimesh."""
+
+    def test_a_meshdataset_is_drawn_as_a_trimesh(self, ugrid_mesh):
+        """A MeshDataset on backend='interactive' is unwrapped to its Mesh2d and drawn as a TriMesh.
+
+        Test scenario:
+            The renderer and the declared 'mesh' kind already existed; #544 is the routing. quickmap must
+            unwrap the MeshDataset to its Mesh2d (connectivity + node coords) and build a gv.TriMesh, rather
+            than being refused by the mesh gate as it was before the gate became capability-derived.
+        """
+        import digitalearth
+
+        scene = digitalearth.quickmap(ugrid_mesh("face"), backend="interactive")
+        assert isinstance(scene, InteractiveMap)
+        assert isinstance(scene.layers[0], gv.TriMesh), f"got {type(scene.layers[0])}"
+
+    def test_a_bad_kind_on_a_mesh_is_refused(self, ugrid_mesh):
+        """Only 'auto'/'trimesh' render a mesh here; another kind is refused by name, not drawn wrong."""
+        import digitalearth
+
+        mesh = ugrid_mesh("face")
+        with pytest.raises(ValueError, match="not a renderer for a mesh"):
+            digitalearth.quickmap(mesh, backend="interactive", kind="contourf")
+
+    def test_ds_plot_routes_through_the_pyramids_seam(self, ugrid_mesh):
+        """DoD #544: ds.plot(variable, backend="interactive") reaches trimesh end-to-end.
+
+        Test scenario:
+            pyramids' MeshDataset.plot forwards backend= to digitalearth.quickmap, with no digitalearth
+            import by the caller. With the gate derived and the interactive branch routed, a mesh plotted
+            this way must build an InteractiveMap TriMesh rather than be refused.
+        """
+        mesh = ugrid_mesh("face")
+        scene = mesh.plot("depth", backend="interactive")
+        assert isinstance(scene, InteractiveMap)
+        assert isinstance(scene.layers[0], gv.TriMesh), f"got {type(scene.layers[0])}"
