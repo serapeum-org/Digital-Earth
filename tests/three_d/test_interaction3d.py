@@ -40,6 +40,34 @@ def test_clip_plane_adds_a_widget_and_hides_the_plain_layer():
     scene.close()
 
 
+def test_clip_plane_draws_a_volume_unlit_but_a_surface_lit():
+    """A clipped volume renders unlit so its cut surface shows on a strict GL; a surface clip stays lit (#538).
+
+    Clipping a volume yields a cut surface with no normals, which Mesa 26's llvmpipe drew blank; `clip_plane`
+    defaults that case to ``lighting=False`` so the cross-section's mapped colour shows. A clipped surface
+    layer (terrain) keeps its own normals, so it is left lit.
+    """
+    scene = Scene3D(off_screen=True)
+    scene.volume(np.random.default_rng(0).random((6, 10, 10)), name="vol")
+    scene.terrain(_dem(), name="dem")
+    volume_clip = scene.clip_plane("vol", normal=(0, 0, 1))
+    surface_clip = scene.clip_plane("dem", normal=(1, 0, 0))
+    assert volume_clip.prop.lighting is False, "a clipped volume must be drawn unlit"
+    assert surface_clip.prop.lighting is True, "a clipped surface keeps lighting"
+    scene.close()
+
+
+def test_clip_plane_lets_a_caller_force_lighting_on_a_volume():
+    """A caller's own ``lighting`` wins over the volume default (#538)."""
+    scene = Scene3D(off_screen=True)
+    scene.volume(np.random.default_rng(0).random((6, 10, 10)), name="vol")
+    actor = scene.clip_plane("vol", normal=(0, 0, 1), lighting=True)
+    assert actor.prop.lighting is True, (
+        "an explicit lighting= must override the volume default"
+    )
+    scene.close()
+
+
 @pytest.mark.parametrize(
     "method", ["slice_planes", "threshold", "isovalue", "clip_box"]
 )

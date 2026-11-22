@@ -78,6 +78,12 @@ class InteractionMixin(_MixinBase):
         Returns:
             The clipped-mesh actor PyVista produced.
         """
+        if self.get_layer(layer_id).kind == "volume":
+            # Clipping a volume yields a cut surface with no normals, so it renders blank under a strict GL
+            # (Mesa 26 llvmpipe, #538) — the same failure the extruded prisms hit. Draw it unlit so its mapped
+            # colour shows on the cross-section. A clipped *surface* layer keeps its own normals and stays lit,
+            # so this narrows to the volume case; a caller's own `lighting` still wins.
+            kwargs.setdefault("lighting", False)
         return self.plotter.add_mesh_clip_plane(
             self._widget_mesh(layer_id), normal=normal, **kwargs
         )
