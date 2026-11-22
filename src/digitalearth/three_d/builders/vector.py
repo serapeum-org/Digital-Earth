@@ -99,7 +99,31 @@ def _extrude_ring(ring: np.ndarray, height: float) -> "pv.PolyData":
 
     z = np.zeros((len(ring), 1))
     face = pv.PolyData(np.hstack([ring, z]), faces=np.r_[len(ring), range(len(ring))])
-    return face.triangulate().extrude((0.0, 0.0, float(height)), capping=True)
+    return _extruded_prism(face.triangulate(), height)
+
+
+def _extruded_prism(cap: "pv.PolyData", height: float) -> "pv.PolyData":
+    """Extrude a flat cap into a capped prism that carries outward point normals.
+
+    The shared tail of both extrusion producers (:func:`_extrude_ring` and :func:`_extrude_polygon`). VTK's
+    ``extrude`` sweeps the cap into a closed solid but leaves it with **no normals**, and a surface with no
+    normals renders unlit — under Mesa 26's llvmpipe software GL that came out pure white, a blank frame
+    (#538). Generating consistent, outward-oriented point normals here lets every GL light the prism, the same
+    fix the Mitsuba path already applies in :func:`~digitalearth.three_d.photoreal._triangulated_surface`. The
+    normals survive the ``MultiBlock(...).combine()`` in :func:`draw_extruded_polygons`, so the surface handed
+    to ``add_mesh`` carries them.
+
+    Args:
+        cap: The flat ``z=0`` cap to extrude — a triangulated ring (solid) or a hole-carved cap.
+        height: Extrusion height along +z.
+
+    Returns:
+        pyvista.PolyData: the capped prism with point normals attached (``point_data["Normals"]``).
+    """
+    prism = cap.extrude((0.0, 0.0, float(height)), capping=True)
+    return prism.compute_normals(
+        point_normals=True, cell_normals=False, auto_orient_normals=True
+    )
 
 
 def _ring_loops(rings: list[np.ndarray]) -> "pv.PolyData":
@@ -174,9 +198,7 @@ def _extrude_polygon(
     Returns:
         pyvista.PolyData: the solid prism with the holes carved through it.
     """
-    return _cap_with_holes(exterior, interiors).extrude(
-        (0.0, 0.0, float(height)), capping=True
-    )
+    return _extruded_prism(_cap_with_holes(exterior, interiors), height)
 
 
 def _line_parts(geom: Any) -> Iterator[np.ndarray]:
