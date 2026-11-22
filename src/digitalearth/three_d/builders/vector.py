@@ -30,10 +30,6 @@ VECTORS = "vectors"
 MAGNITUDE = "magnitude"
 VALUE = "value"
 
-#: Ambient-light fraction the extruded prisms are drawn with, so a face the headlight misses still shows its
-#: mapped colour rather than rendering black under a strict GL (Mesa 26 llvmpipe, #538).
-_EXTRUDE_AMBIENT = 0.3
-
 
 def _polygon_parts(geom: Any) -> Iterator[tuple[np.ndarray, list[np.ndarray]]]:
     """Yield each polygon part as its exterior ring and its interior (hole) rings.
@@ -863,11 +859,13 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
         return None
 
     merged = pv.MultiBlock(prisms).combine()
-    # An ambient floor so the prism's colour shows even on a face the single headlight does not reach. Under
-    # Mesa 26's llvmpipe the diffuse term on the camera-facing prism walls came out ~0, so a normals-only fix
-    # drew the solid but unlit (black); the ambient term lifts the mapped colour off black there (#538). A
-    # caller's own `ambient` wins (`setdefault`), so this is a default, not an override.
-    props.setdefault("ambient", _EXTRUDE_AMBIENT)
+    # Draw the prisms unlit, so each face shows its mapped colour flat. The point normals above are what makes
+    # Mesa 26's llvmpipe draw the surface at all (without them it was blank white), but its diffuse lighting
+    # term then came out ~0 on the camera-facing walls, so a lit prism rendered black. Unlit flat shading does
+    # not depend on that broken term — it shows the viridis colour on every face — and is the same flat colour
+    # on every GL, so the baseline no longer rides on a driver's lighting (#538). A caller's own `lighting`
+    # wins (`setdefault`), so a caller who wants the lit look back can ask for it.
+    props.setdefault("lighting", False)
     if colours is None:
         return merged, scene.plotter.add_mesh(merged, scalars=None, cmap=cmap, **props)
     return merged, scene.plotter.add_mesh(merged, scalars=VALUE, **style, **props)
