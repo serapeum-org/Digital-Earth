@@ -286,6 +286,31 @@ class TestMeshSurface:
         assert poly.n_points == 4, poly.n_points
         assert bool(np.isfinite(poly.points).all()), poly.points
 
+    def test_a_stored_figure_redraws_the_same_mesh(self, scene):
+        """The advertised round trip: a mesh scene's description redraws the same surface and relief.
+
+        Args:
+            scene: The off-screen scene fixture.
+
+        Test scenario:
+            A mesh drawn with a per-node ``node_z`` array and a declared CRS is rebuilt from its own
+            ``figure_spec`` through ``Scene3D.from_figure``. The redraw must reproduce the three cells, the
+            z relief (max 9.0, carried as a ``$ref`` in the stored props), and the display CRS the builder
+            adopted — the guard behind the module/drawer docstring claim that a stored figure draws the same
+            surface again.
+        """
+        from digitalearth.base.spec.bounds import same_crs
+
+        scene.trimesh(_bare_mesh(epsg=4326), node_z=[0.0, 0.0, 0.0, 0.0, 9.0])
+        again = Scene3D.from_figure(scene.figure_spec, off_screen=True)
+        try:
+            poly, _ = again.layers[-1]
+            assert poly.n_cells == 3, poly.n_cells
+            assert float(poly.points[:, 2].max()) == 9.0, poly.points
+            assert same_crs(again.display_crs, 4326), again.display_crs
+        finally:
+            again.close()
+
     def test_a_mesh_with_no_drawable_face_returns_none(self, scene):
         """When every node is non-finite, ``_mesh_surface`` returns ``None`` (the drawer then skips).
 
