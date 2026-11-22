@@ -1270,7 +1270,13 @@ def test_quickmap_draws_a_node_located_ugrid_mesh(ugrid_mesh):
     assert isinstance(drawn, Map)
 
 
-@pytest.mark.parametrize("backend", ["interactive", "3d", "web"])
+_NO_MESH_RENDER = sorted(set(qp.BACKEND_CAPABILITIES) - qp.MESH_BACKENDS)
+
+
+@pytest.mark.skipif(
+    not _NO_MESH_RENDER, reason="every backend now declares a mesh render"
+)
+@pytest.mark.parametrize("backend", _NO_MESH_RENDER or [None])
 def test_quickmap_refuses_a_mesh_on_a_backend_with_no_mesh_render(backend, ugrid_mesh):
     """The three engine tiers state they cannot draw a mesh, and name the one that can.
 

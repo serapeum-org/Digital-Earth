@@ -225,3 +225,28 @@ class TestKde:
         m.kde(point_fc, filled=False)
         plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
         assert plot["filled"] is False
+
+
+class TestQuickmapRoutesAMeshHere:
+    """#544 — quickmap(mesh, backend="interactive") reaches InteractiveMap.trimesh."""
+
+    def test_a_meshdataset_is_drawn_as_a_trimesh(self, ugrid_mesh):
+        """A MeshDataset on backend='interactive' is unwrapped to its Mesh2d and drawn as a TriMesh.
+
+        Test scenario:
+            The renderer and the declared 'mesh' kind already existed; #544 is the routing. quickmap must
+            unwrap the MeshDataset to its Mesh2d (connectivity + node coords) and build a gv.TriMesh, rather
+            than being refused by the mesh gate as it was before the gate became capability-derived.
+        """
+        import digitalearth
+
+        scene = digitalearth.quickmap(ugrid_mesh("face"), backend="interactive")
+        assert isinstance(scene, InteractiveMap)
+        assert isinstance(scene.layers[0], gv.TriMesh), f"got {type(scene.layers[0])}"
+
+    def test_a_bad_kind_on_a_mesh_is_refused(self, ugrid_mesh):
+        """Only 'auto'/'trimesh' render a mesh here; another kind is refused by name, not drawn wrong."""
+        import digitalearth
+
+        with pytest.raises(ValueError, match="not a renderer for a mesh"):
+            digitalearth.quickmap(ugrid_mesh("face"), backend="interactive", kind="contourf")
