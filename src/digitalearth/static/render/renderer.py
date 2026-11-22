@@ -831,8 +831,9 @@ def _rank_zorders(bands: list[list[list[Any]]]) -> None:
 def artists_added(axes: Any) -> Iterator[list[Any]]:
     """Collect the artists a block puts on the axes, for a drawer that cannot name them itself.
 
-    cleopatra's ``GeoMixin.add_tiles`` and ``cleopatra.basemap.reference.add_features`` both draw onto
-    the axes and hand the *axes* back, so a drawer calling them has no handle on what it drew. Recording
+    cleopatra's ``GeoMixin.add_tiles`` (which the static tier reaches through its ``decoration.add_tiles``
+    wrapper) and ``cleopatra.basemap.reference.add_features`` both draw onto the axes and hand the *axes*
+    back, so a drawer calling them has no handle on what it drew. Recording
     the axes as the layer's artist made :meth:`Renderer.set_visible` hide the whole map and
     :meth:`Renderer.remove` detach it from the figure; recording nothing left the layer undrawable-off.
     What they added is the difference between the axes before and after.
