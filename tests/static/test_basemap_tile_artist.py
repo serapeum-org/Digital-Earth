@@ -2,8 +2,9 @@
 
 Round 2, M5. ``basemap()``'s ``Returns:`` claimed "the tile artist ``add_tiles`` added to the axes is
 reached through ``Scene.artist``, by this layer's id", which the drawer's own docstring in the same module
-denies: ``cleopatra.basemap.tiles.add_tiles`` documents ``Returns: matplotlib.axes.Axes: The same axes, for
-chaining``, so ``artist(id)`` is the axes. The test that was supposed to prove the claim stubbed
+denies: cleopatra's ``GeoMixin.add_tiles`` (which the static tier's ``decoration.add_tiles`` wrapper calls)
+documents ``Returns: matplotlib.axes.Axes: The same axes, for chaining``, so ``artist(id)`` is the axes. The
+test that was supposed to prove the claim stubbed
 ``add_tiles`` with ``return_value=<object()>`` and asserted the layer's artist was that sentinel — a
 tautology about the plumbing, true whatever cleopatra returns.
 
