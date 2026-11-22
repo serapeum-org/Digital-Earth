@@ -49,7 +49,10 @@ DRAWS_WITH_KWARGS = {
     "points": "`add_points(cloud, scalars=SCALAR, **style, **props)` — Python's duplicate-keyword TypeError",
     "polygons": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "choropleth": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
-    "trimesh": "`add_mesh(surface, color=..., **props)` — the surface carries no array, so PyVista refuses a scalars keyword",
+    "trimesh": (
+        "`add_mesh(surface, color=..., **props)` — the surface carries no data array, so a scalars= name it "
+        "does not hold is refused by PyVista (a scalars=<array> would be accepted, but the test passes a name)"
+    ),
     "lines": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "streamlines": "`add_mesh(mesh, scalars=_SPEED, **props)` — Python's duplicate-keyword TypeError",
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
