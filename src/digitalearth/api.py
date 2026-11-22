@@ -828,7 +828,7 @@ def _reject_mesh_backend(data: PlottableData, backend: str) -> None:
         )
 
 
-def _mesh_of(data: PlottableData) -> Any:
+def _mesh_of(data: Any) -> Any:
     """Return the ``Mesh2d`` a ``MeshDataset`` wraps, for the engine tiers' mesh builders.
 
     The interactive, 3-D and web tiers draw a mesh from the bare ``Mesh2d`` — connectivity plus node

@@ -249,4 +249,6 @@ class TestQuickmapRoutesAMeshHere:
         import digitalearth
 
         with pytest.raises(ValueError, match="not a renderer for a mesh"):
-            digitalearth.quickmap(ugrid_mesh("face"), backend="interactive", kind="contourf")
+            digitalearth.quickmap(
+                ugrid_mesh("face"), backend="interactive", kind="contourf"
+            )
