@@ -167,6 +167,9 @@ DRAWN_KINDS: tuple[str, ...] = (
     "terrain",
     "point_cloud",
     "model",
+    # A UGRID mesh's triangulated faces, drawn as a deck.gl PolygonLayer from the triangle rings its builder
+    # reprojected and recorded (#547) — the web sibling of the static tripcolor / interactive trimesh renders.
+    "mesh",
     "custom:maplibre",
 )
 
@@ -622,10 +625,10 @@ def drawer_for(kind: str) -> Any:
           caller is told what to do instead rather than only that the kind is missing:
             ```python
             >>> from digitalearth.web.render.renderer import drawer_for
-            >>> drawer_for("mesh")  # doctest: +ELLIPSIS
+            >>> drawer_for("vectors")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            KeyError: "the web tier does not draw 'mesh' layers — a raster is drawn as an image ...
+            KeyError: "the web tier does not draw 'vectors' layers ...
 
             ```
         - A kind the tier neither draws nor decided against carries no reason, because it declared none:
@@ -652,7 +655,7 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the map, so a module-level
     # import would close a cycle, and a map that draws nothing should not pay for loading all of them.
-    from digitalearth.web.builders import bigdata, raster, threed, vector
+    from digitalearth.web.builders import bigdata, mesh, raster, threed, vector
     from digitalearth.web.decoration import decoration
 
     drawers = {
@@ -686,6 +689,8 @@ def drawer_for(kind: str) -> Any:
         "terrain": threed.draw_terrain,
         "point_cloud": threed.draw_point_cloud,
         "model": threed.draw_model,
+        # A UGRID mesh's faces as a deck.gl PolygonLayer, rebuilt from the triangle rings its builder recorded.
+        "mesh": mesh.draw_trimesh,
         "custom:maplibre": _custom_drawer(),
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not

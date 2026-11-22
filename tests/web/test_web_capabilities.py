@@ -101,6 +101,28 @@ def _dem():
     return Dataset.read_file(DEM_PATH)
 
 
+def _mesh():
+    """Return a two-face UGRID mesh (a quad and a triangle), for the `mesh` builder.
+
+    Returns:
+        A pyramids `Mesh2d` the `trimesh` builder fan-cuts into three triangles.
+    """
+    import numpy as np
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+
+    return Mesh2d(
+        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
+        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
+        face_node_connectivity=Connectivity(
+            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
+            fill_value=-1,
+            cf_role="face_node_connectivity",
+            original_start_index=0,
+        ),
+    )
+
+
 #: Kinds a builder records as a layer, which the renderer then draws from that description. This is
 #: `DRAWN_KINDS`, resolved to the call that produces each one — so a kind whose builder stops recording it
 #: fails on the call rather than on a table nobody runs.
@@ -136,6 +158,8 @@ DESCRIBED_AND_DRAWN = {
     "terrain": lambda m: m.terrain_tiles(),
     "point_cloud": lambda m: m.point_cloud([(4.9, 52.4, 10.0), (5.0, 52.2, 20.0)]),
     "model": lambda m: m.gltf("https://example.invalid/model.glb", 4.9, 52.4),
+    # A UGRID mesh's faces drawn as a deck.gl PolygonLayer (#547), described like the other deck kinds.
+    "mesh": lambda m: m.trimesh(_mesh()),
     "custom:maplibre": lambda m: m.add_layer({"id": "own", "type": "background"}),
 }
 
@@ -233,12 +257,13 @@ class TestTheDeclaration:
         """The renderer refuses an unsupported kind with the tier's own sentence, not a new one.
 
         Test scenario:
-            `mesh` is declared absent with "a raster is drawn as an image rather than as cells". Before
-            #294 closed, the refusal said only that the kind was not drawn — true, and no help at all to a
-            caller holding a figure written for the static tier.
+            `vectors` is declared absent with "MapLibre has no arrow glyph; a u/v field is drawn on the
+            static or interactive tier". Before #294 closed, the refusal said only that the kind was not
+            drawn — true, and no help at all to a caller holding a figure written for another tier. (The
+            `mesh` kind carried this role until #547 made the web tier draw a UGRID mesh's faces.)
         """
-        with pytest.raises(KeyError, match="drawn as an image rather than as cells"):
-            drawer_for("mesh")
+        with pytest.raises(KeyError, match="no arrow glyph"):
+            drawer_for("vectors")
 
     def test_a_kind_the_tier_never_decided_about_carries_no_reason(self):
         """The other half: no declared reason, no invented one.

@@ -65,7 +65,7 @@ only what their extra adds:
 | `lakes` | ✓ | — | ✓ | — |
 | `land` | ✓ | — | ✓ | — |
 | `lines` | ✓ | ✓ | ✓ | ✓ |
-| `mesh` | ✓ | — | ✓ | — |
+| `mesh` | ✓ | ✓ | ✓ | — |
 | `model` | — | ✓ | — | — |
 | `nightshade` | ✓ | — | — | — |
 | `ocean` | ✓ | — | ✓ | — |
@@ -187,14 +187,13 @@ omissions with no positive counterpart on any backend, so they appear only in th
   wiring is tracked in #398
 - **`domain`** — a web map pans and zooms, so it is framed by a centre and a zoom rather than by a region
 - **`export_vector`** — a page is a raster canvas; a PDF of it would be a screenshot in a wrapper
-- **`mesh`** — a raster is drawn as an image rather than as cells, which is what a tile pipeline expects
 - **`north_arrow`** — the navigation control's compass already shows the bearing, and turns the map back to
   north when it is clicked
 - **`raster_renderer`** — a raster is drawn as an image and contours are their own builder, so there is no
   choice of renderer to make on top of one
 - **`streamlines`** — there is no streamline primitive to trace a field with in a browser
-- **`unstructured`** — triangulated data has no MapLibre layer type, so neither the scattered-points renders nor
-  a UGRID mesh input can be drawn here; both go to the static tier
+- **`unstructured`** — a scattered point collection has no MapLibre layer type to triangulate into, so a
+  Delaunay mesh of points goes to the static tier; a UGRID mesh's own faces are drawn through the 'mesh' kind
 - **`vectors`** — MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier
 
 ### interactive

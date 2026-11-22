@@ -377,14 +377,15 @@ class TestVocabulary:
     def test_a_ugrid_mesh_is_still_refused_where_no_tier_has_the_render(
         self, backend, ugrid_mesh
     ):
-        """The three tiers without a triangular render still refuse a mesh by name.
+        """A tier without a triangular render still refuses a mesh by name.
 
         Args:
-            backend: The backend to try.
+            backend: The backend to try — derived from the tiers outside
+                :data:`~digitalearth.api.MESH_BACKENDS`, so a tier that gains the render leaves this set.
             ugrid_mesh: The repo's two-face mesh factory.
 
         Test scenario:
-            The other half of the contract. `static` gaining the mesh must not have opened it
+            The other half of the contract. A tier gaining the mesh render must not have opened it
             everywhere, and the refusal must still arrive from the mesh gate — before any keyword is
             read — rather than from a builder that does not recognise `variable`.
         """
