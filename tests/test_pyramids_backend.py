@@ -24,6 +24,7 @@ import numpy as np
 import pytest
 
 import digitalearth
+from digitalearth import api as _de_api
 from digitalearth.pyramids_backend import (
     _UNANIMATABLE,
     _UNANIMATABLE_DEFAULT,
@@ -301,6 +302,11 @@ class TestBandOrigin:
             scene.close()
 
 
+# Backends with no triangular render, derived so a tier that gains one drops out automatically
+# (parallels test_quickplot._NO_MESH_RENDER). Interactive now renders a mesh; only 3d/web remain.
+_NO_MESH_RENDER = sorted(set(_de_api.BACKEND_CAPABILITIES) - _de_api.MESH_BACKENDS)
+
+
 class TestVocabulary:
     """The names that differ between the facade and this package."""
 
@@ -364,7 +370,10 @@ class TestVocabulary:
         finally:
             scene.close()
 
-    @pytest.mark.parametrize("backend", ["3d", "web", "interactive"])
+    @pytest.mark.skipif(
+        not _NO_MESH_RENDER, reason="every backend now declares a mesh render"
+    )
+    @pytest.mark.parametrize("backend", _NO_MESH_RENDER or [None])
     def test_a_ugrid_mesh_is_still_refused_where_no_tier_has_the_render(
         self, backend, ugrid_mesh
     ):
