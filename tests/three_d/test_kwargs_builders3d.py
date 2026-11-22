@@ -49,6 +49,7 @@ DRAWS_WITH_KWARGS = {
     "points": "`add_points(cloud, scalars=SCALAR, **style, **props)` — Python's duplicate-keyword TypeError",
     "polygons": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "choropleth": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
+    "trimesh": "`add_mesh(surface, color=..., **props)` — the surface carries no array, so PyVista refuses a scalars keyword",
     "lines": "`add_mesh(merged, scalars=VALUE, **style, **props)` — Python's duplicate-keyword TypeError",
     "streamlines": "`add_mesh(mesh, scalars=_SPEED, **props)` — Python's duplicate-keyword TypeError",
     "volume": "the caller's array name is honoured; VTK refuses one the grid does not carry",
@@ -163,6 +164,27 @@ def _lines():
     )
 
 
+def _mesh():
+    """Return a two-face UGRID mesh (a quad and a triangle).
+
+    Returns:
+        The pyramids `Mesh2d` a `trimesh` layer is built from.
+    """
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+
+    return Mesh2d(
+        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
+        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
+        face_node_connectivity=Connectivity(
+            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
+            fill_value=-1,
+            cf_role="face_node_connectivity",
+            original_start_index=0,
+        ),
+    )
+
+
 def _grid():
     """Return a small `ImageData` carrying a cell field.
 
@@ -209,6 +231,7 @@ def _draw(scene, builder: str, extra: dict):
         "points": lambda: scene.points(_point_gdf(), column="pop", **extra),
         "polygons": lambda: scene.polygons(_squares(), column="pop", **extra),
         "choropleth": lambda: scene.choropleth(_squares(), column="pop", **extra),
+        "trimesh": lambda: scene.trimesh(_mesh(), **extra),
         "volume": lambda: scene.volume(_cube(), **extra),
         "isosurface": lambda: scene.isosurface(_cube(), isosurfaces=[0.3], **extra),
         "globe": lambda: scene.globe(_dem(), coastlines=False, **extra),

@@ -144,6 +144,11 @@ UNREDUCED: Mapping[str, str] = MappingProxyType(
             "a choropleth is the polygons fill coloured by a column, so it reduces — or does not — exactly as "
             "polygons does: welding footprints would merge separate areas into one"
         ),
+        "mesh": (
+            "a UGRID mesh is drawn as its own faces (pyramids' fan triangles), and decimate_pro would weld "
+            "neighbouring faces together and lose the connectivity the mesh exists to show; a coarser mesh "
+            "comes from the model upstream, not from simplifying the surface after the fact"
+        ),
         "raster": (
             "geovista builds the sphere and owns its resolution; decimating a sphere's quads flattens the "
             "curvature the globe exists to show"

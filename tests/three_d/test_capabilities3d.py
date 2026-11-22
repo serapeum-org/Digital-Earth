@@ -120,6 +120,28 @@ def _dem():
     return Dataset.read_file(DEM_PATH)
 
 
+def _mesh():
+    """Return a two-face UGRID mesh (a quad and a triangle) for the ``trimesh`` builder.
+
+    Returns:
+        A pyramids `Mesh2d` — the same shape the shared ``ugrid_mesh`` fixture builds, so the three fan
+        triangles the quad and triangle cut into are the mesh's own faces.
+    """
+    from pyramids.netcdf.ugrid.connectivity import Connectivity
+    from pyramids.netcdf.ugrid.mesh import Mesh2d
+
+    return Mesh2d(
+        node_x=np.array([0.0, 1.0, 1.0, 0.0, 2.0]),
+        node_y=np.array([0.0, 0.0, 1.0, 1.0, 0.5]),
+        face_node_connectivity=Connectivity(
+            data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]], dtype=np.intp),
+            fill_value=-1,
+            cf_role="face_node_connectivity",
+            original_start_index=0,
+        ),
+    )
+
+
 def _add_basemap(scene):
     """Record a `basemap` layer without touching the network.
 
@@ -173,6 +195,7 @@ BUILDERS = {
     "points": lambda scene: scene.points(_cloud()),
     "polygons": lambda scene: scene.polygons(_polygons()),
     "choropleth": lambda scene: scene.choropleth(_polygons(), column="value"),
+    "mesh": lambda scene: scene.trimesh(_mesh()),
     "volume": lambda scene: scene.volume(_cube()),
     "isosurface": lambda scene: scene.isosurface(_cube(), isosurfaces=[0.5]),
     "vectors": lambda scene: scene.vectors(np.zeros((2, 3)), np.ones((2, 3))),
