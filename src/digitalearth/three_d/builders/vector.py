@@ -30,6 +30,10 @@ VECTORS = "vectors"
 MAGNITUDE = "magnitude"
 VALUE = "value"
 
+#: Ambient-light fraction the extruded prisms are drawn with, so a face the headlight misses still shows its
+#: mapped colour rather than rendering black under a strict GL (Mesa 26 llvmpipe, #538).
+_EXTRUDE_AMBIENT = 0.3
+
 
 def _polygon_parts(geom: Any) -> Iterator[tuple[np.ndarray, list[np.ndarray]]]:
     """Yield each polygon part as its exterior ring and its interior (hole) rings.
@@ -859,6 +863,11 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
         return None
 
     merged = pv.MultiBlock(prisms).combine()
+    # An ambient floor so the prism's colour shows even on a face the single headlight does not reach. Under
+    # Mesa 26's llvmpipe the diffuse term on the camera-facing prism walls came out ~0, so a normals-only fix
+    # drew the solid but unlit (black); the ambient term lifts the mapped colour off black there (#538). A
+    # caller's own `ambient` wins (`setdefault`), so this is a default, not an override.
+    props.setdefault("ambient", _EXTRUDE_AMBIENT)
     if colours is None:
         return merged, scene.plotter.add_mesh(merged, scalars=None, cmap=cmap, **props)
     return merged, scene.plotter.add_mesh(merged, scalars=VALUE, **style, **props)
