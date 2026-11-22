@@ -168,25 +168,6 @@ class TestCleopatra046ImportDrift:
             "the static tier's Map export is not the package-root Map"
         )
 
-    def test_a_basemap_renders_through_the_migrated_add_tiles_seam(self, offline_tiles):
-        """A default basemap draws via `decoration.add_tiles` -> `GeoMixin.add_tiles` on real cleopatra.
-
-        Args:
-            offline_tiles: Stubs only cleopatra's HTTP fetch, so the real 0.46 tile path runs offline.
-
-        Test scenario:
-            The capability #545's import break removed is tiling, not merely importing. Drawing a basemap
-            must leave exactly one real `AxesImage` on the axes, proving the migrated seam reaches cleopatra's
-            current glyph-method tiler and renders — against whatever cleopatra version CI resolved.
-        """
-        scene = Map(domain=BERLIN)
-        scene.ax.set_xlim(BERLIN[0], BERLIN[2])
-        scene.ax.set_ylim(BERLIN[1], BERLIN[3])
-        scene.basemap("OSM", zoom=8)
-        images = [image for image in scene.ax.images if isinstance(image, AxesImage)]
-        scene.close()
-        assert len(images) == 1, scene.ax.images
-
 
 class TestAddTilesWrapper:
     """The static tier's `decoration.add_tiles` wrapper over cleopatra 0.46's `GeoMixin.add_tiles` (#545).
@@ -270,3 +251,25 @@ class TestAddTilesWrapper:
         assert captured["source"] is None, (
             f"an omitted source should forward as None: {captured['source']!r}"
         )
+
+    def test_a_pyproj_crs_object_renders_end_to_end(self, offline_tiles):
+        """A `Map` built with a pyproj CRS object draws a basemap through the real cleopatra tiler (#545 L5).
+
+        Args:
+            offline_tiles: Stubs only cleopatra's HTTP fetch, so the real tile path runs offline.
+
+        Test scenario:
+            The boundary test proves the wrapper forwards a CRS object unchanged; this proves the whole
+            render survives one. `Map(crs=<pyproj CRS>)` frames a Web-Mercator extent over Berlin and draws a
+            basemap, so cleopatra's real `_add_tiles` stringifies and reprojects the object (not a stub) and
+            leaves exactly one `AxesImage` — the end-to-end path `scene.crs` can take in real use.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        scene = Map(crs=crs_from_user_input(3857))
+        scene.ax.set_xlim(1_447_000, 1_525_000)
+        scene.ax.set_ylim(6_880_000, 6_950_000)
+        scene.basemap("OSM", zoom=8)
+        images = [image for image in scene.ax.images if isinstance(image, AxesImage)]
+        scene.close()
+        assert len(images) == 1, scene.ax.images
