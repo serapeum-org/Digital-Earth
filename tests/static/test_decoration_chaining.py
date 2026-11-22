@@ -367,7 +367,7 @@ class TestBasemapChainsWithoutTheNetwork:
         """A framed map whose tile fetch is a stand-in, closed when the test ends.
 
         Args:
-            mocker: Stubs ``cleopatra.basemap.tiles.add_tiles`` where the tier calls it.
+            mocker: Stubs the static tier's ``decoration.add_tiles`` wrapper where the tier calls it.
 
         Yields:
             The map, framed on a lon/lat region so the extent the tiles are asked for exists.
