@@ -65,15 +65,16 @@ class InteractionMixin(_MixinBase):
         self.set_visible(layer_id, False)
         return mesh
 
-    def _unlit_if_volume(self, layer_id: str, kwargs: dict) -> None:
+    def _unlit_if_volume(self, layer_id: str, kwargs: dict[str, Any]) -> None:
         """Default a widget over a ``volume`` layer to an unlit draw, in place on ``kwargs``.
 
-        Each mesh widget cuts or extracts its layer's mesh, and those VTK filters (clip, slice, box, threshold,
-        contour) hand back a surface with **no normals**. A strict GL renders a normal-less surface blank —
-        under Mesa 26's llvmpipe the clipped-volume cross-section came back blank (#538) — so a widget over a
-        ``volume`` layer defaults to ``lighting=False``: flat shading shows the mapped colour and needs no
-        normals. A surface layer keeps the normals it was drawn with and is left lit, so this narrows to the
-        volume case; a caller's own ``lighting`` still wins (``setdefault``).
+        The cut/extract widgets (clip_plane, slice_planes, clip_box, threshold) hand back a surface with **no
+        normals**. A strict GL renders a normal-less surface blank — under Mesa 26's llvmpipe the clipped-volume
+        cross-section came back blank (#538) — so a widget over a ``volume`` layer defaults to ``lighting=False``:
+        flat shading shows the mapped colour and needs no normals. A surface layer keeps the normals it was drawn
+        with and is left lit, so this narrows to the volume case; a caller's own ``lighting`` still wins
+        (``setdefault``). ``isovalue`` does not use this: a ``volume`` is cell data, which its contour filter
+        refuses before drawing.
 
         Args:
             layer_id: The layer the widget is added over.
@@ -157,8 +158,10 @@ class InteractionMixin(_MixinBase):
     def isovalue(self, layer_id: str, **kwargs: Any) -> Any:
         """Add an interactive isovalue (contour) widget over a layer's mesh and return its actor.
 
-        A ``volume`` layer's isosurface is drawn unlit by default (see :meth:`_unlit_if_volume`, #538); a
-        surface layer stays lit. ``lighting=`` overrides.
+        Unlike the other mesh widgets, this one is not given the volume-unlit default: a ``volume`` layer
+        carries cell data, and ``add_mesh_isovalue`` (a contour filter) refuses cell data before any mesh is
+        drawn, so there is no volume draw to make unlit (#538). A point-data field is the separate
+        ``isosurface`` kind, not ``volume``.
 
         Args:
             layer_id: The layer to contour (its active scalar is contoured).
@@ -167,7 +170,6 @@ class InteractionMixin(_MixinBase):
         Returns:
             The contour actor PyVista produced.
         """
-        self._unlit_if_volume(layer_id, kwargs)
         return self.plotter.add_mesh_isovalue(self._widget_mesh(layer_id), **kwargs)
 
     def slider(
