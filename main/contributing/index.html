@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4768,6 +4768,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#keeping-the-clone-small" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping the clone small
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#code-of-conduct" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4932,6 +4943,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#keeping-the-clone-small" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping the clone small
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#code-of-conduct" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5062,6 +5084,28 @@ email, or any other method with the owners of this repository before making a ch
 <li>You may merge the Pull Request in once you have the sign-off of two other developers, or if you
    do not have permission to do that, you may request the second reviewer to merge it for you.</li>
 </ol>
+<h2 id="keeping-the-clone-small"><a class="toclink" href="#keeping-the-clone-small">Keeping the clone small</a><a class="headerlink" href="#keeping-the-clone-small" title="Permanent link">#</a></h2>
+<p>A default clone also fetches <code>gh-pages</code>, the branch the built documentation site is published from. That
+branch carries no source and nothing you need in order to develop, so you can skip it entirely:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>remote<span class="w"> </span>set-branches<span class="w"> </span>origin<span class="w"> </span>main
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>fetch<span class="w"> </span>--prune<span class="w"> </span>origin
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>git<span class="w"> </span>update-ref<span class="w"> </span>-d<span class="w"> </span>refs/remotes/origin/gh-pages
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>git<span class="w"> </span>gc<span class="w"> </span>--prune<span class="o">=</span>now
+</code></pre></div>
+<p>The third line is not redundant. <code>fetch --prune</code> removes only refs the fetch refspec still covers, and the
+first command narrows that refspec to <code>main</code> — so <code>origin/gh-pages</code> is left behind as an orphan, and while it
+exists the objects stay reachable and <code>gc</code> reclaims nothing.</p>
+<p>Two consequences worth knowing. <code>git fetch origin</code> now updates <code>main</code> only, so another branch needs an
+explicit refspec (<code>git fetch origin '+refs/heads/&lt;branch&gt;:refs/remotes/origin/&lt;branch&gt;'</code>). And if you later
+need the docs branch itself, fetch it shallowly — <code>git fetch --depth=1 origin gh-pages</code> — since its full
+history is of no use to you.</p>
+<div class="admonition note">
+<p class="admonition-title">If the repository is on a cloud-synced path</p>
+<p>Dropbox, OneDrive and Google Drive partial-sync <code>.git</code>, which periodically removes pack files from under
+git and corrupts the object store — <code>bad object refs/tags/X</code>, <code>unable to read tree &lt;sha&gt;</code>, a <code>gc</code> that
+will not complete. The commands above make it far less likely by shrinking what is at risk, but they are
+not a fix. Keeping the checkout on a local disk is.</p>
+</div>
 <h2 id="code-of-conduct"><a class="toclink" href="#code-of-conduct">Code of Conduct</a><a class="headerlink" href="#code-of-conduct" title="Permanent link">#</a></h2>
 <h3 id="our-pledge"><a class="toclink" href="#our-pledge">Our Pledge</a><a class="headerlink" href="#our-pledge" title="Permanent link">#</a></h3>
 <p>In the interest of fostering an open and welcoming environment, we as

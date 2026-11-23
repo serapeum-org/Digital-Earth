@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -5354,9 +5354,9 @@ only what their extra adds:</p>
 <tr>
 <td><code>mesh</code></td>
 <td>✓</td>
-<td>—</td>
 <td>✓</td>
-<td>—</td>
+<td>✓</td>
+<td>✓</td>
 </tr>
 <tr>
 <td><code>model</code></td>
@@ -5880,14 +5880,13 @@ omissions with no positive counterpart on any backend, so they appear only in th
   wiring is tracked in #398</li>
 <li><strong><code>domain</code></strong> — a web map pans and zooms, so it is framed by a centre and a zoom rather than by a region</li>
 <li><strong><code>export_vector</code></strong> — a page is a raster canvas; a PDF of it would be a screenshot in a wrapper</li>
-<li><strong><code>mesh</code></strong> — a raster is drawn as an image rather than as cells, which is what a tile pipeline expects</li>
 <li><strong><code>north_arrow</code></strong> — the navigation control's compass already shows the bearing, and turns the map back to
   north when it is clicked</li>
 <li><strong><code>raster_renderer</code></strong> — a raster is drawn as an image and contours are their own builder, so there is no
   choice of renderer to make on top of one</li>
 <li><strong><code>streamlines</code></strong> — there is no streamline primitive to trace a field with in a browser</li>
-<li><strong><code>unstructured</code></strong> — triangulated data has no MapLibre layer type, so neither the scattered-points renders nor
-  a UGRID mesh input can be drawn here; both go to the static tier</li>
+<li><strong><code>unstructured</code></strong> — a scattered point collection has no MapLibre layer type to triangulate into, so a
+  Delaunay mesh of points goes to the static tier; a UGRID mesh's own faces are drawn through the 'mesh' kind</li>
 <li><strong><code>vectors</code></strong> — MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier</li>
 </ul>
 <h3 id="interactive"><a class="toclink" href="#interactive">interactive</a><a class="headerlink" href="#interactive" title="Permanent link">#</a></h3>
