@@ -787,7 +787,7 @@ class TestRasterIdentity:
             code for every real input.
         """
         ds = _small_raster()
-        ds.band_metadata = [{"standard_name": "air_temperature"}]
+        ds.bands.set_metadata({"standard_name": "air_temperature"}, band=0)
         src = get_source(ds, band=1)
         assert src.metadata("standard_name") == "air_temperature", (
             f"expected the band's standard_name, got {src.metadata('standard_name')!r}"
@@ -814,7 +814,7 @@ class TestRasterIdentity:
             Deriving the key must not take the override away from callers that pass one.
         """
         ds = _small_raster()
-        ds.band_metadata = [{"standard_name": "air_temperature"}]
+        ds.bands.set_metadata({"standard_name": "air_temperature"}, band=0)
         src = get_source(
             ds, band=1, metadata={"standard_name": "sea_surface_temperature"}
         )
