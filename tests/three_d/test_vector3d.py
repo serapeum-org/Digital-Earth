@@ -144,6 +144,30 @@ def test_extruded_polygons_public_path_carves_holes():
     scene.close()
 
 
+def test_extruded_polygons_merged_mesh_is_drawn_unlit():
+    """The public builder draws the prisms unlit so llvmpipe shows their colour, not black (#538).
+
+    Under Mesa 26's llvmpipe a lit extruded prism rendered blank/black; `draw_extruded_polygons` defaults
+    ``lighting=False`` so each face shows its mapped colour flat. A caller's own ``lighting`` still wins.
+    """
+    scene = Scene3D(off_screen=True)
+    actor = scene.extruded_polygons(_squares(), height="pop", column="pop")
+    assert actor.prop.lighting is False, "extruded prisms must default to unlit"
+    scene.close()
+
+
+def test_extruded_polygons_lets_a_caller_force_lighting():
+    """A caller's own ``lighting`` wins over the unlit default (#538)."""
+    scene = Scene3D(off_screen=True)
+    actor = scene.extruded_polygons(
+        _squares(), height="pop", column="pop", lighting=True
+    )
+    assert actor.prop.lighting is True, (
+        "an explicit lighting= must override the unlit default"
+    )
+    scene.close()
+
+
 def _rivers():
     """Two line features with a flow value (a tiny lines fixture)."""
     return gpd.GeoDataFrame(

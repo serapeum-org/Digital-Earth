@@ -837,6 +837,13 @@ def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
         return None
 
     merged = pv.MultiBlock(prisms).combine()
+    # Draw the prisms unlit, so each face shows its mapped colour flat. `extrude` leaves the prism with no
+    # normals, and under Mesa 26's llvmpipe a *lit* normal-less surface came out blank white, then (with
+    # normals) black — its diffuse term on the camera-facing walls is ~0. Unlit flat shading does not use
+    # normals or that broken term at all: it shows the viridis colour on every face, the same flat colour on
+    # every GL, so the render no longer rides on a driver's lighting (#538). A caller's own `lighting` wins
+    # (`setdefault`), so a caller who wants the lit look back can ask for it.
+    props.setdefault("lighting", False)
     if colours is None:
         return merged, scene.plotter.add_mesh(merged, scalars=None, cmap=cmap, **props)
     return merged, scene.plotter.add_mesh(merged, scalars=VALUE, **style, **props)

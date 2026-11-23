@@ -65,25 +65,50 @@ class InteractionMixin(_MixinBase):
         self.set_visible(layer_id, False)
         return mesh
 
+    def _unlit_if_volume(self, layer_id: str, kwargs: dict[str, Any]) -> None:
+        """Default a widget over a ``volume`` layer to an unlit draw, in place on ``kwargs``.
+
+        The cut/extract widgets (clip_plane, slice_planes, clip_box, threshold) hand back a surface with **no
+        normals**. A strict GL renders a normal-less surface blank — under Mesa 26's llvmpipe the clipped-volume
+        cross-section came back blank (#538) — so a widget over a ``volume`` layer defaults to ``lighting=False``:
+        flat shading shows the mapped colour and needs no normals. A surface layer keeps the normals it was drawn
+        with and is left lit, so this narrows to the volume case; a caller's own ``lighting`` still wins
+        (``setdefault``). ``isovalue`` does not use this: a ``volume`` is cell data, which its contour filter
+        refuses before drawing.
+
+        Args:
+            layer_id: The layer the widget is added over.
+            kwargs: The widget call's keyword arguments, mutated in place.
+        """
+        if self.get_layer(layer_id).kind == "volume":
+            kwargs.setdefault("lighting", False)
+
     def clip_plane(
         self, layer_id: str, *, normal: Any = (1.0, 0.0, 0.0), **kwargs: Any
     ) -> Any:
         """Add an interactive clip-plane widget over a layer's mesh and return its actor.
 
+        When the layer is a ``volume``, the cut surface is drawn unlit by default so its colour shows under a
+        strict GL (see :meth:`_unlit_if_volume`, #538); a surface layer stays lit. ``lighting=`` overrides.
+
         Args:
             layer_id: The layer to clip.
             normal: The clipping plane's normal.
-            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh_clip_plane`.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh_clip_plane` (e.g. ``lighting``, ``cmap``).
 
         Returns:
             The clipped-mesh actor PyVista produced.
         """
+        self._unlit_if_volume(layer_id, kwargs)
         return self.plotter.add_mesh_clip_plane(
             self._widget_mesh(layer_id), normal=normal, **kwargs
         )
 
     def slice_planes(self, layer_id: str, *, normal: Any = "x", **kwargs: Any) -> Any:
         """Add an interactive orthogonal-slice widget over a layer's mesh and return its actor.
+
+        A ``volume`` layer's slice is drawn unlit by default (see :meth:`_unlit_if_volume`, #538); a surface
+        layer stays lit. ``lighting=`` overrides.
 
         Args:
             layer_id: The layer to slice.
@@ -93,12 +118,16 @@ class InteractionMixin(_MixinBase):
         Returns:
             The slice actor PyVista produced.
         """
+        self._unlit_if_volume(layer_id, kwargs)
         return self.plotter.add_mesh_slice(
             self._widget_mesh(layer_id), normal=normal, **kwargs
         )
 
     def clip_box(self, layer_id: str, **kwargs: Any) -> Any:
         """Add an interactive clip-box widget over a layer's mesh and return its actor.
+
+        A ``volume`` layer's clip is drawn unlit by default (see :meth:`_unlit_if_volume`, #538); a surface
+        layer stays lit. ``lighting=`` overrides.
 
         Args:
             layer_id: The layer to clip.
@@ -107,10 +136,14 @@ class InteractionMixin(_MixinBase):
         Returns:
             The clipped-mesh actor PyVista produced.
         """
+        self._unlit_if_volume(layer_id, kwargs)
         return self.plotter.add_mesh_clip_box(self._widget_mesh(layer_id), **kwargs)
 
     def threshold(self, layer_id: str, **kwargs: Any) -> Any:
         """Add an interactive threshold widget over a layer's mesh and return its actor.
+
+        A ``volume`` layer's thresholded region is drawn unlit by default (see :meth:`_unlit_if_volume`, #538);
+        a surface layer stays lit. ``lighting=`` overrides.
 
         Args:
             layer_id: The layer to threshold (its active scalar is thresholded).
@@ -119,10 +152,16 @@ class InteractionMixin(_MixinBase):
         Returns:
             The thresholded-mesh actor PyVista produced.
         """
+        self._unlit_if_volume(layer_id, kwargs)
         return self.plotter.add_mesh_threshold(self._widget_mesh(layer_id), **kwargs)
 
     def isovalue(self, layer_id: str, **kwargs: Any) -> Any:
         """Add an interactive isovalue (contour) widget over a layer's mesh and return its actor.
+
+        Unlike the other mesh widgets, this one is not given the volume-unlit default: a ``volume`` layer
+        carries cell data, and ``add_mesh_isovalue`` (a contour filter) refuses cell data before any mesh is
+        drawn, so there is no volume draw to make unlit (#538). A point-data field is the separate
+        ``isosurface`` kind, not ``volume``.
 
         Args:
             layer_id: The layer to contour (its active scalar is contoured).

@@ -40,6 +40,59 @@ def test_clip_plane_adds_a_widget_and_hides_the_plain_layer():
     scene.close()
 
 
+# The mesh widgets whose VTK filter cuts/extracts a *volume* into a normal-less surface that a strict GL draws
+# blank (#538), so they default to unlit over a volume. `isovalue` (contour) is excluded: it raises on a
+# cell-data volume ("Contour filter only works on Point data") before any draw, a pre-existing limitation.
+_VOLUME_CUT_WIDGETS = ["clip_plane", "slice_planes", "clip_box", "threshold"]
+
+
+@pytest.mark.parametrize("method", _VOLUME_CUT_WIDGETS)
+def test_a_mesh_widget_over_a_volume_defaults_to_unlit(method):
+    """A widget over a volume layer defaults to ``lighting=False`` so its cut surface shows on a strict GL (#538).
+
+    Args:
+        method: The widget method under test.
+
+    Test scenario:
+        A volume's cut/extracted surface carries no normals, which Mesa 26's llvmpipe drew blank; each widget
+        defaults a volume layer to unlit so the mapped colour shows flat.
+    """
+    scene = Scene3D(off_screen=True)
+    scene.volume(np.random.default_rng(0).random((6, 10, 10)), name="vol")
+    actor = getattr(scene, method)("vol")
+    assert actor.prop.lighting is False, f"{method} over a volume must default to unlit"
+    scene.close()
+
+
+@pytest.mark.parametrize("method", _VOLUME_CUT_WIDGETS)
+def test_a_mesh_widget_over_a_surface_stays_lit(method):
+    """A widget over a surface (terrain) layer keeps its lighting — the volume carve-out does not touch it (#538).
+
+    Args:
+        method: The widget method under test.
+
+    Test scenario:
+        A terrain surface carries normals, so its cut surface still lights correctly; the unlit default is
+        narrowed to volume layers only.
+    """
+    scene = Scene3D(off_screen=True)
+    scene.terrain(_dem(), name="dem")
+    actor = getattr(scene, method)("dem")
+    assert actor.prop.lighting is True, f"{method} over a surface must stay lit"
+    scene.close()
+
+
+def test_a_mesh_widget_over_a_volume_lets_a_caller_force_lighting():
+    """A caller's own ``lighting`` wins over the volume unlit default (#538)."""
+    scene = Scene3D(off_screen=True)
+    scene.volume(np.random.default_rng(0).random((6, 10, 10)), name="vol")
+    actor = scene.clip_plane("vol", normal=(0, 0, 1), lighting=True)
+    assert actor.prop.lighting is True, (
+        "an explicit lighting= must override the volume default"
+    )
+    scene.close()
+
+
 @pytest.mark.parametrize(
     "method", ["slice_planes", "threshold", "isovalue", "clip_box"]
 )
