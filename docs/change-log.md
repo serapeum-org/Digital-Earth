@@ -1,5 +1,18 @@
 # Change log
 
+## 0.16.0 (2026-11-23)
+
+### Feat
+
+- **3d**: render an unstructured MeshDataset on the 3d (PyVista) tier (#551)
+- **web**: render an unstructured MeshDataset on the MapLibre/deck.gl tier (#550)
+- **api**: route an unstructured MeshDataset to the interactive tier and derive the mesh gate (#549)
+
+### Fix
+
+- **three_d**: draw extruded prisms and volume-widget cuts unlit so llvmpipe shows their colour (#554)
+- **static**: import and tile under cleopatra 0.46+ (removed add_tiles free function) (#548)
+
 ## 0.15.2 (2026-11-12)
 
 ## 0.15.1 (2026-11-10)
