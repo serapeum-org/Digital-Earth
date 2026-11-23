@@ -748,7 +748,7 @@ def _pinned_variable(data: PlottableData, variable: str | None) -> PlottableData
             return data
         already = f"the variable {held!r}" if held is not None else "a pinned variable"
         raise ValueError(
-            f"this input is already {already}, so variable={variable!r} cannot select another from it; "
+            f"this input is already {already}, so variable={variable!r} cannot select another from it; "  # nosec B608 (error text, not SQL)
             f"pass the NetCDF container instead"
         )
     carried = list(data.variable_names)

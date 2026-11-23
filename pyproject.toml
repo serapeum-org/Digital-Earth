@@ -260,6 +260,15 @@ select = ["E", "F", "W", "I", "UP"]
 # formatter-owned pycodestyle codes).
 ignore = ["E203", "E226", "E266", "E501", "E701", "E722", "C901", "E741", "E731"]
 
+[tool.ruff.lint.per-file-ignores]
+# tests/examples carry a pre-existing E/F/W/UP backlog that src does not; keep only import-sort (I) there so
+# the full-ruleset pre-commit hook (run in CI by lint.yml) gates src strictly without blocking on that backlog.
+"tests/**" = ["E", "F", "W", "UP"]
+"examples/**" = ["E", "F", "W", "UP"]
+# Notebooks import at first use / run setup before imports (E402), and teaching cells use compact one-liners
+# like `plt.figure(); plt.imshow(img); plt.axis("off")` (E701/E702) — both expected in example notebooks.
+"*.ipynb" = ["E402", "E701", "E702"]
+
 [tool.bandit]
 exclude_dirs = ["tests", "examples", "scripts", "planning", "docs"]
 skips = ["B101"]

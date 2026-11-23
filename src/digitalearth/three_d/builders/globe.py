@@ -124,8 +124,8 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Selection
-from digitalearth.three_d.core.layer import drawing_props
+from digitalearth.base.spec import DEFAULT_BAND, LayerSpec, Selection  # noqa: E402
+from digitalearth.three_d.core.layer import drawing_props  # noqa: E402
 
 
 class GlobeMixin(_MixinBase):

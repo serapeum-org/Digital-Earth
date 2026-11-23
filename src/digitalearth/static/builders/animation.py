@@ -1514,7 +1514,7 @@ class AnimationMixin(_MixinBase):
         if coastlines:
             try:
                 self.coastlines()
-            except Exception:  # network/data unavailable — decoration is best-effort
+            except Exception:  # noqa: BLE001  # nosec B110 - network/data unavailable; decoration is best-effort
                 pass
         if title is not None:
             # On the axes only, for the reason `FrameUpdate.apply` gives: the same caption reaches the

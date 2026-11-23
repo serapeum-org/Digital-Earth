@@ -25,7 +25,7 @@ import atexit
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 (launches Xvfb only, fixed validated arg list)
 import sys
 from collections.abc import Sequence
 from math import isfinite
@@ -145,7 +145,7 @@ def start_xvfb(
     # Not `int(side)`: `_check_request` above has already refused anything that is not an `int`, so the
     # coercion could only ever have been applied to an `int` (review N3).
     width, height = window_size
-    server = subprocess.Popen(
+    server = subprocess.Popen(  # nosec B603 (fixed Xvfb command; size validated as int)
         [xvfb, display, "-screen", "0", f"{width}x{height}x24", "-nolisten", "tcp"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

@@ -215,7 +215,7 @@ class ExportMixin(_MixinBase):
         def _replace(match: "re.Match") -> str:
             url = match.group("url")
             try:
-                with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310 - fixed CDN https URLs
+                with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310 - fixed CDN https URLs  # nosec B310
                     body = response.read().decode("utf-8")
             except Exception as err:  # network/offline at save time — fail loudly, don't ship a broken page
                 raise RuntimeError(
