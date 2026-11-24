@@ -50,10 +50,10 @@ default), `interactive` (HoloViz/Bokeh), `three_d` (PyVista) and `web` (MapLibre
 engine-neutral `base`. `quickmap`/`quickplot` are the one-call entry points; `Map` is the composable scene.
 """
 
-from digitalearth.base.registry import (
+from digitalearth.base.registry import (  # noqa: E402
     register_classifier as _register_classifier,
 )
-from digitalearth.base.registry import (
+from digitalearth.base.registry import (  # noqa: E402
     resolvers as _resolvers,
 )
 

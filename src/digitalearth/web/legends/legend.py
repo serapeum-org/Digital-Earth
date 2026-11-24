@@ -6,9 +6,9 @@ stay in ``decoration`` as module functions -- other modules import them from the
 """
 
 from dataclasses import replace as _with_fields
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Self
 
-from digitalearth.base.spec import Guide, LayerSpec, Symbology
+from digitalearth.base.spec import Guide, Symbology
 from digitalearth.web.core.base import _require_maplibre
 from digitalearth.web.decoration.decoration import (
     DEFAULT_KEY_ANCHOR,

@@ -1206,7 +1206,7 @@ class TestANamedArgumentIsNormalisedForTheDescription:
 
 
 #: A credential of the shape a keyed tile service takes. Long enough not to appear in a figure by accident.
-FAKE_TILE_KEY = "SECRET-TILE-KEY-0123456789"
+FAKE_TILE_KEY = "SECRET-TILE-KEY-0123456789"  # gitleaks:allow  (synthetic, asserts the key never leaks)
 
 
 @pytest.fixture

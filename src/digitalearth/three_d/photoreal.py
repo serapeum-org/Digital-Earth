@@ -531,7 +531,7 @@ def _vertex_rgb(surf: Any, actor: Any, layer: str = "") -> np.ndarray:
             mapped = lut.MapScalars(varr, 0, -1)
             rgb = vtk_to_numpy(mapped)[:, :3].astype("float32") / 255.0
             return np.ascontiguousarray(rgb)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # nosec B110 - LUT/VTK fallback to solid colour, never fails the render
             # Any LUT/VTK hiccup falls back to the solid colour below, never failing the render.
             pass
     # Name the layer so each fallback warns distinctly: identical messages are de-duplicated under Python's

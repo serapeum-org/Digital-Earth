@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from digitalearth.base.spec import Encoding, LayerSpec
+from digitalearth.base.spec import LayerSpec
 from digitalearth.three_d.builders.bigdata import reduce_points
 from digitalearth.three_d.builders.point_cloud import (
     SCALAR,

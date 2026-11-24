@@ -170,8 +170,8 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-from digitalearth.base.spec import LayerSpec
-from digitalearth.three_d.core.layer import drawing_props
+from digitalearth.base.spec import LayerSpec  # noqa: E402
+from digitalearth.three_d.core.layer import drawing_props  # noqa: E402
 
 
 class VolumeMixin(_MixinBase):

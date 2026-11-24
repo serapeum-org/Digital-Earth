@@ -19,9 +19,7 @@ on any other CRS they would silently misalign with the pre-reprojected data laye
 elements touches no network; tiles/coastline geometry is fetched by the renderer at display time.
 """
 
-import warnings
-from collections.abc import Callable, Sequence
-from dataclasses import replace as with_fields
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Self
 
 from loguru import logger
@@ -33,19 +31,13 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
-from digitalearth.base.spec import Encoding, Guide, LayerSpec, Symbology
+from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.core.base import (
     _require_holoviz,
     _skips_off_limb,
     describe_opts,
     held_props,
-)
-from digitalearth.interactive.render.style_fold import (
-    GUIDE_KIND_KEY,
-    GUIDE_LABELS_KEY,
-    fold_guide,
-    split_guide_options,
 )
 
 # #268: `tiles()` once took a provider name, a keyed preset and a raw XYZ URL through one `provider=`. That
@@ -179,7 +171,7 @@ def _provider_description(provider: Any) -> str | None:
 
 #: What `xyzservices` writes into a field the caller has to fill in — `'<insert your apiKey here>'`. It is
 #: the catalog's own marker for a credential, and `TileProvider.requires_token` reads it the same way.
-TOKEN_PLACEHOLDER = "<insert your"
+TOKEN_PLACEHOLDER = "<insert your"  # nosec B105 (xyzservices credential placeholder, not a secret)
 
 
 def _token_fields(provider: Any) -> list:

@@ -31,4 +31,3 @@ hand rather than inventing a span.
 
 The `(1, 2, 3)` a composite maps to its channels when the caller names none. Defined once here so the
 renderers and the animation scan cannot drift apart about what a bare composite means.
-
