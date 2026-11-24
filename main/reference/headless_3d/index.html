@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -5461,7 +5461,7 @@ or <code>wait</code> is not a positive finite number of seconds.</p>
 <a id="__codelineno-0-145" name="__codelineno-0-145"></a>    <span class="c1"># Not `int(side)`: `_check_request` above has already refused anything that is not an `int`, so the</span>
 <a id="__codelineno-0-146" name="__codelineno-0-146"></a>    <span class="c1"># coercion could only ever have been applied to an `int` (review N3).</span>
 <a id="__codelineno-0-147" name="__codelineno-0-147"></a>    <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="n">window_size</span>
-<a id="__codelineno-0-148" name="__codelineno-0-148"></a>    <span class="n">server</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a>    <span class="n">server</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span>  <span class="c1"># nosec B603 (fixed Xvfb command; size validated as int)</span>
 <a id="__codelineno-0-149" name="__codelineno-0-149"></a>        <span class="p">[</span><span class="n">xvfb</span><span class="p">,</span> <span class="n">display</span><span class="p">,</span> <span class="s2">&quot;-screen&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="n">height</span><span class="si">}</span><span class="s2">x24&quot;</span><span class="p">,</span> <span class="s2">&quot;-nolisten&quot;</span><span class="p">,</span> <span class="s2">&quot;tcp&quot;</span><span class="p">],</span>
 <a id="__codelineno-0-150" name="__codelineno-0-150"></a>        <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span><span class="p">,</span>
 <a id="__codelineno-0-151" name="__codelineno-0-151"></a>        <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span><span class="p">,</span>
