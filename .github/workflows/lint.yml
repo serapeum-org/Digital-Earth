@@ -67,7 +67,7 @@ jobs:
       # Pin the resolved version (reproducible CI, and satisfies the supply-chain "lock resolved versions"
       # check); bump deliberately or via dependabot.
       # --only-binary=:all: installs from wheels only, so pip never runs a package's setup scripts.
-      - run: python -m pip install --only-binary=:all: pre-commit==4.5.1
+      - run: "python -m pip install --only-binary=:all: pre-commit==4.5.1"
 
       - name: Run pre-commit hooks
         # --show-diff-on-failure prints exactly what the auto-fixers (ruff-format, end-of-file-fixer, ...)
