@@ -86,6 +86,10 @@ _DEFAULT_ZOOM = 2
 #: height so the embedded map matches the live widget's footprint (the two cannot drift apart).
 _DEFAULT_HEIGHT = 500
 
+#: The mime type of the static export fallback the repr injects, named once so the repr's negotiate/guard/assign
+#: steps cannot drift apart.
+_HTML_MIME = "text/html"
+
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
     "the web tier needs MapLibre GL JS + deck.gl (maplibre). "
@@ -3656,9 +3660,9 @@ class WebMapBase:
         # Add the export fallback into the gap, honouring the same include/exclude negotiation the hook got.
         # render() built one widget; _export_fallback_html builds a second via to_html, because the standalone
         # page needs its own serialization — so the double build is deliberate, not an oversight.
-        if self._wants_mime("text/html", include, exclude) and "text/html" not in data:
+        if self._wants_mime(_HTML_MIME, include, exclude) and _HTML_MIME not in data:
             try:
-                data["text/html"] = self._export_fallback_html()
+                data[_HTML_MIME] = self._export_fallback_html()
             except Exception as error:  # noqa: BLE001 - a successful render must still repr; keep the widget-view
                 # A broken to_html is invisible interactively (the widget-view still carries the cell) and would
                 # surface only as a blank export — a silent re-occurrence of #559. Warn (not debug) so the
