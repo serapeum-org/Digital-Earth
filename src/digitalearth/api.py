@@ -844,6 +844,33 @@ def _mesh_of(data: Any) -> Any:
     return data.mesh
 
 
+def _mesh_values_of(data: Any) -> tuple[Any, str]:
+    """Return the ``(values, location)`` a ``MeshDataset`` shades its 3-D surface by (#557).
+
+    The 3-D tier draws a mesh's geometry from its bare ``Mesh2d`` (:func:`_mesh_of`), but — unlike the
+    interactive and web tiers — it also colours the surface by the plotted variable, the 3-D sibling of static
+    ``tripcolor``. The variable's per-node or per-face values and where they sit come off the same engine-neutral
+    :class:`~digitalearth.base.sources.MeshSource` the static tier reads (``get_source`` defaults to the first
+    variable, or the one the pyramids facade selected), so one extraction serves both. A mesh that carries no
+    data variable shades by nothing and is drawn in the flat ``trimesh`` colour.
+
+    Args:
+        data: The ``MeshDataset`` the mesh branch received.
+
+    Returns:
+        ``(values, location)`` — the value array and ``"node"``/``"face"``, or ``(None, "node")`` when the
+        mesh carries no variable to shade by.
+    """
+    from digitalearth.base.sources import MeshSource, get_source
+
+    if not getattr(data, "data_variable_names", None):
+        return None, "node"
+    source = get_source(data)
+    if not isinstance(source, MeshSource):
+        return None, "node"
+    return source.z.values, source.location
+
+
 def _input_kind(data: PlottableData, caller: str) -> str:
     """Classify a ``quickmap`` input into the base layer kind its geometry draws — the decision, made once.
 
@@ -1961,6 +1988,12 @@ def _quickmap_3d(
                 f"kind={kind!r} is not a renderer for a mesh on backend='3d'; it draws a mesh with "
                 f"'trimesh', one PyVista surface of the mesh's own faces"
             )
+        # Shade the surface by the plotted variable (#557): the geometry comes from the bare `Mesh2d`, the
+        # per-node/face values and their location from the same MeshSource the static tier reads. A caller's
+        # own `values`/`location` (a direct `trimesh` call) wins over the ones derived from the MeshDataset.
+        mesh_values, mesh_location = _mesh_values_of(data)
+        kwargs.setdefault("values", mesh_values)
+        kwargs.setdefault("location", mesh_location)
         scene.trimesh(_mesh_of(data), **kwargs)
     elif family == "raster":
         scene.terrain(data, **kwargs)
