@@ -2430,7 +2430,7 @@ class InteractiveMapBase:
         """
         self.close()
 
-    def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
+    def _repr_mimebundle_(self, **kwargs: Any) -> Any:
         """Render the map inline in notebooks through the HoloViz/Bokeh renderer.
 
         Delegating to the composed element's own ``_repr_mimebundle_`` produced nothing: that hook runs
@@ -2454,9 +2454,9 @@ class InteractiveMapBase:
         draw, and such a real failure must surface at display time, not vanish into a blank cell.
 
         Args:
-            include: The mime types Jupyter asks for, accepted for the Jupyter protocol; the renderer emits
-                the map's own types regardless and IPython filters afterwards, so this is not used here.
-            exclude: The mime types Jupyter asks to leave out, accepted for the same reason and unused.
+            **kwargs: The Jupyter display protocol's ``include``/``exclude`` mime-type hints. The renderer
+                emits the map's own types and IPython post-filters by them after the call, so they are
+                accepted to match the protocol but not read here.
 
         Returns:
             A ``(data, metadata)`` mimebundle of the rendered map — ``data`` carrying the Bokeh ``text/html``
