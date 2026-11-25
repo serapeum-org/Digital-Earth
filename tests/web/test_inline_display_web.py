@@ -37,7 +37,9 @@ def test_repr_carries_a_static_html_fallback_for_export():
     assert "<iframe" in html and "srcdoc=" in html, (
         "the fallback must isolate the standalone page in an iframe so its scripts do not collide"
     )
-    assert "maplibre" in html.lower(), "the fallback must embed the actual MapLibre page"
+    assert "maplibre" in html.lower(), (
+        "the fallback must embed the actual MapLibre page"
+    )
 
 
 def test_repr_still_carries_the_live_widget_view():
@@ -77,3 +79,150 @@ def test_repr_never_raises_when_the_fallback_fails(monkeypatch):
     data = _bundle_data(WebMap()._repr_mimebundle_())
     assert "application/vnd.jupyter.widget-view+json" in data
     assert "text/html" not in data, "a failed fallback is omitted, not half-written"
+
+
+class _FakeWidget:
+    """A stand-in widget whose ``_repr_mimebundle_`` returns a scripted bundle and records its kwargs."""
+
+    def __init__(self, bundle):
+        self._bundle = bundle
+        self.calls = []
+
+    def _repr_mimebundle_(self, include=None, exclude=None):
+        self.calls.append({"include": include, "exclude": exclude})
+        return self._bundle
+
+
+class _HooklessWidget:
+    """A stand-in widget with no ``_repr_mimebundle_`` at all (the ``hook is None`` branch)."""
+
+
+def test_repr_preserves_the_tuple_form_and_metadata(monkeypatch):
+    """A ``(data, metadata)`` bundle keeps its metadata and gains the HTML fallback, still as a tuple.
+
+    Test scenario:
+        A widget whose hook returns the tuple protocol form is merged into without losing the metadata half, and
+        the result stays a 2-tuple so Jupyter still receives the display metadata.
+    """
+    widget = _FakeWidget(({"application/x-demo": 1}, {"meta": "kept"}))
+    monkeypatch.setattr(WebMap, "render", lambda self: widget)
+    bundle = WebMap()._repr_mimebundle_()
+    assert isinstance(bundle, tuple), "the tuple protocol form must be preserved"
+    data, metadata = bundle
+    assert metadata == {"meta": "kept"}, f"metadata dropped: {metadata}"
+    assert data["application/x-demo"] == 1 and "text/html" in data
+
+
+def test_repr_does_not_overwrite_an_existing_html_representation(monkeypatch):
+    """When the widget already offers ``text/html``, the fallback leaves it untouched.
+
+    Test scenario:
+        A hook that already supplies ``text/html`` must win; the export fallback only fills a gap, never clobbers
+        a richer representation the engine produced.
+    """
+    widget = _FakeWidget(
+        {"text/html": "ENGINE-HTML", "application/vnd.jupyter.widget-view+json": {}}
+    )
+    monkeypatch.setattr(WebMap, "render", lambda self: widget)
+    called = []
+    monkeypatch.setattr(
+        WebMap, "_export_fallback_html", lambda self: called.append(1) or "FALLBACK"
+    )
+    data = _bundle_data(WebMap()._repr_mimebundle_())
+    assert data["text/html"] == "ENGINE-HTML", (
+        "an existing text/html must not be overwritten"
+    )
+    assert called == [], (
+        "the fallback must not even be built when text/html already exists"
+    )
+
+
+def test_repr_forwards_include_and_exclude_to_the_widget(monkeypatch):
+    """``include``/``exclude`` are passed through to the widget's hook as keywords.
+
+    Test scenario:
+        Jupyter's mime negotiation reaches the underlying widget unchanged, so the map honours a front-end that
+        asks for or excludes specific mime types.
+    """
+    widget = _FakeWidget({"application/vnd.jupyter.widget-view+json": {}})
+    monkeypatch.setattr(WebMap, "render", lambda self: widget)
+    WebMap()._repr_mimebundle_(include=["a"], exclude=["b"])
+    assert widget.calls == [{"include": ["a"], "exclude": ["b"]}], (
+        f"kwargs not forwarded: {widget.calls}"
+    )
+
+
+def test_repr_handles_a_widget_without_the_hook(monkeypatch):
+    """A widget with no ``_repr_mimebundle_`` still yields a bundle carrying the HTML fallback.
+
+    Test scenario:
+        The ``hook is None`` branch starts from an empty bundle and the export fallback alone makes the cell
+        displayable, rather than returning nothing.
+    """
+    monkeypatch.setattr(WebMap, "render", lambda self: _HooklessWidget())
+    monkeypatch.setattr(
+        WebMap, "_export_fallback_html", lambda self: "<iframe srcdoc='x'></iframe>"
+    )
+    data = _bundle_data(WebMap()._repr_mimebundle_())
+    assert data == {"text/html": "<iframe srcdoc='x'></iframe>"}, (
+        f"unexpected bundle: {data}"
+    )
+
+
+def test_export_fallback_html_escapes_the_document():
+    """The standalone page is HTML-escaped inside ``srcdoc`` so it is a valid, non-injecting attribute.
+
+    Test scenario:
+        A raw ``<!DOCTYPE html>`` is never emitted unescaped into the fragment; its ``<`` and ``"`` become
+        ``&lt;``/``&quot;`` entities, which is what makes the iframe srcdoc self-contained.
+    """
+    fragment = WebMap(center=(0.0, 0.0), zoom=2)._export_fallback_html()
+    assert fragment.startswith('<iframe srcdoc="') and fragment.rstrip().endswith(
+        "></iframe>"
+    )
+    assert "&lt;!DOCTYPE html&gt;" in fragment, (
+        "the document body must be entity-escaped inside srcdoc"
+    )
+    assert "<!DOCTYPE html>" not in fragment, (
+        "an unescaped document would break out of the srcdoc attribute"
+    )
+
+
+def test_export_fallback_html_uses_the_configured_height():
+    """The iframe is sized to the map's configured pixel height.
+
+    Test scenario:
+        A map built with ``height=321`` produces an iframe styled ``height:321px``, so the embedded map matches
+        the widget's footprint.
+    """
+    fragment = WebMap(height=321)._export_fallback_html()
+    assert "height:321px" in fragment, (
+        f"configured height not applied: {fragment[:120]}"
+    )
+
+
+def test_export_fallback_html_defaults_height_when_unset():
+    """A map with ``height=None`` falls back to a sensible default so the iframe is never zero-height.
+
+    Test scenario:
+        ``height=None`` (MapLibre's own default) yields ``height:500px`` in the iframe style rather than an
+        empty or invalid length.
+    """
+    fragment = WebMap(height=None)._export_fallback_html()
+    assert "height:500px" in fragment, f"default height not applied: {fragment[:120]}"
+
+
+def test_export_fallback_html_propagates_missing_engine(monkeypatch):
+    """Without the ``web`` extra, building the fallback raises ``ImportError`` (which the repr then swallows).
+
+    Test scenario:
+        ``to_html`` raising ``ImportError`` when maplibre is absent propagates out of ``_export_fallback_html`` —
+        the contract the repr relies on to omit the fallback and keep only the widget-view.
+    """
+
+    def _no_engine(self, *args, **kwargs):
+        raise ImportError("install digitalearth[web]")
+
+    monkeypatch.setattr(WebMap, "to_html", _no_engine)
+    with pytest.raises(ImportError, match=r"digitalearth\[web\]"):
+        WebMap()._export_fallback_html()
