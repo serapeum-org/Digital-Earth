@@ -78,3 +78,58 @@ def test_trimesh_without_values_stays_flat(ugrid_mesh):
         assert VALUE not in surface.cell_data and VALUE not in surface.point_data
     finally:
         scene.close()
+
+
+def test_trimesh_refuses_a_wrong_length_value_array(ugrid_mesh):
+    """A values array that doesn't match the mesh is refused with a clear message, not a cryptic IndexError (M1).
+
+    Test scenario:
+        The two-face fixture fan-cuts into three triangles, so a face-located ``trimesh`` needs one value per
+        fan-triangle; passing one per face (two values) names both counts instead of raising deep in numpy.
+    """
+    mesh = ugrid_mesh("face").mesh
+    scene = Scene3D(off_screen=True)
+    try:
+        with pytest.raises(ValueError, match="one value per"):
+            scene.trimesh(mesh, values=np.array([10.0, 20.0]), location="face")
+    finally:
+        scene.close()
+
+
+def test_a_graduated_scheme_shades_the_mesh_by_class_index(ugrid_mesh):
+    """A categorical/graduated ``scheme`` replaces the surface scalars with class indices and keys them (M2, L5).
+
+    Test scenario:
+        A node-located mesh (``zs=[1..5]``) shaded ``scheme="categorical"`` reaches the surface as class
+        indices (one per distinct value, a small integer range), the style carries ``n_colors``, and the layer
+        publishes a colour encoding with a shown colorbar guide.
+    """
+    dataset = ugrid_mesh("node")
+    scene = quickmap(dataset, backend="3d", scheme="categorical")
+    try:
+        layer_id = scene.layer_ids[0]
+        surface = scene.renderer.drawn[layer_id][0]
+        indices = np.asarray(surface.point_data[VALUE])
+        assert set(np.unique(indices).tolist()) == {0.0, 1.0, 2.0, 3.0, 4.0}, indices
+        encoding = scene.get_layer(layer_id).symbology.encoding("color")
+        assert encoding is not None, "a shaded mesh must publish a colour encoding"
+        guide = scene.get_layer(layer_id).symbology.guide()
+        assert guide is not None and guide.show, guide
+    finally:
+        scene.close()
+
+
+def test_a_crs_mesh_sets_the_scene_crs_without_a_basemap(ugrid_mesh):
+    """Plotting a CRS-carrying mesh adopts its CRS as the scene's, even with no basemap (L1, intended).
+
+    Test scenario:
+        The seam conveys the MeshDataset's CRS as ``source_crs``, so a plain ``plot(backend="3d")`` on a 28992
+        mesh comes back drawn in 28992 — the scene knows its CRS for any later layer — rather than CRS-less.
+    """
+    from digitalearth.base.spec.bounds import same_crs
+
+    scene = quickmap(ugrid_mesh("node", epsg=28992), backend="3d")
+    try:
+        assert same_crs(scene.display_crs, 28992), scene.display_crs
+    finally:
+        scene.close()

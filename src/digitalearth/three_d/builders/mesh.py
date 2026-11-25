@@ -105,8 +105,10 @@ class MeshMixin(_MixinBase):
             mesh: A pyramids ``Mesh2d`` — anything exposing ``node_x`` / ``node_y`` / ``fan_triangles``, and
                 optionally a ``crs`` to reproject from. This is what
                 :func:`~digitalearth.api._mesh_of` hands over when ``quickmap`` routes a ``MeshDataset`` here.
-            values: The per-node or per-face values to shade the surface by; ``None`` (default) draws it in
-                the flat ``color``. ``quickmap`` passes the plotted variable's values here.
+            values: The values to shade the surface by — one per node, or one per **fan-triangle** for
+                ``location="face"`` (the shape ``quickmap`` passes, having spread a ``MeshDataset``'s per-face
+                values to its triangles); ``None`` (default) draws the flat ``color``. A length that matches
+                neither the node count nor the fan-triangle count is refused, naming both.
             location: ``"node"`` (the default) or ``"face"`` — whether ``values`` sit on the nodes (smooth
                 shading) or on the fan triangles (flat per-face shading), aligned with the geometry's
                 drop/re-index of off-view faces.
@@ -135,7 +137,9 @@ class MeshMixin(_MixinBase):
                 it by kind (``trimesh-1``, ``trimesh-2``, …), and a name already on the scene is suffixed.
             visible: Whether the layer is drawn when added. ``False`` adds it hidden but described, so
                 ``set_visible(id, True)`` later reveals it without a rebuild.
-            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`. On a value-shaded mesh ``scalars`` and
+                ``lighting`` are set by the builder (the values are the scalars, drawn unlit), so passing them
+                here collides with those; shade with ``values``/``cmap`` and leave them alone.
 
         Returns:
             The registered actor, or ``None`` when the mesh placed no drawable face (see ``strict``).
@@ -349,8 +353,18 @@ def _mesh_surface(
         # keeps its colours aligned with the part that drew. `draw_trimesh` classifies them in place (#557).
         column = np.asarray(values, dtype="float64")
         if location == "face":
+            if column.shape[0] != len(drawable):
+                raise ValueError(
+                    f"location='face' needs one value per fan-triangle ({len(drawable)}), got "
+                    f"{column.shape[0]}; quickmap spreads a MeshDataset's face values to triangles, so a "
+                    f"direct call must pass one value per fan-triangle too (Mesh2d.fan_triangles)"
+                )
             surface.cell_data[VALUE] = column[drawable]
         else:
+            if column.shape[0] != len(finite):
+                raise ValueError(
+                    f"location='node' needs one value per node ({len(finite)}), got {column.shape[0]}"
+                )
             surface.point_data[VALUE] = column[used]
     return surface
 
