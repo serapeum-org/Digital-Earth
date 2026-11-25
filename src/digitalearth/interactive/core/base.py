@@ -2437,32 +2437,44 @@ class InteractiveMapBase:
         :func:`holoviews.Store.render`, whose display hooks are registered only by ``hv.extension`` inside a
         live IPython kernel. Outside one — a direct call, or ``nbconvert`` — it returned ``{}`` and a
         notebook showed a bare text repr rather than the map (#556). Building the payload through
-        ``holoviews.renderer("bokeh").components`` does not depend on those hooks, so it renders either way;
-        loading the extension (idempotent) arms the one-time BokehJS load the payload needs on first display.
+        ``holoviews.renderer("bokeh").components`` does not depend on those hooks, so it renders either way,
+        and the ``application/vnd.holoviews_exec`` half of the bundle loads BokehJS on demand — no
+        ``hv.extension`` call, which would flip the process-global current backend (the side effect review
+        M15 engineered away) and emit a loader banner from a hook that should be side-effect-free.
+
+        Both ``render()`` and the renderer set :attr:`holoviews.Store.current_backend` as a side effect, so
+        the previous backend is captured up front and restored in a ``finally`` — displaying a map must not
+        change the backend the rest of the kernel renders through.
+
+        An empty map is answered by its own precondition rather than by catching the engine's
+        ``SkipRendering``: that signal also fires for a **non-empty** map the bokeh backend cannot draw, and
+        such a real failure must surface at display time, not vanish into a blank cell.
 
         Args:
             include: The mime types Jupyter asks for, accepted for the Jupyter protocol; the renderer emits
-                the map's own types regardless, so this is not used to filter them.
+                the map's own types regardless and IPython filters afterwards, so this is not used here.
             exclude: The mime types Jupyter asks to leave out, accepted for the same reason and unused.
 
         Returns:
             A ``(data, metadata)`` mimebundle of the rendered map — ``data`` carrying the Bokeh ``text/html``
-            payload — or an empty dict when the ``interactive`` extra is missing, or when the map is empty
-            (so a bare repr in a notebook degrades to no output instead of raising).
+            payload — or an empty dict when the ``interactive`` extra is missing or the map has no layers (so
+            a bare repr in a notebook degrades to no output instead of raising).
         """
         try:
             import holoviews as hv
-            from holoviews.core.options import SkipRendering
-
-            obj = self.render()
+            from holoviews.core.options import Store
         except ImportError:
             return {}
-        # Arm the one-time BokehJS load the components payload relies on; idempotent, so repeated displays
-        # do not reload it.
-        hv.extension("bokeh")
+        previous_backend = Store.current_backend
         try:
+            obj = self.render()
+            if not self.layers:
+                # Nothing to draw: the renderer raises SkipRendering on a blank overlay, and that same
+                # signal masks a genuinely unrenderable non-empty map — so answer the empty case here and
+                # let a real SkipRendering propagate and be seen.
+                return {}
             return hv.renderer("bokeh").components(obj)
-        except SkipRendering:
-            # An empty map has nothing for the engine to draw; degrade to no output rather than surfacing
-            # the engine's "could not plot any Elements" as a notebook traceback.
+        except ImportError:
             return {}
+        finally:
+            Store.current_backend = previous_backend

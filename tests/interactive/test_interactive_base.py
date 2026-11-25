@@ -389,6 +389,47 @@ class TestShowAndRepr:
         data = bundle[0] if isinstance(bundle, tuple) else bundle
         assert data, f"include/exclude must not empty the bundle, got {data!r}"
 
+    def test_repr_mimebundle_does_not_flip_the_global_backend(self):
+        """Displaying a map must not mutate the process-global HoloViews backend (review M15, #556 R1-M1).
+
+        Test scenario:
+            Both ``render()`` and the bokeh renderer set ``Store.current_backend`` as a side effect. Since
+            the hook runs on every inline display, it must restore the backend, or the rest of the kernel
+            silently starts rendering through bokeh — the global flip the codebase deliberately engineered
+            away.
+        """
+        import holoviews as hv
+        from holoviews.core.options import Store
+
+        hv.renderer("matplotlib")
+        Store.current_backend = "matplotlib"
+        InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))._repr_mimebundle_()
+        assert Store.current_backend == "matplotlib", (
+            f"display flipped the global backend to {Store.current_backend!r}"
+        )
+
+    def test_repr_mimebundle_surfaces_skiprendering_on_a_nonempty_map(
+        self, monkeypatch
+    ):
+        """A non-empty map the engine cannot draw surfaces the error, not a silent blank (#556 R1-M2).
+
+        Test scenario:
+            ``SkipRendering`` fires both for an empty overlay and for a non-empty map whose element bokeh
+            cannot render. The empty case is handled by precondition; a ``SkipRendering`` from a non-empty
+            map must propagate so the failure is visible rather than vanishing to ``{}``.
+        """
+        import holoviews as hv
+        from holoviews.core.options import SkipRendering
+
+        class _Boom:
+            def components(self, *args, **kwargs):
+                raise SkipRendering("non-empty but unrenderable")
+
+        monkeypatch.setattr(hv, "renderer", lambda backend: _Boom())
+        drawn = InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))
+        with pytest.raises(SkipRendering):
+            drawn._repr_mimebundle_()
+
 
 class TestConstructionDefaults:
     """Constructor defaults and the reproject predicate (no engine needed)."""
