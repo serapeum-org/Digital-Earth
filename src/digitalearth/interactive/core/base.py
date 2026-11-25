@@ -2430,20 +2430,57 @@ class InteractiveMapBase:
         """
         self.close()
 
-    def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
-        """Render the map inline in notebooks by delegating to the composed HoloViews object.
+    def _repr_mimebundle_(self, **kwargs: Any) -> Any:
+        """Render the map inline in notebooks through the HoloViz/Bokeh renderer.
+
+        Delegating to the composed element's own ``_repr_mimebundle_`` produced nothing: that hook runs
+        :func:`holoviews.Store.render`, whose display hooks are registered only by ``hv.extension`` inside a
+        live IPython kernel. Outside one — a direct call, or ``nbconvert`` — it returned ``{}`` and a
+        notebook showed a bare text repr rather than the map (#556). Building the payload through
+        ``holoviews.renderer("bokeh").components`` does not depend on those hooks, so the hook can produce it
+        itself.
+
+        The ``components`` payload carries only a comm handshake, **not** BokehJS, so the browser draws the
+        map only once BokehJS is on the page. ``hv.extension("bokeh")`` loads it (idempotently — the library
+        goes out once per session), which is why the hook calls it rather than leaving the caller to. The
+        catch is that ``hv.extension`` is :func:`holoviews.Store.set_current_backend`, so it — and the
+        renderer — flip the process-global current backend; both ``render()`` and the renderer do too. A
+        display must not change the backend the rest of the kernel renders through (review M15), so the prior
+        backend is captured up front and restored in a ``finally``; the one-time JS load survives the
+        restore, the lasting flip does not.
+
+        An empty map is answered by its own ``not self.layers`` precondition rather than by catching the
+        engine's ``SkipRendering``: that signal also fires for a **non-empty** map the bokeh backend cannot
+        draw, and such a real failure must surface at display time, not vanish into a blank cell.
 
         Args:
-            include: The mime types Jupyter asks for, passed through untouched.
-            exclude: The mime types Jupyter asks to be left out, passed through untouched.
+            **kwargs: The Jupyter display protocol's ``include``/``exclude`` mime-type hints. The renderer
+                emits the map's own types and IPython post-filters by them after the call, so they are
+                accepted to match the protocol but not read here.
 
         Returns:
-            The mimebundle of the rendered object, or an empty dict when the engine is missing
-            (so a bare repr in a notebook degrades gracefully instead of raising).
+            A ``(data, metadata)`` mimebundle of the rendered map — ``data`` carrying the Bokeh ``text/html``
+            payload — or an empty dict when the ``interactive`` extra is missing or the map has no layers (so
+            a bare repr in a notebook degrades to no output instead of raising).
         """
         try:
-            obj = self.render()
+            import holoviews as hv
+            from holoviews.core.options import Store
         except ImportError:
             return {}
-        hook = getattr(obj, "_repr_mimebundle_", None)
-        return hook(include, exclude) if hook is not None else {}
+        previous_backend = Store.current_backend
+        try:
+            obj = self.render()
+            if not self.layers:
+                # Nothing to draw: the renderer raises SkipRendering on a blank overlay, and that same
+                # signal masks a genuinely unrenderable non-empty map — so answer the empty case here and
+                # let a real SkipRendering propagate and be seen.
+                return {}
+            # Put BokehJS on the page; the components payload below carries no loader of its own, so without
+            # this the cell renders blank in a session that has not otherwise loaded the engine.
+            hv.extension("bokeh")
+            return hv.renderer("bokeh").components(obj)
+        except ImportError:
+            return {}
+        finally:
+            Store.current_backend = previous_backend

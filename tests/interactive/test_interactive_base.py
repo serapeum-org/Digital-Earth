@@ -83,6 +83,19 @@ class TestLazyImport:
         monkeypatch.setitem(sys.modules, "geoviews", None)
         assert InteractiveMap()._repr_mimebundle_() == {}
 
+    def test_repr_mimebundle_degrades_when_holoviews_itself_is_absent(
+        self, monkeypatch
+    ):
+        """The repr hook's own ``import holoviews`` guard degrades to ``{}`` (#556).
+
+        Test scenario:
+            The geoviews-absent case above reaches the guard through ``render()``; this one makes
+            ``holoviews`` itself unimportable, so the hook's top-level import fails and it returns ``{}``
+            before touching the backend or a layer — covering the other ``ImportError`` branch.
+        """
+        monkeypatch.setitem(sys.modules, "holoviews", None)
+        assert InteractiveMap().add_layer(object())._repr_mimebundle_() == {}
+
 
 class TestImportGuardCoversInteractive:
     """DX.3 negative fixture: the M1 guard already polices ``interactive/``."""
@@ -343,32 +356,114 @@ class TestShowAndRepr:
         el = hv.Points([(0, 0)])
         assert InteractiveMap().add_layer(el).show() is el
 
-    def test_repr_mimebundle_delegates_to_element_hook(self):
-        """The map's mimebundle is the rendered element's mimebundle.
+    def test_repr_mimebundle_renders_a_real_bokeh_payload(self):
+        """With the engine installed, the map's mimebundle carries a real Bokeh HTML payload (#556).
 
         Test scenario:
-            A single registered element exposing ``_repr_mimebundle_`` is what ``render()``
-            returns, so the map must delegate to that hook and return its result.
+            The old code delegated to the composed element's own ``_repr_mimebundle_``, which runs
+            ``holoviews.Store.render`` — empty outside a live IPython kernel (a direct call, ``nbconvert``)
+            — so a notebook showed a bare text repr instead of the map. Rendering through
+            ``holoviews.renderer("bokeh").components`` builds the Bokeh payload regardless of the kernel.
         """
+        import holoviews as hv
 
-        class _FakeElement:
-            def _repr_mimebundle_(self, include=None, exclude=None):
-                return {"text/plain": "fake"}
+        drawn = InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))
+        bundle = drawn._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert data, f"expected a non-empty mimebundle, got {data!r}"
+        assert "text/html" in data, (
+            f"expected a text/html payload, keys were {sorted(data)}"
+        )
+        assert data["text/html"].strip(), "the text/html payload must not be blank"
 
-        bundle = InteractiveMap().add_layer(_FakeElement())._repr_mimebundle_()
-        assert bundle == {"text/plain": "fake"}, (
-            f"hook result not passed through: {bundle}"
+    def test_repr_mimebundle_of_an_empty_map_degrades_to_empty(self):
+        """An empty map has nothing to draw, so its mimebundle is ``{}`` rather than a raise (#556).
+
+        Test scenario:
+            Rendering a blank overlay through the Bokeh renderer raises HoloViews' ``SkipRendering``
+            ("could not plot any Elements"). A bare repr must swallow that into an empty bundle so a
+            notebook shows no output instead of a traceback.
+        """
+        assert InteractiveMap()._repr_mimebundle_() == {}, (
+            "an empty map must repr to an empty bundle"
         )
 
-    def test_repr_mimebundle_without_hook_is_empty(self):
-        """An element without a mimebundle hook degrades to an empty bundle.
+    def test_repr_mimebundle_accepts_include_exclude(self):
+        """Jupyter passes ``include``/``exclude``; the hook accepts them and still returns the payload (#556).
 
         Test scenario:
-            ``render()`` returning an object with no ``_repr_mimebundle_`` attribute must
-            yield ``{}`` rather than raising.
+            The renderer emits the map's own mime types regardless of ``include``/``exclude``, so passing
+            them must neither raise nor empty the bundle.
         """
-        bundle = InteractiveMap().add_layer(object())._repr_mimebundle_()
-        assert bundle == {}, f"expected empty bundle for hookless element, got {bundle}"
+        import holoviews as hv
+
+        drawn = InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))
+        bundle = drawn._repr_mimebundle_(include=["text/html"], exclude=None)
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert data, f"include/exclude must not empty the bundle, got {data!r}"
+
+    def test_repr_mimebundle_does_not_flip_the_global_backend(self):
+        """Displaying a map must not mutate the process-global HoloViews backend (review M15, #556 R1-M1).
+
+        Test scenario:
+            Both ``render()`` and the bokeh renderer set ``Store.current_backend`` as a side effect. Since
+            the hook runs on every inline display, it must restore the backend, or the rest of the kernel
+            silently starts rendering through bokeh — the global flip the codebase deliberately engineered
+            away.
+        """
+        import holoviews as hv
+        from holoviews.core.options import Store
+
+        hv.renderer("matplotlib")
+        original = Store.current_backend
+        Store.current_backend = "matplotlib"
+        try:
+            InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))._repr_mimebundle_()
+            assert Store.current_backend == "matplotlib", (
+                f"display flipped the global backend to {Store.current_backend!r}"
+            )
+        finally:
+            Store.current_backend = original
+
+    def test_repr_mimebundle_arms_the_bokehjs_notebook_load(self, monkeypatch):
+        """The hook must arm the BokehJS notebook load, or a non-blank bundle still renders blank (#556 R2).
+
+        Test scenario:
+            The ``components`` payload carries only a comm handshake, no BokehJS loader, so the map draws
+            only once BokehJS is loaded into the page. The hook loads it via ``hv.extension("bokeh")``. A
+            regression dropping that call would ship a non-blank-but-non-rendering bundle that no HTML-string
+            assertion catches, so this spies on the load call directly.
+        """
+        import holoviews as hv
+
+        calls = []
+        monkeypatch.setattr(hv, "extension", lambda *a, **k: calls.append(a))
+        InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))._repr_mimebundle_()
+        assert ("bokeh",) in calls, (
+            f"the hook must load BokehJS via hv.extension('bokeh'); recorded calls: {calls}"
+        )
+
+    def test_repr_mimebundle_surfaces_skiprendering_on_a_nonempty_map(
+        self, monkeypatch
+    ):
+        """A non-empty map the engine cannot draw surfaces the error, not a silent blank (#556 R1-M2).
+
+        Test scenario:
+            ``SkipRendering`` fires both for an empty overlay and for a non-empty map whose element bokeh
+            cannot render. The empty case is handled by precondition; a ``SkipRendering`` from a non-empty
+            map must propagate so the failure is visible rather than vanishing to ``{}``.
+        """
+        import holoviews as hv
+        from holoviews.core.options import SkipRendering
+
+        class _Boom:
+            def components(self, *args, **kwargs):
+                raise SkipRendering("non-empty but unrenderable")
+
+        monkeypatch.setattr(hv, "renderer", lambda backend: _Boom())
+        drawn = InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))
+        with pytest.raises(SkipRendering):
+            drawn._repr_mimebundle_()
 
 
 class TestConstructionDefaults:
