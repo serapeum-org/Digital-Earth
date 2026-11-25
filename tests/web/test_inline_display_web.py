@@ -307,11 +307,15 @@ def test_temporal_map_repr_falls_back_to_a_single_frame():
     """A temporal map still gets a viewable export fallback — a single-frame snapshot, not the live slider.
 
     Test scenario:
-        A ``timeslider`` map (whose live view is a slider composite) reprs with exactly one ``<iframe>`` export
-        fallback, confirming the static export is a single map frame (an interactive slider cannot survive a
-        kernel-less export) rather than nothing at all.
+        A ``timeslider`` map's live view is the slider composite (a ``VBox``, not a bare ``MapWidget``), but its
+        export fallback embeds only the bare map: the unescaped inner document carries the map and carries no
+        slider control, since an interactive time-slider cannot survive a kernel-less export. Asserting on the
+        unescaped inner document (not the always-single outer ``<iframe>`` wrapper) is what gives this teeth.
     """
+    import html as html_
+
     import geopandas as gpd
+    from maplibre.ipywidget import MapWidget
     from shapely.geometry import Polygon
 
     geoms = [Polygon([(i, 0), (i + 1, 0), (i + 1, 1)]) for i in range(6)]
@@ -324,12 +328,33 @@ def test_temporal_map_repr_falls_back_to_a_single_frame():
     assert m._temporal_times() == [2000, 2010, 2020], (
         "fixture must be a genuinely temporal map"
     )
+    assert not isinstance(m.render(), MapWidget), (
+        "a temporal map's live view is the slider composite, not a bare MapWidget"
+    )
     data = _bundle_data(m._repr_mimebundle_())
     assert "text/html" in data, (
         "a temporal map must still leave a viewable export fallback"
     )
-    assert data["text/html"].count("<iframe") == 1, (
-        "the static fallback is a single map frame"
+    inner = html_.unescape(data["text/html"].split('srcdoc="', 1)[1].rsplit('"', 1)[0])
+    assert "maplibre" in inner.lower(), "the static fallback must embed the map itself"
+    assert "slider" not in inner.lower(), (
+        "the static export is a single frame: the interactive time-slider is not carried into a kernel-less export"
+    )
+
+
+def test_repr_degrades_a_malformed_hook_return(monkeypatch):
+    """A hook returning neither a dict nor a 2-tuple degrades to the fallback instead of raising from the repr.
+
+    Test scenario:
+        A widget whose ``_repr_mimebundle_`` returns a 1-tuple (a contract violation) does not crash the repr on
+        the unpack; the bundle degrades to just the export fallback, upholding "a successful render must repr".
+    """
+    widget = _FakeWidget(("only-one-element",))
+    monkeypatch.setattr(WebMap, "render", lambda self: widget)
+    monkeypatch.setattr(WebMap, "_export_fallback_html", lambda self: "FB")
+    data = _bundle_data(WebMap()._repr_mimebundle_())
+    assert data == {"text/html": "FB"}, (
+        f"a malformed hook return must degrade, not raise: {data}"
     )
 
 
