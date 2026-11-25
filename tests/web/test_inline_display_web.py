@@ -226,3 +226,130 @@ def test_export_fallback_html_propagates_missing_engine(monkeypatch):
     monkeypatch.setattr(WebMap, "to_html", _no_engine)
     with pytest.raises(ImportError, match=r"digitalearth\[web\]"):
         WebMap()._export_fallback_html()
+
+
+def test_repr_respects_exclude_and_include_for_the_fallback(monkeypatch):
+    """The injected fallback honours Jupyter's ``exclude``/``include`` mime negotiation, like the widget hook.
+
+    Test scenario:
+        ``exclude=["text/html"]`` and a non-empty ``include`` that omits ``text/html`` both suppress the
+        fallback; ``include`` naming ``text/html`` (or no hints) keeps it. The real fallback is stubbed so the
+        test isolates the negotiation, not the HTML build.
+    """
+    widget = _FakeWidget({"application/vnd.jupyter.widget-view+json": {}})
+    monkeypatch.setattr(WebMap, "render", lambda self: widget)
+    monkeypatch.setattr(WebMap, "_export_fallback_html", lambda self: "FALLBACK")
+
+    excluded = _bundle_data(WebMap()._repr_mimebundle_(exclude=["text/html"]))
+    assert "text/html" not in excluded, "exclude must suppress the injected fallback"
+
+    narrowed = _bundle_data(
+        WebMap()._repr_mimebundle_(include=["application/vnd.jupyter.widget-view+json"])
+    )
+    assert "text/html" not in narrowed, (
+        "a non-empty include that omits text/html must suppress it"
+    )
+
+    asked = _bundle_data(WebMap()._repr_mimebundle_(include=["text/html"]))
+    assert asked.get("text/html") == "FALLBACK", (
+        "include naming text/html must keep the fallback"
+    )
+
+    default = _bundle_data(WebMap()._repr_mimebundle_())
+    assert default.get("text/html") == "FALLBACK", "no hints must keep the fallback"
+
+
+def test_repr_keeps_a_tuple_even_when_metadata_is_none(monkeypatch):
+    """A widget that returns the tuple form keeps that shape, so the repr round-trips the protocol faithfully.
+
+    Test scenario:
+        A hook returning ``(data, None)`` yields a tuple back (not a bare dict), preserving exactly what the
+        widget declared while still carrying the injected fallback.
+    """
+    widget = _FakeWidget(({"application/vnd.jupyter.widget-view+json": {}}, None))
+    monkeypatch.setattr(WebMap, "render", lambda self: widget)
+    monkeypatch.setattr(WebMap, "_export_fallback_html", lambda self: "FALLBACK")
+    bundle = WebMap()._repr_mimebundle_()
+    assert isinstance(bundle, tuple), (
+        "a tuple-returning widget must round-trip as a tuple"
+    )
+    data, metadata = bundle
+    assert metadata is None and data["text/html"] == "FALLBACK"
+
+
+def test_repr_logs_a_swallowed_fallback_error(monkeypatch):
+    """A failed fallback is logged at debug level, so a silently-blank export is at least discoverable.
+
+    Test scenario:
+        ``to_html`` raising leaves the widget-view intact and omits ``text/html`` (the repr never raises), and a
+        debug log records the swallowed error rather than it vanishing with a bare ``pass``.
+    """
+    from loguru import logger
+
+    records = []
+    sink_id = logger.add(records.append, level="DEBUG")
+    try:
+        monkeypatch.setattr(
+            WebMap,
+            "to_html",
+            lambda self, *a, **k: (_ for _ in ()).throw(RuntimeError("boom-xyz")),
+        )
+        data = _bundle_data(WebMap()._repr_mimebundle_())
+    finally:
+        logger.remove(sink_id)
+    assert "text/html" not in data, "a failed fallback is still omitted"
+    assert any("boom-xyz" in str(record) for record in records), (
+        "the swallowed fallback error must be logged, not discarded silently"
+    )
+
+
+def test_temporal_map_repr_falls_back_to_a_single_frame():
+    """A temporal map still gets a viewable export fallback — a single-frame snapshot, not the live slider.
+
+    Test scenario:
+        A ``timeslider`` map (whose live view is a slider composite) reprs with exactly one ``<iframe>`` export
+        fallback, confirming the static export is a single map frame (an interactive slider cannot survive a
+        kernel-less export) rather than nothing at all.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    geoms = [Polygon([(i, 0), (i + 1, 0), (i + 1, 1)]) for i in range(6)]
+    gdf = gpd.GeoDataFrame(
+        {"time": [2000, 2000, 2010, 2010, 2020, 2020], "pop": range(6)},
+        geometry=geoms,
+        crs=4326,
+    )
+    m = WebMap().timeslider(gdf, kdim="time", column="pop")
+    assert m._temporal_times() == [2000, 2010, 2020], (
+        "fixture must be a genuinely temporal map"
+    )
+    data = _bundle_data(m._repr_mimebundle_())
+    assert "text/html" in data, (
+        "a temporal map must still leave a viewable export fallback"
+    )
+    assert data["text/html"].count("<iframe") == 1, (
+        "the static fallback is a single map frame"
+    )
+
+
+def test_export_fallback_html_escapes_a_breakout_payload(monkeypatch):
+    """A document containing a ``srcdoc`` breakout payload is entity-escaped, closing the injection vector.
+
+    Test scenario:
+        ``to_html`` returning a page with ``"></iframe><script>`` yields a fragment with a single ``srcdoc="..."``
+        boundary and the payload entity-escaped, so the embedded document cannot break out of the attribute.
+    """
+    payload = '"></iframe><script>alert(1)</script>'
+    monkeypatch.setattr(
+        WebMap, "to_html", lambda self, *a, **k: f"<html>{payload}</html>"
+    )
+    fragment = WebMap()._export_fallback_html()
+    assert fragment.count('srcdoc="') == 1, "exactly one srcdoc attribute boundary"
+    assert "</iframe>" == fragment[-len("</iframe>") :], (
+        "the only </iframe> is the real closer"
+    )
+    assert fragment.count("<script>") == 0, (
+        "the breakout payload must be entity-escaped, not live"
+    )
+    assert "&lt;script&gt;" in fragment and "&quot;" in fragment
