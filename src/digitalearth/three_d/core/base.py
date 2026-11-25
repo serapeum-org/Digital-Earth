@@ -2717,11 +2717,12 @@ class Scene3DBase:
         import io
 
         try:
-            frame = self.screenshot()
-        except Exception:  # noqa: BLE001 - a repr must never raise; degrade to the text repr
-            return None
-        from PIL import Image
+            from PIL import Image
 
-        buffer = io.BytesIO()
-        Image.fromarray(frame).save(buffer, format="PNG")
-        return buffer.getvalue()
+            buffer = io.BytesIO()
+            Image.fromarray(self.screenshot()).save(buffer, format="PNG")
+            return buffer.getvalue()
+        except Exception:  # noqa: BLE001 - a repr must never raise; degrade to the text repr
+            # Covers the whole render→encode path: a display-less host that never set `pyvista.OFF_SCREEN`,
+            # or a frame PIL cannot encode. Returning None makes the notebook fall back to the text repr.
+            return None
