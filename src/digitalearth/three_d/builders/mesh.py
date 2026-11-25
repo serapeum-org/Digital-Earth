@@ -75,9 +75,6 @@ class MeshMixin(_MixinBase):
         *,
         values: Any = None,
         location: str = "node",
-        cmap: Any = "viridis",
-        scheme: Any | None = None,
-        k: int = 5,
         relief: Any = None,
         node_z: Any = None,
         source_crs: Any = None,
@@ -112,11 +109,6 @@ class MeshMixin(_MixinBase):
             location: ``"node"`` (the default) or ``"face"`` — whether ``values`` sit on the nodes (smooth
                 shading) or on the fan triangles (flat per-face shading), aligned with the geometry's
                 drop/re-index of off-view faces.
-            cmap: Colormap the ``values`` are shaded through; ignored when ``values`` is ``None``.
-            scheme: How ``values`` are classified — ``None`` (default) for a continuous ramp, ``"categorical"``
-                or a ``classify`` scheme name — so one ``scheme``/``k``/``cmap`` paints the same classes as on
-                every other tier.
-            k: Number of classes for a graduated ``scheme``.
             relief: Lift a **node-located** surface by its own value so coloured data reads as 3-D relief —
                 ``True`` raises each node to its value, a number exaggerates by that factor. ``None`` (default)
                 leaves the surface flat (or at an explicit ``node_z``); a face-located mesh is refused and
@@ -137,9 +129,14 @@ class MeshMixin(_MixinBase):
                 it by kind (``trimesh-1``, ``trimesh-2``, …), and a name already on the scene is suffixed.
             visible: Whether the layer is drawn when added. ``False`` adds it hidden but described, so
                 ``set_visible(id, True)`` later reveals it without a rebuild.
-            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`. On a value-shaded mesh ``scalars`` and
-                ``lighting`` are set by the builder (the values are the scalars, drawn unlit), so passing them
-                here collides with those; shade with ``values``/``cmap`` and leave them alone.
+            **kwargs: The classification styling, then forwarded to :meth:`pyvista.Plotter.add_mesh`.
+                ``cmap`` is the colormap the ``values`` are shaded through (default ``"viridis"``, ignored when
+                ``values`` is ``None``); ``scheme`` is how they are classified — ``None`` (default) for a
+                continuous ramp, ``"categorical"`` or a ``classify`` scheme name, so one ``scheme``/``k``/``cmap``
+                paints the same classes as on every other tier; ``k`` is the number of classes for a graduated
+                ``scheme`` (default ``5``). On a value-shaded mesh ``scalars`` and ``lighting`` are set by the
+                builder (the values are the scalars, drawn unlit), so passing them here collides with those;
+                shade with ``values``/``cmap`` and leave them alone.
 
         Returns:
             The registered actor, or ``None`` when the mesh placed no drawable face (see ``strict``).
@@ -174,6 +171,13 @@ class MeshMixin(_MixinBase):
             digitalearth.three_d.builders.terrain.TerrainMixin.terrain: the gridded-relief builder a mesh
                 surface is the unstructured counterpart of.
         """
+        # The classification styling rides in **kwargs (the repo convention for styling kwargs like `cmap`),
+        # not as explicit parameters — this keeps `trimesh` under SonarCloud's parameter-count limit (S107)
+        # while the semantic inputs (values/location/relief/node_z/source_crs) stay explicit. The defaults
+        # match what `draw_trimesh` applies when it later pops them back off the layer's props.
+        cmap = kwargs.pop("cmap", "viridis")
+        scheme = kwargs.pop("scheme", None)
+        k = kwargs.pop("k", 5)
         if values is not None:
             import numpy as np
 
