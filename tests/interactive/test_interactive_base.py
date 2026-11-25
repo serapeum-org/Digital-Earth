@@ -415,10 +415,32 @@ class TestShowAndRepr:
         from holoviews.core.options import Store
 
         hv.renderer("matplotlib")
+        original = Store.current_backend
         Store.current_backend = "matplotlib"
+        try:
+            InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))._repr_mimebundle_()
+            assert Store.current_backend == "matplotlib", (
+                f"display flipped the global backend to {Store.current_backend!r}"
+            )
+        finally:
+            Store.current_backend = original
+
+    def test_repr_mimebundle_arms_the_bokehjs_notebook_load(self, monkeypatch):
+        """The hook must arm the BokehJS notebook load, or a non-blank bundle still renders blank (#556 R2).
+
+        Test scenario:
+            The ``components`` payload carries only a comm handshake, no BokehJS loader, so the map draws
+            only once BokehJS is loaded into the page. The hook loads it via ``hv.extension("bokeh")``. A
+            regression dropping that call would ship a non-blank-but-non-rendering bundle that no HTML-string
+            assertion catches, so this spies on the load call directly.
+        """
+        import holoviews as hv
+
+        calls = []
+        monkeypatch.setattr(hv, "extension", lambda *a, **k: calls.append(a))
         InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))._repr_mimebundle_()
-        assert Store.current_backend == "matplotlib", (
-            f"display flipped the global backend to {Store.current_backend!r}"
+        assert ("bokeh",) in calls, (
+            f"the hook must load BokehJS via hv.extension('bokeh'); recorded calls: {calls}"
         )
 
     def test_repr_mimebundle_surfaces_skiprendering_on_a_nonempty_map(
