@@ -174,12 +174,29 @@ class MeshMixin(_MixinBase):
             digitalearth.three_d.builders.terrain.TerrainMixin.terrain: the gridded-relief builder a mesh
                 surface is the unstructured counterpart of.
         """
-        if relief is not None and node_z is None:
+        if values is not None:
+            import numpy as np
+
+            # Validate the shading length here, before the layer is built — and so before `_mesh_surface`
+            # would adopt the mesh's CRS — so a wrong-length call leaves the scene untouched (review L4). The
+            # face count is the fan-triangle count the drawer masks over; the node count is the node count.
+            count = np.asarray(values).shape[0]
+            unit, expected = (
+                ("fan-triangle", len(mesh.fan_triangles))
+                if location == "face"
+                else ("node", len(mesh.node_x))
+            )
+            if count != expected:
+                raise ValueError(
+                    f"location={location!r} needs one value per {unit} ({expected}), got {count}; quickmap "
+                    f"spreads a MeshDataset's face values to triangles, so a direct call must match too"
+                )
+        if relief and node_z is None:
             import numpy as np
 
             # "Lift by the value" (#557): raise each node to its own value so a coloured surface reads as 3-D
-            # relief. It needs a node-located value per node; a face value belongs to a triangle, not a node,
-            # so a face-located mesh is pointed at the explicit `node_z` instead.
+            # relief. `False`/`0` mean no relief (truthiness, not `is not None`). It needs a node-located value
+            # per node; a face value belongs to a triangle, not a node, so a face mesh is sent to `node_z`.
             if values is None or location != "node":
                 raise ValueError(
                     "relief= lifts each node by its own value, so it needs a node-located values-carrying "
@@ -357,20 +374,14 @@ def _mesh_surface(
         # Carry the shading values through the same drop/re-index as the geometry: a face value sits on each
         # drawn triangle (cell data), a node value on each kept node (point data), so a partly off-view mesh
         # keeps its colours aligned with the part that drew. `draw_trimesh` classifies them in place (#557).
+        # `MeshMixin.trimesh` has already checked the length (so a wrong one raises before the scene is touched,
+        # review L4): one value per fan-triangle for `"face"`, one per node for `"node"`. Carry it through the
+        # same drop/re-index as the geometry — the drawable triangles for a face value, the kept nodes for a
+        # node one — so a partly off-view mesh keeps its colours aligned with the part that drew.
         column = np.asarray(values, dtype="float64")
         if location == "face":
-            if column.shape[0] != len(drawable):
-                raise ValueError(
-                    f"location='face' needs one value per fan-triangle ({len(drawable)}), got "
-                    f"{column.shape[0]}; quickmap spreads a MeshDataset's face values to triangles, so a "
-                    f"direct call must pass one value per fan-triangle too (Mesh2d.fan_triangles)"
-                )
             surface.cell_data[VALUE] = column[drawable]
         else:
-            if column.shape[0] != len(finite):
-                raise ValueError(
-                    f"location='node' needs one value per node ({len(finite)}), got {column.shape[0]}"
-                )
             surface.point_data[VALUE] = column[used]
     return surface
 

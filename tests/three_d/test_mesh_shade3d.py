@@ -144,3 +144,29 @@ def test_trimesh_refuses_a_wrong_length_node_value_array(ugrid_mesh):
             scene.trimesh(mesh, values=np.array([1.0, 2.0]), location="node")
     finally:
         scene.close()
+
+
+def test_relief_false_is_a_no_op_not_a_flatten(ugrid_mesh):
+    """``relief=False``/``0`` mean "no relief", drawing flat without raising or force-flattening (review L1)."""
+    mesh = ugrid_mesh("face").mesh
+    scene = Scene3D(off_screen=True)
+    try:
+        scene.trimesh(mesh, relief=False)  # bare mesh, no values: must not raise
+        assert float(scene.layers[0][0].points[:, 2].max()) == 0.0
+    finally:
+        scene.close()
+
+
+def test_a_wrong_length_value_leaves_the_scene_crs_untouched(ugrid_mesh):
+    """A bad-length shaded call raises before adopting the mesh CRS, so the scene is left untouched (review L4)."""
+    mesh = ugrid_mesh("node", epsg=28992).mesh
+    scene = Scene3D(off_screen=True)
+    try:
+        assert scene.display_crs is None
+        with pytest.raises(ValueError, match="one value per node"):
+            scene.trimesh(
+                mesh, values=np.array([1.0, 2.0]), location="node", source_crs=28992
+            )
+        assert scene.display_crs is None, scene.display_crs
+    finally:
+        scene.close()
