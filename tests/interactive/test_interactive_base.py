@@ -343,32 +343,23 @@ class TestShowAndRepr:
         el = hv.Points([(0, 0)])
         assert InteractiveMap().add_layer(el).show() is el
 
-    def test_repr_mimebundle_delegates_to_element_hook(self):
-        """The map's mimebundle is the rendered element's mimebundle.
+    def test_repr_mimebundle_renders_a_real_bokeh_payload(self):
+        """With the engine installed, the map's mimebundle carries a real Bokeh HTML payload (#556).
 
         Test scenario:
-            A single registered element exposing ``_repr_mimebundle_`` is what ``render()``
-            returns, so the map must delegate to that hook and return its result.
+            The old code delegated to the composed element's own ``_repr_mimebundle_``, which runs
+            ``holoviews.Store.render`` — empty outside a live IPython kernel (a direct call, ``nbconvert``)
+            — so a notebook showed a bare text repr instead of the map. Rendering through
+            ``holoviews.renderer("bokeh").components`` builds the Bokeh payload regardless of the kernel.
         """
+        import holoviews as hv
 
-        class _FakeElement:
-            def _repr_mimebundle_(self, include=None, exclude=None):
-                return {"text/plain": "fake"}
-
-        bundle = InteractiveMap().add_layer(_FakeElement())._repr_mimebundle_()
-        assert bundle == {"text/plain": "fake"}, (
-            f"hook result not passed through: {bundle}"
-        )
-
-    def test_repr_mimebundle_without_hook_is_empty(self):
-        """An element without a mimebundle hook degrades to an empty bundle.
-
-        Test scenario:
-            ``render()`` returning an object with no ``_repr_mimebundle_`` attribute must
-            yield ``{}`` rather than raising.
-        """
-        bundle = InteractiveMap().add_layer(object())._repr_mimebundle_()
-        assert bundle == {}, f"expected empty bundle for hookless element, got {bundle}"
+        drawn = InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))
+        bundle = drawn._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert data, f"expected a non-empty mimebundle, got {data!r}"
+        assert "text/html" in data, f"expected a text/html payload, keys were {sorted(data)}"
+        assert data["text/html"].strip(), "the text/html payload must not be blank"
 
 
 class TestConstructionDefaults:

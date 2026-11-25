@@ -2431,19 +2431,32 @@ class InteractiveMapBase:
         self.close()
 
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
-        """Render the map inline in notebooks by delegating to the composed HoloViews object.
+        """Render the map inline in notebooks through the HoloViz/Bokeh renderer.
+
+        Delegating to the composed element's own ``_repr_mimebundle_`` produced nothing: that hook runs
+        :func:`holoviews.Store.render`, whose display hooks are registered only by ``hv.extension`` inside a
+        live IPython kernel. Outside one — a direct call, or ``nbconvert`` — it returned ``{}`` and a
+        notebook showed a bare text repr rather than the map (#556). Building the payload through
+        ``holoviews.renderer("bokeh").components`` does not depend on those hooks, so it renders either way;
+        loading the extension (idempotent) arms the one-time BokehJS load the payload needs on first display.
 
         Args:
-            include: The mime types Jupyter asks for, passed through untouched.
-            exclude: The mime types Jupyter asks to be left out, passed through untouched.
+            include: The mime types Jupyter asks for, accepted for the Jupyter protocol; the renderer emits
+                the map's own types regardless, so this is not used to filter them.
+            exclude: The mime types Jupyter asks to leave out, accepted for the same reason and unused.
 
         Returns:
-            The mimebundle of the rendered object, or an empty dict when the engine is missing
-            (so a bare repr in a notebook degrades gracefully instead of raising).
+            A ``(data, metadata)`` mimebundle of the rendered map — ``data`` carrying the Bokeh ``text/html``
+            payload — or an empty dict when the ``interactive`` extra is missing (so a bare repr in a
+            notebook degrades gracefully instead of raising).
         """
         try:
+            import holoviews as hv
+
             obj = self.render()
         except ImportError:
             return {}
-        hook = getattr(obj, "_repr_mimebundle_", None)
-        return hook(include, exclude) if hook is not None else {}
+        # Arm the one-time BokehJS load the components payload relies on; idempotent, so repeated displays
+        # do not reload it.
+        hv.extension("bokeh")
+        return hv.renderer("bokeh").components(obj)
