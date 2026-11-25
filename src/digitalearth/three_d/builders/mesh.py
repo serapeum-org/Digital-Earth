@@ -296,6 +296,12 @@ def _mesh_surface(
             nothing leaves the scene's CRS untouched.
         mesh: A pyramids ``Mesh2d`` (``node_x`` / ``node_y`` / ``fan_triangles``, and an optional ``crs``).
         node_z: The elevation argument from :meth:`MeshMixin.trimesh`, resolved by :func:`_elevation`.
+        values: The shading values to attach, or ``None`` for a flat surface — one per node (``location``
+            ``"node"``, stored as ``point_data``) or one per fan-triangle (``"face"``, ``cell_data``), carried
+            through the geometry's own drop/re-index of off-view faces. A wrong length is refused, naming both.
+        location: ``"node"`` or ``"face"`` — which of the two ``values`` is aligned with.
+        source_crs: The CRS ``mesh`` is in, used to reproject into the scene's display CRS; ``None`` falls back
+            to ``mesh.crs`` (a ``MeshDataset`` carries its CRS on the wrapper, not the bare ``Mesh2d``).
 
     Returns:
         A ``pyvista.PolyData`` surface whose cells are the mesh's fan triangles, or ``None`` when no triangle
@@ -380,7 +386,9 @@ def draw_trimesh(scene: Any, data: Any, layer: Any) -> Any:
         scene: The scene being drawn into.
         data: The layer's source — the ``Mesh2d`` the builder stored. The surface's connectivity and node
             coordinates come off it.
-        layer: The layer's description, whose props carry ``node_z``, ``color``, ``opacity``, ``show_edges``
+        layer: The layer's description, whose props carry the shading keywords (``values``, ``location``,
+            ``cmap``, ``scheme``, ``k``) and ``source_crs`` as well as ``node_z``, ``color``, ``opacity``,
+            ``show_edges``
             and ``edge_color``.
 
     Returns:
