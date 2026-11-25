@@ -3639,11 +3639,20 @@ class WebMapBase:
         # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only
         # accepts them that way, so never call this hook positionally.
         bundle = hook(include=include, exclude=exclude) if hook is not None else {}
-        # ipywidgets returns a bare {mime: data} dict; the (data, metadata) tuple form is also valid. Keep
-        # whichever shape the widget used so the returned bundle round-trips the protocol faithfully.
-        was_tuple = isinstance(bundle, tuple)
-        data, metadata = bundle if was_tuple else (bundle, None)
-        data = dict(data) if data else {}
+        # ipywidgets returns a bare {mime: data} dict; the (data, metadata) 2-tuple form is also valid. Accept
+        # exactly those two shapes and keep whichever the widget used, so the returned bundle round-trips the
+        # protocol faithfully; anything else (a malformed hook) degrades to an empty bundle rather than raising
+        # out of the repr on the unpack.
+        if (
+            isinstance(bundle, tuple)
+            and len(bundle) == 2
+            and isinstance(bundle[0], dict)
+        ):
+            data, metadata, was_tuple = dict(bundle[0]), bundle[1], True
+        elif isinstance(bundle, dict):
+            data, metadata, was_tuple = dict(bundle), None, False
+        else:
+            data, metadata, was_tuple = {}, None, False
         # Add the export fallback into the gap, honouring the same include/exclude negotiation the hook got.
         # render() built one widget; _export_fallback_html builds a second via to_html, because the standalone
         # page needs its own serialization — so the double build is deliberate, not an oversight.
@@ -3651,10 +3660,10 @@ class WebMapBase:
             try:
                 data["text/html"] = self._export_fallback_html()
             except Exception as error:  # noqa: BLE001 - a successful render must still repr; keep the widget-view
-                # A broken to_html would otherwise be invisible interactively (the widget-view still carries the
-                # cell) and surface only as a blank export — a silent re-occurrence of #559. Log it at debug so
-                # it stays discoverable without raising out of the repr.
-                logger.debug(
+                # A broken to_html is invisible interactively (the widget-view still carries the cell) and would
+                # surface only as a blank export — a silent re-occurrence of #559. Warn (not debug) so the
+                # blanked export stays visible even to an app that raised the log level, without raising here.
+                logger.warning(
                     "WebMap export fallback failed; serving the live widget-view only: {}",
                     error,
                 )
