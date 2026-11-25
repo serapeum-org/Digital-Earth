@@ -133,3 +133,14 @@ def test_a_crs_mesh_sets_the_scene_crs_without_a_basemap(ugrid_mesh):
         assert same_crs(scene.display_crs, 28992), scene.display_crs
     finally:
         scene.close()
+
+
+def test_trimesh_refuses_a_wrong_length_node_value_array(ugrid_mesh):
+    """A node-located values array that isn't one per node is refused, naming both counts (#557)."""
+    mesh = ugrid_mesh("node").mesh
+    scene = Scene3D(off_screen=True)
+    try:
+        with pytest.raises(ValueError, match="one value per node"):
+            scene.trimesh(mesh, values=np.array([1.0, 2.0]), location="node")
+    finally:
+        scene.close()
