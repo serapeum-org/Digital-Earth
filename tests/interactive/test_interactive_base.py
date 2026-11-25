@@ -83,6 +83,19 @@ class TestLazyImport:
         monkeypatch.setitem(sys.modules, "geoviews", None)
         assert InteractiveMap()._repr_mimebundle_() == {}
 
+    def test_repr_mimebundle_degrades_when_holoviews_itself_is_absent(
+        self, monkeypatch
+    ):
+        """The repr hook's own ``import holoviews`` guard degrades to ``{}`` (#556).
+
+        Test scenario:
+            The geoviews-absent case above reaches the guard through ``render()``; this one makes
+            ``holoviews`` itself unimportable, so the hook's top-level import fails and it returns ``{}``
+            before touching the backend or a layer — covering the other ``ImportError`` branch.
+        """
+        monkeypatch.setitem(sys.modules, "holoviews", None)
+        assert InteractiveMap().add_layer(object())._repr_mimebundle_() == {}
+
 
 class TestImportGuardCoversInteractive:
     """DX.3 negative fixture: the M1 guard already polices ``interactive/``."""
