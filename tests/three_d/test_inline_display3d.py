@@ -81,7 +81,8 @@ def test_repr_png_renders_an_empty_scene_without_raising():
     scene = Scene3D(off_screen=True)
     try:
         png = scene._repr_png_()
-        assert isinstance(png, bytes) and png.startswith(_PNG_MAGIC), png[:8]
+        assert isinstance(png, bytes), type(png)
+        assert png.startswith(_PNG_MAGIC), png[:8]
     finally:
         scene.close()
 

@@ -75,7 +75,8 @@ def test_trimesh_without_values_stays_flat(ugrid_mesh):
     try:
         scene.trimesh(mesh)
         surface = scene.layers[0][0]
-        assert VALUE not in surface.cell_data and VALUE not in surface.point_data
+        assert VALUE not in surface.cell_data
+        assert VALUE not in surface.point_data
     finally:
         scene.close()
 
@@ -115,7 +116,8 @@ def test_a_graduated_scheme_shades_the_mesh_by_class_index(ugrid_mesh):
         encoding = scene.get_layer(layer_id).symbology.encoding("color")
         assert encoding is not None, "a shaded mesh must publish a colour encoding"
         guide = scene.get_layer(layer_id).symbology.guide()
-        assert guide is not None and guide.show, guide
+        assert guide is not None, guide
+        assert guide.show, guide
     finally:
         scene.close()
 
