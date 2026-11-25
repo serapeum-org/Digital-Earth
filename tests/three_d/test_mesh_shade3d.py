@@ -101,8 +101,9 @@ def test_a_graduated_scheme_shades_the_mesh_by_class_index(ugrid_mesh):
 
     Test scenario:
         A node-located mesh (``zs=[1..5]``) shaded ``scheme="categorical"`` reaches the surface as class
-        indices (one per distinct value, a small integer range), the style carries ``n_colors``, and the layer
-        publishes a colour encoding with a shown colorbar guide.
+        indices (one per distinct value, a small integer range), and the layer publishes a colour encoding
+        with a shown colorbar guide. (``n_colors`` lives in the internal style dict ``draw_trimesh`` consumes,
+        not on anything reachable from the scene, so it is covered by the shared classified-scalars tests.)
     """
     dataset = ugrid_mesh("node")
     scene = quickmap(dataset, backend="3d", scheme="categorical")
@@ -168,5 +169,17 @@ def test_a_wrong_length_value_leaves_the_scene_crs_untouched(ugrid_mesh):
                 mesh, values=np.array([1.0, 2.0]), location="node", source_crs=28992
             )
         assert scene.display_crs is None, scene.display_crs
+    finally:
+        scene.close()
+
+
+def test_shaded_trimesh_refuses_a_caller_scalars_or_lighting(ugrid_mesh):
+    """Passing ``scalars=``/``lighting=`` to a value-shaded ``trimesh`` is refused by name, not a raw TypeError (L3)."""
+    mesh = ugrid_mesh("node").mesh
+    values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])  # one per node of the fixture
+    scene = Scene3D(off_screen=True)
+    try:
+        with pytest.raises(TypeError, match="set by the shaded path"):
+            scene.trimesh(mesh, values=values, location="node", scalars="foo")
     finally:
         scene.close()

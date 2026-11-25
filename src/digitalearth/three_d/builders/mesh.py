@@ -439,6 +439,12 @@ def draw_trimesh(scene: Any, data: Any, layer: Any) -> Any:
     # drop/re-index; classify them into the scalars PyVista colours by — the same classification every tier
     # cuts its classes with — and draw the surface unlit so the colour reads flat on a strict GL (a lit
     # normal-less surface came back blank on Mesa 26 llvmpipe, #538), the 3-D sibling of static `tripcolor`.
+    reserved = {"scalars", "lighting"} & props.keys()
+    if reserved:
+        raise TypeError(
+            f"{', '.join(sorted(reserved))} are set by the shaded path and cannot be passed to a value-shaded "
+            f"trimesh; shade with values=/cmap= and drop them"
+        )
     store = surface.cell_data if location == "face" else surface.point_data
     encoding = layer.symbology.encoding("color")
     style = classified_scalars(
