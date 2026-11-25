@@ -34,9 +34,9 @@ def test_repr_carries_a_static_html_fallback_for_export():
     data = _bundle_data(WebMap(center=(0.0, 0.0), zoom=2)._repr_mimebundle_())
     assert "text/html" in data, "expected a static HTML fallback for export"
     html = data["text/html"]
-    assert "<iframe" in html and "srcdoc=" in html, (
-        "the fallback must isolate the standalone page in an iframe so its scripts do not collide"
-    )
+    isolation = "the fallback must isolate the standalone page in an iframe so its scripts do not collide"
+    assert "<iframe" in html, isolation
+    assert "srcdoc=" in html, isolation
     assert "maplibre" in html.lower(), (
         "the fallback must embed the actual MapLibre page"
     )
@@ -61,7 +61,8 @@ def test_empty_map_repr_is_safe():
         A ``WebMap`` with no layers produces a ``text/html`` fallback rather than raising or omitting it.
     """
     data = _bundle_data(WebMap()._repr_mimebundle_())
-    assert "text/html" in data and "<iframe" in data["text/html"]
+    assert "text/html" in data
+    assert "<iframe" in data["text/html"]
 
 
 def test_repr_never_raises_when_the_fallback_fails(monkeypatch):
@@ -110,7 +111,8 @@ def test_repr_preserves_the_tuple_form_and_metadata(monkeypatch):
     assert isinstance(bundle, tuple), "the tuple protocol form must be preserved"
     data, metadata = bundle
     assert metadata == {"meta": "kept"}, f"metadata dropped: {metadata}"
-    assert data["application/x-demo"] == 1 and "text/html" in data
+    assert data["application/x-demo"] == 1
+    assert "text/html" in data
 
 
 def test_repr_does_not_overwrite_an_existing_html_representation(monkeypatch):
@@ -177,9 +179,8 @@ def test_export_fallback_html_escapes_the_document():
         ``&lt;``/``&quot;`` entities, which is what makes the iframe srcdoc self-contained.
     """
     fragment = WebMap(center=(0.0, 0.0), zoom=2)._export_fallback_html()
-    assert fragment.startswith('<iframe srcdoc="') and fragment.rstrip().endswith(
-        "></iframe>"
-    )
+    assert fragment.startswith('<iframe srcdoc="')
+    assert fragment.rstrip().endswith("></iframe>")
     assert "&lt;!DOCTYPE html&gt;" in fragment, (
         "the document body must be entity-escaped inside srcdoc"
     )
@@ -274,7 +275,8 @@ def test_repr_keeps_a_tuple_even_when_metadata_is_none(monkeypatch):
         "a tuple-returning widget must round-trip as a tuple"
     )
     data, metadata = bundle
-    assert metadata is None and data["text/html"] == "FALLBACK"
+    assert metadata is None
+    assert data["text/html"] == "FALLBACK"
 
 
 def test_repr_logs_a_swallowed_fallback_error(monkeypatch):
@@ -371,10 +373,9 @@ def test_export_fallback_html_escapes_a_breakout_payload(monkeypatch):
     )
     fragment = WebMap()._export_fallback_html()
     assert fragment.count('srcdoc="') == 1, "exactly one srcdoc attribute boundary"
-    assert "</iframe>" == fragment[-len("</iframe>") :], (
-        "the only </iframe> is the real closer"
-    )
+    assert fragment.endswith("</iframe>"), "the only </iframe> is the real closer"
     assert fragment.count("<script>") == 0, (
         "the breakout payload must be entity-escaped, not live"
     )
-    assert "&lt;script&gt;" in fragment and "&quot;" in fragment
+    assert "&lt;script&gt;" in fragment
+    assert "&quot;" in fragment
