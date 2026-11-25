@@ -358,8 +358,36 @@ class TestShowAndRepr:
         bundle = drawn._repr_mimebundle_()
         data = bundle[0] if isinstance(bundle, tuple) else bundle
         assert data, f"expected a non-empty mimebundle, got {data!r}"
-        assert "text/html" in data, f"expected a text/html payload, keys were {sorted(data)}"
+        assert "text/html" in data, (
+            f"expected a text/html payload, keys were {sorted(data)}"
+        )
         assert data["text/html"].strip(), "the text/html payload must not be blank"
+
+    def test_repr_mimebundle_of_an_empty_map_degrades_to_empty(self):
+        """An empty map has nothing to draw, so its mimebundle is ``{}`` rather than a raise (#556).
+
+        Test scenario:
+            Rendering a blank overlay through the Bokeh renderer raises HoloViews' ``SkipRendering``
+            ("could not plot any Elements"). A bare repr must swallow that into an empty bundle so a
+            notebook shows no output instead of a traceback.
+        """
+        assert InteractiveMap()._repr_mimebundle_() == {}, (
+            "an empty map must repr to an empty bundle"
+        )
+
+    def test_repr_mimebundle_accepts_include_exclude(self):
+        """Jupyter passes ``include``/``exclude``; the hook accepts them and still returns the payload (#556).
+
+        Test scenario:
+            The renderer emits the map's own mime types regardless of ``include``/``exclude``, so passing
+            them must neither raise nor empty the bundle.
+        """
+        import holoviews as hv
+
+        drawn = InteractiveMap().add_layer(hv.Points([(0, 0), (1, 1)]))
+        bundle = drawn._repr_mimebundle_(include=["text/html"], exclude=None)
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert data, f"include/exclude must not empty the bundle, got {data!r}"
 
 
 class TestConstructionDefaults:

@@ -2447,11 +2447,12 @@ class InteractiveMapBase:
 
         Returns:
             A ``(data, metadata)`` mimebundle of the rendered map — ``data`` carrying the Bokeh ``text/html``
-            payload — or an empty dict when the ``interactive`` extra is missing (so a bare repr in a
-            notebook degrades gracefully instead of raising).
+            payload — or an empty dict when the ``interactive`` extra is missing, or when the map is empty
+            (so a bare repr in a notebook degrades to no output instead of raising).
         """
         try:
             import holoviews as hv
+            from holoviews.core.options import SkipRendering
 
             obj = self.render()
         except ImportError:
@@ -2459,4 +2460,9 @@ class InteractiveMapBase:
         # Arm the one-time BokehJS load the components payload relies on; idempotent, so repeated displays
         # do not reload it.
         hv.extension("bokeh")
-        return hv.renderer("bokeh").components(obj)
+        try:
+            return hv.renderer("bokeh").components(obj)
+        except SkipRendering:
+            # An empty map has nothing for the engine to draw; degrade to no output rather than surfacing
+            # the engine's "could not plot any Elements" as a notebook traceback.
+            return {}
