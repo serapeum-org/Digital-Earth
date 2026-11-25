@@ -225,8 +225,9 @@ def test_export_fallback_html_propagates_missing_engine(monkeypatch):
         raise ImportError("install digitalearth[web]")
 
     monkeypatch.setattr(WebMap, "to_html", _no_engine)
+    web_map = WebMap()
     with pytest.raises(ImportError, match=r"digitalearth\[web\]"):
-        WebMap()._export_fallback_html()
+        web_map._export_fallback_html()
 
 
 def test_repr_respects_exclude_and_include_for_the_fallback(monkeypatch):
