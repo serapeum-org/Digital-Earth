@@ -84,3 +84,23 @@ def test_repr_png_renders_an_empty_scene_without_raising():
         assert isinstance(png, bytes) and png.startswith(_PNG_MAGIC), png[:8]
     finally:
         scene.close()
+
+
+def test_repr_png_degrades_to_none_when_rendering_fails(monkeypatch):
+    """A repr must never raise: if the frame cannot be rendered, ``_repr_png_`` returns ``None`` (L2).
+
+    Test scenario:
+        A render failure (here a headless on-screen plotter, simulated by a raising ``screenshot``) makes
+        ``_repr_png_`` fall back to ``None`` so a notebook shows the text repr instead of a traceback.
+    """
+    scene = Scene3D(off_screen=True)
+    scene.terrain(_dem())
+    try:
+        monkeypatch.setattr(
+            type(scene),
+            "screenshot",
+            lambda self, *a, **k: (_ for _ in ()).throw(RuntimeError("no display")),
+        )
+        assert scene._repr_png_() is None
+    finally:
+        scene.close()

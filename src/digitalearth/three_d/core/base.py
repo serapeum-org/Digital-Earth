@@ -2694,7 +2694,7 @@ class Scene3DBase:
         self.close()
         return False
 
-    def _repr_png_(self) -> bytes:
+    def _repr_png_(self) -> bytes | None:
         """Return a PNG of the scene so a notebook embeds a static image inline (#558).
 
         IPython calls this for the last expression in a cell, so a plain ``ds.plot(var, backend="3d")`` — which
@@ -2710,12 +2710,18 @@ class Scene3DBase:
         ``screenshot()`` call would.
 
         Returns:
-            bytes: the ``image/png`` payload Jupyter embeds in the cell's saved output.
+            bytes: the ``image/png`` payload Jupyter embeds in the cell's saved output, or ``None`` when the
+            frame cannot be rendered (a display-less host that never set :data:`pyvista.OFF_SCREEN`), so the
+            notebook falls back to the text repr instead of showing a traceback — a repr must never raise.
         """
         import io
 
+        try:
+            frame = self.screenshot()
+        except Exception:  # noqa: BLE001 - a repr must never raise; degrade to the text repr
+            return None
         from PIL import Image
 
         buffer = io.BytesIO()
-        Image.fromarray(self.screenshot()).save(buffer, format="PNG")
+        Image.fromarray(frame).save(buffer, format="PNG")
         return buffer.getvalue()
