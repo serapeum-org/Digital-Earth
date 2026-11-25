@@ -1974,6 +1974,16 @@ def _quickmap_3d(
             f"{sorted(data.geometry.geom_type.unique())}"
         )
 
+    # A basemap needs an EPSG:3857 scene to align its tiles. When the caller asks for one over a mesh that
+    # declares a CRS (the CRS lives on the MeshDataset, not its bare Mesh2d) and names no display CRS, build
+    # the scene in 3857 and let the mesh reproject into it, so the common "coloured mesh over a basemap" case
+    # needs no manual set_crs/crs=3857 dance (#557).
+    if family == "mesh" and basemap and crs is None:
+        from digitalearth.base.crs import declared_crs
+
+        if declared_crs(data) is not None:
+            crs = 3857
+
     # Constructed only after validation, so the error paths above leak no scene.
     scene = _scene_of(Scene3D, scene_kw, crs=crs)
     if family == "mesh":
@@ -1989,11 +1999,15 @@ def _quickmap_3d(
                 f"'trimesh', one PyVista surface of the mesh's own faces"
             )
         # Shade the surface by the plotted variable (#557): the geometry comes from the bare `Mesh2d`, the
-        # per-node/face values and their location from the same MeshSource the static tier reads. A caller's
-        # own `values`/`location` (a direct `trimesh` call) wins over the ones derived from the MeshDataset.
+        # per-node/face values and their location from the same MeshSource the static tier reads, and the
+        # mesh's CRS from the MeshDataset wrapper (the bare Mesh2d does not carry it) so the surface reprojects
+        # into the scene. A caller's own `values`/`location`/`source_crs` (a direct call) wins over these.
+        from digitalearth.base.crs import declared_crs
+
         mesh_values, mesh_location = _mesh_values_of(data)
         kwargs.setdefault("values", mesh_values)
         kwargs.setdefault("location", mesh_location)
+        kwargs.setdefault("source_crs", declared_crs(data))
         scene.trimesh(_mesh_of(data), **kwargs)
     elif family == "raster":
         scene.terrain(data, **kwargs)
@@ -2043,11 +2057,20 @@ def _add_quickmap_basemap(scene: Any, basemap: Any) -> None:
             display,
         )
         return
+    # Drop the tile plane just below the data so an opaque basemap does not occlude a flat (z=0) mesh drawn on
+    # the ground plane — the "value-shaded mesh reads over the tiles" ask (#557). The drop is 1% of the data's
+    # own xy span, so it is a hairline on any scale and never pushes the tiles out of the camera's frame.
+    bounds = scene.plotter.bounds
+    span = max(bounds[1] - bounds[0], bounds[3] - bounds[2], 1.0)
     # Route through the shared `_basemap_source`, like the other three backends: `True` -> the backend
     # default, and every other form (dotted name, keyed preset, an xyzservices TileProvider object) is
     # forwarded intact. The old `basemap if isinstance(basemap, str) else None` silently dropped a provider
     # object to the default (M1), the regression the api.py:1029-1030 comment warns against.
-    scene.basemap(_basemap_source(basemap), bbox=_scene_bbox_4326(scene))
+    scene.basemap(
+        _basemap_source(basemap),
+        bbox=_scene_bbox_4326(scene),
+        z=bounds[4] - 0.01 * span,
+    )
 
 
 def _scene_bbox_4326(scene: Any) -> tuple[float, float, float, float]:

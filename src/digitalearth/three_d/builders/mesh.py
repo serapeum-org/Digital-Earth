@@ -78,7 +78,9 @@ class MeshMixin(_MixinBase):
         cmap: Any = "viridis",
         scheme: Any | None = None,
         k: int = 5,
+        relief: Any = None,
         node_z: Any = None,
+        source_crs: Any = None,
         color: Any = MESH_FILL_COLOR,
         opacity: float | None = None,
         show_edges: bool = True,
@@ -113,6 +115,14 @@ class MeshMixin(_MixinBase):
                 or a ``classify`` scheme name — so one ``scheme``/``k``/``cmap`` paints the same classes as on
                 every other tier.
             k: Number of classes for a graduated ``scheme``.
+            relief: Lift a **node-located** surface by its own value so coloured data reads as 3-D relief —
+                ``True`` raises each node to its value, a number exaggerates by that factor. ``None`` (default)
+                leaves the surface flat (or at an explicit ``node_z``); a face-located mesh is refused and
+                pointed at ``node_z``. ``quickmap`` passes a caller's ``relief=`` through.
+            source_crs: The CRS the mesh's coordinates are in, so the surface reprojects into the scene's
+                display CRS. ``quickmap`` fills it from the ``MeshDataset`` (whose wrapper, not its bare
+                ``Mesh2d``, carries the CRS); a direct caller with a CRS-tagged ``Mesh2d`` can leave it
+                ``None`` and the mesh's own ``crs`` is used.
             node_z: The elevation each node is lifted to, read as 3-D relief. ``None`` (default) lays the
                 surface flat on the ground plane (``z=0``); a scalar lifts every node to one height; a
                 per-node array (one value per node, in mesh order) gives the surface its own relief.
@@ -160,6 +170,20 @@ class MeshMixin(_MixinBase):
             digitalearth.three_d.builders.terrain.TerrainMixin.terrain: the gridded-relief builder a mesh
                 surface is the unstructured counterpart of.
         """
+        if relief is not None and node_z is None:
+            import numpy as np
+
+            # "Lift by the value" (#557): raise each node to its own value so a coloured surface reads as 3-D
+            # relief. It needs a node-located value per node; a face value belongs to a triangle, not a node,
+            # so a face-located mesh is pointed at the explicit `node_z` instead.
+            if values is None or location != "node":
+                raise ValueError(
+                    "relief= lifts each node by its own value, so it needs a node-located values-carrying "
+                    "mesh; pass node_z= for an explicit relief, or for a face-located one"
+                )
+            node_z = np.asarray(values, dtype="float64") * (
+                1.0 if relief is True else float(relief)
+            )
         return self._add_described_layer(
             kind="mesh",
             data=mesh,
@@ -172,6 +196,7 @@ class MeshMixin(_MixinBase):
             scheme=scheme,
             k=k,
             node_z=node_z,
+            source_crs=source_crs,
             color=color,
             opacity=opacity,
             show_edges=show_edges,
@@ -244,7 +269,12 @@ def _elevation(node_z: Any, count: int) -> Any:
 
 
 def _mesh_surface(
-    scene: Any, mesh: Any, node_z: Any, values: Any = None, location: str = "node"
+    scene: Any,
+    mesh: Any,
+    node_z: Any,
+    values: Any = None,
+    location: str = "node",
+    source_crs: Any = None,
 ) -> Any:
     """Build the PyVista ``PolyData`` surface a mesh layer draws, placed in the scene's display CRS.
 
@@ -274,7 +304,9 @@ def _mesh_surface(
 
     x = np.asarray(mesh.node_x, dtype="float64")
     y = np.asarray(mesh.node_y, dtype="float64")
-    held = getattr(mesh, "crs", None)
+    # The mesh's source CRS: a `MeshDataset` carries it on the wrapper, not on the bare `Mesh2d`, so the seam
+    # conveys it as `source_crs`; a direct caller with a CRS-tagged `Mesh2d` falls back to `mesh.crs` (#557).
+    held = source_crs if source_crs is not None else getattr(mesh, "crs", None)
     # Reproject only when the scene already draws in another CRS — this reads `display_crs`, it does not set
     # it. Adoption (setting the scene's CRS from this mesh) is deferred past the drawable check below, so a
     # mesh that places no face leaves the scene's CRS untouched (review L2).
@@ -351,11 +383,12 @@ def draw_trimesh(scene: Any, data: Any, layer: Any) -> Any:
     cmap = props.pop("cmap", "viridis")
     scheme = props.pop("scheme", None)
     k = props.pop("k", 5)
+    source_crs = props.pop("source_crs", None)
     color = props.pop("color", MESH_FILL_COLOR)
     opacity = props.pop("opacity", None)
     show_edges = props.pop("show_edges", True)
     edge_color = props.pop("edge_color", MESH_EDGE_COLOR)
-    surface = _mesh_surface(scene, data, node_z, values, location)
+    surface = _mesh_surface(scene, data, node_z, values, location, source_crs)
     if surface is None:
         scene._skip_empty(
             "trimesh",
