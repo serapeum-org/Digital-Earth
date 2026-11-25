@@ -82,6 +82,10 @@ DEFAULT_TITLE = "Digital-Earth map"
 #: :data:`~digitalearth.base.ask.UNSET`, the same "not passed" the style keywords carry (#334).
 _DEFAULT_ZOOM = 2
 
+#: The constructor's widget height in pixels when the caller names none, reused as the export-fallback iframe
+#: height so the embedded map matches the live widget's footprint (the two cannot drift apart).
+_DEFAULT_HEIGHT = 500
+
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
     "the web tier needs MapLibre GL JS + deck.gl (maplibre). "
@@ -668,7 +672,7 @@ class WebMapBase:
         zoom: Any = UNSET,
         style: Any = "dark",
         crs: Any = DISPLAY_CRS,
-        height: int | None = 500,
+        height: int | None = _DEFAULT_HEIGHT,
         strict: bool = False,
     ):
         """Record the display configuration and open the empty layer / decoration registries.
@@ -3635,24 +3639,55 @@ class WebMapBase:
         # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only
         # accepts them that way, so never call this hook positionally.
         bundle = hook(include=include, exclude=exclude) if hook is not None else {}
-        # ipywidgets returns a bare {mime: data} dict; the (data, metadata) tuple form is also valid. Normalise
-        # so the static fallback can be merged into the data half either way.
-        data, metadata = bundle if isinstance(bundle, tuple) else (bundle, None)
+        # ipywidgets returns a bare {mime: data} dict; the (data, metadata) tuple form is also valid. Keep
+        # whichever shape the widget used so the returned bundle round-trips the protocol faithfully.
+        was_tuple = isinstance(bundle, tuple)
+        data, metadata = bundle if was_tuple else (bundle, None)
         data = dict(data) if data else {}
-        if "text/html" not in data:
+        # Add the export fallback into the gap, honouring the same include/exclude negotiation the hook got.
+        # render() built one widget; _export_fallback_html builds a second via to_html, because the standalone
+        # page needs its own serialization — so the double build is deliberate, not an oversight.
+        if self._wants_mime("text/html", include, exclude) and "text/html" not in data:
             try:
                 data["text/html"] = self._export_fallback_html()
-            except Exception:  # noqa: BLE001 - a repr must never raise; the live widget-view still carries the cell
-                pass
-        return (data, metadata) if metadata is not None else data
+            except Exception as error:  # noqa: BLE001 - a successful render must still repr; keep the widget-view
+                # A broken to_html would otherwise be invisible interactively (the widget-view still carries the
+                # cell) and surface only as a blank export — a silent re-occurrence of #559. Log it at debug so
+                # it stays discoverable without raising out of the repr.
+                logger.debug(
+                    "WebMap export fallback failed; serving the live widget-view only: {}",
+                    error,
+                )
+        return (data, metadata) if was_tuple else data
+
+    @staticmethod
+    def _wants_mime(mime: str, include: Any, exclude: Any) -> bool:
+        """Whether ``mime`` survives Jupyter's ``include``/``exclude`` negotiation (both optional and advisory).
+
+        Args:
+            mime: The mime type the repr is about to add.
+            include: The mime types Jupyter asked for, or ``None``/empty for "no restriction".
+            exclude: The mime types Jupyter asked to leave out, or ``None``/empty for "exclude nothing".
+
+        Returns:
+            ``False`` when ``exclude`` names ``mime`` or a non-empty ``include`` omits it; ``True`` otherwise.
+        """
+        if exclude and mime in exclude:
+            return False
+        if include and mime not in include:
+            return False
+        return True
 
     def _export_fallback_html(self) -> str:
         """Return the standalone map wrapped in an ``<iframe srcdoc>`` for the notebook-export fallback (#559).
 
-        The map's own :meth:`~digitalearth.web.output.export.ExportMixin.to_html` builds the self-contained
+        The map's own :meth:`~digitalearth.web.output.export.ExportMixin.to_html` builds the kernel-independent
         MapLibre page; embedding that whole document in an iframe (rather than inlining it into the cell) keeps
         each map's scripts and globals isolated, so several ``plot(backend="web")`` cells on one exported page do
-        not collide. The iframe is sized to the map's configured height.
+        not collide. The iframe is sized to the map's configured height (``_DEFAULT_HEIGHT`` when unset). The page
+        references ``maplibre-gl`` from a CDN (``to_html``'s default), so it is independent of the kernel and
+        widget state but not of the network. A temporal map is rendered as a single frame, since an interactive
+        time-slider cannot survive a kernel-less export.
 
         Returns:
             An ``<iframe srcdoc=...>`` HTML fragment carrying the standalone map page.
@@ -3663,7 +3698,7 @@ class WebMapBase:
         import html as html_
 
         document = self.to_html()
-        height = int(self.height) if self.height is not None else 500
+        height = int(self.height) if self.height is not None else _DEFAULT_HEIGHT
         return (
             f'<iframe srcdoc="{html_.escape(document, quote=True)}" '
             f'style="width:100%; height:{height}px; border:none;" loading="lazy"></iframe>'
