@@ -1,5 +1,16 @@
 # Change log
 
+## 0.17.0 (2026-11-26)
+
+### Feat
+
+- **3d**: shade a MeshDataset by value, and show Scene3D inline in notebooks (#560)
+
+### Fix
+
+- **web**: persist a static HTML fallback so WebMap survives notebook export (#562)
+- **interactive**: render InteractiveMap inline in notebooks (#561)
+
 ## 0.16.0 (2026-11-23)
 
 ### Feat
