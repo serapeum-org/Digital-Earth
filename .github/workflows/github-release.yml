@@ -167,14 +167,15 @@ jobs:
         env:
           RELEASE_BRANCH: ${{ needs.prepare.outputs.branch }}
 
-      # Hand the release branch to pypi-release. pypi-release is triggered by `workflow_run`, whose payload's
-      # head_branch points at the dispatched ref, not necessarily the branch that received the version-bump +
-      # lockfile commits above. Uploading the branch name as an artifact is the one channel that crosses the
-      # workflow_run boundary; pypi-release downloads it by run id and checks out that exact branch.
-      - name: Record the release branch for pypi-release
-        env:
-          RELEASE_BRANCH: ${{ needs.prepare.outputs.branch }}
-        run: printf '%s\n' "$RELEASE_BRANCH" > release-ref.txt
+      # Hand the released commit to the downstream consumers. They are triggered by `workflow_run`, whose
+      # payload's head_branch points at the dispatched ref, not the branch that received the version-bump +
+      # lockfile commits above. The artifact is the one channel that crosses the workflow_run boundary;
+      # pypi-release, deploy-release and build-strict download it by run id and check this out.
+      # Record the SHA (the lockfile commit = the published tree), not the branch name: a SHA survives the
+      # release branch being auto-deleted after the PR merges (it stays reachable via the merge commit on
+      # main), whereas a branch name would leave a delayed re-publish unable to check anything out.
+      - name: Record the released commit for the downstream consumers
+        run: git rev-parse HEAD > release-ref.txt
 
       - name: Upload the release ref for pypi-release
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
