@@ -844,6 +844,82 @@ def _mesh_of(data: Any) -> Any:
     return data.mesh
 
 
+def _mesh_values_of(data: Any) -> tuple[Any, str]:
+    """Return the ``(values, location)`` a ``MeshDataset`` shades its 3-D surface by (#557).
+
+    The 3-D tier draws a mesh's geometry from its bare ``Mesh2d`` (:func:`_mesh_of`), but — unlike the
+    interactive and web tiers — it also colours the surface by the plotted variable, the 3-D sibling of static
+    ``tripcolor``. The variable's per-node or per-face values and where they sit come off the same engine-neutral
+    :class:`~digitalearth.base.sources.MeshSource` the static tier reads (``get_source`` defaults to the first
+    variable, or the one the pyramids facade selected), so one extraction serves both. A mesh that carries no
+    data variable shades by nothing and is drawn in the flat ``trimesh`` colour.
+
+    Args:
+        data: The ``MeshDataset`` the mesh branch received.
+
+    Returns:
+        ``(values, location)`` — the value array and ``"node"``/``"face"``, or ``(None, "node")`` when the
+        mesh carries no variable to shade by.
+    """
+    from digitalearth.base.sources import MeshSource, get_source
+
+    if not getattr(data, "data_variable_names", None):
+        return None, "node"
+    source = get_source(data)
+    if not isinstance(source, MeshSource):
+        return None, "node"
+    z = source.z
+    if z is None:
+        return None, "node"
+    return z.values, source.location
+
+
+def _mesh_declares_crs(data: Any) -> bool:
+    """Whether a mesh input carries a CRS on its ``MeshDataset`` wrapper (the bare ``Mesh2d`` never does, #557)."""
+    from digitalearth.base.crs import declared_crs
+
+    return declared_crs(data) is not None
+
+
+def _draw_mesh_3d(scene: Any, data: Any, kwargs: dict[str, Any]) -> None:
+    """Route a ``MeshDataset`` to :meth:`Scene3D.trimesh` for the ``backend="3d"`` path (#546, #557).
+
+    Factored out of :func:`_quickmap_3d` so the dispatcher stays flat: the mesh render is the one family that
+    both validates a ``kind`` and threads three seam-derived keywords, which together tipped the dispatcher's
+    cognitive complexity over the limit (SonarCloud ``python:S3776``).
+
+    The geometry comes from the bare ``Mesh2d`` (:func:`_mesh_of`); the per-node/face values and their
+    location come off the same :class:`~digitalearth.base.sources.MeshSource` the static tier reads
+    (:func:`_mesh_values_of`); and the mesh's CRS comes from the ``MeshDataset`` wrapper, since the bare
+    ``Mesh2d`` does not carry it, so the surface reprojects into the scene. A caller's own
+    ``values``/``location``/``source_crs`` (a direct call) wins over the seam-derived ones. ``kind`` is
+    validated for the direct-call path only — public ``quickmap`` refuses a non-auto ``kind`` on this tier
+    upstream (``_reject_unsupported``), so it only reaches here on a direct ``_quickmap_3d(..., kind=...)`` call.
+
+    Args:
+        scene: The ``Scene3D`` being built.
+        data: The ``MeshDataset`` the mesh branch received.
+        kwargs: The remaining ``quickmap`` keywords; mutated in place (``kind`` popped, the seam defaults
+            set) before being splatted into ``trimesh``.
+
+    Raises:
+        ValueError: if ``kind`` is neither ``"auto"`` nor ``"trimesh"``.
+    """
+    from digitalearth.base.crs import declared_crs
+
+    kind = kwargs.pop("kind", "auto")
+    if kind not in ("auto", "trimesh"):
+        raise ValueError(
+            f"kind={kind!r} is not a renderer for a mesh on backend='3d'; it draws a mesh with "
+            f"'trimesh', one PyVista surface of the mesh's own faces"
+        )
+    mesh_values, mesh_location = _mesh_values_of(data)
+    kwargs.setdefault("values", mesh_values)
+    kwargs.setdefault("location", mesh_location)
+    kwargs.setdefault("source_crs", declared_crs(data))
+    scene.trimesh(_mesh_of(data), **kwargs)
+
+
 def _input_kind(data: PlottableData, caller: str) -> str:
     """Classify a ``quickmap`` input into the base layer kind its geometry draws — the decision, made once.
 
@@ -1947,21 +2023,20 @@ def _quickmap_3d(
             f"{sorted(data.geometry.geom_type.unique())}"
         )
 
+    # A basemap needs an EPSG:3857 scene to align its tiles. When the caller asks for one over a mesh that
+    # declares a CRS (the CRS lives on the MeshDataset, not its bare Mesh2d) and names no display CRS, build
+    # the scene in 3857 and let the mesh reproject into it, so the common "coloured mesh over a basemap" case
+    # needs no manual set_crs/crs=3857 dance (#557).
+    # A basemap needs an EPSG:3857 scene to align its tiles; a mesh that declares a CRS (on the MeshDataset,
+    # not its bare Mesh2d) and names no display CRS is built in 3857 so the "coloured mesh over a basemap" case
+    # needs no manual set_crs dance (#557). The import is lazy, behind the cheap guards' short-circuit.
+    if family == "mesh" and basemap and crs is None and _mesh_declares_crs(data):
+        crs = 3857
+
     # Constructed only after validation, so the error paths above leak no scene.
     scene = _scene_of(Scene3D, scene_kw, crs=crs)
     if family == "mesh":
-        # The `trimesh` builder (and the tier's declared `mesh` kind) route a MeshDataset to the 3-D mesh
-        # render, unwrapped to its `Mesh2d`, closing #546. This guard protects the direct-call path only: via
-        # public `quickmap`, `_reject_unsupported` refuses any non-auto `kind` on this tier upstream (3d has no
-        # `raster_renderer`), so `kind` only reaches here on a direct `_quickmap_3d(..., kind=...)` call. It
-        # mirrors the web mesh branch, whose tier is in the same position.
-        kind = kwargs.pop("kind", "auto")
-        if kind not in ("auto", "trimesh"):
-            raise ValueError(
-                f"kind={kind!r} is not a renderer for a mesh on backend='3d'; it draws a mesh with "
-                f"'trimesh', one PyVista surface of the mesh's own faces"
-            )
-        scene.trimesh(_mesh_of(data), **kwargs)
+        _draw_mesh_3d(scene, data, kwargs)
     elif family == "raster":
         scene.terrain(data, **kwargs)
     elif family == "polygons":
@@ -2010,11 +2085,20 @@ def _add_quickmap_basemap(scene: Any, basemap: Any) -> None:
             display,
         )
         return
+    # Drop the tile plane just below the data so an opaque basemap does not occlude a flat (z=0) mesh drawn on
+    # the ground plane — the "value-shaded mesh reads over the tiles" ask (#557). The drop is 1% of the data's
+    # own xy span, so it is a hairline on any scale and never pushes the tiles out of the camera's frame.
+    bounds = scene.plotter.bounds
+    span = max(bounds[1] - bounds[0], bounds[3] - bounds[2], 1.0)
     # Route through the shared `_basemap_source`, like the other three backends: `True` -> the backend
     # default, and every other form (dotted name, keyed preset, an xyzservices TileProvider object) is
     # forwarded intact. The old `basemap if isinstance(basemap, str) else None` silently dropped a provider
     # object to the default (M1), the regression the api.py:1029-1030 comment warns against.
-    scene.basemap(_basemap_source(basemap), bbox=_scene_bbox_4326(scene))
+    scene.basemap(
+        _basemap_source(basemap),
+        bbox=_scene_bbox_4326(scene),
+        z=bounds[4] - 0.01 * span,
+    )
 
 
 def _scene_bbox_4326(scene: Any) -> tuple[float, float, float, float]:

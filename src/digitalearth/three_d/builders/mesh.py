@@ -6,11 +6,13 @@ the triangles become the surface's cells. It is the 3-D sibling of the static ``
 ``trimesh`` and the web ``trimesh`` renders, and like them it consumes the connectivity pyramids hands over
 rather than re-triangulating anything itself.
 
-**A bare ``Mesh2d`` carries geometry, not a per-element value table**, so the surface takes one flat ``color``
-rather than being shaded by a node or face variable — exactly as the interactive and web tiers draw a UGRID
-mesh. To shade a mesh by a variable, draw the ``MeshDataset`` on the static tier, whose ``tripcolor`` colours
-each face through cleopatra. The surface lies on the ground plane (``z=0``) by default; pass ``node_z`` to lift
-each node and read the mesh as 3-D relief.
+**A ``MeshDataset`` is shaded by its plotted variable** (#557), the 3-D sibling of static ``tripcolor``: the
+seam reads the per-node or per-face values off the shared ``MeshSource`` and hands them to ``trimesh`` as
+``values``/``location``, which classifies them (one ``scheme``/``k``/``cmap`` paints the same classes as every
+tier) and draws the surface unlit so each face's colour reads flat on a strict GL. A **bare ``Mesh2d``**, with
+no value table, still takes one flat ``color`` — the geometry-only render the interactive and web tiers also
+draw. The surface lies on the ground plane (``z=0``) by default; pass ``node_z`` to lift each node and read the
+mesh as 3-D relief.
 
 **CRS follows the tier's rule, not the web tier's.** The 3-D tier draws in whatever display CRS the scene
 carries — it is not EPSG:4326-only — so a mesh that declares a CRS sets the scene's when it has none yet, and
@@ -71,7 +73,11 @@ class MeshMixin(_MixinBase):
         self,
         mesh: Any,
         *,
+        values: Any = None,
+        location: str = "node",
+        relief: Any = None,
         node_z: Any = None,
+        source_crs: Any = None,
         color: Any = MESH_FILL_COLOR,
         opacity: float | None = None,
         show_edges: bool = True,
@@ -88,15 +94,29 @@ class MeshMixin(_MixinBase):
         ``pyvista.PolyData``. A mesh that declares a CRS is placed in the scene's display CRS first (see
         :func:`draw_trimesh`).
 
-        A bare ``Mesh2d`` carries geometry, not a per-element value table, so the surface takes one flat
-        ``color`` rather than being shaded by a node or face variable — exactly as the interactive and web
-        tiers draw a UGRID mesh. To shade a mesh by a variable, draw the ``MeshDataset`` on the static tier,
-        whose ``tripcolor`` colours each face through cleopatra.
+        Pass ``values`` to shade the surface by a node- or face-located variable (#557) — the 3-D sibling of
+        static ``tripcolor``; ``quickmap`` fills them in from the ``MeshDataset``. With no ``values`` the
+        surface takes one flat ``color``, the geometry-only render the interactive and web tiers draw.
 
         Args:
             mesh: A pyramids ``Mesh2d`` — anything exposing ``node_x`` / ``node_y`` / ``fan_triangles``, and
                 optionally a ``crs`` to reproject from. This is what
                 :func:`~digitalearth.api._mesh_of` hands over when ``quickmap`` routes a ``MeshDataset`` here.
+            values: The values to shade the surface by — one per node, or one per **fan-triangle** for
+                ``location="face"`` (the shape ``quickmap`` passes, having spread a ``MeshDataset``'s per-face
+                values to its triangles); ``None`` (default) draws the flat ``color``. A length that matches
+                neither the node count nor the fan-triangle count is refused, naming both.
+            location: ``"node"`` (the default) or ``"face"`` — whether ``values`` sit on the nodes (smooth
+                shading) or on the fan triangles (flat per-face shading), aligned with the geometry's
+                drop/re-index of off-view faces.
+            relief: Lift a **node-located** surface by its own value so coloured data reads as 3-D relief —
+                ``True`` raises each node to its value, a number exaggerates by that factor. ``None`` (default)
+                leaves the surface flat (or at an explicit ``node_z``); a face-located mesh is refused and
+                pointed at ``node_z``. ``quickmap`` passes a caller's ``relief=`` through.
+            source_crs: The CRS the mesh's coordinates are in, so the surface reprojects into the scene's
+                display CRS. ``quickmap`` fills it from the ``MeshDataset`` (whose wrapper, not its bare
+                ``Mesh2d``, carries the CRS); a direct caller with a CRS-tagged ``Mesh2d`` can leave it
+                ``None`` and the mesh's own ``crs`` is used.
             node_z: The elevation each node is lifted to, read as 3-D relief. ``None`` (default) lays the
                 surface flat on the ground plane (``z=0``); a scalar lifts every node to one height; a
                 per-node array (one value per node, in mesh order) gives the surface its own relief.
@@ -109,7 +129,14 @@ class MeshMixin(_MixinBase):
                 it by kind (``trimesh-1``, ``trimesh-2``, …), and a name already on the scene is suffixed.
             visible: Whether the layer is drawn when added. ``False`` adds it hidden but described, so
                 ``set_visible(id, True)`` later reveals it without a rebuild.
-            **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
+            **kwargs: The classification styling, then forwarded to :meth:`pyvista.Plotter.add_mesh`.
+                ``cmap`` is the colormap the ``values`` are shaded through (default ``"viridis"``, ignored when
+                ``values`` is ``None``); ``scheme`` is how they are classified — ``None`` (default) for a
+                continuous ramp, ``"categorical"`` or a ``classify`` scheme name, so one ``scheme``/``k``/``cmap``
+                paints the same classes as on every other tier; ``k`` is the number of classes for a graduated
+                ``scheme`` (default ``5``). On a value-shaded mesh ``scalars`` and ``lighting`` are set by the
+                builder (the values are the scalars, drawn unlit), so passing them here collides with those;
+                shade with ``values``/``cmap`` and leave them alone.
 
         Returns:
             The registered actor, or ``None`` when the mesh placed no drawable face (see ``strict``).
@@ -144,18 +171,96 @@ class MeshMixin(_MixinBase):
             digitalearth.three_d.builders.terrain.TerrainMixin.terrain: the gridded-relief builder a mesh
                 surface is the unstructured counterpart of.
         """
+        # The classification styling rides in **kwargs (the repo convention for styling kwargs like `cmap`),
+        # not as explicit parameters — this keeps `trimesh` under SonarCloud's parameter-count limit (S107)
+        # while the semantic inputs (values/location/relief/node_z/source_crs) stay explicit. The defaults
+        # match what `draw_trimesh` applies when it later pops them back off the layer's props.
+        cmap = kwargs.pop("cmap", "viridis")
+        scheme = kwargs.pop("scheme", None)
+        k = kwargs.pop("k", 5)
+        if values is not None:
+            import numpy as np
+
+            # Validate the shading length here, before the layer is built — and so before `_mesh_surface`
+            # would adopt the mesh's CRS — so a wrong-length call leaves the scene untouched (review L4). The
+            # face count is the fan-triangle count the drawer masks over; the node count is the node count.
+            count = np.asarray(values).shape[0]
+            unit, expected = (
+                ("fan-triangle", len(mesh.fan_triangles))
+                if location == "face"
+                else ("node", len(mesh.node_x))
+            )
+            if count != expected:
+                raise ValueError(
+                    f"location={location!r} needs one value per {unit} ({expected}), got {count}; quickmap "
+                    f"spreads a MeshDataset's face values to triangles, so a direct call must match too"
+                )
+        if relief and node_z is None:
+            import numpy as np
+
+            # "Lift by the value" (#557): raise each node to its own value so a coloured surface reads as 3-D
+            # relief. `False`/`0` mean no relief (truthiness, not `is not None`). It needs a node-located value
+            # per node; a face value belongs to a triangle, not a node, so a face mesh is sent to `node_z`.
+            if values is None or location != "node":
+                raise ValueError(
+                    "relief= lifts each node by its own value, so it needs a node-located values-carrying "
+                    "mesh; pass node_z= for an explicit relief, or for a face-located one"
+                )
+            node_z = np.asarray(values, dtype="float64") * (
+                1.0 if relief is True else float(relief)
+            )
         return self._add_described_layer(
             kind="mesh",
             data=mesh,
             name=name,
             visible=visible,
+            encodings=_mesh_color_encoding(values, scheme, k, cmap),
+            values=values,
+            location=location,
+            cmap=cmap,
+            scheme=scheme,
+            k=k,
             node_z=node_z,
+            source_crs=source_crs,
             color=color,
             opacity=opacity,
             show_edges=show_edges,
             edge_color=edge_color,
             **kwargs,
         )
+
+
+def _mesh_color_encoding(values: Any, scheme: Any, k: int, cmap: Any) -> Any:
+    """Return the colour encoding a value-shaded mesh publishes, or ``None`` for a flat one (#557).
+
+    The mesh's colour comes from a value per node or per face, so a key over it describes that variable —
+    recorded on the layer (order 24) rather than rebuilt from whatever was drawn last, the same way the point
+    cloud and choropleth publish theirs. A mesh with no ``values`` colours by nothing and publishes no key.
+
+    Args:
+        values: The per-node or per-face value array the mesh is shaded by, or ``None`` for a flat fill.
+        scheme: How the values are classified, or ``None`` for a continuous ramp.
+        k: How many classes a graduated ``scheme`` cuts.
+        cmap: The colormap the ramp / classes come from.
+
+    Returns:
+        ``{"color": Encoding}`` naming the ``value`` scalar the drawer binds on the surface and carrying the
+        scale the values are cut into, or ``None`` when the mesh shades by nothing.
+    """
+    if values is None:
+        return None
+    import numpy as np
+
+    from digitalearth.base.spec import Encoding
+    from digitalearth.three_d.builders.vector import VALUE
+    from digitalearth.three_d.legends.legend import color_scale
+
+    column = np.asarray(values)
+    return {
+        "color": Encoding.by_field(
+            "color", VALUE, scale=color_scale(column, scheme=scheme, k=k, cmap=cmap)
+        )
+    }
 
 
 def _elevation(node_z: Any, count: int) -> Any:
@@ -188,7 +293,14 @@ def _elevation(node_z: Any, count: int) -> Any:
     return array
 
 
-def _mesh_surface(scene: Any, mesh: Any, node_z: Any) -> Any:
+def _mesh_surface(
+    scene: Any,
+    mesh: Any,
+    node_z: Any,
+    values: Any = None,
+    location: str = "node",
+    source_crs: Any = None,
+) -> Any:
     """Build the PyVista ``PolyData`` surface a mesh layer draws, placed in the scene's display CRS.
 
     The connectivity is pyramids' (``Mesh2d.fan_triangles`` cuts every face into triangles with pure numpy);
@@ -205,6 +317,12 @@ def _mesh_surface(scene: Any, mesh: Any, node_z: Any) -> Any:
             nothing leaves the scene's CRS untouched.
         mesh: A pyramids ``Mesh2d`` (``node_x`` / ``node_y`` / ``fan_triangles``, and an optional ``crs``).
         node_z: The elevation argument from :meth:`MeshMixin.trimesh`, resolved by :func:`_elevation`.
+        values: The shading values to attach, or ``None`` for a flat surface — one per node (``location``
+            ``"node"``, stored as ``point_data``) or one per fan-triangle (``"face"``, ``cell_data``), carried
+            through the geometry's own drop/re-index of off-view faces. A wrong length is refused, naming both.
+        location: ``"node"`` or ``"face"`` — which of the two ``values`` is aligned with.
+        source_crs: The CRS ``mesh`` is in, used to reproject into the scene's display CRS; ``None`` falls back
+            to ``mesh.crs`` (a ``MeshDataset`` carries its CRS on the wrapper, not the bare ``Mesh2d``).
 
     Returns:
         A ``pyvista.PolyData`` surface whose cells are the mesh's fan triangles, or ``None`` when no triangle
@@ -217,7 +335,9 @@ def _mesh_surface(scene: Any, mesh: Any, node_z: Any) -> Any:
 
     x = np.asarray(mesh.node_x, dtype="float64")
     y = np.asarray(mesh.node_y, dtype="float64")
-    held = getattr(mesh, "crs", None)
+    # The mesh's source CRS: a `MeshDataset` carries it on the wrapper, not on the bare `Mesh2d`, so the seam
+    # conveys it as `source_crs`; a direct caller with a CRS-tagged `Mesh2d` falls back to `mesh.crs` (#557).
+    held = source_crs if source_crs is not None else getattr(mesh, "crs", None)
     # Reproject only when the scene already draws in another CRS — this reads `display_crs`, it does not set
     # it. Adoption (setting the scene's CRS from this mesh) is deferred past the drawable check below, so a
     # mesh that places no face leaves the scene's CRS untouched (review L2).
@@ -251,7 +371,23 @@ def _mesh_surface(scene: Any, mesh: Any, node_z: Any) -> Any:
     points = np.column_stack([x[used], y[used], z[used]])
     # VTK face stream: each cell is `[n_points, *point_ids]`; every cell here is a triangle, so a leading 3.
     faces = np.hstack([np.full((len(remapped), 1), 3, dtype=np.intp), remapped]).ravel()
-    return pv.PolyData(points, faces)
+    surface = pv.PolyData(points, faces)
+    if values is not None:
+        from digitalearth.three_d.builders.vector import VALUE
+
+        # Carry the shading values through the same drop/re-index as the geometry: a face value sits on each
+        # drawn triangle (cell data), a node value on each kept node (point data), so a partly off-view mesh
+        # keeps its colours aligned with the part that drew. `draw_trimesh` classifies them in place (#557).
+        # `MeshMixin.trimesh` has already checked the length (so a wrong one raises before the scene is touched,
+        # review L4): one value per fan-triangle for `"face"`, one per node for `"node"`. Carry it through the
+        # same drop/re-index as the geometry — the drawable triangles for a face value, the kept nodes for a
+        # node one — so a partly off-view mesh keeps its colours aligned with the part that drew.
+        column = np.asarray(values, dtype="float64")
+        if location == "face":
+            surface.cell_data[VALUE] = column[drawable]
+        else:
+            surface.point_data[VALUE] = column[used]
+    return surface
 
 
 def draw_trimesh(scene: Any, data: Any, layer: Any) -> Any:
@@ -265,20 +401,31 @@ def draw_trimesh(scene: Any, data: Any, layer: Any) -> Any:
         scene: The scene being drawn into.
         data: The layer's source — the ``Mesh2d`` the builder stored. The surface's connectivity and node
             coordinates come off it.
-        layer: The layer's description, whose props carry ``node_z``, ``color``, ``opacity``, ``show_edges``
+        layer: The layer's description, whose props carry the shading keywords (``values``, ``location``,
+            ``cmap``, ``scheme``, ``k``) and ``source_crs`` as well as ``node_z``, ``color``, ``opacity``,
+            ``show_edges``
             and ``edge_color``.
 
     Returns:
         The ``(surface, actor)`` pair, or ``None`` when the mesh placed no drawable face and the scene is not
         ``strict``.
     """
+    from digitalearth.three_d.builders.vector import VALUE
+    from digitalearth.three_d.core.base import classified_scalars
+
     props = drawing_props(layer.symbology.props)
     node_z = props.pop("node_z", None)
+    values = props.pop("values", None)
+    location = props.pop("location", "node")
+    cmap = props.pop("cmap", "viridis")
+    scheme = props.pop("scheme", None)
+    k = props.pop("k", 5)
+    source_crs = props.pop("source_crs", None)
     color = props.pop("color", MESH_FILL_COLOR)
     opacity = props.pop("opacity", None)
     show_edges = props.pop("show_edges", True)
     edge_color = props.pop("edge_color", MESH_EDGE_COLOR)
-    surface = _mesh_surface(scene, data, node_z)
+    surface = _mesh_surface(scene, data, node_z, values, location, source_crs)
     if surface is None:
         scene._skip_empty(
             "trimesh",
@@ -289,5 +436,30 @@ def draw_trimesh(scene: Any, data: Any, layer: Any) -> Any:
     extra: dict[str, Any] = {"show_edges": bool(show_edges), "edge_color": edge_color}
     if opacity is not None:
         extra["opacity"] = opacity
-    actor = scene.plotter.add_mesh(surface, color=color, **extra, **props)
+    if values is None:
+        actor = scene.plotter.add_mesh(surface, color=color, **extra, **props)
+        return surface, actor
+    # Shaded by the mesh's own variable (#557): `_mesh_surface` carried the raw values through the geometry's
+    # drop/re-index; classify them into the scalars PyVista colours by — the same classification every tier
+    # cuts its classes with — and draw the surface unlit so the colour reads flat on a strict GL (a lit
+    # normal-less surface came back blank on Mesa 26 llvmpipe, #538), the 3-D sibling of static `tripcolor`.
+    reserved = {"scalars", "lighting"} & props.keys()
+    if reserved:
+        raise TypeError(
+            f"{', '.join(sorted(reserved))} are set by the shaded path and cannot be passed to a value-shaded "
+            f"trimesh; shade with values=/cmap= and drop them"
+        )
+    store = surface.cell_data if location == "face" else surface.point_data
+    encoding = layer.symbology.encoding("color")
+    style = classified_scalars(
+        store[VALUE],
+        scheme=scheme,
+        k=k,
+        cmap=cmap,
+        scale=None if encoding is None else encoding.scale,
+    )
+    store[VALUE] = style.pop("scalars")
+    actor = scene.plotter.add_mesh(
+        surface, scalars=VALUE, lighting=False, **style, **extra, **props
+    )
     return surface, actor

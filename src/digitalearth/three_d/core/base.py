@@ -2693,3 +2693,36 @@ class Scene3DBase:
         """
         self.close()
         return False
+
+    def _repr_png_(self) -> bytes | None:
+        """Return a PNG of the scene so a notebook embeds a static image inline (#558).
+
+        IPython calls this for the last expression in a cell, so a plain ``ds.plot(var, backend="3d")`` — which
+        returns a ``Scene3D`` — shows a rendered image with no caller-side screenshot code, the 3-D counterpart
+        of the inline PNG a matplotlib figure embeds. It renders the off-screen frame through
+        :meth:`screenshot` and encodes it as PNG bytes, which the saved notebook keeps, so the image survives
+        ``nbconvert --execute`` and ``mkdocs-jupyter`` (``execute: false``) static export. The live, interactive
+        view stays available through :meth:`~digitalearth.three_d.Scene3D.show` and
+        :meth:`~digitalearth.three_d.app.serve.ServeMixin.serve`.
+
+        Rendering happens headless under :data:`pyvista.OFF_SCREEN` (which every 3-D notebook sets), so the
+        repr needs no display; `screenshot` builds the scene's lazy plotter the same way an explicit
+        ``screenshot()`` call would.
+
+        Returns:
+            bytes: the ``image/png`` payload Jupyter embeds in the cell's saved output, or ``None`` when the
+            frame cannot be rendered (a display-less host that never set :data:`pyvista.OFF_SCREEN`), so the
+            notebook falls back to the text repr instead of showing a traceback — a repr must never raise.
+        """
+        import io
+
+        try:
+            from PIL import Image
+
+            buffer = io.BytesIO()
+            Image.fromarray(self.screenshot()).save(buffer, format="PNG")
+            return buffer.getvalue()
+        except Exception:  # noqa: BLE001 - a repr must never raise; degrade to the text repr
+            # Covers the whole render→encode path: a display-less host that never set `pyvista.OFF_SCREEN`,
+            # or a frame PIL cannot encode. Returning None makes the notebook fall back to the text repr.
+            return None
