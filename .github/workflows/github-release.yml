@@ -215,3 +215,32 @@ jobs:
               --body "Automated release PR. Merge MANUALLY with a MERGE COMMIT (a squash orphans the tag)."
           fi
           echo "Release PR for ${HEAD_BRANCH} is open; merge it manually into main."
+
+  # If the release fails anywhere after `prepare` pushed an auto-created branch (and no PR was opened yet),
+  # delete that branch so failed attempts don't litter the remote. Only touches `release/auto-*` branches
+  # (never a user-supplied release-branch) and never one that already has an open PR.
+  cleanup-on-failure:
+    needs: [prepare, pure-wheel-test, release]
+    if: ${{ failure() && needs.prepare.outputs.branch != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Delete the orphaned auto-created release branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+        run: |
+          set -euo pipefail
+          case "$BRANCH" in
+            release/auto-*) ;;
+            *) echo "Not an auto-created branch ($BRANCH); leaving it."; exit 0 ;;
+          esac
+          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            echo "A PR exists for $BRANCH; leaving the branch for the PR."
+            exit 0
+          fi
+          echo "Deleting orphaned release branch $BRANCH"
+          gh api -X DELETE "repos/$REPOSITORY/git/refs/heads/$BRANCH" || echo "branch $BRANCH already gone"
