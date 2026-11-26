@@ -189,6 +189,11 @@ jobs:
       # failed jobs" (run_attempt yields a new auto-branch and the bump is not idempotent); delete the failed
       # release's branch + tag, then dispatch a fresh release.
       - name: Open the release PR into main (merge manually)
+        # Non-fatal: a `gh pr create` hiccup must NOT fail the release run. The tag, GitHub Release and
+        # release-ref artifact are already done by this point, and pypi-release + docs-deploy gate on this
+        # run's success -- so a failed PR-open would otherwise block the publish. If it fails, open the PR
+        # by hand; the publish and docs still proceed.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ needs.prepare.outputs.branch }}
