@@ -146,6 +146,12 @@ jobs:
        && github.event.workflow_run.head_repository.fork == false)
     needs: build-strict
     runs-on: ubuntu-latest
+    # Serialize release-docs deploys so two runs never race on gh-pages (mike deploy + prune). A UI/PAT-
+    # published release fires BOTH the `release` and `workflow_run` events; a constant group makes the second
+    # wait instead of corrupting the branch. The bot path fires only workflow_run, so this is normally a no-op.
+    concurrency:
+      group: mkdocs-deploy-release
+      cancel-in-progress: false
     permissions:
       contents: write
       pages: write
