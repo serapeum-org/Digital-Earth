@@ -105,6 +105,8 @@ jobs:
             exit 1
           fi
           if [ -n "$GIVEN_BRANCH" ]; then
+            git ls-remote --exit-code --heads origin "$GIVEN_BRANCH" >/dev/null \
+              || { echo "::error::release-branch '$GIVEN_BRANCH' does not exist on origin"; exit 1; }
             echo "Using the given release branch: $GIVEN_BRANCH"
             BRANCH="$GIVEN_BRANCH"
           else
@@ -185,9 +187,9 @@ jobs:
 
       # Open the release PR into main. It is MERGED MANUALLY: main's ruleset requires a review, so the
       # workflow cannot land the merge unattended. Merge it with a MERGE COMMIT (not squash) so the tagged
-      # bump commit stays an ancestor of main. RECOVERY: a failed release is NOT re-runnable via "Re-run
-      # failed jobs" (run_attempt yields a new auto-branch and the bump is not idempotent); delete the failed
-      # release's branch + tag, then dispatch a fresh release.
+      # bump commit stays an ancestor of main. RECOVERY: do NOT re-run a failed release. "Re-run failed jobs"
+      # keeps prepare's branch but re-bumps the already-bumped tree / collides on the existing tag; "Re-run all
+      # jobs" cuts a fresh auto-branch. Either way: delete the failed release's branch + tag, then dispatch anew.
       - name: Open the release PR into main (merge manually)
         # Non-fatal: a `gh pr create` hiccup must NOT fail the release run. The tag, GitHub Release and
         # release-ref artifact are already done by this point, and pypi-release + docs-deploy gate on this
