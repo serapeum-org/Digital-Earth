@@ -179,7 +179,8 @@ jobs:
         with:
           name: release-ref
           path: release-ref.txt
-          retention-days: 1
+          # 7 days, not 1: a delayed re-publish on the workflow_run path must still find the artifact.
+          retention-days: 7
           if-no-files-found: error
 
       # Open the release PR into main. It is MERGED MANUALLY: main's ruleset requires a review, so the
