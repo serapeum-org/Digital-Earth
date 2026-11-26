@@ -868,7 +868,10 @@ def _mesh_values_of(data: Any) -> tuple[Any, str]:
     source = get_source(data)
     if not isinstance(source, MeshSource):
         return None, "node"
-    return source.z.values, source.location
+    z = source.z
+    if z is None:
+        return None, "node"
+    return z.values, source.location
 
 
 def _mesh_declares_crs(data: Any) -> bool:
