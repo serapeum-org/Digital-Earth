@@ -91,8 +91,9 @@ def test_trimesh_refuses_a_wrong_length_value_array(ugrid_mesh):
     mesh = ugrid_mesh("face").mesh
     scene = Scene3D(off_screen=True)
     try:
+        values = np.array([10.0, 20.0])
         with pytest.raises(ValueError, match="one value per"):
-            scene.trimesh(mesh, values=np.array([10.0, 20.0]), location="face")
+            scene.trimesh(mesh, values=values, location="face")
     finally:
         scene.close()
 
@@ -143,8 +144,9 @@ def test_trimesh_refuses_a_wrong_length_node_value_array(ugrid_mesh):
     mesh = ugrid_mesh("node").mesh
     scene = Scene3D(off_screen=True)
     try:
+        values = np.array([1.0, 2.0])
         with pytest.raises(ValueError, match="one value per node"):
-            scene.trimesh(mesh, values=np.array([1.0, 2.0]), location="node")
+            scene.trimesh(mesh, values=values, location="node")
     finally:
         scene.close()
 
@@ -166,10 +168,9 @@ def test_a_wrong_length_value_leaves_the_scene_crs_untouched(ugrid_mesh):
     scene = Scene3D(off_screen=True)
     try:
         assert scene.display_crs is None
+        values = np.array([1.0, 2.0])
         with pytest.raises(ValueError, match="one value per node"):
-            scene.trimesh(
-                mesh, values=np.array([1.0, 2.0]), location="node", source_crs=28992
-            )
+            scene.trimesh(mesh, values=values, location="node", source_crs=28992)
         assert scene.display_crs is None, scene.display_crs
     finally:
         scene.close()

@@ -56,13 +56,9 @@ def test_relief_on_a_face_located_mesh_is_refused(ugrid_mesh):
     try:
         # One value per fan-triangle (the quad+triangle fixture fan-cuts into three), so the length check
         # passes and the relief-on-a-face refusal is what fires.
+        values = np.array([10.0, 10.0, 20.0])
         with pytest.raises(ValueError, match="node_z"):
-            scene.trimesh(
-                mesh,
-                values=np.array([10.0, 10.0, 20.0]),
-                location="face",
-                relief=True,
-            )
+            scene.trimesh(mesh, values=values, location="face", relief=True)
     finally:
         scene.close()
 
