@@ -3,9 +3,10 @@ name: github-release
 permissions:
   contents: read
 
-# Serialize releases: a second dispatch queues behind the first instead of racing it on branch
-# creation / bump / tag / PR (two runs off the same tip would compute the same next version and
-# collide). Releases are rare and admin-only, so queue rather than cancel.
+# Serialize releases: one release runs at a time (a second dispatch queues, it does not cancel). NOTE this
+# does NOT prevent a duplicate-version/tag collision: until a release PR is merged, main is still unbumped,
+# so a second release dispatched before that merge recomputes the same version and fails at tag push. Rule:
+# merge each release PR into main before dispatching the next. Releases are rare and admin-only.
 concurrency:
   group: github-release
   cancel-in-progress: false
@@ -114,8 +115,9 @@ jobs:
           fi
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
-  # Build the wheel and run it across the OS/Python matrix on the SAME branch the release is cut on, so a
-  # wheel that cannot install or import on a supported target blocks the tag/release/PyPI chain.
+  # Build the wheel and run it across the OS/Python matrix on the release branch (its PRE-BUMP tip -- the
+  # version bump + lockfile land later, in the release job), so a wheel that cannot install or import on a
+  # supported target blocks the tag/release/PyPI chain.
   pure-wheel-test:
     needs: prepare
     uses: ./.github/workflows/pure-wheel-test.yml
@@ -182,7 +184,9 @@ jobs:
 
       # Open the release PR into main. It is MERGED MANUALLY: main's ruleset requires a review, so the
       # workflow cannot land the merge unattended. Merge it with a MERGE COMMIT (not squash) so the tagged
-      # bump commit stays an ancestor of main. A re-run that finds the PR already open does not re-create it.
+      # bump commit stays an ancestor of main. RECOVERY: a failed release is NOT re-runnable via "Re-run
+      # failed jobs" (run_attempt yields a new auto-branch and the bump is not idempotent); delete the failed
+      # release's branch + tag, then dispatch a fresh release.
       - name: Open the release PR into main (merge manually)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
