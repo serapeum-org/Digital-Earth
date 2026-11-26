@@ -99,6 +99,10 @@ jobs:
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
+          if [ "$GIVEN_BRANCH" = "main" ]; then
+            echo "::error::Cannot release on 'main' (protected; the bump push is rejected). Leave empty to auto-create."
+            exit 1
+          fi
           if [ -n "$GIVEN_BRANCH" ]; then
             echo "Using the given release branch: $GIVEN_BRANCH"
             BRANCH="$GIVEN_BRANCH"
@@ -186,10 +190,6 @@ jobs:
         run: |
           set -euo pipefail
           HEAD_BRANCH="$BRANCH"
-          if [ "$HEAD_BRANCH" = "main" ]; then
-            echo "Release was cut on main; nothing to merge back."
-            exit 0
-          fi
           VERSION="$(git describe --tags --abbrev=0 2>/dev/null || true)"
           TITLE="release: land ${VERSION:-the version bump, changelog and tag} on main"
           if gh pr view "$HEAD_BRANCH" --json number >/dev/null 2>&1; then
