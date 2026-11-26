@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: ${{ matrix.environment }}
           activate-environment: ${{ matrix.environment }}
@@ -74,7 +74,7 @@ jobs:
 
       - name: Set up Python
         id: setup
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: dev
           activate-environment: dev
@@ -161,7 +161,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: dev
           activate-environment: dev
@@ -208,7 +208,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: dev
           activate-environment: dev
@@ -233,7 +233,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: viz3d
           activate-environment: viz3d
@@ -366,7 +366,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: viz3d
           activate-environment: viz3d
@@ -422,7 +422,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: photoreal
           activate-environment: photoreal
@@ -455,7 +455,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: photoreal
           activate-environment: photoreal
@@ -489,7 +489,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: interactive
           activate-environment: interactive
@@ -524,7 +524,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: interactive
           activate-environment: interactive
@@ -546,7 +546,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: web
           activate-environment: web
@@ -579,7 +579,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: all
           activate-environment: all
@@ -611,7 +611,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: web
           activate-environment: web
@@ -634,7 +634,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
         with:
           environments: web
           activate-environment: web

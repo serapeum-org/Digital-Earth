@@ -46,7 +46,7 @@ jobs:
     # The same environment the deploy jobs get: mkdocs-deploy calls this action internally with these
     # inputs, so reusing it here keeps the gate and the deploy on one environment instead of letting a
     # hand-installed toolchain drift from the one that actually publishes.
-    - uses: serapeum-org/github-actions/actions/python-setup/pixi@13e2d4fd050748da242c62dfb3b3abe40f71dfb3 # pixi/v1.2.2
+    - uses: serapeum-org/github-actions/actions/python-setup/pixi@71653ea9fc52dff9166b270614a41d7e42b3453a # pixi/v1.3.0
       with:
         environments: 'docs'
         activate-environment: 'docs'
