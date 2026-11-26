@@ -40,6 +40,7 @@ jobs:
         id: ref
         env:
           EVENT_NAME: ${{ github.event_name }}
+          # Fallback serves the workflow_dispatch path, where ref_name is the chosen branch's short name.
           FALLBACK_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail

@@ -52,6 +52,9 @@ jobs:
         activate-environment: 'docs'
         version: 'v0.73.0'
         verify-lock: false
+        # Explicit (pixi/v1.3.0 flips the default to true): match the other pixi steps rather than let a
+        # dependency bump silently change the gate's caching.
+        cache: true
 
     - name: Build docs with --strict
       run: pixi run -e docs docs-build-strict --site-dir /tmp/site
@@ -136,6 +139,7 @@ jobs:
       id: ref
       env:
         EVENT_NAME: ${{ github.event_name }}
+        # Fallback serves the `release` event, where github.ref is refs/tags/<tag> (the released tag).
         FALLBACK_REF: ${{ github.ref }}
       run: |
         set -euo pipefail
