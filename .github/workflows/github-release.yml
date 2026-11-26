@@ -97,3 +97,20 @@ jobs:
           git push origin "$RELEASE_BRANCH"
         env:
           RELEASE_BRANCH: ${{ inputs.release-branch }}
+
+      # Hand the release branch to pypi-release. pypi-release is triggered by `workflow_run`, whose payload's
+      # head_branch points at the dispatched ref, not necessarily the branch that received the version-bump +
+      # lockfile commits above. Uploading the branch name as an artifact is the one channel that crosses the
+      # workflow_run boundary; pypi-release downloads it by run id and checks out that exact branch.
+      - name: Record the release branch for pypi-release
+        env:
+          RELEASE_BRANCH: ${{ inputs.release-branch }}
+        run: printf '%s\n' "$RELEASE_BRANCH" > release-ref.txt
+
+      - name: Upload the release ref for pypi-release
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-ref
+          path: release-ref.txt
+          retention-days: 1
+          if-no-files-found: error
