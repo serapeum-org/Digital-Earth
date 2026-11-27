@@ -374,6 +374,24 @@ def _face_values_to_nodes(mesh: Any, values: Any, how: str = "face") -> Any:
         A ``(n_nodes,)`` float array of per-node heights, ``0`` where no finite-valued face touches the node.
 
     Examples:
+        - The default per-face mode collapses each face's fan-triangles back to the face, so a quad and a
+          triangle sharing a node lift it to the mean of the two faces (15), not the fan-weighted 13.33:
+            ```python
+            >>> import numpy as np
+            >>> from types import SimpleNamespace
+            >>> conn = SimpleNamespace(
+            ...     data=np.array([[0, 1, 2, 3], [1, 4, 2, -1]]),
+            ...     nodes_per_element=lambda: np.array([4, 3]),
+            ... )
+            >>> mesh = SimpleNamespace(
+            ...     fan_triangles=np.array([[0, 1, 2], [0, 2, 3], [1, 4, 2]]),
+            ...     node_x=np.zeros(5),
+            ...     face_node_connectivity=conn,
+            ... )
+            >>> _face_values_to_nodes(mesh, np.array([10.0, 10.0, 20.0])).tolist()
+            [10.0, 15.0, 15.0, 10.0, 20.0]
+
+            ```
         - The per-triangle mode averages the fan-triangles touching each node — the shared node blends both:
             ```python
             >>> import numpy as np
@@ -409,19 +427,32 @@ def _face_values_to_nodes(mesh: Any, values: Any, how: str = "face") -> Any:
     # "face": collapse each face's fan-triangles back to the face, then average the distinct faces per node.
     connectivity = mesh.face_node_connectivity
     faces = np.asarray(connectivity.data, dtype=np.intp)
+    triangles = np.asarray(mesh.fan_triangles, dtype=np.intp)
     per_face = np.clip(np.asarray(connectivity.nodes_per_element()) - 2, 0, None)
-    if faces.ndim != 2 or int(per_face.sum()) != column.shape[0]:
-        # The spread values do not line up with the connectivity's fan-cut: fall back to the triangle reduction
-        # rather than mis-group them (a direct caller's per-triangle values have no face grouping to recover).
-        return _face_values_to_nodes(mesh, values, how="triangle")
-    # Each fan-triangle belongs to a face (triangulation is face-major); recover one value per face, then lift
-    # every node by the mean of the distinct faces whose node list includes it — a quad counts once, not once
-    # per triangle.
     face_of_triangle = np.repeat(np.arange(len(per_face), dtype=np.intp), per_face)
+    # The regroup trusts that the triangulation is face-major in face-index order. A count match alone cannot
+    # catch a reorder (base's `_fan_values` documents exactly this), so verify each fan group leads with its
+    # own face's first node — the same check `_fan_values` uses for the inverse spread. If the values are not
+    # face-grouped (e.g. a direct caller's genuinely per-triangle array), fall back to the triangle reduction
+    # rather than mis-group them into the wrong faces and warp the surface wrongly.
+    face_major = (
+        faces.ndim == 2
+        and triangles.ndim == 2
+        and int(per_face.sum()) == column.shape[0]
+    )
+    if face_major:
+        face_major = np.array_equal(triangles[:, 0], np.repeat(faces[:, 0], per_face))
+    if not face_major:
+        return _face_values_to_nodes(mesh, values, how="triangle")
+    # Recover one value per face, then lift every node by the mean of the distinct faces whose node list
+    # includes it — a quad counts once, not once per triangle.
     face_value = _scatter_mean(face_of_triangle, column, len(per_face))
     has_value = np.zeros(len(per_face), dtype=bool)
-    np.add.at(has_value, face_of_triangle[np.isfinite(column)], True)
+    # A face is usable only if a finite value reached it; `[idx] = True` is an idempotent OR over the triangles.
+    has_value[face_of_triangle[np.isfinite(column)]] = True
     usable = has_value & (per_face > 0)
+    # `faces >= 0` drops the fill slots: a real `Mesh2d` normalises all connectivity padding (and only padding)
+    # to negative in `Mesh2d.__init__`, so a non-negative entry is always a genuine node index.
     valid = (faces >= 0) & usable[:, None]
     face_index = np.broadcast_to(
         np.arange(len(per_face), dtype=np.intp)[:, None], faces.shape
