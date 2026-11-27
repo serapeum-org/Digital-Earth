@@ -52,7 +52,12 @@ jobs:
             # No artifact => github-release withheld it (a draft release), or the run never reached the
             # upload. Either way there is nothing to publish: skip cleanly rather than erroring on the file.
             if [ ! -f .release-ref/release-ref.txt ]; then
-              echo "no release-ref artifact (draft or non-publishing run); skipping PyPI publish"
+              # ::warning:: not echo: GitHub surfaces a warning as a run annotation and on the run
+              # summary, so a release that published NOTHING is distinguishable at a glance from one that
+              # did. A bare echo only lands in this step's log, which nobody opens on a green run -- and
+              # "the release workflow went green" is exactly the wrong conclusion to invite here.
+              echo "::warning::no release-ref token; PyPI publish SKIPPED (draft release, or the token was unavailable)"
+              echo "- **PyPI publish skipped** - no \`release-ref\` token (draft, or unavailable)" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi

@@ -83,7 +83,10 @@ jobs:
               esac
               [ "${#REF}" -eq 40 ] || { echo "::error::release ref '$REF' is not a 40-char commit SHA"; exit 1; }
             else
-              echo "no release-ref artifact (draft or non-publishing run); gating the default tree"
+              # A warning, not a bare echo: a green build-strict on a draft otherwise reads as "the
+              # staged release's docs are fine" when what was actually gated is the default tree.
+              echo "::warning::no release-ref token; gating the DEFAULT TREE, not a released commit"
+              echo "- **Docs gate ran against the default tree** - no \`release-ref\` token" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
               REF=""
             fi ;;
           release) REF="$RELEASE_REF" ;;
@@ -212,7 +215,10 @@ jobs:
           # upload. Nothing was published, so there are no versioned docs to deploy and no `latest` alias
           # to move: skip cleanly rather than erroring on the file.
           if [ ! -f .release-ref/release-ref.txt ]; then
-            echo "no release-ref artifact (draft or non-publishing run); skipping the release deploy"
+            # A warning, not a bare echo -- see the note in pypi-release.yml's resolve step. A
+            # skipped release deploy means the published docs still point at the previous version.
+            echo "::warning::no release-ref token; release docs deploy SKIPPED (draft release, or the token was unavailable)"
+            echo "- **Release docs deploy skipped** - no \`release-ref\` token (draft, or unavailable)" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

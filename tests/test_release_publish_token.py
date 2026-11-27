@@ -370,6 +370,45 @@ class TestADraftActuallyStopsThePublish:
             f"Gate each on `{gate} != 'true'`:\n  " + "\n  ".join(offenders)
         )
 
+    @pytest.mark.parametrize(("filename", "job_id", "job"), _consumer_params())
+    def test_a_skipped_publish_is_announced_as_a_run_annotation(
+        self, filename, job_id, job
+    ):
+        """A silent skip on a green run is how a never-released version goes unnoticed.
+
+        Args:
+            filename: The workflow file the job came from.
+            job_id: The job under test.
+            job: The job itself.
+
+        Test scenario:
+            The skip branch originally announced itself with a bare `echo`, which lands only in the
+            step log. A run that skipped the PyPI publish was then indistinguishable at a glance from
+            one that published: both are a green check on `pypi-release`. Since the consequence is
+            "this version was never released", and the token's absence also covers a failed download
+            and a lapsed 7-day retention, the skip must reach the run annotations and the run summary.
+        """
+        step = _resolve_step(job)
+        assert step is not None, (
+            f"{filename} / job {job_id} downloads the token but no step reads it"
+        )
+        script = step["run"]
+        assert "::warning::" in script, (
+            f"{_step_label(filename, job_id, step)} announces a skipped publish/deploy without a "
+            "`::warning::`, so it leaves no annotation and a green run looks like a successful one"
+        )
+        assert "GITHUB_STEP_SUMMARY" in script, (
+            f"{_step_label(filename, job_id, step)} writes no line to $GITHUB_STEP_SUMMARY, so the "
+            "skip is invisible on the run's summary page"
+        )
+        # The expansion must carry a default. These scripts run under `set -u`, so a bare
+        # `$GITHUB_STEP_SUMMARY` is fatal wherever it is unset -- which would turn a benign draft skip
+        # into a FAILED release, and did exactly that when first written.
+        assert '"${GITHUB_STEP_SUMMARY:-' in script, (
+            f"{_step_label(filename, job_id, step)} expands $GITHUB_STEP_SUMMARY without a default; "
+            "under `set -u` an unset value aborts the step, so a draft would red the release"
+        )
+
     def test_the_docs_gate_still_runs_on_every_non_release_event(self):
         """The success guard must not cost the repository its pull-request docs gate.
 
