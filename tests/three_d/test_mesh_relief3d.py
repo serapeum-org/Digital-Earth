@@ -49,16 +49,53 @@ def test_relief_scales_the_lift(ugrid_mesh):
         scene.close()
 
 
-def test_relief_on_a_face_located_mesh_is_refused(ugrid_mesh):
-    """``relief=`` lifts each node by its value, so a face-located mesh is refused, pointing at node_z (#557)."""
+def test_relief_warps_a_face_located_mesh_by_face_node_averaging(ugrid_mesh):
+    """``relief=True`` warps a face-located mesh by averaging its face values onto the nodes (#569).
+
+    Test scenario:
+        The face fixture (``depth=[10, 20]`` → fan-triangle values ``[10, 10, 20]``) drawn with
+        ``relief=True`` no longer refuses: the lone triangle-only node carries depth 20, so the warped
+        surface reaches z=20 instead of raising a ``ValueError``.
+    """
+    scene = quickmap(ugrid_mesh("face"), backend="3d", relief=True)
+    try:
+        poly = scene.layers[0][0]
+        assert float(poly.points[:, 2].max()) == 20.0, poly.points[:, 2].max()
+    finally:
+        scene.close()
+
+
+def test_face_relief_averages_incident_face_values_onto_each_node(ugrid_mesh):
+    """``_face_values_to_nodes`` lifts each node to the mean of the fan-triangles that touch it (#569).
+
+    Test scenario:
+        For the quad+triangle fixture (fan-triangle values ``[10, 10, 20]``) each node's height is the mean
+        of its incident fan-triangle values — a nodes-only-on-the-quad node reads 10, the triangle-only node
+        reads 20, and the shared nodes fall strictly between — matching an independent incident-mean oracle.
+    """
+    from digitalearth.three_d.builders.mesh import _face_values_to_nodes
+
+    mesh = ugrid_mesh("face").mesh
+    # One value per fan-triangle, the shape the quad+triangle fixture (3 fan-triangles) is spread into.
+    face_values = np.array([10.0, 10.0, 20.0])
+    triangles = np.asarray(mesh.fan_triangles)
+    expected = np.array(
+        [
+            face_values[np.any(triangles == node, axis=1)].mean()
+            for node in range(len(mesh.node_x))
+        ]
+    )
+    heights = _face_values_to_nodes(mesh, face_values)
+    np.testing.assert_allclose(heights, expected)
+
+
+def test_relief_without_values_is_still_refused(ugrid_mesh):
+    """``relief=`` lifts each node by a value, so a mesh carrying none is still refused (#569)."""
     mesh = ugrid_mesh("face").mesh
     scene = Scene3D(off_screen=True)
     try:
-        # One value per fan-triangle (the quad+triangle fixture fan-cuts into three), so the length check
-        # passes and the relief-on-a-face refusal is what fires.
-        values = np.array([10.0, 10.0, 20.0])
-        with pytest.raises(ValueError, match="node_z"):
-            scene.trimesh(mesh, values=values, location="face", relief=True)
+        with pytest.raises(ValueError, match="values-carrying"):
+            scene.trimesh(mesh, relief=True)
     finally:
         scene.close()
 

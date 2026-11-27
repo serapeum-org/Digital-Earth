@@ -109,10 +109,13 @@ class MeshMixin(_MixinBase):
             location: ``"node"`` (the default) or ``"face"`` — whether ``values`` sit on the nodes (smooth
                 shading) or on the fan triangles (flat per-face shading), aligned with the geometry's
                 drop/re-index of off-view faces.
-            relief: Lift a **node-located** surface by its own value so coloured data reads as 3-D relief —
-                ``True`` raises each node to its value, a number exaggerates by that factor. ``None`` (default)
-                leaves the surface flat (or at an explicit ``node_z``); a face-located mesh is refused and
-                pointed at ``node_z``. ``quickmap`` passes a caller's ``relief=`` through.
+            relief: Lift the surface by its own value so coloured data reads as 3-D relief — ``True`` raises
+                each node to its value, a number exaggerates by that factor. A node-located mesh lifts each node
+                exactly; a **face**-located one is reduced to the nodes first by averaging the fan-triangles that
+                touch each node (#569), so ``relief=True`` warps the cell-centred fields drivers produce without
+                a hand-rolled ``node_z``. ``None`` (default) leaves the surface flat (or at an explicit
+                ``node_z``); a mesh carrying no ``values`` at all has nothing to lift by and is refused.
+                ``quickmap`` passes a caller's ``relief=`` through.
             source_crs: The CRS the mesh's coordinates are in, so the surface reprojects into the scene's
                 display CRS. ``quickmap`` fills it from the ``MeshDataset`` (whose wrapper, not its bare
                 ``Mesh2d``, carries the CRS); a direct caller with a CRS-tagged ``Mesh2d`` can leave it
@@ -198,17 +201,22 @@ class MeshMixin(_MixinBase):
         if relief and node_z is None:
             import numpy as np
 
-            # "Lift by the value" (#557): raise each node to its own value so a coloured surface reads as 3-D
-            # relief. `False`/`0` mean no relief (truthiness, not `is not None`). It needs a node-located value
-            # per node; a face value belongs to a triangle, not a node, so a face mesh is sent to `node_z`.
-            if values is None or location != "node":
+            # "Lift by the value" (#557/#569): raise each node to its own value so a coloured surface reads as
+            # 3-D relief. `False`/`0` mean no relief (truthiness, not `is not None`). A node-located value lifts
+            # each node exactly; a face-located one is reduced to the nodes first by averaging the incident
+            # faces (#569), so `relief=True` "just works" for the cell-centred meshes drivers produce. Only a
+            # mesh carrying no value at all has nothing to lift by and is refused.
+            if values is None:
                 raise ValueError(
-                    "relief= lifts each node by its own value, so it needs a node-located values-carrying "
-                    "mesh; pass node_z= for an explicit relief, or for a face-located one"
+                    "relief= lifts each node by its own value, so it needs a values-carrying mesh; "
+                    "pass node_z= for an explicit relief"
                 )
-            node_z = np.asarray(values, dtype="float64") * (
-                1.0 if relief is True else float(relief)
+            heights = (
+                np.asarray(values, dtype="float64")
+                if location == "node"
+                else _face_values_to_nodes(mesh, values)
             )
+            node_z = heights * (1.0 if relief is True else float(relief))
         return self._add_described_layer(
             kind="mesh",
             data=mesh,
@@ -291,6 +299,44 @@ def _elevation(node_z: Any, count: int) -> Any:
             "node (in mesh order) or a single scalar"
         )
     return array
+
+
+def _face_values_to_nodes(mesh: Any, values: Any) -> Any:
+    """Reduce per-fan-triangle values to a per-node height by averaging the incident faces (#569).
+
+    ``relief=`` lifts each node by a value, but a cell-centred mesh — the norm for hydrodynamic / finite-volume
+    output (water level, depth, velocity are stored per face) — carries its values on the faces, not the nodes.
+    This is the standard cell-data → point-data step a 3-D viewer does before warping such a surface: each node
+    is raised to the mean of the fan-triangles that touch it (VTK's own default is the same unweighted average),
+    so ``relief=True`` warps a face mesh without the caller hand-rolling a per-node array. ``values`` is already
+    one value per **fan-triangle** (``quickmap`` spreads a ``MeshDataset``'s per-face values to its triangles,
+    and :meth:`MeshMixin.trimesh` has checked the length), aligned with ``mesh.fan_triangles``. A node touched by
+    no face (an isolated node that no triangle uses, and so one the surface never draws) stays at ``0``.
+
+    Args:
+        mesh: The pyramids ``Mesh2d`` being warped — its ``fan_triangles`` give the node triple of each triangle
+            and ``node_x`` gives the node count.
+        values: One value per fan-triangle, in ``mesh.fan_triangles`` order (the face-located shading array).
+
+    Returns:
+        A ``(n_nodes,)`` float array: each node's height is the mean of the values of the incident fan-triangles,
+        or ``0`` where no triangle touches the node.
+    """
+    import numpy as np
+
+    triangles = np.asarray(mesh.fan_triangles, dtype=np.intp)
+    column = np.asarray(values, dtype="float64")
+    node_count = len(mesh.node_x)
+    # Scatter each fan-triangle's value onto its three nodes and count the touches, then divide: a node's
+    # height is the unweighted mean of the faces incident on it. `np.add.at` accumulates the repeated indices
+    # (a node shared by several triangles appears several times) that plain fancy-indexing would overwrite.
+    sums = np.zeros(node_count, dtype="float64")
+    counts = np.zeros(node_count, dtype="float64")
+    np.add.at(sums, triangles.ravel(), np.repeat(column, triangles.shape[1]))
+    np.add.at(counts, triangles.ravel(), 1.0)
+    return np.divide(
+        sums, counts, out=np.zeros(node_count, dtype="float64"), where=counts > 0
+    )
 
 
 def _mesh_surface(
