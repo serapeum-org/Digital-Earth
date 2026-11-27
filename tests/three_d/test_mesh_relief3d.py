@@ -65,28 +65,68 @@ def test_relief_warps_a_face_located_mesh_by_face_node_averaging(ugrid_mesh):
         scene.close()
 
 
-def test_face_relief_averages_incident_face_values_onto_each_node(ugrid_mesh):
-    """``_face_values_to_nodes`` lifts each node to the mean of the fan-triangles that touch it (#569).
+def _spread_to_fan_triangles(mesh, face_values):
+    """Spread one value per mesh face across its fan-triangles, the way the seam feeds ``trimesh``."""
+    counts = np.clip(
+        np.asarray(mesh.face_node_connectivity.nodes_per_element()) - 2, 0, None
+    )
+    return np.repeat(np.asarray(face_values, dtype="float64"), counts)
+
+
+def _per_face_node_oracle(mesh, face_values):
+    """Per-node mean over the distinct FACES touching each node (computed from connectivity, not triangles)."""
+    conn = np.asarray(mesh.face_node_connectivity.data)
+    face_values = np.asarray(face_values, dtype="float64")
+    out = []
+    for node in range(len(mesh.node_x)):
+        incident = [
+            face_values[f] for f, row in enumerate(conn) if node in row[row >= 0]
+        ]
+        out.append(float(np.mean(incident)) if incident else 0.0)
+    return np.array(out)
+
+
+def test_face_relief_default_is_a_per_face_mean(ugrid_mesh):
+    """The default reduction lifts each node to the mean of the distinct FACES touching it (#569).
 
     Test scenario:
-        For the quad+triangle fixture (fan-triangle values ``[10, 10, 20]``) each node's height is the mean
-        of its incident fan-triangle values — a nodes-only-on-the-quad node reads 10, the triangle-only node
-        reads 20, and the shared nodes fall strictly between — matching an independent incident-mean oracle.
+        The quad+triangle fixture (face values ``[10, 20]``) averaged per-face gives the shared nodes 15.0 and
+        the corners their own face's value — matching a connectivity-based oracle and, crucially, NOT the
+        fan-triangle-weighted 13.33 the per-triangle mode would give the quad/triangle-shared node.
     """
     from digitalearth.three_d.builders.mesh import _face_values_to_nodes
 
     mesh = ugrid_mesh("face").mesh
-    # One value per fan-triangle, the shape the quad+triangle fixture (3 fan-triangles) is spread into.
-    face_values = np.array([10.0, 10.0, 20.0])
+    face_values = np.array([10.0, 20.0])
+    spread = _spread_to_fan_triangles(mesh, face_values)
+    expected = _per_face_node_oracle(mesh, face_values)
+    heights = _face_values_to_nodes(mesh, spread)
+    np.testing.assert_allclose(heights, expected)
+    assert sorted(heights.tolist()) == [10.0, 10.0, 15.0, 15.0, 20.0], heights.tolist()
+
+
+def test_face_relief_triangle_mode_averages_over_fan_triangles(ugrid_mesh):
+    """``relief_reduce="triangle"`` lifts each node to the mean of the fan-triangles that touch it (#569).
+
+    Test scenario:
+        The same fixture under the triangle reduction weights the quad by each of its two fan-triangles, so the
+        node shared by the quad and the lone triangle reads ``(10+10+20)/3 = 13.33`` — matching a fan-triangle
+        oracle, and differing from the per-face default by that fan-cut weighting.
+    """
+    from digitalearth.three_d.builders.mesh import _face_values_to_nodes
+
+    mesh = ugrid_mesh("face").mesh
+    spread = _spread_to_fan_triangles(mesh, np.array([10.0, 20.0]))
     triangles = np.asarray(mesh.fan_triangles)
     expected = np.array(
         [
-            face_values[np.any(triangles == node, axis=1)].mean()
+            spread[np.any(triangles == node, axis=1)].mean()
             for node in range(len(mesh.node_x))
         ]
     )
-    heights = _face_values_to_nodes(mesh, face_values)
+    heights = _face_values_to_nodes(mesh, spread, how="triangle")
     np.testing.assert_allclose(heights, expected)
+    assert any(abs(h - 13.333333333333334) < 1e-9 for h in heights), heights.tolist()
 
 
 def test_face_relief_leaves_a_node_no_triangle_touches_at_zero():
@@ -101,7 +141,7 @@ def test_face_relief_leaves_a_node_no_triangle_touches_at_zero():
     from digitalearth.three_d.builders.mesh import _face_values_to_nodes
 
     mesh = SimpleNamespace(fan_triangles=np.array([[0, 1, 2]]), node_x=np.zeros(4))
-    heights = _face_values_to_nodes(mesh, np.array([5.0]))
+    heights = _face_values_to_nodes(mesh, np.array([5.0]), how="triangle")
     np.testing.assert_allclose(heights, [5.0, 5.0, 5.0, 0.0])
 
 
@@ -116,6 +156,73 @@ def test_face_relief_scales_the_averaged_lift(ugrid_mesh):
     try:
         poly = scene.layers[0][0]
         assert float(poly.points[:, 2].max()) == 40.0, poly.points[:, 2].max()
+    finally:
+        scene.close()
+
+
+def test_face_relief_masks_a_dry_nan_face_from_its_neighbours(ugrid_mesh):
+    """A non-finite (dry-cell) face contributes nothing, so it does not drag its neighbours to NaN (#569).
+
+    Test scenario:
+        The quad is marked dry (``NaN``) and the triangle wet (20). Every node's height stays finite: the
+        quad-only corners get 0 (no finite face touches them), while the nodes the wet triangle touches read 20
+        — the dry quad is masked out of their mean instead of poisoning it.
+    """
+    from digitalearth.three_d.builders.mesh import _face_values_to_nodes
+
+    mesh = ugrid_mesh("face").mesh
+    spread = _spread_to_fan_triangles(mesh, np.array([np.nan, 20.0]))
+    heights = _face_values_to_nodes(mesh, spread)
+    assert np.all(np.isfinite(heights)), heights.tolist()
+    np.testing.assert_allclose(sorted(heights.tolist()), [0.0, 0.0, 20.0, 20.0, 20.0])
+
+
+def test_face_relief_keeps_the_surface_colour_shaded(ugrid_mesh):
+    """Warping a face mesh into relief does not drop its per-face colour scalars (#569).
+
+    Test scenario:
+        A face mesh drawn with ``relief=True`` still carries the ``VALUE`` cell scalars on the warped surface,
+        so the mesh reads as coloured-and-lifted, not lifted-but-blank.
+    """
+    from digitalearth.three_d.builders.vector import VALUE
+
+    scene = quickmap(ugrid_mesh("face"), backend="3d", relief=True)
+    try:
+        poly = scene.layers[0][0]
+        assert VALUE in poly.cell_data, list(poly.cell_data.keys())
+        assert float(poly.points[:, 2].max()) == 20.0, poly.points[:, 2].max()
+    finally:
+        scene.close()
+
+
+def test_face_relief_draws_the_on_view_part_of_a_partly_off_view_mesh(ugrid_mesh):
+    """A face-relief mesh with an off-view node still draws (and colours) the triangles that remain (#569).
+
+    Test scenario:
+        One node is pushed to a non-finite x so the triangles using it drop; the surface still builds from the
+        surviving triangles, stays colour-shaded, and is warped (a positive z extent) rather than returning
+        ``None`` or raising.
+    """
+    from digitalearth.three_d.builders.vector import VALUE
+
+    off_view = np.array([0.0, 1.0, 1.0, 0.0, np.inf])
+    scene = quickmap(ugrid_mesh("face", node_x=off_view), backend="3d", relief=True)
+    try:
+        poly = scene.layers[0][0]
+        assert poly is not None and poly.n_cells > 0, poly
+        assert VALUE in poly.cell_data, list(poly.cell_data.keys())
+        assert float(poly.points[:, 2].max()) > 0.0, poly.points[:, 2].max()
+    finally:
+        scene.close()
+
+
+def test_relief_reduce_rejects_an_unknown_mode(ugrid_mesh):
+    """``relief_reduce`` only names the two reductions, so a typo is refused rather than silently ignored (#569)."""
+    mesh = ugrid_mesh("face").mesh
+    scene = Scene3D(off_screen=True)
+    try:
+        with pytest.raises(ValueError, match="relief_reduce"):
+            scene.trimesh(mesh, relief_reduce="nope")
     finally:
         scene.close()
 

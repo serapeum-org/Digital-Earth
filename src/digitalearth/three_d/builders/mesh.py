@@ -111,11 +111,12 @@ class MeshMixin(_MixinBase):
                 drop/re-index of off-view faces.
             relief: Lift the surface by its own value so coloured data reads as 3-D relief — ``True`` raises
                 each node to its value, a number exaggerates by that factor. A node-located mesh lifts each node
-                exactly; a **face**-located one is reduced to the nodes first by averaging the fan-triangles that
-                touch each node (#569), so ``relief=True`` warps the cell-centred fields drivers produce without
-                a hand-rolled ``node_z``. ``None`` (default) leaves the surface flat (or at an explicit
-                ``node_z``); a mesh carrying no ``values`` at all has nothing to lift by and is refused.
-                ``quickmap`` passes a caller's ``relief=`` through.
+                exactly; a **face**-located one is reduced to the nodes first (#569) — by ``relief_reduce``,
+                below — so ``relief=True`` warps the cell-centred fields drivers produce without a hand-rolled
+                ``node_z``. ``None`` (default) leaves the surface flat (or at an explicit ``node_z``); a mesh
+                carrying no ``values`` at all has nothing to lift by and is refused. ``quickmap`` passes a
+                caller's ``relief=`` through. Note the reduction runs over the whole mesh, so a boundary node
+                shared with an off-view face blends that face even though the geometry later drops it.
             source_crs: The CRS the mesh's coordinates are in, so the surface reprojects into the scene's
                 display CRS. ``quickmap`` fills it from the ``MeshDataset`` (whose wrapper, not its bare
                 ``Mesh2d``, carries the CRS); a direct caller with a CRS-tagged ``Mesh2d`` can leave it
@@ -137,8 +138,11 @@ class MeshMixin(_MixinBase):
                 ``values`` is ``None``); ``scheme`` is how they are classified — ``None`` (default) for a
                 continuous ramp, ``"categorical"`` or a ``classify`` scheme name, so one ``scheme``/``k``/``cmap``
                 paints the same classes as on every other tier; ``k`` is the number of classes for a graduated
-                ``scheme`` (default ``5``). On a value-shaded mesh ``scalars`` and ``lighting`` are set by the
-                builder (the values are the scalars, drawn unlit), so passing them here collides with those;
+                ``scheme`` (default ``5``). ``relief_reduce`` chooses how a **face**-located ``relief`` averages
+                each face's value onto the nodes — ``"face"`` (default) a true per-face mean, independent of the
+                fan-cut, or ``"triangle"`` the per-fan-triangle (VTK cell→point) mean; it is ignored for a
+                node-located or non-relief mesh. On a value-shaded mesh ``scalars`` and ``lighting`` are set by
+                the builder (the values are the scalars, drawn unlit), so passing them here collides with those;
                 shade with ``values``/``cmap`` and leave them alone.
 
         Returns:
@@ -181,6 +185,12 @@ class MeshMixin(_MixinBase):
         cmap = kwargs.pop("cmap", "viridis")
         scheme = kwargs.pop("scheme", None)
         k = kwargs.pop("k", 5)
+        relief_reduce = kwargs.pop("relief_reduce", "face")
+        if relief_reduce not in ("face", "triangle"):
+            raise ValueError(
+                f"relief_reduce={relief_reduce!r} is not 'face' or 'triangle'; it chooses how a face-located "
+                "relief averages each face's value onto the nodes"
+            )
         if values is not None:
             import numpy as np
 
@@ -214,7 +224,7 @@ class MeshMixin(_MixinBase):
             heights = (
                 np.asarray(values, dtype="float64")
                 if location == "node"
-                else _face_values_to_nodes(mesh, values)
+                else _face_values_to_nodes(mesh, values, how=relief_reduce)
             )
             node_z = heights * (1.0 if relief is True else float(relief))
         return self._add_described_layer(
@@ -301,37 +311,77 @@ def _elevation(node_z: Any, count: int) -> Any:
     return array
 
 
-def _face_values_to_nodes(mesh: Any, values: Any) -> Any:
-    """Reduce per-fan-triangle values to a per-node height by averaging the incident faces (#569).
+def _scatter_mean(indices: Any, values: Any, size: int) -> Any:
+    """Mean of ``values`` grouped by ``indices`` into ``size`` bins, skipping non-finite values (#569).
 
-    ``relief=`` lifts each node by a value, but a cell-centred mesh — the norm for hydrodynamic / finite-volume
-    output (water level, depth, velocity are stored per face) — carries its values on the faces, not the nodes.
-    This is the standard cell-data → point-data step a 3-D viewer does before warping such a surface: each node
-    is raised to the mean of the fan-triangles that touch it (VTK's own default is the same unweighted average),
-    so ``relief=True`` warps a face mesh without the caller hand-rolling a per-node array. ``values`` is already
-    one value per **fan-triangle** (``quickmap`` spreads a ``MeshDataset``'s per-face values to its triangles,
-    and :meth:`MeshMixin.trimesh` has checked the length), aligned with ``mesh.fan_triangles``. A node touched by
-    no face (an isolated node that no triangle uses, and so one the surface never draws) stays at ``0``.
+    The building block of both relief reductions: ``np.add.at`` accumulates the repeated indices (a node or
+    face touched several times) that plain fancy-indexing would overwrite, and a bin no finite value lands in
+    is left at ``0`` rather than a divide-by-zero ``NaN``. Non-finite values (dry-cell ``NaN``/fill) are
+    dropped from both the sum and the count, so one dry cell contributes nothing instead of poisoning its bin.
 
     Args:
-        mesh: The pyramids ``Mesh2d`` being warped — its ``fan_triangles`` give the node triple of each triangle
-            and ``node_x`` gives the node count.
-        values: One value per fan-triangle, in ``mesh.fan_triangles`` order (the face-located shading array).
+        indices: The bin each value falls in, one per value (flattened).
+        values: The values to average, aligned with ``indices``; non-finite entries are ignored.
+        size: How many bins the result has.
 
     Returns:
-        A ``(n_nodes,)`` float array: each node's height is the mean of the values of the incident fan-triangles,
-        or ``0`` where no triangle touches the node.
+        A ``(size,)`` float array of per-bin means, ``0`` where a bin received no finite value.
+    """
+    import numpy as np
+
+    indices = np.asarray(indices, dtype=np.intp)
+    values = np.asarray(values, dtype="float64")
+    finite = np.isfinite(values)
+    sums = np.zeros(size, dtype="float64")
+    counts = np.zeros(size, dtype="float64")
+    np.add.at(sums, indices[finite], values[finite])
+    np.add.at(counts, indices[finite], 1.0)
+    return np.divide(
+        sums, counts, out=np.zeros(size, dtype="float64"), where=counts > 0
+    )
+
+
+def _face_values_to_nodes(mesh: Any, values: Any, how: str = "face") -> Any:
+    """Reduce per-fan-triangle values to a per-node height, for warping a face mesh into relief (#569).
+
+    ``relief=`` lifts each node by a value, but a cell-centred mesh — the norm for hydrodynamic / finite-volume
+    output (water level, depth, velocity are stored per face) — carries its values on the faces, not the nodes,
+    so a face value must be reduced to the nodes before the surface can be warped. ``values`` arrives as one
+    value per **fan-triangle** (``quickmap`` spreads a ``MeshDataset``'s per-face values across the triangles
+    each face was cut into, and :meth:`MeshMixin.trimesh` has checked the length), aligned with
+    ``mesh.fan_triangles``. Two reductions are offered, chosen by ``how``:
+
+    - ``"face"`` (the default): each node is lifted to the mean of the distinct **faces** touching it. A face's
+      fan-triangles are collapsed back to one contribution per node (via ``mesh.face_node_connectivity``), so a
+      quad counts once however many triangles it was cut into. This is a true cell→node average, independent of
+      pyramids' arbitrary fan-cut, and is what a cell-centred field means by "the value of the cells around a
+      point".
+    - ``"triangle"``: each node is lifted to the mean of the **fan-triangles** touching it — the unweighted
+      cell→point step VTK applies to the already-triangulated surface. Simpler, but a non-triangular face is
+      weighted by how many triangles it was cut into, so a shared node's height depends on the fan-cut.
+
+    Non-finite face values (dry-cell ``NaN``/fill) contribute nothing to a node's mean in either mode (see
+    :func:`_scatter_mean`), so one dry cell does not drag its wet neighbours' heights to ``NaN``. A node touched
+    by no (finite-valued) face stays at ``0``.
+
+    Args:
+        mesh: The pyramids ``Mesh2d`` being warped — ``fan_triangles`` gives each triangle's node triple,
+            ``node_x`` the node count, and ``face_node_connectivity`` (``"face"`` mode) each face's nodes.
+        values: One value per fan-triangle, in ``mesh.fan_triangles`` order (the face-located shading array).
+        how: ``"face"`` (per-face mean, the default) or ``"triangle"`` (per-fan-triangle mean).
+
+    Returns:
+        A ``(n_nodes,)`` float array of per-node heights, ``0`` where no finite-valued face touches the node.
 
     Examples:
-        - Average two fan-triangles onto their shared and their private nodes — the shared nodes blend both
-          values, the corners keep their own face's value:
+        - The per-triangle mode averages the fan-triangles touching each node — the shared node blends both:
             ```python
             >>> import numpy as np
             >>> from types import SimpleNamespace
             >>> mesh = SimpleNamespace(
             ...     fan_triangles=np.array([[0, 1, 2], [1, 2, 3]]), node_x=np.zeros(4)
             ... )
-            >>> _face_values_to_nodes(mesh, np.array([10.0, 20.0])).tolist()
+            >>> _face_values_to_nodes(mesh, np.array([10.0, 20.0]), how="triangle").tolist()
             [10.0, 15.0, 15.0, 20.0]
 
             ```
@@ -340,26 +390,43 @@ def _face_values_to_nodes(mesh: Any, values: Any) -> Any:
             >>> import numpy as np
             >>> from types import SimpleNamespace
             >>> lone = SimpleNamespace(fan_triangles=np.array([[0, 1, 2]]), node_x=np.zeros(4))
-            >>> _face_values_to_nodes(lone, np.array([5.0])).tolist()
+            >>> _face_values_to_nodes(lone, np.array([5.0]), how="triangle").tolist()
             [5.0, 5.0, 5.0, 0.0]
 
             ```
     """
     import numpy as np
 
-    triangles = np.asarray(mesh.fan_triangles, dtype=np.intp)
     column = np.asarray(values, dtype="float64")
     node_count = len(mesh.node_x)
-    # Scatter each fan-triangle's value onto its three nodes and count the touches, then divide: a node's
-    # height is the unweighted mean of the faces incident on it. `np.add.at` accumulates the repeated indices
-    # (a node shared by several triangles appears several times) that plain fancy-indexing would overwrite.
-    sums = np.zeros(node_count, dtype="float64")
-    counts = np.zeros(node_count, dtype="float64")
-    np.add.at(sums, triangles.ravel(), np.repeat(column, triangles.shape[1]))
-    np.add.at(counts, triangles.ravel(), 1.0)
-    return np.divide(
-        sums, counts, out=np.zeros(node_count, dtype="float64"), where=counts > 0
+    if how == "triangle":
+        triangles = np.asarray(mesh.fan_triangles, dtype=np.intp)
+        if triangles.ndim != 2 or triangles.shape[0] == 0:
+            # A mesh with no fan-triangle places nothing to warp; there is no node to lift.
+            return np.zeros(node_count, dtype="float64")
+        indices = triangles.ravel()
+        return _scatter_mean(indices, np.repeat(column, triangles.shape[1]), node_count)
+    # "face": collapse each face's fan-triangles back to the face, then average the distinct faces per node.
+    connectivity = mesh.face_node_connectivity
+    faces = np.asarray(connectivity.data, dtype=np.intp)
+    per_face = np.clip(np.asarray(connectivity.nodes_per_element()) - 2, 0, None)
+    if faces.ndim != 2 or int(per_face.sum()) != column.shape[0]:
+        # The spread values do not line up with the connectivity's fan-cut: fall back to the triangle reduction
+        # rather than mis-group them (a direct caller's per-triangle values have no face grouping to recover).
+        return _face_values_to_nodes(mesh, values, how="triangle")
+    # Each fan-triangle belongs to a face (triangulation is face-major); recover one value per face, then lift
+    # every node by the mean of the distinct faces whose node list includes it — a quad counts once, not once
+    # per triangle.
+    face_of_triangle = np.repeat(np.arange(len(per_face), dtype=np.intp), per_face)
+    face_value = _scatter_mean(face_of_triangle, column, len(per_face))
+    has_value = np.zeros(len(per_face), dtype=bool)
+    np.add.at(has_value, face_of_triangle[np.isfinite(column)], True)
+    usable = has_value & (per_face > 0)
+    valid = (faces >= 0) & usable[:, None]
+    face_index = np.broadcast_to(
+        np.arange(len(per_face), dtype=np.intp)[:, None], faces.shape
     )
+    return _scatter_mean(faces[valid], face_value[face_index[valid]], node_count)
 
 
 def _mesh_surface(
