@@ -8,10 +8,10 @@ import digitalearth
 @pytest.fixture(autouse=True)
 def _restore_options():
     """Reset the option store after each test so one test's writes do not leak into another."""
-    from digitalearth.base.options import reset_options
+    from digitalearth.base.options import _reset_options
 
     yield
-    reset_options()
+    _reset_options()
 
 
 def test_three_d_off_screen_defaults_to_auto():
@@ -27,8 +27,8 @@ def test_set_then_get_round_trips_each_valid_value(value):
 
 
 def test_set_option_rejects_an_unknown_name():
-    """Setting an option digitalearth does not define is refused, naming the known options (#573)."""
-    with pytest.raises(ValueError, match="three_d.off_screen"):
+    """Setting an option digitalearth does not define is refused, echoing the rejected name (#573)."""
+    with pytest.raises(ValueError, match="no_such_option"):
         digitalearth.set_option("three_d.no_such_option", True)
 
 

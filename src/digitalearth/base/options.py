@@ -29,7 +29,7 @@ Examples:
 from collections.abc import Callable
 from typing import Any
 
-__all__ = ["get_option", "reset_options", "set_option"]
+__all__ = ["get_option", "set_option"]
 
 
 def _valid_off_screen(value: Any) -> bool:
@@ -127,25 +127,13 @@ def get_option(name: str) -> Any:
     return _VALUES[name]
 
 
-def reset_options() -> None:
-    """Reset every option to its registered default.
+def _reset_options() -> None:
+    """Reset every option to its registered default (internal: used for test isolation).
 
     The store is process-wide configuration, set once and read where it matters (matplotlib's ``rcParams`` and
     pandas' options work the same way), so it is not thread-safe and a program configures it from one thread.
-    This restores the defaults in one call — handy for a test that must not leak a setting into the next, and
-    for a caller that wants a clean slate.
-
-    Examples:
-        - Change an option, then put everything back:
-            ```python
-            >>> import digitalearth
-            >>> from digitalearth.base.options import reset_options
-            >>> digitalearth.set_option("three_d.off_screen", True)
-            >>> reset_options()
-            >>> digitalearth.get_option("three_d.off_screen")
-            'auto'
-
-            ```
+    This restores the defaults in one call so a test cannot leak a setting into the next. It is intentionally
+    private: the public surface is :func:`set_option` / :func:`get_option` only.
     """
     _VALUES.clear()
     _VALUES.update({name: default for name, (_, default) in _REGISTRY.items()})
