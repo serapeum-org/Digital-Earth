@@ -60,7 +60,9 @@ def test_relief_warps_a_face_located_mesh_by_face_node_averaging(ugrid_mesh):
     scene = quickmap(ugrid_mesh("face"), backend="3d", relief=True)
     try:
         poly = scene.layers[0][0]
-        assert float(poly.points[:, 2].max()) == 20.0, poly.points[:, 2].max()
+        assert float(poly.points[:, 2].max()) == pytest.approx(20.0), poly.points[
+            :, 2
+        ].max()
     finally:
         scene.close()
 
@@ -155,7 +157,9 @@ def test_face_relief_scales_the_averaged_lift(ugrid_mesh):
     scene = quickmap(ugrid_mesh("face"), backend="3d", relief=2.0)
     try:
         poly = scene.layers[0][0]
-        assert float(poly.points[:, 2].max()) == 40.0, poly.points[:, 2].max()
+        assert float(poly.points[:, 2].max()) == pytest.approx(40.0), poly.points[
+            :, 2
+        ].max()
     finally:
         scene.close()
 
@@ -190,7 +194,9 @@ def test_face_relief_keeps_the_surface_colour_shaded(ugrid_mesh):
     try:
         poly = scene.layers[0][0]
         assert VALUE in poly.cell_data, list(poly.cell_data.keys())
-        assert float(poly.points[:, 2].max()) == 20.0, poly.points[:, 2].max()
+        assert float(poly.points[:, 2].max()) == pytest.approx(20.0), poly.points[
+            :, 2
+        ].max()
     finally:
         scene.close()
 
@@ -257,6 +263,66 @@ def test_face_relief_face_mode_falls_back_when_connectivity_disagrees():
     np.testing.assert_allclose(
         heights, _face_values_to_nodes(mesh, values, how="triangle")
     )
+
+
+def test_face_relief_falls_back_when_triangles_are_not_face_major():
+    """Face mode only regroups when the triangulation is face-major; otherwise it degrades to triangle (#569).
+
+    Test scenario:
+        A mesh whose fan-triangles do NOT lead with their face's first node (so the per-fan-triangle values
+        cannot be trusted to be face-grouped) must not be silently mis-grouped into the wrong faces — the
+        reduction falls back to the per-triangle mean instead, matching ``how="triangle"`` and NOT the naive
+        per-face result (which would paint every node with the single mis-recovered face value).
+    """
+    from types import SimpleNamespace
+
+    from digitalearth.three_d.builders.mesh import _face_values_to_nodes
+
+    conn = SimpleNamespace(
+        data=np.array([[0, 1, 2, 3]], dtype=np.intp),
+        nodes_per_element=lambda: np.array([4]),
+    )
+    # Two fan-triangles whose leading column is [1, 2], not the face's first node repeated ([0, 0]).
+    mesh = SimpleNamespace(
+        fan_triangles=np.array([[1, 2, 3], [2, 3, 0]], dtype=np.intp),
+        node_x=np.zeros(4),
+        face_node_connectivity=conn,
+    )
+    values = np.array([10.0, 20.0])
+    heights = _face_values_to_nodes(mesh, values, how="face")
+    np.testing.assert_allclose(
+        heights, _face_values_to_nodes(mesh, values, how="triangle")
+    )
+    naive_misgrouped = np.full(4, 15.0)
+    assert not np.allclose(heights, naive_misgrouped), heights.tolist()
+
+
+def test_relief_reduce_threads_through_quickmap(ugrid_mesh):
+    """``relief_reduce`` survives the ``quickmap → trimesh`` kwarg path and changes the warp (#569).
+
+    Test scenario:
+        The same face fixture drawn through ``quickmap`` with ``relief_reduce="triangle"`` produces a surface
+        carrying the fan-weighted shared-node height (13.33), which the per-face default does not — the default
+        instead carries 15.0. This proves the kwarg reaches the reduction and selects the mode end-to-end, not
+        just when ``_face_values_to_nodes`` is called directly.
+    """
+    triangle = quickmap(
+        ugrid_mesh("face"), backend="3d", relief=True, relief_reduce="triangle"
+    )
+    face = quickmap(ugrid_mesh("face"), backend="3d", relief=True)
+    try:
+        z_triangle = triangle.layers[0][0].points[:, 2]
+        z_face = face.layers[0][0].points[:, 2]
+        assert any(abs(z - 13.333333333333334) < 1e-6 for z in z_triangle), (
+            z_triangle.tolist()
+        )
+        assert not any(abs(z - 13.333333333333334) < 1e-6 for z in z_face), (
+            z_face.tolist()
+        )
+        assert any(abs(z - 15.0) < 1e-6 for z in z_face), z_face.tolist()
+    finally:
+        triangle.close()
+        face.close()
 
 
 def test_relief_reduce_rejects_an_unknown_mode(ugrid_mesh):
