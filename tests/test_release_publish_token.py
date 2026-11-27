@@ -192,6 +192,190 @@ def _consumer_params() -> list:
     ]
 
 
+class TestTheDiscriminatorsTellProducersFromConsumers:
+    """The guards below are only as good as the two predicates that decide what they apply to.
+
+    Both predicates are exercised by the real workflows only on their *matching* side: while every
+    guard passes, the rejecting branches and the failure-message path never run. A predicate that
+    quietly over-matched would then demand of the producer what only a consumer owes — withholding the
+    token AND absorbing its absence are opposite duties — and the contradiction would surface as a
+    confusing failure on an unrelated change rather than here.
+    """
+
+    @pytest.mark.parametrize(
+        ("step", "expected", "because"),
+        [
+            (
+                {"uses": "actions/download-artifact@v8", "with": {"name": TOKEN}},
+                True,
+                "a download of the token is a consumer",
+            ),
+            (
+                {"uses": "actions/upload-artifact@v7", "with": {"name": TOKEN}},
+                False,
+                "the producer's upload names the same artifact and must not be read as a consumer",
+            ),
+            (
+                {"uses": "actions/download-artifact@v8", "with": {"name": "site-pr-1"}},
+                False,
+                "another artifact's download is unrelated",
+            ),
+            (
+                {"uses": "actions/download-artifact@v8"},
+                False,
+                "a download with no name selects by pattern, not by this token",
+            ),
+            (
+                {"run": f"cat .release-ref/{TOKEN_FILE}"},
+                False,
+                "a script is not a download step",
+            ),
+        ],
+    )
+    def test_only_a_download_of_the_token_counts_as_a_consumer(
+        self, step, expected, because
+    ):
+        """`_downloads_token` keys off both the action and the artifact name.
+
+        Args:
+            step: A synthetic step.
+            expected: Whether it should be read as consuming the token.
+            because: Why, quoted back in the failure message.
+
+        Test scenario:
+            The decisive case is the producer's `upload-artifact` step, which carries the *same*
+            `name: release-ref`. Matching on the name alone would class it as a consumer and demand
+            `continue-on-error` on the very step whose job is to withhold the artifact.
+        """
+        assert _downloads_token(step) is expected, (
+            f"_downloads_token({step}) should be {expected}: {because}"
+        )
+
+    @pytest.mark.parametrize(
+        ("step", "expected", "because"),
+        [
+            (
+                {"run": f'REF="$(cat .release-ref/{TOKEN_FILE})"'},
+                True,
+                "the consumers' resolve step reads the token",
+            ),
+            (
+                {"run": f"git rev-parse HEAD > {TOKEN_FILE}"},
+                False,
+                "the producer WRITES the token; it has no file to test for",
+            ),
+            (
+                {"uses": "actions/download-artifact@v8", "with": {"name": TOKEN}},
+                False,
+                "a `uses` step runs no script",
+            ),
+            (
+                {"run": "echo no token here"},
+                False,
+                "an unrelated script does not touch the token",
+            ),
+        ],
+    )
+    def test_only_a_script_that_reads_the_token_counts(self, step, expected, because):
+        """`_reads_token_file` must not mistake the producer's write for a read.
+
+        Args:
+            step: A synthetic step.
+            expected: Whether it should be read as reading the token file.
+            because: Why, quoted back in the failure message.
+
+        Test scenario:
+            The producer's `git rev-parse HEAD > release-ref.txt` mentions the same filename. Were it
+            read as a reader, the resolve guard would demand a `[ -f … ]` test on a step that creates
+            the file.
+        """
+        assert _reads_token_file(step) is expected, (
+            f"_reads_token_file({step}) should be {expected}: {because}"
+        )
+
+    def test_the_producing_and_consuming_steps_are_disjoint_in_this_repository(self):
+        """No real step is asked to both withhold the token and tolerate its absence.
+
+        Test scenario:
+            Run against the actual workflows: the producer's steps and the consumers' download steps
+            must share no member. Overlap would mean the two guard families make contradictory demands
+            of one step, which no edit could satisfy.
+        """
+        producing = {
+            (filename, job_id, step.get("name") or step.get("uses"))
+            for filename, job_id, step in _producer_steps()
+        }
+        consuming = {
+            (filename, job_id, step.get("name") or step.get("uses"))
+            for filename, job_id, job in _token_consumers()
+            for step in _steps(job)
+            if _downloads_token(step)
+        }
+        assert producing, "no producing steps found; the comparison would be vacuous"
+        assert consuming, "no consuming steps found; the comparison would be vacuous"
+        assert producing.isdisjoint(consuming), (
+            "these steps are read as both producing and consuming the publish token, so the guards "
+            f"would demand opposite things of them: {sorted(producing & consuming)}"
+        )
+
+    @pytest.mark.parametrize(
+        ("step", "tail"),
+        [
+            ({"name": "Resolve the ref"}, "Resolve the ref"),
+            (
+                {
+                    "name": "Download the release ref from the github-release run",
+                    "uses": "actions/download-artifact@3e5f45b2",
+                },
+                "Download the release ref from the github-release run",
+            ),
+            ({"uses": "actions/checkout@v5"}, "actions/checkout@v5"),
+            ({}, "?"),
+        ],
+    )
+    def test_a_step_is_labelled_by_name_then_by_action(self, step, tail):
+        """The label a tripped guard prints must locate the step for whoever has to fix it.
+
+        Args:
+            step: A synthetic step.
+            tail: The identifier expected at the end of the label.
+
+        Test scenario:
+            This path runs only when a guard fails, so it is otherwise unexercised; a broken label
+            would be discovered at the worst moment. The load-bearing case is a step carrying BOTH
+            keys — every download step here does — where the human-readable `name` must win over the
+            pinned action SHA. A `uses`-only step falls back to the action, and a step with neither
+            still has to produce something.
+        """
+        label = _step_label("pypi-release.yml", "publish", step)
+        assert label == f"pypi-release.yml / job publish / {tail}", (
+            f"unexpected label for {step}: {label!r}"
+        )
+
+    @pytest.mark.parametrize(
+        ("job", "expected"),
+        [
+            ({"steps": None}, []),
+            ({}, []),
+            ({"steps": ["not-a-mapping"]}, []),
+            ({"steps": [{"run": "true"}, "stray"]}, [{"run": "true"}]),
+        ],
+    )
+    def test_degenerate_jobs_yield_no_phantom_steps(self, job, expected):
+        """`_steps` tolerates a job that declares none without inventing one.
+
+        Args:
+            job: A synthetic job.
+            expected: The steps that should be recovered from it.
+
+        Test scenario:
+            A `uses:` job (a reusable-workflow call such as `pure-wheel-test`) has no `steps` key at
+            all, and GitHub accepts a list that YAML parses with a non-mapping entry. Neither may crash
+            the scan or contribute a step the guards would then judge.
+        """
+        assert _steps(job) == expected, f"_steps({job}) returned {_steps(job)}"
+
+
 class TestTheSuiteIsNotVacuous:
     """Every guard below is a filter; an empty repository would satisfy all of them."""
 
