@@ -57,7 +57,15 @@ jobs:
               exit 0
             fi
             REF="$(cat .release-ref/release-ref.txt)"
-            [ -n "$REF" ] || { echo "::error::empty release ref -- refusing to publish the default branch"; exit 1; }
+            # Validate the SHAPE, not mere non-emptiness. The producer writes `git rev-parse HEAD`, so a
+            # valid token is 40 hex characters. `-n` alone admits a blank ref such as "   " ($(cat) strips
+            # the trailing newline, not interior blanks); `actions/checkout` then trims its `ref` input to
+            # the empty string and silently checks out the DEFAULT BRANCH -- publishing pre-bump main,
+            # which is exactly what this guard exists to refuse.
+            case "$REF" in
+              "" | *[!0-9a-f]*) echo "::error::malformed release ref '$REF' -- refusing to publish the default branch"; exit 1 ;;
+            esac
+            [ "${#REF}" -eq 40 ] || { echo "::error::release ref '$REF' is not a 40-char commit SHA"; exit 1; }
           else
             REF="$FALLBACK_REF"
           fi

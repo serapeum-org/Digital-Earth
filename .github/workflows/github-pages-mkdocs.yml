@@ -75,7 +75,13 @@ jobs:
             # rather than erroring. A present-but-empty ref is corruption and still hard-errors.
             if [ -f .release-ref/release-ref.txt ]; then
               REF="$(cat .release-ref/release-ref.txt)"
-              [ -n "$REF" ] || { echo "::error::empty release ref"; exit 1; }
+              # Shape, not mere non-emptiness: the producer writes `git rev-parse HEAD`, so a valid token
+              # is 40 hex characters. `-n` alone admits a blank ref, which checkout trims away and
+              # resolves to the default branch -- gating a tree nobody is publishing.
+              case "$REF" in
+                "" | *[!0-9a-f]*) echo "::error::malformed release ref '$REF'"; exit 1 ;;
+              esac
+              [ "${#REF}" -eq 40 ] || { echo "::error::release ref '$REF' is not a 40-char commit SHA"; exit 1; }
             else
               echo "no release-ref artifact (draft or non-publishing run); gating the default tree"
               REF=""
@@ -211,7 +217,14 @@ jobs:
             exit 0
           fi
           REF="$(cat .release-ref/release-ref.txt)"
-          [ -n "$REF" ] || { echo "::error::empty release ref"; exit 1; }
+          # Shape, not mere non-emptiness: the producer writes `git rev-parse HEAD`, so a valid token is
+          # 40 hex characters. `-n` alone admits a blank ref, which checkout trims away and resolves to
+          # the default branch -- deploying pre-bump main as the released version and moving `latest`
+          # onto it, which is what this guard exists to refuse.
+          case "$REF" in
+            "" | *[!0-9a-f]*) echo "::error::malformed release ref '$REF' -- refusing to deploy the default branch"; exit 1 ;;
+          esac
+          [ "${#REF}" -eq 40 ] || { echo "::error::release ref '$REF' is not a 40-char commit SHA"; exit 1; }
         else
           REF="$FALLBACK_REF"
         fi

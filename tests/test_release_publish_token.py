@@ -523,6 +523,41 @@ class TestEveryTokenConsumerToleratesAMissingToken:
         )
 
     @pytest.mark.parametrize(("filename", "job_id", "job"), _consumer_params())
+    def test_the_resolve_step_validates_the_ref_is_a_commit_sha(
+        self, filename, job_id, job
+    ):
+        """A non-empty ref is not a *valid* ref, and the difference publishes the wrong tree.
+
+        Args:
+            filename: The workflow file the job came from.
+            job_id: The job under test.
+            job: The job itself.
+
+        Test scenario:
+            `[ -n "$REF" ]` admits a blank-but-non-empty token such as `"   "`: `$(cat …)` strips the
+            trailing newline but not interior blanks, so the guard passes with `REF="   "`. That value
+            reaches `actions/checkout`, whose `getInput` trims whitespace, so checkout receives an empty
+            ref and silently takes the **default branch** — the exact outcome the guard's own message
+            promises to refuse. Both consumers were measured returning exit 0 on such a token. The
+            producer writes `git rev-parse HEAD`, so the ref is always 40 hex characters; the guard must
+            check that shape, not mere non-emptiness.
+        """
+        readers = [step for step in _steps(job) if _reads_token_file(step)]
+        assert readers, (
+            f"{filename} / job {job_id} downloads the publish token but no step reads it"
+        )
+        offenders = [
+            _step_label(filename, job_id, step)
+            for step in readers
+            if "${#REF}" not in step["run"] or "-eq 40" not in step["run"]
+        ]
+        assert offenders == [], (
+            "these steps accept any non-empty release ref, so a blank token resolves to the default "
+            "branch. Validate the 40-hex-character SHA the producer writes:\n  "
+            + "\n  ".join(offenders)
+        )
+
+    @pytest.mark.parametrize(("filename", "job_id", "job"), _consumer_params())
     def test_a_present_but_empty_token_still_hard_errors(self, filename, job_id, job):
         """Corruption is not a draft, and it must never fall through to the default branch.
 
