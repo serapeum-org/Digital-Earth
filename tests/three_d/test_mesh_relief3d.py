@@ -89,6 +89,37 @@ def test_face_relief_averages_incident_face_values_onto_each_node(ugrid_mesh):
     np.testing.assert_allclose(heights, expected)
 
 
+def test_face_relief_leaves_a_node_no_triangle_touches_at_zero():
+    """A node no fan-triangle touches has no incident face to average, so it stays at 0 (#569).
+
+    Test scenario:
+        A one-triangle mesh over four nodes leaves node 3 referenced by nothing; the three touched nodes take
+        the triangle's value (5) and the untouched node reads 0 rather than a divide-by-zero NaN.
+    """
+    from types import SimpleNamespace
+
+    from digitalearth.three_d.builders.mesh import _face_values_to_nodes
+
+    mesh = SimpleNamespace(fan_triangles=np.array([[0, 1, 2]]), node_x=np.zeros(4))
+    heights = _face_values_to_nodes(mesh, np.array([5.0]))
+    np.testing.assert_allclose(heights, [5.0, 5.0, 5.0, 0.0])
+
+
+def test_face_relief_scales_the_averaged_lift(ugrid_mesh):
+    """A numeric ``relief`` exaggerates a face-located warp by that factor, after averaging (#569).
+
+    Test scenario:
+        The face fixture (triangle-only node averages to 20) drawn with ``relief=2.0`` reaches z=40 — the
+        averaged per-node heights are scaled by the factor, the same exaggeration the node-located path applies.
+    """
+    scene = quickmap(ugrid_mesh("face"), backend="3d", relief=2.0)
+    try:
+        poly = scene.layers[0][0]
+        assert float(poly.points[:, 2].max()) == 40.0, poly.points[:, 2].max()
+    finally:
+        scene.close()
+
+
 def test_relief_without_values_is_still_refused(ugrid_mesh):
     """``relief=`` lifts each node by a value, so a mesh carrying none is still refused (#569)."""
     mesh = ugrid_mesh("face").mesh
