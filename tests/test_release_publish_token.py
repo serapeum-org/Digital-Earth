@@ -23,6 +23,14 @@ leaves no artifact, and `workflow_run: types: [completed]` fires on a failure to
 do with it.
 
 These are read from the **parsed** YAML, so a `${{ }}` or a path inside a comment cannot satisfy a guard.
+
+Producers and consumers are located by **behaviour** — which step writes or uploads the artifact, which
+downloads or reads it — rather than by workflow name, so renaming a file cannot quietly empty the suite.
+That makes the two predicates load-bearing, and `TestTheDiscriminatorsTellProducersFromConsumers` pins
+them: the producer's upload carries the *same* `name: release-ref` as the consumers' downloads, and the two
+owe opposite duties, so a predicate that over-matched would demand of one step what only the other can do.
+`TestTheSuiteIsNotVacuous` covers the other direction, where a predicate that stopped matching would leave
+every guard passing over an empty set.
 """
 
 import pathlib
