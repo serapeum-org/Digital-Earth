@@ -321,6 +321,29 @@ def _face_values_to_nodes(mesh: Any, values: Any) -> Any:
     Returns:
         A ``(n_nodes,)`` float array: each node's height is the mean of the values of the incident fan-triangles,
         or ``0`` where no triangle touches the node.
+
+    Examples:
+        - Average two fan-triangles onto their shared and their private nodes — the shared nodes blend both
+          values, the corners keep their own face's value:
+            ```python
+            >>> import numpy as np
+            >>> from types import SimpleNamespace
+            >>> mesh = SimpleNamespace(
+            ...     fan_triangles=np.array([[0, 1, 2], [1, 2, 3]]), node_x=np.zeros(4)
+            ... )
+            >>> _face_values_to_nodes(mesh, np.array([10.0, 20.0])).tolist()
+            [10.0, 15.0, 15.0, 20.0]
+
+            ```
+        - A node no triangle touches has nothing to average, so it stays at ``0``:
+            ```python
+            >>> import numpy as np
+            >>> from types import SimpleNamespace
+            >>> lone = SimpleNamespace(fan_triangles=np.array([[0, 1, 2]]), node_x=np.zeros(4))
+            >>> _face_values_to_nodes(lone, np.array([5.0])).tolist()
+            [5.0, 5.0, 5.0, 0.0]
+
+            ```
     """
     import numpy as np
 
