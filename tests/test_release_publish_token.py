@@ -50,8 +50,41 @@ TOKEN = "release-ref"
 #: The file inside that artifact, and the path the consumers read it from.
 TOKEN_FILE = "release-ref.txt"
 
-#: The guard that keeps a consumer from running on a failed / cancelled upstream release.
+#: The guard that keeps a consumer from running on a failed / cancelled upstream release, in the
+#: normalised form `_normalise` produces — so reformatting the YAML expression cannot fail the test for
+#: no behavioural reason.
 SUCCESS_GUARD = "workflow_run.conclusion == 'success'"
+
+#: Every spelling of the draft gate that actually withholds the token. Matching the *whole* normalised
+#: condition against this set is what pins the gate's polarity: a substring test for `inputs.draft` is
+#: equally satisfied by `inputs.draft == true`, which inverts the fix — a draft would upload the token
+#: (#568 returns) and a real release would upload none.
+DRAFT_GATE_FORMS = frozenset(
+    {
+        "inputs.draft != true",
+        "inputs.draft != true && inputs.draft != 'true'",
+        "!inputs.draft",
+    }
+)
+
+
+def _normalise(condition) -> str:
+    """Reduce a workflow condition to a form that ignores cosmetic spelling.
+
+    Collapses runs of whitespace, strips an enclosing `${{ … }}`, unifies double quotes to single, and
+    removes the space after a `!`. Without this the guards would fail on a reformatted expression that
+    behaves identically, which trains the next maintainer to edit the test instead of thinking about it.
+
+    Args:
+        condition: A job's or step's `if:` value, or `None` for a step that has none.
+
+    Returns:
+        The condition with cosmetic differences removed; `""` when there is no condition.
+    """
+    text = " ".join(str(condition or "").split()).replace('"', "'")
+    if text.startswith("${{") and text.endswith("}}"):
+        text = text[3:-2].strip()
+    return text.replace("! ", "!")
 
 
 def _workflow_files() -> list:
@@ -584,11 +617,12 @@ class TestADraftReleaseUploadsNoPublishToken:
             that was never meant to go live. Skipping these two steps is the whole fix: no token, no
             publish.
         """
-        condition = str(step.get("if") or "")
-        assert "inputs.draft" in condition, (
-            f"{_step_label(filename, job_id, step)} runs on a draft release, so a draft still hands "
-            f"the downstream consumers a publish token. Gate it on `inputs.draft != true`. Found "
-            f"if: {condition!r}"
+        condition = _normalise(step.get("if"))
+        assert condition in DRAFT_GATE_FORMS, (
+            f"{_step_label(filename, job_id, step)} is not gated so as to WITHHOLD the token on a "
+            f"draft. A substring check for `inputs.draft` would equally accept `inputs.draft == true`, "
+            f"which inverts the fix: a draft would upload the token and a real release would not. "
+            f"Expected one of {sorted(DRAFT_GATE_FORMS)}, found if: {condition!r}"
         )
 
 
@@ -612,7 +646,7 @@ class TestEveryTokenConsumerToleratesAMissingToken:
             the wheel matrix, commitizen — started the docs gate anyway, whose download then errored and
             reddened "Deploy MkDocs" for a failure that had nothing to do with docs.
         """
-        condition = str(job.get("if") or "")
+        condition = _normalise(job.get("if"))
         assert SUCCESS_GUARD in condition, (
             f"{filename} / job {job_id} downloads the publish token but is not guarded on the "
             f"upstream release succeeding; add `{SUCCESS_GUARD}` to its job-level `if:`. Found "
@@ -727,13 +761,27 @@ class TestEveryTokenConsumerToleratesAMissingToken:
             a different failure: `checkout` would silently take the default branch and the job would
             publish pre-bump `main`. That guard predates this change and must survive it.
         """
+        readers = [step for step in _steps(job) if _reads_token_file(step)]
         offenders = [
             _step_label(filename, job_id, step)
-            for step in _steps(job)
-            if _reads_token_file(step) and "::error::" not in step["run"]
+            for step in readers
+            if "::error::" not in step["run"]
         ]
         assert offenders == [], (
             "these steps no longer fail on a present-but-empty publish token, which would publish the "
             "default branch instead of the released commit:\n  "
             + "\n  ".join(offenders)
+        )
+        # An annotation without an exit is not a guard: the step prints the error and falls through to
+        # the publish. Asserting that `::error::` appears somewhere in the script does not catch that,
+        # so require every diagnostic line to carry its own `exit 1`.
+        toothless = [
+            f"{_step_label(filename, job_id, step)}: {line.strip()}"
+            for step in readers
+            for line in step["run"].split("\n")
+            if "::error::" in line and "exit 1" not in line
+        ]
+        assert toothless == [], (
+            "these lines annotate a bad release ref but do not exit, so the job continues and "
+            "publishes the default branch anyway:\n  " + "\n  ".join(toothless)
         )
