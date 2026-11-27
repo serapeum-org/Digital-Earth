@@ -7,8 +7,10 @@ lifecycle. Capability mixins (terrain, point clouds, volumes, vectors, globe) li
 ``Map(GeoLayerBase, RasterMixin, …)`` pattern.
 
 PyVista is a renderer, not a GIS engine: meshes are built from pyramids-sourced numpy (never xarray/rasterio — see
-the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``off_screen`` follows
-:data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
+the tier's HARD RULE); all CRS/reproject work stays in pyramids. digitalearth owns the off-screen decision
+through the ``three_d.off_screen`` option (default ``"auto"``, which renders headless where there is no display
+and on-screen on a desktop); a caller never has to set :data:`pyvista.OFF_SCREEN` themselves, and the
+static-image path always renders off-screen on its own (#573).
 """
 
 import logging
@@ -26,6 +28,7 @@ from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.crs import OffLimbError, declared_crs, reproject
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.display import auto_cmap, needs_reproject
+from digitalearth.base.options import get_option
 from digitalearth.base.registry import (
     forget_namespace,
     kind_info,
@@ -442,6 +445,85 @@ def house_theme() -> "pv.themes.Theme":
     return theme
 
 
+def _env_flag(env: Mapping[str, str], key: str) -> bool:
+    """Read ``env[key]`` as a boolean, so ``0``/``false``/``no``/``off``/empty read as false (#573).
+
+    Raw string truthiness would read ``CI=false`` or ``PYVISTA_OFF_SCREEN=0`` — a hand-set opt-*out* — as
+    true, since any non-empty string is truthy. This parses the common opt-out spellings instead.
+
+    Args:
+        env: The process environment (``os.environ`` in production, a literal in tests).
+        key: The variable to read.
+
+    Returns:
+        ``True`` only when the variable is set to a truthy spelling.
+    """
+    return env.get(key, "").strip().lower() not in ("", "0", "false", "no", "off")
+
+
+def _headless(env: Mapping[str, str], platform: str, pyvista_off_screen: bool) -> bool:
+    """Decide whether the ``"auto"`` off-screen setting should render headless (#573).
+
+    Pure so it is testable without a real display: it reads only its arguments, not the live environment.
+    A render is headless when there is no window server to open onto. In priority order:
+
+    - a PyVista global/env the caller set by hand wins (``pyvista.OFF_SCREEN`` / a truthy ``PYVISTA_OFF_SCREEN``)
+      — the power-user fallback the issue allows, so an existing workflow that set it keeps working;
+    - a known CI runner (a truthy ``CI``) is headless, including on Windows and macOS where there is no display
+      variable to key off;
+    - macOS (Aqua) and Windows desktops always have a window server, so they are on-screen (a genuinely
+      headless Windows service without ``CI`` is the documented gap — pass ``off_screen=`` or set the option);
+    - any other POSIX host (Linux/BSD) is headless only when it has no ``DISPLAY`` / ``WAYLAND_DISPLAY``.
+
+    Args:
+        env: The process environment (``os.environ`` in production, a literal in tests).
+        platform: ``sys.platform`` — ``"darwin"`` / ``"win32"`` name the always-windowed desktops; everything
+            else is treated as X11/Wayland-style and gated on the display variables.
+        pyvista_off_screen: Whether PyVista's own ``OFF_SCREEN`` global is set.
+
+    Returns:
+        ``True`` to render off-screen, ``False`` to open a window.
+    """
+    if pyvista_off_screen or _env_flag(env, "PYVISTA_OFF_SCREEN"):
+        return True
+    if _env_flag(env, "CI"):
+        return True
+    if platform == "darwin" or platform.startswith("win"):
+        return False
+    return not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY")
+
+
+def _auto_off_screen() -> bool:
+    """Resolve the ``"auto"`` off-screen setting against the live environment (#573)."""
+    import sys
+
+    import pyvista as pv
+
+    return _headless(os.environ, sys.platform, bool(getattr(pv, "OFF_SCREEN", False)))
+
+
+def _resolve_off_screen(explicit: bool | None) -> bool:
+    """Resolve a scene's effective off-screen mode, digitalearth owning the decision (#573).
+
+    The precedence the issue asks for: a per-call ``off_screen=`` wins; otherwise the
+    ``three_d.off_screen`` package option decides (``True``/``False`` outright, or ``"auto"`` →
+    :func:`_auto_off_screen`). The raw PyVista global is never the interface — it is consulted only inside
+    ``"auto"`` as a power-user fallback — so a caller never has to set ``pyvista.OFF_SCREEN`` themselves.
+
+    Args:
+        explicit: The constructor's ``off_screen`` argument; ``None`` means "decide for me".
+
+    Returns:
+        A concrete ``bool`` the plotter is built with, so the render never silently follows a global.
+    """
+    if explicit is not None:
+        return bool(explicit)
+    setting = get_option("three_d.off_screen")
+    if isinstance(setting, bool):
+        return setting
+    return _auto_off_screen()
+
+
 def _pyvista_vtk_root() -> str:
     """Return the top-level VTK package pyvista is bound to (``vtkmodules`` for a stock build).
 
@@ -550,7 +632,9 @@ class Scene3DBase:
     2-D map, the camera, not a projection, then decides what the viewer sees.
 
     Args:
-        off_screen: Render without opening a window. ``None`` (default) follows :data:`pyvista.OFF_SCREEN`.
+        off_screen: Render without opening a window. ``None`` (default) lets digitalearth decide via the
+            ``three_d.off_screen`` option (``"auto"`` by default); an explicit ``True``/``False`` is the
+            highest-priority override. A caller never needs to set :data:`pyvista.OFF_SCREEN` (#573).
         window_size: Render window size in pixels (``(width, height)``).
         theme: A PyVista theme to apply. ``None`` uses :func:`house_theme`.
         strict: How a layer with nothing to draw is handled. ``False`` (default) skips it with a warning
@@ -628,8 +712,9 @@ class Scene3DBase:
         """Build the 3-D scene; the PyVista plotter behind it is built when something first needs it.
 
         Args:
-            off_screen: Render without opening a window. `None` follows PyVista's own setting, which is what
-                makes the tier usable in a notebook and in CI without changing the call.
+            off_screen: Render without opening a window. `None` (default) lets digitalearth decide via the
+                `three_d.off_screen` option (`"auto"` by default: headless where there is no display,
+                on-screen on a desktop); `True`/`False` overrides it. No `pyvista.OFF_SCREEN` needed (#573).
             window_size: Render size in pixels, used for both the window and `screenshot`.
             theme: PyVista theme; defaults to the package's document-style theme.
             strict: Raise `OffLimbError` for a layer with nothing to draw — an empty point table, a DEM with
@@ -723,6 +808,10 @@ class Scene3DBase:
 
             settings = dict(self._plotter_settings)
             settings["theme"] = settings["theme"] or house_theme()
+            # Resolve the off-screen decision HERE, at the lazy build, not in `__init__` (#573 review M1):
+            # describing a scene then stays renderer-free (no pyvista import at construction), and a late
+            # `set_option`/`DISPLAY`/`pyvista.OFF_SCREEN` change made before the first render is still honoured.
+            settings["off_screen"] = _resolve_off_screen(settings["off_screen"])
             self._plotter = pv.Plotter(**settings)
             self._dress_plotter()
         return self._plotter
@@ -2188,8 +2277,74 @@ class Scene3DBase:
         See Also:
             save: dispatches here for the raster-frame suffixes (:data:`IMAGE_SUFFIXES`).
         """
+        if not self._effective_off_screen():
+            # The scene renders on-screen, but a screenshot never needs a window: take it from a faithful
+            # off-screen copy so the static-image path (this, `_repr_png_`, and `save` to a file) works
+            # regardless of the resolved live mode or any pyvista global (#573) — that is what makes
+            # `ds.plot(var, backend="3d")` embed inline in a notebook whose kernel never set
+            # `pyvista.OFF_SCREEN` — without opening or disturbing the scene's live window.
+            return self._offscreen_snapshot(path, **kwargs)
         self._apply_camera()
         return self.plotter.screenshot(filename=path, return_img=True, **kwargs)
+
+    def _effective_off_screen(self) -> bool:
+        """Whether the scene renders off-screen — the built plotter's mode, else the resolved setting (#573).
+
+        Resolving without building: an already-built plotter's ``off_screen`` is the truth; otherwise the
+        ``three_d.off_screen`` setting is resolved (:func:`_resolve_off_screen`) so the static-image path can
+        choose between a direct screenshot and an off-screen copy without forcing a window open first.
+
+        Returns:
+            ``True`` when the scene renders off-screen, ``False`` when it opens (or would open) a window.
+        """
+        if self._plotter is not None:
+            return bool(self._plotter.off_screen)
+        return _resolve_off_screen(self._plotter_settings["off_screen"])
+
+    def _offscreen_snapshot(
+        self, path: Destination | None, **kwargs: Any
+    ) -> np.ndarray:
+        """Render an off-screen copy of an on-screen scene and screenshot it, for the static-image path (#573).
+
+        A screenshot of an on-screen scene would need the window shown first (and no window exists on a
+        headless host), so the frame is taken from an off-screen rebuild of the same figure, leaving the
+        scene's own (live) plotter untouched. The copy is faithful to the scene's *description*: its layers and
+        live camera (from :attr:`figure_spec`), the raw ``add_mesh``/``add_volume`` objects
+        (:attr:`held_objects`, which the figure describes but does not carry, review H1), and its ``theme``,
+        ``strict`` and plotter kwargs (review M1). The one thing it cannot reproduce is a direct post-draw edit
+        to a returned actor (e.g. ``actor.prop.opacity = 0.5``), which lives on the live actor, not in the
+        figure — such a tweak is absent from the inline image.
+
+        Args:
+            path: Optional destination for the PNG, forwarded to :meth:`screenshot`.
+            **kwargs: Forwarded to :meth:`pyvista.Plotter.screenshot`.
+
+        Returns:
+            numpy.ndarray: the ``(height, width, 3)`` RGB frame.
+        """
+        from contextlib import closing
+
+        reserved = {"off_screen", "window_size", "theme"}
+        settings = self._plotter_settings
+        extra = {k: v for k, v in settings.items() if k not in reserved}
+        crs = getattr(self.figure_spec.panels[0].view, "crs", None)
+        # Build inside the `with` (closing) so a failure during the rebuild's draw still closes the snapshot's
+        # plotter rather than leaking a VTK context (review M3).
+        with closing(
+            type(self)(
+                crs=crs,
+                off_screen=True,
+                window_size=tuple(settings["window_size"]),
+                theme=settings.get("theme"),
+                strict=self.strict,
+                **extra,
+            )
+        ) as snapshot:
+            # Carry the raw add_mesh/add_volume objects the figure describes but does not hold, so a custom
+            # layer is redrawn rather than silently skipped as a missing object (review H1).
+            snapshot._custom.update(self._custom)
+            snapshot.draw_figure(self.figure_spec)
+            return snapshot.screenshot(path, **kwargs)
 
     def export_html(self, path: Destination) -> str:
         """Export the scene to a self-contained interactive HTML page (via trame/vtk.js).
@@ -2705,14 +2860,15 @@ class Scene3DBase:
         view stays available through :meth:`~digitalearth.three_d.Scene3D.show` and
         :meth:`~digitalearth.three_d.app.serve.ServeMixin.serve`.
 
-        Rendering happens headless under :data:`pyvista.OFF_SCREEN` (which every 3-D notebook sets), so the
-        repr needs no display; `screenshot` builds the scene's lazy plotter the same way an explicit
-        ``screenshot()`` call would.
+        Rendering is off-screen on its own: :meth:`screenshot` builds the scene's lazy plotter off-screen for
+        the snapshot regardless of any setting or the :data:`pyvista.OFF_SCREEN` global (#573), so a plain
+        ``ds.plot(var, backend="3d")`` embeds inline in a notebook whose kernel never set that flag — the blank
+        cell that used to appear when it was unset is gone.
 
         Returns:
             bytes: the ``image/png`` payload Jupyter embeds in the cell's saved output, or ``None`` when the
-            frame cannot be rendered (a display-less host that never set :data:`pyvista.OFF_SCREEN`), so the
-            notebook falls back to the text repr instead of showing a traceback — a repr must never raise.
+            frame genuinely cannot be rendered (e.g. a frame PIL cannot encode), so the notebook falls back to
+            the text repr instead of showing a traceback — a repr must never raise.
         """
         import io
 
@@ -2723,6 +2879,7 @@ class Scene3DBase:
             Image.fromarray(self.screenshot()).save(buffer, format="PNG")
             return buffer.getvalue()
         except Exception:  # noqa: BLE001 - a repr must never raise; degrade to the text repr
-            # Covers the whole render→encode path: a display-less host that never set `pyvista.OFF_SCREEN`,
-            # or a frame PIL cannot encode. Returning None makes the notebook fall back to the text repr.
+            # Covers the whole render→encode path (a GPU/driver that cannot render even off-screen, or a frame
+            # PIL cannot encode). The common blank-cell cause — an unset `pyvista.OFF_SCREEN` — no longer
+            # reaches here, since `screenshot` now forces off-screen (#573). None → the text repr.
             return None

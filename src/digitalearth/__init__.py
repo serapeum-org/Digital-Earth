@@ -276,6 +276,7 @@ load_installed_plugins()
 _LAZY_MODULES = {
     "digitalearth.api": ("quickmap", "quickplot", "to_backend"),
     "digitalearth.base.sources": ("DimensionInfo", "Source", "get_source"),
+    "digitalearth.base.options": ("get_option", "set_option"),
     "digitalearth.ops.batch": ("Batch",),
     "digitalearth.ops.browser": ("gallery",),
     "digitalearth.ops.plugins": ("load_plugins",),
@@ -331,6 +332,7 @@ if TYPE_CHECKING:
     from digitalearth import ops as ops
     from digitalearth import static as static
     from digitalearth.api import quickmap, quickplot, to_backend
+    from digitalearth.base.options import get_option, set_option
     from digitalearth.base.sources import DimensionInfo, Source, get_source
     from digitalearth.ops.batch import Batch
     from digitalearth.ops.browser import gallery
@@ -384,6 +386,9 @@ __all__ = [
     "get_source",
     "Source",
     "DimensionInfo",
+    # package options
+    "set_option",
+    "get_option",
     # charts and statistical series
     "line",
     "bar",
