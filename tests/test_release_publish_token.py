@@ -68,7 +68,7 @@ DRAFT_GATE_FORMS = frozenset(
 )
 
 
-def _normalise(condition) -> str:
+def _normalise(condition: object) -> str:
     """Reduce a workflow condition to a form that ignores cosmetic spelling.
 
     Collapses runs of whitespace, strips an enclosing `${{ … }}`, unifies double quotes to single, and
@@ -87,16 +87,18 @@ def _normalise(condition) -> str:
     return text.replace("! ", "!")
 
 
-def _workflow_files() -> list:
+def _workflow_files() -> list[pathlib.Path]:
     """Return every workflow definition in the repository.
 
     Returns:
-        The `.yml` / `.yaml` files under `.github/workflows`, sorted by name.
+        Every `.yml` file under `.github/workflows`, then every `.yaml` file, each group sorted by
+        name. The two groups are concatenated rather than merged, so an `a.yaml` follows a `z.yml`;
+        nothing here depends on the order, only on the set being complete.
     """
     return sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
 
 
-def _steps(job: dict) -> list:
+def _steps(job: dict) -> list[dict]:
     """Return a job's steps, tolerating a `uses:` job that declares none.
 
     Args:
@@ -109,7 +111,7 @@ def _steps(job: dict) -> list:
     return [step for step in steps if isinstance(step, dict)]
 
 
-def _jobs(path: pathlib.Path) -> list:
+def _jobs(path: pathlib.Path) -> list[tuple[str, dict]]:
     """Return a workflow's jobs, paired with the file they came from.
 
     Args:
@@ -150,7 +152,7 @@ def _reads_token_file(step: dict) -> bool:
     return isinstance(script, str) and TOKEN_FILE in script and "cat " in script
 
 
-def _token_consumers() -> list:
+def _token_consumers() -> list[tuple[str, str, dict]]:
     """Return every job in the repository that downloads the publish token.
 
     Returns:
@@ -164,7 +166,7 @@ def _token_consumers() -> list:
     ]
 
 
-def _producer_steps() -> list:
+def _producer_steps() -> list[tuple[str, str, dict]]:
     """Return the steps that create and upload the publish token.
 
     The producer is whichever job writes the token file and uploads it as an artifact — located by
@@ -201,10 +203,13 @@ def _step_label(filename: str, job_id: str, step: dict) -> str:
     Returns:
         A `file / job / step` label.
     """
-    return f"{filename} / job {job_id} / {step.get('name', step.get('uses', '?'))}"
+    # `or`, not `.get(key, default)`: a step written `name:` with no value parses as
+    # {"name": None} and an empty one as {"name": ""}, and both are present keys -- so a default
+    # would never fire and the label read "None". Falsy values must fall through to the action.
+    return f"{filename} / job {job_id} / {step.get('name') or step.get('uses') or '?'}"
 
 
-def _producer_params() -> list:
+def _producer_params() -> list[pytest.param]:
     """Return the producing steps as parametrize cases with readable identifiers.
 
     Returns:
@@ -215,13 +220,13 @@ def _producer_params() -> list:
             filename,
             job_id,
             step,
-            id=f"{filename}:{job_id}:{step.get('name', step.get('uses', '?'))}",
+            id=f"{filename}:{job_id}:{step.get('name') or step.get('uses') or '?'}",
         )
         for filename, job_id, step in _producer_steps()
     ]
 
 
-def _consumer_params() -> list:
+def _consumer_params() -> list[pytest.param]:
     """Return the consuming jobs as parametrize cases with readable identifiers.
 
     Returns:
@@ -266,7 +271,7 @@ def _skips_on_a_missing_token(job: dict) -> bool:
     return step is not None and "skip=true" in step["run"]
 
 
-def _steps_after_resolve(job: dict) -> list:
+def _steps_after_resolve(job: dict) -> list[dict]:
     """Return the steps a job runs once the token has been resolved.
 
     These are the steps that act — checkout, publish, deploy, prune — and the ones a skip has to stop.
@@ -519,6 +524,8 @@ class TestTheDiscriminatorsTellProducersFromConsumers:
         ("step", "tail"),
         [
             ({"name": "Resolve the ref"}, "Resolve the ref"),
+            ({"name": None, "uses": "actions/checkout@v5"}, "actions/checkout@v5"),
+            ({"name": "", "uses": "actions/checkout@v5"}, "actions/checkout@v5"),
             (
                 {
                     "name": "Download the release ref from the github-release run",
@@ -581,18 +588,46 @@ class TestTheSuiteIsNotVacuous:
         assert WORKFLOWS.is_dir(), f"no workflow directory at {WORKFLOWS}"
         assert _workflow_files(), f"no workflow files under {WORKFLOWS}"
 
-    def test_the_token_is_produced_somewhere(self):
-        """A repository that stopped uploading the token would pass the producer guards vacuously."""
-        assert _producer_steps(), (
-            f"no step writes or uploads the {TOKEN!r} artifact — the producer guards would pass "
-            "vacuously. If the release handoff was redesigned, retire this suite deliberately."
+    def test_the_token_is_produced_by_exactly_the_two_known_steps(self):
+        """A floor of "at least one" hides the loss of the step whose gate stops the publish.
+
+        Test scenario:
+            The producer is two steps — one writes the file, one uploads it — and it is the *upload*
+            whose draft gate withholds the token. A `>= 1` floor stays green if `_producer_steps`'s
+            `uploads` branch stops matching (an artifact rename, a move into a composite action) while
+            `writes` still does: the upload's gate then goes unasserted while this test passes. Pin the
+            count so that loss is a failure, not a silence.
+        """
+        producers = [
+            (filename, job_id, step.get("name"))
+            for filename, job_id, step in _producer_steps()
+        ]
+        assert len(producers) == 2, (
+            f"expected exactly 2 producing steps (one writes the {TOKEN!r} file, one uploads it), "
+            f"found {len(producers)}: {producers}. Update this count deliberately if the release "
+            "handoff changed; do not relax it to make a scan gap pass."
         )
 
-    def test_the_token_has_consumers(self):
-        """Likewise for the consumer guards."""
-        consumers = _token_consumers()
-        assert len(consumers) >= 2, (
-            f"expected the publish token to be downloaded by several jobs, found {consumers}"
+    def test_the_token_is_consumed_by_exactly_the_three_known_jobs(self):
+        """Same ratchet for the consumer side, where a dropped job loses all five of its guards.
+
+        Test scenario:
+            Every consumer guard is parametrized over `_token_consumers()`, so a job that falls out of
+            that scan is not reported — it is simply no longer checked. A `>= 2` floor tolerates losing
+            one of the three. Pinning the identities makes the scan's own coverage the thing under test,
+            the way `tests/static/test_map_composition.py` pins the `Map` MRO.
+        """
+        found = {(filename, job_id) for filename, job_id, _ in _token_consumers()}
+        expected = {
+            ("github-pages-mkdocs.yml", "build-strict"),
+            ("github-pages-mkdocs.yml", "deploy-release"),
+            ("pypi-release.yml", "publish"),
+        }
+        assert found == expected, (
+            f"the set of jobs downloading the {TOKEN!r} token changed.\n"
+            f"  no longer seen (their guards are now unchecked): {sorted(expected - found)}\n"
+            f"  newly seen (guards now apply to them): {sorted(found - expected)}\n"
+            "Update the expected set deliberately when the release handoff changes."
         )
 
 
