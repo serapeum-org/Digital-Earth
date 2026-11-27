@@ -200,6 +200,162 @@ def _consumer_params() -> list:
     ]
 
 
+def _resolve_step(job: dict) -> dict | None:
+    """Return the step that reads the token and decides what the job does about it.
+
+    Args:
+        job: One entry of a workflow's `jobs` mapping.
+
+    Returns:
+        The resolve step, or `None` for a job that downloads the token but never reads it.
+    """
+    for step in _steps(job):
+        if _reads_token_file(step):
+            return step
+    return None
+
+
+def _skips_on_a_missing_token(job: dict) -> bool:
+    """Whether this consumer answers a missing token by skipping its remaining steps.
+
+    Two mechanisms are in use, deliberately. `pypi-release`'s publish and `deploy-release` have nothing
+    useful to do without a released commit, so they emit a `skip=true` output and gate every later step
+    on it. `build-strict` does — gating the default tree is a meaningful action — so it assigns `REF=""`
+    and carries on. Which mechanism a job uses decides which guard applies to it.
+
+    Args:
+        job: One entry of a workflow's `jobs` mapping.
+
+    Returns:
+        `True` when the job's resolve step emits a skip signal rather than an empty-ref fallback.
+    """
+    step = _resolve_step(job)
+    return step is not None and "skip=true" in step["run"]
+
+
+def _steps_after_resolve(job: dict) -> list:
+    """Return the steps a job runs once the token has been resolved.
+
+    These are the steps that act — checkout, publish, deploy, prune — and the ones a skip has to stop.
+
+    Args:
+        job: One entry of a workflow's `jobs` mapping.
+
+    Returns:
+        Every step following the resolve step, in order.
+    """
+    steps = _steps(job)
+    resolve = _resolve_step(job)
+    if resolve is None:
+        return []
+    return steps[steps.index(resolve) + 1 :]
+
+
+class TestADraftActuallyStopsThePublish:
+    """The gating is the half of the fix that does the work, and it needs its own guards.
+
+    The other consumer tests assert that a missing token is *tolerated* — the download continues, the
+    resolve step does not die on the `cat`. None of that prevents anything: a job that tolerates the
+    absence and then publishes regardless is the original defect with extra steps. What stops the
+    publish is the `skip=true` output and the `if: steps.ref.outputs.skip != 'true'` gate on every step
+    after it, so those are pinned here.
+
+    Written after a review mutation-tested the first version of this suite and found six mutants
+    surviving green, among them the removal of all five `deploy-release` gates plus the `skip=true`
+    output — together a clean revert of the consumer side of the fix.
+    """
+
+    @pytest.mark.parametrize(("filename", "job_id", "job"), _consumer_params())
+    def test_the_resolve_step_emits_a_skip_signal_or_an_empty_ref_fallback(
+        self, filename, job_id, job
+    ):
+        """Each consumer answers a missing token by one of the two mechanisms, not by neither.
+
+        Args:
+            filename: The workflow file the job came from.
+            job_id: The job under test.
+            job: The job itself.
+
+        Test scenario:
+            Deleting `echo "skip=true" >> "$GITHUB_OUTPUT"` left the earlier suite green while making
+            every downstream gate read `'' != 'true'` — true — so the job published a checkout of the
+            default branch. A job must therefore either emit the skip signal into `$GITHUB_OUTPUT`, or
+            be the fallback kind that assigns an empty `REF` and legitimately carries on.
+        """
+        step = _resolve_step(job)
+        assert step is not None, (
+            f"{filename} / job {job_id} downloads the token but no step reads it"
+        )
+        script = step["run"]
+        emits_skip = "skip=true" in script and "$GITHUB_OUTPUT" in script
+        falls_back = 'REF=""' in script
+        assert emits_skip or falls_back, (
+            f"{_step_label(filename, job_id, step)} neither emits `skip=true` into $GITHUB_OUTPUT nor "
+            "falls back to an empty REF, so a missing token leaves the job acting on an unresolved ref"
+        )
+
+    @pytest.mark.parametrize(("filename", "job_id", "job"), _consumer_params())
+    def test_every_step_after_the_resolve_is_gated_on_the_skip(
+        self, filename, job_id, job
+    ):
+        """A skip that nothing is gated on does not skip anything.
+
+        Args:
+            filename: The workflow file the job came from.
+            job_id: The job under test.
+            job: The job itself.
+
+        Test scenario:
+            This is the finding that prompted the class. Removing the gate from `Build and publish to
+            PyPI`, from its checkout, or from all five `deploy-release` steps each left the earlier
+            suite at 35/35 green — and the first two are worse than the original bug: with `skip=true`
+            set but the gate gone, `ref:` is empty and `actions/checkout` takes the default branch, so
+            the job publishes pre-bump `main` to PyPI.
+
+            Jobs using the empty-ref fallback (`build-strict`) are exempt by construction: they have no
+            skip output, and gating the default tree is the action they are meant to take.
+        """
+        if not _skips_on_a_missing_token(job):
+            pytest.skip(f"{job_id} uses the empty-ref fallback, not the skip mechanism")
+        resolve_id = _resolve_step(job).get("id")
+        assert resolve_id, (
+            f"{filename} / job {job_id}'s resolve step has no `id:`, so nothing can gate on its output"
+        )
+        gate = f"steps.{resolve_id}.outputs.skip"
+        offenders = [
+            _step_label(filename, job_id, step)
+            for step in _steps_after_resolve(job)
+            if gate not in str(step.get("if") or "")
+        ]
+        assert offenders == [], (
+            f"these steps run even when the publish token is absent, so a draft release still acts. "
+            f"Gate each on `{gate} != 'true'`:\n  " + "\n  ".join(offenders)
+        )
+
+    def test_the_docs_gate_still_runs_on_every_non_release_event(self):
+        """The success guard must not cost the repository its pull-request docs gate.
+
+        Test scenario:
+            `build-strict` is the `--strict` docs build every PR is gated on, and the success guard
+            added for #567 is only the *second* arm of its condition. The first arm,
+            `github.event_name != 'workflow_run'`, is what keeps it running on `push`, `pull_request`
+            and `release`. Dropping that prefix leaves a condition that is false on every one of those
+            events, so the docs gate would silently stop running on all pull requests while a suite
+            asserting only the `success` clause stayed green.
+        """
+        document = yaml.safe_load(
+            (WORKFLOWS / "github-pages-mkdocs.yml").read_text(encoding="utf-8")
+        )
+        condition = " ".join(str(document["jobs"]["build-strict"]["if"]).split())
+        assert "github.event_name != 'workflow_run'" in condition, (
+            "build-strict no longer admits non-workflow_run events, so the --strict docs gate does not "
+            f"run on pull requests. Found if: {condition!r}"
+        )
+        assert SUCCESS_GUARD in condition, (
+            f"build-strict lost its success guard (#567). Found if: {condition!r}"
+        )
+
+
 class TestTheDiscriminatorsTellProducersFromConsumers:
     """The guards below are only as good as the two predicates that decide what they apply to.
 
