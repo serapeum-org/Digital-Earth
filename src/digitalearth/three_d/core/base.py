@@ -445,41 +445,61 @@ def house_theme() -> "pv.themes.Theme":
     return theme
 
 
-def _headless(env: Mapping[str, str], os_name: str, pyvista_off_screen: bool) -> bool:
+def _env_flag(env: Mapping[str, str], key: str) -> bool:
+    """Read ``env[key]`` as a boolean, so ``0``/``false``/``no``/``off``/empty read as false (#573).
+
+    Raw string truthiness would read ``CI=false`` or ``PYVISTA_OFF_SCREEN=0`` — a hand-set opt-*out* — as
+    true, since any non-empty string is truthy. This parses the common opt-out spellings instead.
+
+    Args:
+        env: The process environment (``os.environ`` in production, a literal in tests).
+        key: The variable to read.
+
+    Returns:
+        ``True`` only when the variable is set to a truthy spelling.
+    """
+    return env.get(key, "").strip().lower() not in ("", "0", "false", "no", "off")
+
+
+def _headless(env: Mapping[str, str], platform: str, pyvista_off_screen: bool) -> bool:
     """Decide whether the ``"auto"`` off-screen setting should render headless (#573).
 
     Pure so it is testable without a real display: it reads only its arguments, not the live environment.
     A render is headless when there is no window server to open onto. In priority order:
 
-    - a PyVista global/env the caller set by hand wins (``pyvista.OFF_SCREEN`` / ``PYVISTA_OFF_SCREEN``) —
-      the power-user fallback the issue allows, so an existing workflow that set it keeps working;
-    - a known CI runner (``CI``) is headless, including on Windows where there is no display variable;
-    - a POSIX host with no ``DISPLAY`` / ``WAYLAND_DISPLAY`` has no window server.
-
-    Otherwise (a desktop with a display server) the render is on-screen.
+    - a PyVista global/env the caller set by hand wins (``pyvista.OFF_SCREEN`` / a truthy ``PYVISTA_OFF_SCREEN``)
+      — the power-user fallback the issue allows, so an existing workflow that set it keeps working;
+    - a known CI runner (a truthy ``CI``) is headless, including on Windows and macOS where there is no display
+      variable to key off;
+    - macOS (Aqua) and Windows desktops always have a window server, so they are on-screen (a genuinely
+      headless Windows service without ``CI`` is the documented gap — pass ``off_screen=`` or set the option);
+    - any other POSIX host (Linux/BSD) is headless only when it has no ``DISPLAY`` / ``WAYLAND_DISPLAY``.
 
     Args:
         env: The process environment (``os.environ`` in production, a literal in tests).
-        os_name: ``os.name`` — ``"posix"`` gates the display-variable check.
+        platform: ``sys.platform`` — ``"darwin"`` / ``"win32"`` name the always-windowed desktops; everything
+            else is treated as X11/Wayland-style and gated on the display variables.
         pyvista_off_screen: Whether PyVista's own ``OFF_SCREEN`` global is set.
 
     Returns:
         ``True`` to render off-screen, ``False`` to open a window.
     """
-    if pyvista_off_screen or env.get("PYVISTA_OFF_SCREEN"):
+    if pyvista_off_screen or _env_flag(env, "PYVISTA_OFF_SCREEN"):
         return True
-    if env.get("CI"):
+    if _env_flag(env, "CI"):
         return True
-    if os_name == "posix" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
-        return True
-    return False
+    if platform == "darwin" or platform.startswith("win"):
+        return False
+    return not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY")
 
 
 def _auto_off_screen() -> bool:
     """Resolve the ``"auto"`` off-screen setting against the live environment (#573)."""
+    import sys
+
     import pyvista as pv
 
-    return _headless(os.environ, os.name, bool(getattr(pv, "OFF_SCREEN", False)))
+    return _headless(os.environ, sys.platform, bool(getattr(pv, "OFF_SCREEN", False)))
 
 
 def _resolve_off_screen(explicit: bool | None) -> bool:
@@ -2269,8 +2289,13 @@ class Scene3DBase:
         """Render an off-screen copy of an on-screen scene and screenshot it, for the static-image path (#573).
 
         A screenshot of an on-screen scene would need the window shown first (and no window exists on a
-        headless host), so the frame is taken from a faithful off-screen rebuild of the same figure — same
-        layers and live camera, via :meth:`from_figure` — leaving the scene's own (live) plotter untouched.
+        headless host), so the frame is taken from an off-screen rebuild of the same figure, leaving the
+        scene's own (live) plotter untouched. The copy is faithful to the scene's *description*: its layers and
+        live camera (from :attr:`figure_spec`), the raw ``add_mesh``/``add_volume`` objects
+        (:attr:`held_objects`, which the figure describes but does not carry, review H1), and its ``theme``,
+        ``strict`` and plotter kwargs (review M1). The one thing it cannot reproduce is a direct post-draw edit
+        to a returned actor (e.g. ``actor.prop.opacity = 0.5``), which lives on the live actor, not in the
+        figure — such a tweak is absent from the inline image.
 
         Args:
             path: Optional destination for the PNG, forwarded to :meth:`screenshot`.
@@ -2279,14 +2304,29 @@ class Scene3DBase:
         Returns:
             numpy.ndarray: the ``(height, width, 3)`` RGB frame.
         """
-        window = tuple(self._plotter_settings.get("window_size", (1024, 768)))
-        snapshot = type(self).from_figure(
-            self.figure_spec, off_screen=True, window_size=window
-        )
-        try:
+        from contextlib import closing
+
+        reserved = {"off_screen", "window_size", "theme"}
+        settings = self._plotter_settings
+        extra = {k: v for k, v in settings.items() if k not in reserved}
+        crs = getattr(self.figure_spec.panels[0].view, "crs", None)
+        # Build inside the `with` (closing) so a failure during the rebuild's draw still closes the snapshot's
+        # plotter rather than leaking a VTK context (review M3).
+        with closing(
+            type(self)(
+                crs=crs,
+                off_screen=True,
+                window_size=tuple(settings["window_size"]),
+                theme=settings.get("theme"),
+                strict=self.strict,
+                **extra,
+            )
+        ) as snapshot:
+            # Carry the raw add_mesh/add_volume objects the figure describes but does not hold, so a custom
+            # layer is redrawn rather than silently skipped as a missing object (review H1).
+            snapshot._custom.update(self._custom)
+            snapshot.draw_figure(self.figure_spec)
             return snapshot.screenshot(path, **kwargs)
-        finally:
-            snapshot.close()
 
     def export_html(self, path: Destination) -> str:
         """Export the scene to a self-contained interactive HTML page (via trame/vtk.js).

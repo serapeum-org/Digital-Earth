@@ -7,6 +7,9 @@ Gated on the ``3d`` extra.
 """
 
 # ruff: noqa: E402
+import os
+import sys
+
 import numpy as np
 import pytest
 
@@ -14,18 +17,20 @@ pv = pytest.importorskip("pyvista")
 
 import digitalearth
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.core.base import _headless, _resolve_off_screen
+from digitalearth.three_d.core.base import (
+    _auto_off_screen,
+    _headless,
+    _resolve_off_screen,
+)
 
 
 @pytest.fixture(autouse=True)
 def _restore_option():
-    """Save and restore the option store so one test's writes do not leak into another."""
-    from digitalearth.base import options
+    """Reset the option store after each test so one test's writes do not leak into another."""
+    from digitalearth.base.options import reset_options
 
-    saved = dict(options._VALUES)
     yield
-    options._VALUES.clear()
-    options._VALUES.update(saved)
+    reset_options()
 
 
 @pytest.fixture
@@ -47,30 +52,64 @@ def mesh():
 
 
 @pytest.mark.parametrize(
-    "env, os_name, pv_off, expected",
+    "env, platform, pv_off, expected",
     [
-        ({}, "posix", False, True),  # POSIX, no display -> headless
-        ({"DISPLAY": ":0"}, "posix", False, False),  # X display present -> on-screen
+        ({}, "linux", False, True),  # Linux, no display server -> headless
+        ({"DISPLAY": ":0"}, "linux", False, False),  # X display present -> on-screen
         (
             {"WAYLAND_DISPLAY": "wayland-0"},
-            "posix",
+            "linux",
             False,
             False,
         ),  # Wayland -> on-screen
-        ({"CI": "true"}, "nt", False, True),  # CI runner (even on Windows) -> headless
-        ({}, "nt", False, False),  # desktop Windows -> on-screen
-        ({}, "nt", True, True),  # power user set pyvista.OFF_SCREEN -> honoured
         (
-            {"PYVISTA_OFF_SCREEN": "1"},
-            "nt",
+            {},
+            "darwin",
+            False,
+            False,
+        ),  # macOS desktop (Aqua, no DISPLAY) -> on-screen (H2)
+        ({}, "win32", False, False),  # desktop Windows -> on-screen
+        (
+            {"CI": "true"},
+            "win32",
             False,
             True,
-        ),  # power user set the env var -> honoured
+        ),  # CI runner (even on Windows) -> headless
+        (
+            {"CI": "false", "DISPLAY": ":0"},
+            "linux",
+            False,
+            False,
+        ),  # CI=false not forced (M2)
+        (
+            {"PYVISTA_OFF_SCREEN": "0"},
+            "win32",
+            False,
+            False,
+        ),  # explicit opt-out honoured (M2)
+        ({}, "win32", True, True),  # power user set pyvista.OFF_SCREEN -> honoured
+        ({"PYVISTA_OFF_SCREEN": "1"}, "win32", False, True),  # env opt-in honoured
     ],
 )
-def test_headless_decides_from_environment(env, os_name, pv_off, expected):
-    """``_headless`` decides off-screen purely from the environment it is handed (#573)."""
-    assert _headless(env, os_name, pv_off) is expected
+def test_headless_decides_from_environment(env, platform, pv_off, expected):
+    """``_headless`` decides off-screen purely from the environment and platform it is handed (#573)."""
+    assert _headless(env, platform, pv_off) is expected
+
+
+def test_auto_off_screen_keeps_a_macos_desktop_on_screen(monkeypatch):
+    """``"auto"`` must not disable interactive windows on a Mac desktop, which has no ``DISPLAY`` (#573, H2).
+
+    Test scenario:
+        A macOS desktop (``os.name == "posix"``, ``sys.platform == "darwin"``, no display vars, not CI, PyVista
+        global off) resolves to on-screen — restoring the pre-PR behaviour the display-only heuristic removed.
+    """
+    monkeypatch.setattr(os, "name", "posix")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setattr(pv, "OFF_SCREEN", False)
+    assert _auto_off_screen() is False
 
 
 @pytest.mark.parametrize("explicit", [True, False])
@@ -87,15 +126,15 @@ def test_resolve_off_screen_reads_the_option_when_not_explicit(setting):
     assert _resolve_off_screen(None) is setting
 
 
-def test_repr_png_renders_without_pyvista_off_screen(mesh, monkeypatch):
-    """The headline fix: inline PNG renders with ``pyvista.OFF_SCREEN`` unset (#573).
+def test_repr_png_returns_bytes_for_a_drawn_scene(mesh, monkeypatch):
+    """The headline fix: ``_repr_png_`` yields a PNG, not the blank ``None`` the shipped path returned (#573).
 
     Test scenario:
-        An interactive-style kernel (``pyvista.OFF_SCREEN`` False) that never configured PyVista still gets a
-        PNG from ``_repr_png_`` instead of the blank ``None`` the shipped behaviour returned.
+        A drawn off-screen scene (the mode a notebook resolves to) embeds real PNG bytes with ``pyvista``'s own
+        global left off — the inline image no longer depends on ``pyvista.OFF_SCREEN``.
     """
     monkeypatch.setattr(pv, "OFF_SCREEN", False)
-    scene = Scene3D()
+    scene = Scene3D(off_screen=True)
     try:
         scene.trimesh(mesh)
         png = scene._repr_png_()
@@ -105,20 +144,48 @@ def test_repr_png_renders_without_pyvista_off_screen(mesh, monkeypatch):
         scene.close()
 
 
-def test_static_path_forces_off_screen_even_for_an_on_screen_scene(mesh, monkeypatch):
-    """``screenshot`` forces off-screen on its lazy build regardless of the scene's mode (#573).
+def test_offscreen_snapshot_carries_a_custom_add_mesh_layer():
+    """The off-screen snapshot redraws held ``add_mesh`` objects rather than silently dropping them (#573, H1).
 
     Test scenario:
-        A scene explicitly built ``off_screen=False`` with ``pyvista.OFF_SCREEN`` also False still screenshots
-        — the static-image path builds its plotter off-screen rather than failing with "nothing to screenshot".
+        A scene holding a raw ``add_mesh(pv.Sphere())`` layer — whose object lives only in ``held_objects``,
+        not in ``figure_spec`` — snapshots to a non-uniform frame (the sphere is present). The pre-fix rebuild
+        via ``from_figure`` lost the held object and produced a blank, uniform frame.
     """
-    monkeypatch.setattr(pv, "OFF_SCREEN", False)
-    scene = Scene3D(off_screen=False)
+    scene = Scene3D(off_screen=True)
     try:
-        scene.trimesh(mesh)
-        frame = scene.screenshot()
+        scene.add_mesh(pv.Sphere())
+        frame = scene._offscreen_snapshot(None)
         assert frame.ndim == 3, frame.shape
         assert frame.shape[-1] == 3, frame.shape
+        assert float(frame.std()) > 0.0, (
+            "snapshot is uniform — the custom sphere layer was dropped"
+        )
+    finally:
+        scene.close()
+
+
+def test_screenshot_routes_an_on_screen_scene_through_the_snapshot(monkeypatch):
+    """An on-screen scene takes the off-screen-snapshot path, without opening or needing a window (#573).
+
+    Test scenario:
+        ``screenshot()`` on an on-screen scene (no plotter built yet) calls ``_offscreen_snapshot`` instead of
+        screenshotting a windowless live plotter — verified by spying on the method, so the test needs no
+        display and runs headless.
+    """
+    scene = Scene3D(off_screen=False)
+    calls = {}
+    sentinel = np.zeros((2, 2, 3), dtype=np.uint8)
+    monkeypatch.setattr(
+        scene,
+        "_offscreen_snapshot",
+        lambda path, **k: calls.setdefault("hit", True) or sentinel,
+    )
+    try:
+        scene.screenshot()
+        assert calls.get("hit"), (
+            "on-screen scene did not route through _offscreen_snapshot"
+        )
     finally:
         scene.close()
 
