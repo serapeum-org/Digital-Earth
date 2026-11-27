@@ -215,7 +215,10 @@ def test_face_relief_draws_the_on_view_part_of_a_partly_off_view_mesh(ugrid_mesh
     scene = quickmap(ugrid_mesh("face", node_x=off_view), backend="3d", relief=True)
     try:
         poly = scene.layers[0][0]
-        assert poly is not None and poly.n_cells > 0, poly
+        assert poly is not None, (
+            "a partly-off-view face-relief mesh should still build a surface"
+        )
+        assert poly.n_cells > 0, poly.n_cells
         assert VALUE in poly.cell_data, list(poly.cell_data.keys())
         assert float(poly.points[:, 2].max()) > 0.0, poly.points[:, 2].max()
     finally:
