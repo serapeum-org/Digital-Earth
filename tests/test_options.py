@@ -7,13 +7,11 @@ import digitalearth
 
 @pytest.fixture(autouse=True)
 def _restore_options():
-    """Save and restore the option store so one test's writes do not leak into another."""
-    from digitalearth.base import options
+    """Reset the option store after each test so one test's writes do not leak into another."""
+    from digitalearth.base.options import reset_options
 
-    saved = dict(options._VALUES)
     yield
-    options._VALUES.clear()
-    options._VALUES.update(saved)
+    reset_options()
 
 
 def test_three_d_off_screen_defaults_to_auto():
