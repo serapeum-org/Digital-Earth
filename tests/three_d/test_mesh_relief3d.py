@@ -216,6 +216,49 @@ def test_face_relief_draws_the_on_view_part_of_a_partly_off_view_mesh(ugrid_mesh
         scene.close()
 
 
+def test_face_relief_triangle_mode_returns_zeros_for_an_empty_mesh():
+    """A mesh with no fan-triangle places nothing to warp, so the reduction returns all-zero heights (#569).
+
+    Test scenario:
+        A degenerate 1-D (empty) ``fan_triangles`` over three nodes yields a ``(3,)`` zero array rather than
+        raising on ``.shape[1]``.
+    """
+    from types import SimpleNamespace
+
+    from digitalearth.three_d.builders.mesh import _face_values_to_nodes
+
+    mesh = SimpleNamespace(fan_triangles=np.empty((0,), dtype=int), node_x=np.zeros(3))
+    heights = _face_values_to_nodes(mesh, np.array([]), how="triangle")
+    np.testing.assert_array_equal(heights, np.zeros(3))
+
+
+def test_face_relief_face_mode_falls_back_when_connectivity_disagrees():
+    """When the values do not line up with the connectivity's fan-cut, face mode falls back to triangle (#569).
+
+    Test scenario:
+        Connectivity implies 2 fan-triangles (a quad) but 3 values are passed, so the per-face regrouping
+        cannot be trusted; the reduction falls back to the per-triangle mean rather than mis-grouping.
+    """
+    from types import SimpleNamespace
+
+    from digitalearth.three_d.builders.mesh import _face_values_to_nodes
+
+    conn = SimpleNamespace(
+        data=np.array([[0, 1, 2, 3]], dtype=np.intp),
+        nodes_per_element=lambda: np.array([4]),
+    )
+    mesh = SimpleNamespace(
+        fan_triangles=np.array([[0, 1, 2], [0, 2, 3], [1, 2, 3]], dtype=np.intp),
+        node_x=np.zeros(4),
+        face_node_connectivity=conn,
+    )
+    values = np.array([10.0, 20.0, 30.0])
+    heights = _face_values_to_nodes(mesh, values, how="face")
+    np.testing.assert_allclose(
+        heights, _face_values_to_nodes(mesh, values, how="triangle")
+    )
+
+
 def test_relief_reduce_rejects_an_unknown_mode(ugrid_mesh):
     """``relief_reduce`` only names the two reductions, so a typo is refused rather than silently ignored (#569)."""
     mesh = ugrid_mesh("face").mesh
