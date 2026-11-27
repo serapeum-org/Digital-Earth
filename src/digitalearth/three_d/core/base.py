@@ -724,7 +724,7 @@ class Scene3DBase:
             **plotter_kwargs: Forwarded to `pyvista.Plotter` when it is built.
         """
         self._plotter_settings: dict[str, Any] = {
-            "off_screen": _resolve_off_screen(off_screen),
+            "off_screen": off_screen,
             "window_size": list(window_size),
             "theme": theme,
             **plotter_kwargs,
@@ -808,6 +808,10 @@ class Scene3DBase:
 
             settings = dict(self._plotter_settings)
             settings["theme"] = settings["theme"] or house_theme()
+            # Resolve the off-screen decision HERE, at the lazy build, not in `__init__` (#573 review M1):
+            # describing a scene then stays renderer-free (no pyvista import at construction), and a late
+            # `set_option`/`DISPLAY`/`pyvista.OFF_SCREEN` change made before the first render is still honoured.
+            settings["off_screen"] = _resolve_off_screen(settings["off_screen"])
             self._plotter = pv.Plotter(**settings)
             self._dress_plotter()
         return self._plotter
@@ -2273,7 +2277,7 @@ class Scene3DBase:
         See Also:
             save: dispatches here for the raster-frame suffixes (:data:`IMAGE_SUFFIXES`).
         """
-        if not self._plotter_settings.get("off_screen"):
+        if not self._effective_off_screen():
             # The scene renders on-screen, but a screenshot never needs a window: take it from a faithful
             # off-screen copy so the static-image path (this, `_repr_png_`, and `save` to a file) works
             # regardless of the resolved live mode or any pyvista global (#573) — that is what makes
@@ -2282,6 +2286,20 @@ class Scene3DBase:
             return self._offscreen_snapshot(path, **kwargs)
         self._apply_camera()
         return self.plotter.screenshot(filename=path, return_img=True, **kwargs)
+
+    def _effective_off_screen(self) -> bool:
+        """Whether the scene renders off-screen — the built plotter's mode, else the resolved setting (#573).
+
+        Resolving without building: an already-built plotter's ``off_screen`` is the truth; otherwise the
+        ``three_d.off_screen`` setting is resolved (:func:`_resolve_off_screen`) so the static-image path can
+        choose between a direct screenshot and an off-screen copy without forcing a window open first.
+
+        Returns:
+            ``True`` when the scene renders off-screen, ``False`` when it opens (or would open) a window.
+        """
+        if self._plotter is not None:
+            return bool(self._plotter.off_screen)
+        return _resolve_off_screen(self._plotter_settings["off_screen"])
 
     def _offscreen_snapshot(
         self, path: Destination | None, **kwargs: Any

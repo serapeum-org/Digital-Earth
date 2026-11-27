@@ -27,10 +27,10 @@ from digitalearth.three_d.core.base import (
 @pytest.fixture(autouse=True)
 def _restore_option():
     """Reset the option store after each test so one test's writes do not leak into another."""
-    from digitalearth.base.options import reset_options
+    from digitalearth.base.options import _reset_options
 
     yield
-    reset_options()
+    _reset_options()
 
 
 @pytest.fixture
@@ -144,22 +144,68 @@ def test_repr_png_returns_bytes_for_a_drawn_scene(mesh, monkeypatch):
         scene.close()
 
 
+def test_off_screen_is_resolved_lazily_at_plotter_build(monkeypatch):
+    """The off-screen decision is read when the plotter is built, so a late option change is honoured (#573, M1).
+
+    Test scenario:
+        A scene constructed while the option is ``"auto"`` has resolved nothing yet; setting
+        ``three_d.off_screen`` to ``True`` *after* construction but before the first render still makes the
+        built plotter off-screen — the decision is not frozen at ``__init__`` (which also keeps construction
+        renderer-free).
+    """
+    monkeypatch.setattr(pv, "OFF_SCREEN", False)
+    scene = Scene3D()
+    try:
+        digitalearth.set_option("three_d.off_screen", True)
+        assert scene.plotter.off_screen is True, (
+            "late option change was not honoured — decision frozen early"
+        )
+    finally:
+        scene.close()
+
+
 def test_offscreen_snapshot_carries_a_custom_add_mesh_layer():
     """The off-screen snapshot redraws held ``add_mesh`` objects rather than silently dropping them (#573, H1).
 
     Test scenario:
         A scene holding a raw ``add_mesh(pv.Sphere())`` layer — whose object lives only in ``held_objects``,
-        not in ``figure_spec`` — snapshots to a non-uniform frame (the sphere is present). The pre-fix rebuild
-        via ``from_figure`` lost the held object and produced a blank, uniform frame.
+        not in ``figure_spec`` — snapshots to an image that differs from the same scene with no custom layer.
+        The pre-fix rebuild via ``from_figure`` lost the held object, so the sphere and empty frames matched.
+    """
+    empty = Scene3D(off_screen=True)
+    with_sphere = Scene3D(off_screen=True)
+    try:
+        with_sphere.add_mesh(pv.Sphere())
+        baseline = empty._offscreen_snapshot(None)
+        sphere_frame = with_sphere._offscreen_snapshot(None)
+        assert sphere_frame.ndim == 3, sphere_frame.shape
+        assert sphere_frame.shape[-1] == 3, sphere_frame.shape
+        assert float(sphere_frame.std()) > 0.0, (
+            "snapshot is uniform — the custom sphere layer was dropped"
+        )
+        assert not np.array_equal(baseline, sphere_frame), (
+            "the custom sphere layer did not change the image"
+        )
+    finally:
+        empty.close()
+        with_sphere.close()
+
+
+def test_live_scene_survives_an_offscreen_snapshot():
+    """Taking an off-screen snapshot must not free or corrupt the live scene's shared objects (#573, M2).
+
+    Test scenario:
+        A scene holding a custom ``add_mesh`` layer still renders a non-uniform frame *after* an
+        ``_offscreen_snapshot`` has built and closed a copy that shared that same pyvista object — proving the
+        snapshot's ``close()`` left the live scene untouched.
     """
     scene = Scene3D(off_screen=True)
     try:
         scene.add_mesh(pv.Sphere())
-        frame = scene._offscreen_snapshot(None)
-        assert frame.ndim == 3, frame.shape
-        assert frame.shape[-1] == 3, frame.shape
+        scene._offscreen_snapshot(None)
+        frame = scene.screenshot()
         assert float(frame.std()) > 0.0, (
-            "snapshot is uniform — the custom sphere layer was dropped"
+            "live scene lost its sphere after the snapshot closed a shared copy"
         )
     finally:
         scene.close()
@@ -176,16 +222,18 @@ def test_screenshot_routes_an_on_screen_scene_through_the_snapshot(monkeypatch):
     scene = Scene3D(off_screen=False)
     calls = {}
     sentinel = np.zeros((2, 2, 3), dtype=np.uint8)
-    monkeypatch.setattr(
-        scene,
-        "_offscreen_snapshot",
-        lambda path, **k: calls.setdefault("hit", True) or sentinel,
-    )
+
+    def _spy(path, **kwargs):
+        calls["hit"] = True
+        return sentinel
+
+    monkeypatch.setattr(scene, "_offscreen_snapshot", _spy)
     try:
-        scene.screenshot()
+        result = scene.screenshot()
         assert calls.get("hit"), (
             "on-screen scene did not route through _offscreen_snapshot"
         )
+        assert result is sentinel, "screenshot did not return the snapshot's frame"
     finally:
         scene.close()
 
