@@ -31,6 +31,8 @@ EXPECTED = [
     "get_source",
     "Source",
     "DimensionInfo",
+    "set_option",
+    "get_option",
     "line",
     "bar",
     "histogram",
