@@ -27,8 +27,10 @@ builder/render method without it raises an actionable ``ImportError`` (``pip ins
 broken widget stack (e.g. a stale ``@jupyter-widgets/jupyterlab-manager`` labextension) it may show
 "model not found"; ``digitalearth.web.doctor()`` diagnoses that, and ``set_option("web.inline", "static")``
 renders the self-contained HTML map instead, which needs no widget manager. The ``[web]`` extra floors the
-kernel-side widget stack (``ipywidgets>=8``, ``jupyterlab_widgets>=3``, ``anywidget>=0.9``) so an outdated
-one is not the cause; a conflicting *front-end* labextension can only be removed in the serving env.
+widget stack (``ipywidgets>=8``, ``jupyterlab_widgets>=3``, ``anywidget>=0.9``) to rule out an outdated
+kernel-side package — but it installs into the *kernel* env, so it only helps when that is also the serving
+env; a conflicting *front-end* labextension (the usual "model not found" cause) can only be removed where
+JupyterLab is served.
 """
 
 from digitalearth.web.builders.raster import TileRoute
