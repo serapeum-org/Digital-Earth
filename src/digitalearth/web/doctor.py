@@ -381,7 +381,7 @@ def doctor() -> WidgetStackReport:
 
 
 #: Module-level latch for :func:`_warn_once` — a plain bool (not an attribute hung on the function), so the
-#: once-per-process guard needs no ``# type: ignore``. Reset by the tests between cases.
+#: once-per-process guard is type-clean with no inline linter suppression. Reset by the tests between cases.
 _warned_once = False
 
 
