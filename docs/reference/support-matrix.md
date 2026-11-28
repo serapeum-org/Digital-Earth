@@ -33,7 +33,7 @@ only what their extra adds:
 
 - **static** — `numpy`, `pandas`, `matplotlib`, `geopandas`, `cleopatra`, `xyzservices`, `pyramids-core`, `loguru`,
   `pyyaml`
-- **web** — `maplibre`
+- **web** — `maplibre`, `ipywidgets`, `jupyterlab_widgets`, `anywidget`
 - **interactive** — `geoviews`, `holoviews`, `hvplot`, `datashader`, `panel`, `cartopy`
 - **3d** — `pyvista`, `geovista`, `pointclouds`, `imageio`, `imageio-ffmpeg`
 

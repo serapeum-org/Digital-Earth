@@ -8710,6 +8710,9 @@ packages:
   - panel>=1.9 ; extra == 'interactive'
   - cartopy<0.26 ; extra == 'interactive'
   - maplibre[ipywidget]>=0.3 ; extra == 'web'
+  - ipywidgets>=8 ; extra == 'web'
+  - jupyterlab-widgets>=3 ; extra == 'web'
+  - anywidget>=0.9 ; extra == 'web'
   - digitalearth[3d,interactive,web] ; extra == 'all'
   requires_python: '>=3.11,<4'
 - pypi: https://files.pythonhosted.org/packages/01/b0/cb28ff4474a2f07bb9b64751112b3b40c421755297749c70810f4cadfc24/pyobjc_framework_cocoa-13.0-cp313-cp313-macosx_10_13_universal2.whl

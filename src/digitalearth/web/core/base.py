@@ -3617,73 +3617,183 @@ class WebMapBase:
         self.close()
 
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
-        """Render the map inline in a notebook — the live widget, plus a static HTML fallback for export (#559).
+        """Render the map inline in a notebook, honouring the ``web.inline`` option (#559, #575).
 
-        The returned mimebundle carries two rich representations. The MapLibre widget's own
-        ``application/vnd.jupyter.widget-view+json`` keeps the live, interactive map in a front-end that has the
-        widget manager (Jupyter ranks the widget-view above ``text/html``, so it wins there). Alongside it, a
-        self-contained ``text/html`` fallback — the standalone map page wrapped in an isolating ``<iframe
-        srcdoc>`` — is embedded so the map still renders in a notebook saved/exported without live widget state
-        (``nbconvert --execute``, ``mkdocs-jupyter`` with ``execute: false``), where the widget-view is dropped.
-        A plain ``plot(backend="web")`` therefore survives a static export with no caller-side ``to_html`` plumbing.
+        The ``web.inline`` option (via :func:`~digitalearth.web.doctor.inline_mode`) chooses what the bundle
+        leads with. In ``"widget"`` mode it carries the MapLibre widget's own
+        ``application/vnd.jupyter.widget-view+json`` — the live, interactive map a front-end with the widget
+        manager renders (Jupyter ranks the widget-view above ``text/html``, so it wins there) — and a preflight
+        warning fires when the widget stack looks broken. In ``"static"`` mode the widget-view is dropped so a
+        front-end with no working widget manager renders the map instead of "model not found". The default
+        ``"auto"`` picks ``"static"`` only when the stack is detectably broken, else ``"widget"``.
+
+        Either way a self-contained ``text/html`` map — the standalone page wrapped in an isolating ``<iframe
+        srcdoc>`` — is embedded (honouring ``include``/``exclude``), so the map still renders in a notebook
+        saved/exported without live widget state (``nbconvert --execute``, ``mkdocs-jupyter`` with
+        ``execute: false``) and so ``"static"`` mode has a map to show. If that export is unavailable in static
+        mode, the live widget-view is restored as a last resort so the cell is never emptier than widget mode.
 
         Args:
             include: The mime types Jupyter asks for, passed through untouched.
             exclude: The mime types Jupyter asks to be left out, passed through untouched.
 
         Returns:
-            The mimebundle: the widget's representations plus a ``text/html`` export fallback, or an empty dict
-            when the engine is missing (so a bare repr in a notebook degrades gracefully instead of raising).
+            The mimebundle for the resolved mode (the widget-view and/or the ``text/html`` map, plus a
+            ``text/plain`` stand-in), or an empty dict when the engine is missing (so a bare repr in a notebook
+            degrades gracefully instead of raising).
         """
         try:
             widget = self.render()
         except ImportError:
             return {}
-        # Warn once per process if the JupyterLab widget stack looks broken (an incompatible extension, a
-        # missing/disabled widget manager) — so a "model not found" failure arrives with its cause and a
-        # working remedy, rather than a silent blank cell (#576). Cached, and guarded here including the
-        # import, so a diagnostic can never raise out of the repr (review L4).
-        try:
-            from digitalearth.web.doctor import _warn_once
-
-            _warn_once()
-        except (
-            Exception
-        ) as error:  # a diagnostic may never break the repr; log, never swallow
-            logger.debug("web-doctor preflight check failed: {}", error)
-        hook = getattr(widget, "_repr_mimebundle_", None)
-        # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only
-        # accepts them that way, so never call this hook positionally.
-        bundle = hook(include=include, exclude=exclude) if hook is not None else {}
-        # ipywidgets returns a bare {mime: data} dict; the (data, metadata) 2-tuple form is also valid. Accept
-        # exactly those two shapes and keep whichever the widget used, so the returned bundle round-trips the
-        # protocol faithfully; anything else (a malformed hook) degrades to an empty bundle rather than raising
-        # out of the repr on the unpack.
-        if (
-            isinstance(bundle, tuple)
-            and len(bundle) == 2
-            and isinstance(bundle[0], dict)
-        ):
-            data, metadata, was_tuple = dict(bundle[0]), bundle[1], True
-        elif isinstance(bundle, dict):
-            data, metadata, was_tuple = dict(bundle), None, False
+        # web.inline (#575) decides whether to serve the live widget or the static HTML map; the broken-stack
+        # preflight warning fires only when the live widget is actually being served, because static renders
+        # the map inline regardless and the warning would otherwise contradict it (review M1).
+        mode = self._resolve_inline_mode()
+        if mode == "widget":
+            self._preflight_warn()
+        if mode == "static":
+            data, metadata, was_tuple = self._static_mimebundle(include, exclude)
         else:
-            data, metadata, was_tuple = {}, None, False
+            data, metadata, was_tuple = self._widget_mimebundle(
+                widget, include, exclude
+            )
+        return self._with_export_fallback(
+            data, metadata, was_tuple, widget, mode, include, exclude
+        )
+
+    def _static_mimebundle(self, include: Any, exclude: Any) -> tuple[dict, Any, bool]:
+        """The static inline bundle: the widget-view is dropped; a negotiation-honouring stand-in stays (#575).
+
+        The self-contained ``text/html`` map is added by :meth:`_with_export_fallback`; this seeds only a
+        plain-text stand-in for a bare repr, routed through the same ``include``/``exclude`` negotiation as any
+        other representation (review L1).
+
+        Args:
+            include: The mime types Jupyter asked for.
+            exclude: The mime types Jupyter asked to leave out.
+
+        Returns:
+            ``(data, None, False)`` — ``data`` holds the ``text/plain`` stand-in unless it was negotiated out.
+        """
+        data: dict = {}
+        if self._wants_mime("text/plain", include, exclude):
+            data["text/plain"] = "<WebMap: static inline map>"
+        return data, None, False
+
+    def _with_export_fallback(
+        self,
+        data: dict,
+        metadata: Any,
+        was_tuple: bool,
+        widget: Any,
+        mode: str,
+        include: Any,
+        exclude: Any,
+    ) -> Any:
+        """Add the ``text/html`` export to ``data``, restore the widget-view if static would be empty, and shape it.
+
+        Args:
+            data: The mimebundle built so far (mutated in place to add the export).
+            metadata: The bundle's metadata, or ``None``.
+            was_tuple: Whether the widget returned the ``(data, metadata)`` 2-tuple form.
+            widget: The rendered widget, reused as the static-mode fallback source.
+            mode: The resolved inline mode (``"widget"`` or ``"static"``).
+            include: The mime types Jupyter asked for.
+            exclude: The mime types Jupyter asked to leave out.
+
+        Returns:
+            The final mimebundle — ``(data, metadata)`` when the widget used the 2-tuple form, else ``data``.
+        """
         # Add the export fallback into the gap, honouring the same include/exclude negotiation the hook got.
         # render() built one widget; _export_fallback_html builds a second via to_html, because the standalone
         # page needs its own serialization — so the double build is deliberate, not an oversight.
         if self._wants_mime(_HTML_MIME, include, exclude) and _HTML_MIME not in data:
             try:
                 data[_HTML_MIME] = self._export_fallback_html()
-            except Exception as error:  # noqa: BLE001 - a successful render must still repr; keep the widget-view
-                # A broken to_html is invisible interactively (the widget-view still carries the cell) and would
-                # surface only as a blank export — a silent re-occurrence of #559. Warn (not debug) so the
+            except Exception as error:
+                # A broken to_html is invisible in widget mode (the widget-view still carries the cell) and
+                # would surface only as a blank export — a silent re-occurrence of #559. Warn (not debug) so the
                 # blanked export stays visible even to an app that raised the log level, without raising here.
+                logger.warning("WebMap HTML export fallback failed: {}", error)
+        # Static mode dropped the widget-view, so if the text/html map never landed — the export raised, or
+        # include/exclude excluded text/html — the cell would be emptier than widget mode, a regression on the
+        # reliable-render path #575 exists to guarantee. Restore the live widget-view as a last resort so static
+        # mode is never worse than the widget it replaces (review M2). The widget was already built, so this
+        # reuses it rather than building another (review L1: the build is the static-mode safety net).
+        if mode == "static" and _HTML_MIME not in data:
+            wdata, wmeta, wtuple = self._widget_mimebundle(widget, include, exclude)
+            if wdata:
                 logger.warning(
-                    "WebMap export fallback failed; serving the live widget-view only: {}",
-                    error,
+                    "WebMap static inline map unavailable; falling back to the live widget-view"
                 )
+                data, metadata, was_tuple = {**wdata, **data}, wmeta, wtuple
         return (data, metadata) if was_tuple else data
+
+    def _widget_mimebundle(
+        self, widget: Any, include: Any, exclude: Any
+    ) -> tuple[dict, Any, bool]:
+        """Return the live widget's mimebundle as a ``(data, metadata, was_tuple)`` triple.
+
+        The MapLibre widget (an ipywidgets widget) may return either a bare ``{mime: data}`` dict or the
+        ``(data, metadata)`` 2-tuple form; both are valid Jupyter protocol shapes. This normalises them so the
+        caller round-trips whichever the widget used, and degrades a malformed hook to an empty bundle.
+
+        Args:
+            widget: The rendered MapLibre widget whose ``_repr_mimebundle_`` is consulted.
+            include: The mime types Jupyter asked for, passed through to the widget untouched.
+            exclude: The mime types Jupyter asked to leave out, passed through to the widget untouched.
+
+        Returns:
+            ``(data, metadata, was_tuple)``: the widget's ``{mime: data}`` dict (a fresh copy), its metadata or
+            ``None``, and whether the widget returned the 2-tuple form; ``({}, None, False)`` for a missing or
+            malformed hook.
+        """
+        hook = getattr(widget, "_repr_mimebundle_", None)
+        # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only
+        # accepts them that way, so never call this hook positionally.
+        bundle = hook(include=include, exclude=exclude) if hook is not None else {}
+        # Accept exactly the two valid shapes and keep whichever the widget used; anything else degrades to {}.
+        if (
+            isinstance(bundle, tuple)
+            and len(bundle) == 2
+            and isinstance(bundle[0], dict)
+        ):
+            return dict(bundle[0]), bundle[1], True
+        if isinstance(bundle, dict):
+            return dict(bundle), None, False
+        return {}, None, False
+
+    def _resolve_inline_mode(self) -> str:
+        """Resolve the ``web.inline`` option to ``"widget"`` or ``"static"`` for this repr (#575).
+
+        Degrades to ``"widget"`` (today's live-widget behaviour) if the doctor check raises — a diagnostic may
+        never break the repr.
+
+        Returns:
+            ``"widget"`` or ``"static"``.
+        """
+        try:
+            from digitalearth.web.doctor import inline_mode
+
+            return inline_mode()
+        except Exception as error:
+            logger.debug("web-doctor inline-mode check failed: {}", error)
+            return "widget"
+
+    def _preflight_warn(self) -> None:
+        """Emit the once-per-process broken-stack warning before serving the live widget (#576).
+
+        Called only in ``"widget"`` mode — static renders the map inline regardless, so the "may not render
+        inline" warning would contradict it (review M1). Fully guarded: a diagnostic may never raise out of the
+        repr.
+        """
+        try:
+            from digitalearth.web.doctor import _warn_once
+
+            _warn_once()
+        except Exception as error:
+            logger.debug("web-doctor preflight check failed: {}", error)
 
     @staticmethod
     def _wants_mime(mime: str, include: Any, exclude: Any) -> bool:

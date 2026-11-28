@@ -154,21 +154,22 @@ class TestAnalyzeFlagsTheRealFailures:
         )
         assert "could not inspect" in str(report).lower()
 
-    def test_the_remedy_points_at_a_mechanism_that_exists_today(self):
-        """The advertised remedy must be a command that works now, not a set_option that raises (review H1).
+    def test_the_remedy_recommends_both_shipped_inline_paths(self):
+        """The advisory names both no-widget-manager remedies now that web.inline="static" has shipped (#575).
 
         Test scenario:
-            The report names the instance ``.save("map.html")`` call (which renders a standalone page with no
-            widget manager today), and does NOT instruct a bare ``set_option(...)`` call — ``web.inline`` is
-            #575's unshipped option, so advising it would raise ValueError.
+            ``web.inline="static"`` shipped in #575, so the report recommends
+            ``set_option("web.inline", "static")`` for an inline static map and ``.save("map.html")`` for a
+            standalone page — and never calls either remedy "not yet shipped".
         """
         report = _analyze(
             _state(exts=(ExtensionInfo("anywidget", "0.11.0", _ENV, False, ""),))
         )
         text = str(report)
+        assert 'set_option("web.inline", "static")' in text
         assert '.save("map.html")' in text
-        assert "set_option(" not in text, (
-            "must not advertise a set_option call that raises today"
+        assert "not yet shipped" not in text.lower(), (
+            "web.inline='static' shipped in #575; the advisory must not call it unshipped"
         )
 
     def test_the_report_caveats_the_kernel_environment(self):
@@ -279,12 +280,14 @@ class TestWarnOnce:
 
     @pytest.fixture(autouse=True)
     def _reset(self):
-        """Clear the once-per-process latch before and after each test so cases don't bleed."""
+        """Clear the once-per-process latch and the cached report before/after each test so cases don't bleed."""
         d = sys.modules["digitalearth.web.doctor"]
 
         d._warned_once = False
+        d._cached_report = None
         yield
         d._warned_once = False
+        d._cached_report = None
 
     def test_warns_when_broken_and_caches(self, monkeypatch):
         """A broken report logs one warning; a second call is a no-op (the gather must not run per-plot)."""

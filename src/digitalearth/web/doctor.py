@@ -11,10 +11,9 @@ It is **best-effort and advisory**: it reads the extension registry and installe
 so it detects the common on-disk *causes* but can never assert the widget *will* render. It does not
 intentionally change the environment — though reading the registry goes through JupyterLab's own tooling, which
 may run JupyterLab's standard one-time settings migration (the doctor itself writes nothing). When it cannot
-introspect JupyterLab at all it says so rather than inventing problems. The
-guaranteed-render path when a stack is broken is to write the map to a standalone page —
-:meth:`~digitalearth.web.map.WebMap.save` — which renders in any browser with no widget manager. (A static
-*inline* representation, ``web.inline="static"``, is tracked separately in #575, not yet shipped.)
+introspect JupyterLab at all it says so rather than inventing problems. Two render paths need no working widget
+manager when a stack is broken: ``set_option("web.inline", "static")`` embeds the map inline as self-contained
+HTML (#575), and :meth:`~digitalearth.web.map.WebMap.save` writes a standalone page that renders in any browser.
 
 The split is deliberate: :func:`_gather` does the impure introspection (best-effort, wrapped), and :func:`_analyze`
 is a pure function of the gathered :class:`WidgetStackState`, so every verdict is unit-tested against a synthetic
@@ -44,13 +43,13 @@ _FLOORS: dict[str, str] = {
     "anywidget": "0.9",
 }
 
-#: The one-line escape hatch appended to every non-clean report: a remedy that works today, with no widget
-#: manager. (It points at ``WebMap.save`` rather than ``web.inline="static"`` because the latter is #575's
-#: not-yet-shipped inline option — advising a command that raises would be worse than no advice, H1.)
+#: The one-line escape hatch appended to every non-clean report: the two remedies that render with no widget
+#: manager — ``set_option("web.inline", "static")`` embeds the map inline as static HTML (#575), and
+#: ``WebMap.save`` writes a standalone page. Both shipped; neither raises.
 _STATIC_HINT = (
-    "To see the map regardless of the widget stack, write it to a standalone page — call "
-    '.save("map.html") on the map (m.save("map.html")) and open that file in a browser; it renders with no '
-    'widget manager. (A static inline representation, web.inline="static", is tracked in #575 but not yet shipped.)'
+    "To see the map regardless of the widget stack, render it without a widget manager: either "
+    'digitalearth.set_option("web.inline", "static") to embed the map inline as self-contained HTML, or call '
+    '.save("map.html") on the map and open that standalone file in a browser.'
 )
 
 #: Appended to a problem report: the doctor reads the *kernel's* environment, but a JupyterLab server is often
@@ -380,6 +379,61 @@ def doctor() -> WidgetStackReport:
     return _analyze(_gather())
 
 
+#: The process-wide cached report, so :func:`_warn_once` and :func:`inline_mode` share one registry scan
+#: rather than each running :func:`doctor`. Reset to ``None`` by the tests between cases.
+_cached_report: WidgetStackReport | None = None
+
+
+def _report_once() -> WidgetStackReport:
+    """Return :func:`doctor`'s verdict, computed at most once per process and cached.
+
+    Both the repr-time warning and ``web.inline="auto"`` consult the stack, and each ``doctor`` call scans the
+    extension registry, so the scan must not repeat per plot. The cache holds a frozen report.
+
+    Because the verdict is frozen for the process, repairing the widget stack mid-session (re-enabling an
+    extension, upgrading a package) does not change what ``auto`` or the warning see until the kernel restarts;
+    call :func:`doctor` directly for a fresh scan, or restart the kernel to re-seed the cache.
+    """
+    global _cached_report
+    if _cached_report is None:
+        _cached_report = doctor()
+    return _cached_report
+
+
+def inline_mode() -> str:
+    """Resolve the ``web.inline`` option to the concrete mode the web repr renders in — #575.
+
+    ``"widget"`` and ``"static"`` are returned as set. ``"auto"`` (the default) returns ``"static"`` only when
+    the widget stack is **detectably broken** — :func:`doctor` finds an incompatible extension, a
+    missing/disabled widget manager or a below-floor package — and ``"widget"`` otherwise, so a healthy
+    front-end keeps the live widget and a broken one still renders a static map. ``"auto"`` reads only the
+    kernel-visible signal; a purely browser-side failure it cannot see still needs an explicit
+    ``set_option("web.inline", "static")``.
+
+    Returns:
+        ``"static"`` or ``"widget"``.
+
+    Examples:
+        - An explicit mode resolves to itself, with no live registry scan:
+            ```python
+            >>> import digitalearth
+            >>> from digitalearth.web.doctor import inline_mode
+            >>> digitalearth.set_option("web.inline", "static")
+            >>> inline_mode()
+            'static'
+            >>> digitalearth.set_option("web.inline", "auto")
+
+            ```
+    """
+    from digitalearth.base.options import get_option
+
+    mode: str = get_option("web.inline")
+    if mode in ("widget", "static"):
+        return mode
+    report = _report_once()
+    return "static" if (report.checked and not report.ok) else "widget"
+
+
 #: Module-level latch for :func:`_warn_once` — a plain bool (not an attribute hung on the function), so the
 #: once-per-process guard is type-clean with no inline linter suppression. Reset by the tests between cases.
 _warned_once = False
@@ -398,7 +452,7 @@ def _warn_once() -> None:
         return
     _warned_once = True
     try:
-        report = doctor()
+        report = _report_once()
         if report.checked and not report.ok:
             message = f'plot(backend="web") may not render inline — {report}'
             warnings.warn(message, stacklevel=2)
