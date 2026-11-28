@@ -52,7 +52,9 @@ _REGISTRY: dict[str, tuple[Callable[[Any], bool], Any, str]] = {
 
 #: The live values, seeded from the registry's defaults. :func:`set_option` writes here; :func:`get_option`
 #: reads here. Kept module-level (not a class) so the whole package shares one store.
-_VALUES: dict[str, Any] = {name: default for name, (_, default, _remedy) in _REGISTRY.items()}
+_VALUES: dict[str, Any] = {
+    name: default for name, (_, default, _remedy) in _REGISTRY.items()
+}
 
 
 def _known() -> str:
