@@ -174,10 +174,19 @@ jobs:
       # Record the SHA (the lockfile commit = the published tree), not the branch name: a SHA survives the
       # release branch being auto-deleted after the PR merges (it stays reachable via the merge commit on
       # main), whereas a branch name would leave a delayed re-publish unable to check anything out.
+      #
+      # Skipped on a draft. `draft` only sets the visibility of the GitHub Release PAGE -- the bump and the
+      # tag above are already pushed and this job still concludes `success`, so a consumer gated on that
+      # success would publish to PyPI (irreversible) and move the `latest` docs alias for a release the
+      # maintainer asked to keep unpublished. The input cannot cross the workflow_run boundary, so
+      # WITHHOLDING the artifact is the signal: no token, nothing to publish. The consumers read a missing
+      # artifact as "skip" (a present-but-empty one still hard-errors).
       - name: Record the released commit for the downstream consumers
+        if: ${{ inputs.draft != true }}
         run: git rev-parse HEAD > release-ref.txt
 
       - name: Upload the release ref for pypi-release
+        if: ${{ inputs.draft != true }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-ref

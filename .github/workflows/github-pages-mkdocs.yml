@@ -31,6 +31,12 @@ jobs:
   # so the notebooks render from their committed outputs and no kernel (hence no xvfb/OpenGL) is needed
   # here - unlike the deploy jobs, which re-execute them.
   build-strict:
+    # Skip on a FAILED (or cancelled) upstream github-release: such a run never reached the upload step, so
+    # there is no release-ref artifact, and this job would spend a full docs build gating the wrong tree.
+    # `workflow_run: types: [completed]` fires whatever the conclusion, and this was the only consumer
+    # without the guard the deploy / publish jobs already carry. Every non-workflow_run event (push /
+    # pull_request / release) still runs unconditionally.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     # Only reads the tree; the write scopes the workflow grants are for the deploy jobs, not for this one.
     permissions:
@@ -43,7 +49,11 @@ jobs:
       # (the bump + new changelog), not pre-bump main -- else a page that only exists on the release branch
       # would pass --strict yet still publish. On push / pull_request this is skipped and checkout uses its
       # default ref (the PR merge commit), so fork-controlled code never reaches a write-scoped job.
+      # continue-on-error: a draft release (which concludes `success`, so the job guard above does not skip
+      # it) uploads no artifact; let the job continue and have the resolve step fall back to gating the
+      # default tree instead of erroring here.
       if: github.event_name == 'workflow_run'
+      continue-on-error: true
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         name: release-ref
@@ -60,8 +70,25 @@ jobs:
         set -euo pipefail
         case "$EVENT_NAME" in
           workflow_run)
-            REF="$(cat .release-ref/release-ref.txt)"
-            [ -n "$REF" ] || { echo "::error::empty release ref"; exit 1; } ;;
+            # No artifact => a draft release, or a run that never reached the upload. Nothing was published,
+            # so there is no released tree to gate: fall back to the default tree (harmless, stays green)
+            # rather than erroring. A present-but-empty ref is corruption and still hard-errors.
+            if [ -f .release-ref/release-ref.txt ]; then
+              REF="$(cat .release-ref/release-ref.txt)"
+              # Shape, not mere non-emptiness: the producer writes `git rev-parse HEAD`, so a valid token
+              # is 40 hex characters. `-n` alone admits a blank ref, which checkout trims away and
+              # resolves to the default branch -- gating a tree nobody is publishing.
+              case "$REF" in
+                "" | *[!0-9a-f]*) echo "::error::malformed release ref '$REF'"; exit 1 ;;
+              esac
+              [ "${#REF}" -eq 40 ] || { echo "::error::release ref '$REF' is not a 40-char commit SHA"; exit 1; }
+            else
+              # A warning, not a bare echo: a green build-strict on a draft otherwise reads as "the
+              # staged release's docs are fine" when what was actually gated is the default tree.
+              echo "::warning::no release-ref token; gating the DEFAULT TREE, not a released commit"
+              echo "- **Docs gate ran against the default tree** - no \`release-ref\` token" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+              REF=""
+            fi ;;
           release) REF="$RELEASE_REF" ;;
           *) REF="" ;;
         esac
@@ -164,7 +191,10 @@ jobs:
       # recorded and deploy from there, so the versioned docs reflect the released version -- the same
       # release-ref handoff pypi-release uses. (Without it, deploy-release publishes OLD docs + regresses
       # `latest`.)
+      # continue-on-error: a draft release uploads no artifact; the resolve step reads that absence as
+      # "nothing to deploy" and skips the checkout, the deploy and the prune rather than erroring here.
       if: github.event_name == 'workflow_run'
+      continue-on-error: true
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         name: release-ref
@@ -181,8 +211,26 @@ jobs:
       run: |
         set -euo pipefail
         if [ "$EVENT_NAME" = "workflow_run" ]; then
+          # No artifact => github-release withheld it (a draft release), or the run never reached the
+          # upload. Nothing was published, so there are no versioned docs to deploy and no `latest` alias
+          # to move: skip cleanly rather than erroring on the file.
+          if [ ! -f .release-ref/release-ref.txt ]; then
+            # A warning, not a bare echo -- see the note in pypi-release.yml's resolve step. A
+            # skipped release deploy means the published docs still point at the previous version.
+            echo "::warning::no release-ref token; release docs deploy SKIPPED (draft release, or the token was unavailable)"
+            echo "- **Release docs deploy skipped** - no \`release-ref\` token (draft, or unavailable)" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           REF="$(cat .release-ref/release-ref.txt)"
-          [ -n "$REF" ] || { echo "::error::empty release ref"; exit 1; }
+          # Shape, not mere non-emptiness: the producer writes `git rev-parse HEAD`, so a valid token is
+          # 40 hex characters. `-n` alone admits a blank ref, which checkout trims away and resolves to
+          # the default branch -- deploying pre-bump main as the released version and moving `latest`
+          # onto it, which is what this guard exists to refuse.
+          case "$REF" in
+            "" | *[!0-9a-f]*) echo "::error::malformed release ref '$REF' -- refusing to deploy the default branch"; exit 1 ;;
+          esac
+          [ "${#REF}" -eq 40 ] || { echo "::error::release ref '$REF' is not a 40-char commit SHA"; exit 1; }
         else
           REF="$FALLBACK_REF"
         fi
@@ -190,6 +238,7 @@ jobs:
         echo "ref=${REF}" >> "$GITHUB_OUTPUT"
 
     - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      if: steps.ref.outputs.skip != 'true'
       with:
         fetch-depth: 0
         # workflow_run: the released commit SHA from the release-ref artifact (the tree that holds the bump);
@@ -200,6 +249,7 @@ jobs:
 
     - name: Extract version from pyproject.toml
       id: version
+      if: steps.ref.outputs.skip != 'true'
       # Anchor on `version` + `=` so it cannot match `version_provider` under [tool.commitizen]. On a
       # `release` event, assert the published tag_name equals the committed version so the deploy tag and the
       # prune floor (KEEP_VERSION) cannot diverge and prune the version just deployed (finding M2).
@@ -214,6 +264,7 @@ jobs:
         echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Virtual framebuffer + software OpenGL (so the 3-D notebooks render during the build)
+      if: steps.ref.outputs.skip != 'true'
       run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
@@ -221,6 +272,7 @@ jobs:
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
 
     - uses: serapeum-org/github-actions/actions/mkdocs-deploy@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # mkdocs/v1.3.1
+      if: steps.ref.outputs.skip != 'true'
       with:
         trigger: 'release'
         package-manager: 'pixi'
@@ -257,6 +309,7 @@ jobs:
     # Auth comes from the checkout above, the same way the deploy's own pushes work. mike runs through
     # `pixi run -e docs` because the mkdocs-deploy step above installed that env earlier in this job.
     - name: Prune superseded documentation versions
+      if: steps.ref.outputs.skip != 'true'
       env:
         KEEP_VERSION: ${{ github.event.release.tag_name || steps.version.outputs.tag }}
         RETAIN_RELEASES: '5'
