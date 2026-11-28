@@ -124,6 +124,12 @@ interactive = [
 # `NameError: name 'AnyWidget' is not defined`.
 web = [
     "maplibre[ipywidget] >=0.3",
+    # The notebook widget stack maplibre drives. Floors pin a JupyterLab-4 / Notebook-7-era combo so
+    # an older ipywidgets cannot be the cause of a "model not found" bind failure (#575 item 3); they
+    # are already satisfied transitively via maplibre[ipywidget], so this constrains rather than adds.
+    "ipywidgets >=8",
+    "jupyterlab_widgets >=3",
+    "anywidget >=0.9",
 ]
 # Every optional backend in one install: `pip install digitalearth[all]`. Written as a self-reference so the
 # three lists above stay the single source of truth — adding a package to `web` reaches `all` automatically,

@@ -22,6 +22,13 @@ back from a description and nothing was placed for it; MapLibre renders EPSG:385
 
 The engine import is **lazy**: this package imports without the optional ``web`` extra; calling a
 builder/render method without it raises an actionable ``ImportError`` (``pip install 'digitalearth[web]'``).
+
+**Rendering inline.** ``plot(backend="web")`` shows a live MapLibre widget. If a notebook front-end has a
+broken widget stack (e.g. a stale ``@jupyter-widgets/jupyterlab-manager`` labextension) it may show
+"model not found"; ``digitalearth.web.doctor()`` diagnoses that, and ``set_option("web.inline", "static")``
+renders the self-contained HTML map instead, which needs no widget manager. The ``[web]`` extra floors the
+kernel-side widget stack (``ipywidgets>=8``, ``jupyterlab_widgets>=3``, ``anywidget>=0.9``) so an outdated
+one is not the cause; a conflicting *front-end* labextension can only be removed in the serving env.
 """
 
 from digitalearth.web.builders.raster import TileRoute
