@@ -44,9 +44,15 @@ class TestWebInlineOption:
         assert digitalearth.get_option("web.inline") == value
 
     def test_rejects_an_unknown_value(self):
-        """An unlisted value is refused by name rather than silently stored."""
-        with pytest.raises(ValueError, match="not a valid value"):
+        """An unlisted value is refused with a message naming web.inline's OWN valid values (review M1)."""
+        with pytest.raises(ValueError) as excinfo:
             digitalearth.set_option("web.inline", "nope")
+        message = str(excinfo.value)
+        assert "not a valid value for option 'web.inline'" in message
+        assert "'widget', 'static' or 'auto'" in message
+        assert "three_d.off_screen" not in message, (
+            "the remedy must describe the failing option, not a different one"
+        )
 
 
 class TestInlineModeResolution:

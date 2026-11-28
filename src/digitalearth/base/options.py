@@ -42,16 +42,17 @@ def _valid_web_inline(value: Any) -> bool:
     return value in ("widget", "static", "auto")
 
 
-#: Each option's validator and default. The dotted name is the public key; a new option is one row here plus
-#: the tier code that reads it — no new top-level function.
-_REGISTRY: dict[str, tuple[Callable[[Any], bool], Any]] = {
-    "three_d.off_screen": (_valid_off_screen, "auto"),
-    "web.inline": (_valid_web_inline, "auto"),
+#: Each option's validator, default, and a remedy phrase naming its accepted values (for the invalid-value
+#: error). The dotted name is the public key; a new option is one row here plus the tier code that reads it —
+#: no new top-level function.
+_REGISTRY: dict[str, tuple[Callable[[Any], bool], Any, str]] = {
+    "three_d.off_screen": (_valid_off_screen, "auto", "True, False or 'auto'"),
+    "web.inline": (_valid_web_inline, "auto", "'widget', 'static' or 'auto'"),
 }
 
 #: The live values, seeded from the registry's defaults. :func:`set_option` writes here; :func:`get_option`
 #: reads here. Kept module-level (not a class) so the whole package shares one store.
-_VALUES: dict[str, Any] = {name: default for name, (_, default) in _REGISTRY.items()}
+_VALUES: dict[str, Any] = {name: default for name, (_, default, _remedy) in _REGISTRY.items()}
 
 
 def _known() -> str:
@@ -95,11 +96,10 @@ def set_option(name: str, value: Any) -> None:
         raise ValueError(
             f"{name!r} is not a digitalearth option; known options: {_known()}"
         )
-    validator, _ = _REGISTRY[name]
+    validator, _, remedy = _REGISTRY[name]
     if not validator(value):
         raise ValueError(
-            f"{value!r} is not a valid value for option {name!r}; "
-            "three_d.off_screen takes True, False or 'auto'"
+            f"{value!r} is not a valid value for option {name!r}; {name} takes {remedy}"
         )
     _VALUES[name] = value
 
@@ -142,4 +142,4 @@ def _reset_options() -> None:
     private: the public surface is :func:`set_option` / :func:`get_option` only.
     """
     _VALUES.clear()
-    _VALUES.update({name: default for name, (_, default) in _REGISTRY.items()})
+    _VALUES.update({name: default for name, (_, default, _remedy) in _REGISTRY.items()})
