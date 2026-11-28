@@ -410,11 +410,14 @@ def inline_mode() -> str:
         ``"static"`` or ``"widget"``.
 
     Examples:
-        - Resolve the default option to a concrete mode (``"static"`` or ``"widget"``):
+        - An explicit mode resolves to itself, with no live registry scan:
             ```python
+            >>> import digitalearth
             >>> from digitalearth.web.doctor import inline_mode
-            >>> inline_mode() in ("static", "widget")
-            True
+            >>> digitalearth.set_option("web.inline", "static")
+            >>> inline_mode()
+            'static'
+            >>> digitalearth.set_option("web.inline", "auto")
 
             ```
     """
