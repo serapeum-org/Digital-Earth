@@ -97,6 +97,40 @@ class WidgetStackReport:
     Attributes:
         checked: Whether the stack could be introspected at all. ``False`` means "no opinion" — not "broken".
         problems: One actionable line per detected problem, each ending in its remedy. Empty when clean.
+
+    Examples:
+        - A clean, checked stack is ``ok`` and prints the single healthy line:
+            ```python
+            >>> from digitalearth.web.doctor import WidgetStackReport
+            >>> report = WidgetStackReport(checked=True, problems=())
+            >>> report.ok
+            True
+            >>> print(report)
+            digitalearth web widget-stack doctor: the JupyterLab widget stack looks healthy.
+
+            ```
+        - A problem makes it not ``ok``; the summary lists it and points at the static-render remedy:
+            ```python
+            >>> from digitalearth.web.doctor import WidgetStackReport
+            >>> report = WidgetStackReport(checked=True, problems=("anywidget is disabled",))
+            >>> report.ok
+            False
+            >>> "anywidget is disabled" in str(report)
+            True
+            >>> "web.inline" in str(report)
+            True
+
+            ```
+        - An unchecked report is treated as ``ok`` (no opinion), and says it could not inspect:
+            ```python
+            >>> from digitalearth.web.doctor import WidgetStackReport
+            >>> report = WidgetStackReport(checked=False)
+            >>> report.ok
+            True
+            >>> "could not inspect" in str(report)
+            True
+
+            ```
     """
 
     checked: bool
@@ -261,11 +295,12 @@ def doctor() -> WidgetStackReport:
         stack cannot be inspected the report says so rather than reporting a problem.
 
     Examples:
-        - The report is always safe to build and to print, whatever the environment:
+        - The report is always safe to build whatever the environment finds, and its ``ok`` flag reads back
+          as a plain bool you can branch on:
             ```python
             >>> from digitalearth.web.doctor import doctor
             >>> report = doctor()
-            >>> isinstance(report.problems, tuple)
+            >>> report.ok in (True, False)
             True
 
             ```
