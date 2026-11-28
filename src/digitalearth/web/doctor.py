@@ -1,0 +1,292 @@
+"""Diagnose the JupyterLab widget stack behind ``plot(backend="web")`` (#576).
+
+``plot(backend="web")`` renders a live ``maplibre`` (anywidget) widget in a notebook. When the front-end widget
+manager cannot bind the model it shows **"model not found"** and a blank cell — and the cause is almost always a
+JupyterLab extension problem the kernel can *see on disk* even though it cannot watch the browser fail: a stale
+extension marked incompatible with the running JupyterLab, one shadowing the env from a user-level install, or a
+missing/disabled widget manager.
+
+:func:`doctor` inspects that state and returns a :class:`WidgetStackReport` naming each problem with its remedy.
+It is **best-effort and advisory**: it reads the extension registry and installed versions, never the browser,
+so it detects the common on-disk *causes* but can never assert the widget *will* render — and it never changes
+the environment. When it cannot introspect JupyterLab at all it says so rather than inventing problems. The
+guaranteed-render path when a stack is broken is :func:`digitalearth.set_option` ``("web.inline", "static")``.
+
+The split is deliberate: :func:`_gather` does the impure introspection (best-effort, wrapped), and :func:`_analyze`
+is a pure function of the gathered :class:`WidgetStackState`, so every verdict is unit-tested against a synthetic
+state with no live JupyterLab (#576 DoD).
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from dataclasses import dataclass, field
+
+from loguru import logger
+
+__all__ = ["ExtensionInfo", "WidgetStackReport", "WidgetStackState", "doctor"]
+
+#: The widget manager and the anywidget host that ``maplibre``'s widget needs on the front-end.
+_WIDGET_MANAGER = "@jupyter-widgets/jupyterlab-manager"
+_ANYWIDGET = "anywidget"
+
+#: Minimum versions of the kernel-side widget packages for a JupyterLab-4 / Notebook-7 front-end. Below these,
+#: the kernel side is a plausible cause rather than a known-good baseline.
+_FLOORS: dict[str, str] = {
+    "ipywidgets": "8",
+    "jupyterlab_widgets": "3",
+    "anywidget": "0.9",
+}
+
+#: The one-line escape hatch appended to every non-clean report: render without the widget at all.
+_STATIC_HINT = (
+    "To render regardless of the widget stack, set "
+    'digitalearth.set_option("web.inline", "static") — it emits the self-contained HTML map, so no '
+    "widget manager is needed."
+)
+
+
+@dataclass(frozen=True)
+class ExtensionInfo:
+    """One JupyterLab federated (prebuilt) extension, as the registry reports it.
+
+    Attributes:
+        name: The extension's package name, e.g. ``"@jupyter-widgets/jupyterlab-manager"``.
+        version: Its installed version.
+        ext_dir: The ``labextensions`` directory it loads from — the key to spotting a user-level shadow.
+        incompatible: Whether the registry flags it incompatible with the running JupyterLab (the ``X`` in
+            ``jupyter labextension list``).
+        detail: The incompatibility detail when there is one, else ``""``.
+    """
+
+    name: str
+    version: str
+    ext_dir: str
+    incompatible: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class WidgetStackState:
+    """The raw facts :func:`_gather` reads, and :func:`_analyze` reasons over.
+
+    Attributes:
+        extensions: Every federated extension found, in registry order.
+        disabled: The names JupyterLab has disabled.
+        env_labextensions_dir: This interpreter's own ``share/jupyter/labextensions`` — the dir an extension
+            *should* load from; anything else is a user/system install that is searched first and shadows it.
+        jupyterlab_version: The running JupyterLab version, or ``None`` when it could not be read.
+        versions: Installed versions of the kernel-side widget packages (``None`` for a missing one).
+        inspect_error: ``None`` on a successful gather, else why introspection failed — which makes the report
+            say "could not inspect" instead of claiming a healthy or broken stack.
+    """
+
+    extensions: tuple[ExtensionInfo, ...]
+    disabled: frozenset[str]
+    env_labextensions_dir: str
+    jupyterlab_version: str | None
+    versions: dict[str, str | None]
+    inspect_error: str | None = None
+
+
+@dataclass(frozen=True)
+class WidgetStackReport:
+    """The doctor's verdict: whether the stack looks able to render a web widget, and what to fix if not.
+
+    Attributes:
+        checked: Whether the stack could be introspected at all. ``False`` means "no opinion" — not "broken".
+        problems: One actionable line per detected problem, each ending in its remedy. Empty when clean.
+    """
+
+    checked: bool
+    problems: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def ok(self) -> bool:
+        """``True`` when no problem was detected (including when the stack could not be inspected)."""
+        return not self.problems
+
+    def __str__(self) -> str:
+        """A human-readable report — the healthy line, the problem list, or the could-not-inspect note."""
+        if not self.checked:
+            return (
+                "digitalearth web widget-stack doctor: could not inspect JupyterLab "
+                "(is the 'web' extra installed?). " + _STATIC_HINT
+            )
+        if not self.problems:
+            return "digitalearth web widget-stack doctor: the JupyterLab widget stack looks healthy."
+        lines = [f"  - {p}" for p in self.problems]
+        return (
+            "digitalearth web widget-stack doctor found "
+            f'{len(self.problems)} problem(s) that can stop plot(backend="web") rendering:\n'
+            + "\n".join(lines)
+            + "\n"
+            + _STATIC_HINT
+        )
+
+
+def _below_floor(version: str | None, floor: str) -> bool:
+    """Whether ``version`` is older than ``floor`` (missing counts as below; unparseable never does)."""
+    if version is None:
+        return True
+    try:
+        from packaging.version import Version
+
+        return Version(version) < Version(floor)
+    except Exception:  # noqa: BLE001 - a non-PEP440 version is not a floor breach we can prove
+        return False
+
+
+def _analyze(state: WidgetStackState) -> WidgetStackReport:
+    """Turn gathered facts into a verdict — a pure function, so it is tested without a live JupyterLab.
+
+    Args:
+        state: The facts :func:`_gather` read (or a synthetic one in a test).
+
+    Returns:
+        The report: unchecked when ``state`` carries an ``inspect_error``, else one problem line per detected
+        fault (incompatible extension, user-level shadow, missing/disabled widget manager, below-floor package).
+    """
+    if state.inspect_error is not None:
+        return WidgetStackReport(checked=False)
+
+    problems: list[str] = []
+    names = {e.name for e in state.extensions}
+
+    for ext in state.extensions:
+        if ext.incompatible:
+            detail = f" ({ext.detail})" if ext.detail else ""
+            problems.append(
+                f"{ext.name} {ext.version} is incompatible with JupyterLab "
+                f"{state.jupyterlab_version or '?'}{detail}, at {ext.ext_dir} — update or remove it; a broken "
+                "extension stops the widget manager activating, which is what 'model not found' is."
+            )
+        elif os.path.normpath(ext.ext_dir) != os.path.normpath(
+            state.env_labextensions_dir
+        ):
+            problems.append(
+                f"{ext.name} loads from {ext.ext_dir}, not this environment "
+                f"({state.env_labextensions_dir}) — a user/system dir is searched first, so it shadows the "
+                "env's copy; remove the stray install so only the env's extension loads."
+            )
+
+    for needed, why in (
+        (_WIDGET_MANAGER, "the ipywidgets widget manager"),
+        (_ANYWIDGET, "anywidget, which maplibre's widget is built on"),
+    ):
+        if needed in state.disabled:
+            problems.append(
+                f"{needed} ({why}) is disabled — re-enable it so the web widget can bind."
+            )
+        elif needed not in names:
+            problems.append(
+                f"{needed} ({why}) is not installed as a JupyterLab extension — install it into the "
+                "environment JupyterLab runs from."
+            )
+
+    for pkg, floor in _FLOORS.items():
+        if _below_floor(state.versions.get(pkg), floor):
+            have = state.versions.get(pkg) or "missing"
+            problems.append(
+                f"{pkg} is {have}; the web widget needs >= {floor} on a JupyterLab-4 / Notebook-7 front-end."
+            )
+
+    return WidgetStackReport(checked=True, problems=tuple(problems))
+
+
+def _gather() -> WidgetStackState:
+    """Read the JupyterLab extension registry and the installed widget-package versions — best-effort.
+
+    Returns:
+        A populated :class:`WidgetStackState`, or one whose ``inspect_error`` is set when JupyterLab is not
+        importable or its registry cannot be read — the doctor never raises out of a diagnostic.
+    """
+    import importlib.metadata as md
+
+    def _ver(pkg: str) -> str | None:
+        try:
+            return md.version(pkg)
+        except Exception:  # noqa: BLE001 - a missing package is a fact, not an error to raise
+            return None
+
+    versions = {pkg: _ver(pkg) for pkg in _FLOORS}
+    env_dir = os.path.join(sys.prefix, "share", "jupyter", "labextensions")
+
+    try:
+        from jupyter_core.paths import jupyter_path
+        from jupyterlab.commands import AppOptions, _AppHandler, get_app_info
+
+        options = AppOptions(labextensions_path=jupyter_path("labextensions"))
+        info = get_app_info(options)
+        compat = _AppHandler(options)._get_extension_compat()
+        federated = info.get("federated_extensions", {})
+        exts = tuple(
+            ExtensionInfo(
+                name=name,
+                version=str(meta.get("version", "?")),
+                ext_dir=str(meta.get("ext_dir", "")),
+                incompatible=bool(compat.get(name)),
+                detail="; ".join(str(d) for d in compat.get(name, [])),
+            )
+            for name, meta in sorted(federated.items())
+        )
+        return WidgetStackState(
+            extensions=exts,
+            disabled=frozenset(info.get("disabled", {})),
+            env_labextensions_dir=env_dir,
+            jupyterlab_version=_ver("jupyterlab"),
+            versions=versions,
+        )
+    except Exception as error:  # noqa: BLE001 - any introspection failure becomes an "unchecked" report
+        return WidgetStackState(
+            extensions=(),
+            disabled=frozenset(),
+            env_labextensions_dir=env_dir,
+            jupyterlab_version=_ver("jupyterlab"),
+            versions=versions,
+            inspect_error=f"{type(error).__name__}: {error}",
+        )
+
+
+def doctor() -> WidgetStackReport:
+    """Diagnose the JupyterLab widget stack behind ``plot(backend="web")`` and return the verdict.
+
+    Reads the extension registry and installed versions (never the browser), so it flags the on-disk causes of
+    a "model not found" failure — an incompatible or shadowing extension, a missing/disabled widget manager, a
+    below-floor package — without claiming the widget will render. It changes nothing.
+
+    Returns:
+        A :class:`WidgetStackReport`; print it (``print(digitalearth.web.doctor())``) for the remedies. When the
+        stack cannot be inspected the report says so rather than reporting a problem.
+
+    Examples:
+        - The report is always safe to build and to print, whatever the environment:
+            ```python
+            >>> from digitalearth.web.doctor import doctor
+            >>> report = doctor()
+            >>> isinstance(report.problems, tuple)
+            True
+
+            ```
+    """
+    return _analyze(_gather())
+
+
+def _warn_once() -> None:
+    """Warn once per process if the widget stack looks broken — called from the web map's repr.
+
+    Kept cheap and cached (the gather scans the extension registry, so it must never run per-plot), and fully
+    guarded: a diagnostic may never raise out of a ``_repr_mimebundle_``.
+    """
+    if getattr(_warn_once, "_done", False):
+        return
+    _warn_once._done = True  # type: ignore[attr-defined]
+    try:
+        report = doctor()
+        if report.checked and not report.ok:
+            logger.warning(
+                'plot(backend="web") may not render inline — {}', str(report)
+            )
+    except Exception:  # noqa: BLE001 - the repr must survive a failing doctor
+        pass

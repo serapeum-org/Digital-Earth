@@ -3639,6 +3639,12 @@ class WebMapBase:
             widget = self.render()
         except ImportError:
             return {}
+        # Warn once per process if the JupyterLab widget stack looks broken (an incompatible/shadowing
+        # extension, a missing widget manager) — so a "model not found" failure arrives with its cause and
+        # the web.inline="static" remedy, rather than a silent blank cell (#576). Cached + fully guarded.
+        from digitalearth.web.doctor import _warn_once
+
+        _warn_once()
         hook = getattr(widget, "_repr_mimebundle_", None)
         # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only
         # accepts them that way, so never call this hook positionally.

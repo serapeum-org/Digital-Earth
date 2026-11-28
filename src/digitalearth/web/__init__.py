@@ -26,6 +26,7 @@ builder/render method without it raises an actionable ``ImportError`` (``pip ins
 
 from digitalearth.web.builders.raster import TileRoute
 from digitalearth.web.builders.vector import ContourInterval, VectorTileSource
+from digitalearth.web.doctor import WidgetStackReport, doctor
 from digitalearth.web.map import WebMap
 from digitalearth.web.output.export import (
     measure_html,
@@ -41,6 +42,8 @@ __all__ = [
     "ContourInterval",
     "TileRoute",
     "VectorTileSource",
+    "doctor",
+    "WidgetStackReport",
     "swipe_html",
     "save_swipe",
     "minimap_html",
