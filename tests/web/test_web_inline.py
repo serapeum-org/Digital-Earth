@@ -261,11 +261,11 @@ class TestReprHonoursInlineMode:
                 checked=True, problems=("x is incompatible",)
             ),
         )
-        _DOCTOR._warned_once = False
         digitalearth.set_option("web.inline", "auto")
+        map_ = WebMap().basemap("OSM")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            WebMap().basemap("OSM")._repr_mimebundle_()
+            map_._repr_mimebundle_()
         offenders = [
             str(w.message) for w in caught if "may not render inline" in str(w.message)
         ]
@@ -288,7 +288,7 @@ class TestReprHonoursInlineMode:
                 checked=True, problems=("x is incompatible",)
             ),
         )
-        _DOCTOR._warned_once = False
         digitalearth.set_option("web.inline", "widget")
+        map_ = WebMap().basemap("OSM")
         with pytest.warns(UserWarning, match="may not render inline"):
-            WebMap().basemap("OSM")._repr_mimebundle_()
+            map_._repr_mimebundle_()
