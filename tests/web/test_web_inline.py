@@ -15,6 +15,13 @@ from digitalearth.web.doctor import inline_mode
 
 _DOCTOR = sys.modules["digitalearth.web.doctor"]
 
+_WIDGET_VIEW = "application/vnd.jupyter.widget-view+json"
+
+
+def _raises_export_error(_self):
+    """Stand in for a failing ``_export_fallback_html`` (the static HTML export raised)."""
+    raise RuntimeError("static export boom")
+
 
 @pytest.fixture(autouse=True)
 def _reset_state():
@@ -141,3 +148,36 @@ class TestReprHonoursInlineMode:
         bundle = WebMap().basemap("OSM")._repr_mimebundle_()
         data = bundle[0] if isinstance(bundle, tuple) else bundle
         assert "application/vnd.jupyter.widget-view+json" in data, sorted(data)
+
+    def test_static_export_failure_restores_the_widget_view(self, monkeypatch):
+        """In static mode, a failing HTML export restores the live widget-view instead of an empty cell (M2).
+
+        Test scenario:
+            static mode drops the widget-view and serves text/html; if _export_fallback_html raises, the cell
+            must not degrade to a text/plain-only stand-in (strictly worse than widget mode) — the widget-view
+            is restored as a last resort.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap("OSM")
+        monkeypatch.setattr(type(m), "_export_fallback_html", _raises_export_error)
+        digitalearth.set_option("web.inline", "static")
+        bundle = m._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert _WIDGET_VIEW in data, sorted(data)
+
+    def test_static_mode_with_html_excluded_restores_the_widget_view(self):
+        """When the front-end excludes text/html, static mode falls back to the widget-view, not an empty cell (M2).
+
+        Test scenario:
+            A front-end negotiating include={widget-view} makes _wants_mime drop text/html, so the static map
+            cannot be served; the repr must then restore the widget-view rather than return only text/plain.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        digitalearth.set_option("web.inline", "static")
+        bundle = WebMap().basemap("OSM")._repr_mimebundle_(include={_WIDGET_VIEW})
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert _WIDGET_VIEW in data, sorted(data)

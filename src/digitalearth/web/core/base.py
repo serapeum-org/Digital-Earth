@@ -3673,40 +3673,67 @@ class WebMapBase:
                 False,
             )
         else:
-            hook = getattr(widget, "_repr_mimebundle_", None)
-            # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only
-            # accepts them that way, so never call this hook positionally.
-            bundle = hook(include=include, exclude=exclude) if hook is not None else {}
-            # ipywidgets returns a bare {mime: data} dict; the (data, metadata) 2-tuple form is also valid.
-            # Accept exactly those two shapes and keep whichever the widget used, so the returned bundle
-            # round-trips the protocol; anything else (a malformed hook) degrades to an empty bundle.
-            if (
-                isinstance(bundle, tuple)
-                and len(bundle) == 2
-                and isinstance(bundle[0], dict)
-            ):
-                data, metadata, was_tuple = dict(bundle[0]), bundle[1], True
-            elif isinstance(bundle, dict):
-                data, metadata, was_tuple = dict(bundle), None, False
-            else:
-                data, metadata, was_tuple = {}, None, False
+            data, metadata, was_tuple = self._widget_mimebundle(
+                widget, include, exclude
+            )
         # Add the export fallback into the gap, honouring the same include/exclude negotiation the hook got.
         # render() built one widget; _export_fallback_html builds a second via to_html, because the standalone
         # page needs its own serialization — so the double build is deliberate, not an oversight.
         if self._wants_mime(_HTML_MIME, include, exclude) and _HTML_MIME not in data:
             try:
                 data[_HTML_MIME] = self._export_fallback_html()
-            except (
-                Exception
-            ) as error:  # a successful render must still repr; keep the widget-view
-                # A broken to_html is invisible interactively (the widget-view still carries the cell) and would
-                # surface only as a blank export — a silent re-occurrence of #559. Warn (not debug) so the
+            except Exception as error:  # a successful render must still repr; the fallback below keeps a view
+                # A broken to_html is invisible in widget mode (the widget-view still carries the cell) and
+                # would surface only as a blank export — a silent re-occurrence of #559. Warn (not debug) so the
                 # blanked export stays visible even to an app that raised the log level, without raising here.
+                logger.warning("WebMap HTML export fallback failed: {}", error)
+        # Static mode dropped the widget-view, so if the text/html map never landed — the export raised, or
+        # include/exclude excluded text/html — the cell would be emptier than widget mode, a regression on the
+        # reliable-render path #575 exists to guarantee. Restore the live widget-view as a last resort so static
+        # mode is never worse than the widget it replaces (review M2). The widget was already built above, so
+        # this reuses it rather than building another (review L1: the build is the static-mode safety net).
+        if mode == "static" and _HTML_MIME not in data:
+            wdata, wmeta, wtuple = self._widget_mimebundle(widget, include, exclude)
+            if wdata:
                 logger.warning(
-                    "WebMap export fallback failed; serving the live widget-view only: {}",
-                    error,
+                    "WebMap static inline map unavailable; falling back to the live widget-view"
                 )
+                data, metadata, was_tuple = {**wdata, **data}, wmeta, wtuple
         return (data, metadata) if was_tuple else data
+
+    def _widget_mimebundle(
+        self, widget: Any, include: Any, exclude: Any
+    ) -> tuple[dict, Any, bool]:
+        """Return the live widget's mimebundle as a ``(data, metadata, was_tuple)`` triple.
+
+        The MapLibre widget (an ipywidgets widget) may return either a bare ``{mime: data}`` dict or the
+        ``(data, metadata)`` 2-tuple form; both are valid Jupyter protocol shapes. This normalises them so the
+        caller round-trips whichever the widget used, and degrades a malformed hook to an empty bundle.
+
+        Args:
+            widget: The rendered MapLibre widget whose ``_repr_mimebundle_`` is consulted.
+            include: The mime types Jupyter asked for, passed through to the widget untouched.
+            exclude: The mime types Jupyter asked to leave out, passed through to the widget untouched.
+
+        Returns:
+            ``(data, metadata, was_tuple)``: the widget's ``{mime: data}`` dict (a fresh copy), its metadata or
+            ``None``, and whether the widget returned the 2-tuple form; ``({}, None, False)`` for a missing or
+            malformed hook.
+        """
+        hook = getattr(widget, "_repr_mimebundle_", None)
+        # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only
+        # accepts them that way, so never call this hook positionally.
+        bundle = hook(include=include, exclude=exclude) if hook is not None else {}
+        # Accept exactly the two valid shapes and keep whichever the widget used; anything else degrades to {}.
+        if (
+            isinstance(bundle, tuple)
+            and len(bundle) == 2
+            and isinstance(bundle[0], dict)
+        ):
+            return dict(bundle[0]), bundle[1], True
+        if isinstance(bundle, dict):
+            return dict(bundle), None, False
+        return {}, None, False
 
     @staticmethod
     def _wants_mime(mime: str, include: Any, exclude: Any) -> bool:
