@@ -380,6 +380,11 @@ def doctor() -> WidgetStackReport:
     return _analyze(_gather())
 
 
+#: Module-level latch for :func:`_warn_once` — a plain bool (not an attribute hung on the function), so the
+#: once-per-process guard needs no ``# type: ignore``. Reset by the tests between cases.
+_warned_once = False
+
+
 def _warn_once() -> None:
     """Warn once per process if the widget stack looks broken — called from the web map's repr.
 
@@ -388,9 +393,10 @@ def _warn_once() -> None:
     :mod:`warnings` (so it surfaces in the notebook even if the host removed loguru's sinks — review L3) and
     the loguru ``logger`` (the repo convention).
     """
-    if getattr(_warn_once, "_done", False):
+    global _warned_once
+    if _warned_once:
         return
-    _warn_once._done = True  # type: ignore[attr-defined]
+    _warned_once = True
     try:
         report = doctor()
         if report.checked and not report.ok:
