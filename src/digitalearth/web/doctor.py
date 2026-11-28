@@ -380,6 +380,54 @@ def doctor() -> WidgetStackReport:
     return _analyze(_gather())
 
 
+#: The process-wide cached report, so :func:`_warn_once` and :func:`inline_mode` share one registry scan
+#: rather than each running :func:`doctor`. Reset to ``None`` by the tests between cases.
+_cached_report: WidgetStackReport | None = None
+
+
+def _report_once() -> WidgetStackReport:
+    """Return :func:`doctor`'s verdict, computed at most once per process and cached.
+
+    Both the repr-time warning and ``web.inline="auto"`` consult the stack, and each ``doctor`` call scans the
+    extension registry, so the scan must not repeat per plot. The cache holds a frozen report.
+    """
+    global _cached_report
+    if _cached_report is None:
+        _cached_report = doctor()
+    return _cached_report
+
+
+def inline_mode() -> str:
+    """Resolve the ``web.inline`` option to the concrete mode the web repr renders in — #575.
+
+    ``"widget"`` and ``"static"`` are returned as set. ``"auto"`` (the default) returns ``"static"`` only when
+    the widget stack is **detectably broken** — :func:`doctor` finds an incompatible extension, a
+    missing/disabled widget manager or a below-floor package — and ``"widget"`` otherwise, so a healthy
+    front-end keeps the live widget and a broken one still renders a static map. ``"auto"`` reads only the
+    kernel-visible signal; a purely browser-side failure it cannot see still needs an explicit
+    ``set_option("web.inline", "static")``.
+
+    Returns:
+        ``"static"`` or ``"widget"``.
+
+    Examples:
+        - Resolve the default option to a concrete mode (``"static"`` or ``"widget"``):
+            ```python
+            >>> from digitalearth.web.doctor import inline_mode
+            >>> inline_mode() in ("static", "widget")
+            True
+
+            ```
+    """
+    from digitalearth.base.options import get_option
+
+    mode: str = get_option("web.inline")
+    if mode in ("widget", "static"):
+        return mode
+    report = _report_once()
+    return "static" if (report.checked and not report.ok) else "widget"
+
+
 #: Module-level latch for :func:`_warn_once` — a plain bool (not an attribute hung on the function), so the
 #: once-per-process guard is type-clean with no inline linter suppression. Reset by the tests between cases.
 _warned_once = False
@@ -398,7 +446,7 @@ def _warn_once() -> None:
         return
     _warned_once = True
     try:
-        report = doctor()
+        report = _report_once()
         if report.checked and not report.ok:
             message = f'plot(backend="web") may not render inline — {report}'
             warnings.warn(message, stacklevel=2)

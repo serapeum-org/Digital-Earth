@@ -1,0 +1,119 @@
+"""web.inline (#575) — render the static HTML map inline instead of the live widget.
+
+The option and its resolution are engine-neutral and tested without maplibre; the repr-behaviour tests
+``importorskip`` maplibre because they build a ``WebMap`` widget. ``web.inline="auto"`` is driven by the
+doctor's verdict, which these tests supply synthetically through ``_report_once`` so no live JupyterLab is
+needed.
+"""
+
+import sys
+
+import pytest
+
+import digitalearth
+from digitalearth.web.doctor import inline_mode
+
+_DOCTOR = sys.modules["digitalearth.web.doctor"]
+
+
+@pytest.fixture(autouse=True)
+def _reset_state():
+    """Restore the option default and clear the doctor's process caches around each test."""
+    _DOCTOR._cached_report = None
+    _DOCTOR._warned_once = False
+    yield
+    digitalearth.set_option("web.inline", "auto")
+    _DOCTOR._cached_report = None
+    _DOCTOR._warned_once = False
+
+
+class TestWebInlineOption:
+    """The ``web.inline`` package option — its values and default (#575 item 1)."""
+
+    def test_default_is_auto(self):
+        """Fresh from the registry, web.inline defaults to ``"auto"`` (the live widget stays default)."""
+        from digitalearth.base.options import _reset_options
+
+        _reset_options()
+        assert digitalearth.get_option("web.inline") == "auto"
+
+    @pytest.mark.parametrize("value", ["widget", "static", "auto"])
+    def test_accepts_the_three_modes(self, value):
+        """Each documented mode round-trips through set/get."""
+        digitalearth.set_option("web.inline", value)
+        assert digitalearth.get_option("web.inline") == value
+
+    def test_rejects_an_unknown_value(self):
+        """An unlisted value is refused by name rather than silently stored."""
+        with pytest.raises(ValueError, match="not a valid value"):
+            digitalearth.set_option("web.inline", "nope")
+
+
+class TestInlineModeResolution:
+    """``inline_mode`` resolves the option to a concrete ``"static"``/``"widget"`` (#575)."""
+
+    def test_explicit_static_passes_through(self):
+        digitalearth.set_option("web.inline", "static")
+        assert inline_mode() == "static"
+
+    def test_explicit_widget_passes_through(self):
+        digitalearth.set_option("web.inline", "widget")
+        assert inline_mode() == "widget"
+
+    def test_auto_is_static_when_the_stack_is_broken(self, monkeypatch):
+        """auto picks static when the doctor reports a detectably-broken stack."""
+        monkeypatch.setattr(
+            _DOCTOR,
+            "_report_once",
+            lambda: _DOCTOR.WidgetStackReport(
+                checked=True, problems=("x is incompatible",)
+            ),
+        )
+        digitalearth.set_option("web.inline", "auto")
+        assert inline_mode() == "static"
+
+    def test_auto_is_widget_when_the_stack_is_healthy(self, monkeypatch):
+        """auto keeps the live widget when the doctor reports a healthy stack."""
+        monkeypatch.setattr(
+            _DOCTOR,
+            "_report_once",
+            lambda: _DOCTOR.WidgetStackReport(checked=True, problems=()),
+        )
+        digitalearth.set_option("web.inline", "auto")
+        assert inline_mode() == "widget"
+
+    def test_auto_is_widget_when_the_stack_is_unchecked(self, monkeypatch):
+        """An unchecked verdict (could not inspect) is not 'broken', so auto keeps the widget."""
+        monkeypatch.setattr(
+            _DOCTOR,
+            "_report_once",
+            lambda: _DOCTOR.WidgetStackReport(checked=False),
+        )
+        digitalearth.set_option("web.inline", "auto")
+        assert inline_mode() == "widget"
+
+
+class TestReprHonoursInlineMode:
+    """The mimebundle emits the widget-view only when the resolved mode is ``"widget"`` (#575 item 2)."""
+
+    def test_static_mode_drops_the_widget_view(self):
+        """web.inline='static' serves the self-contained text/html map with no widget-view to fail to bind."""
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        digitalearth.set_option("web.inline", "static")
+        bundle = WebMap().basemap("OSM")._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert "text/html" in data, sorted(data)
+        assert "application/vnd.jupyter.widget-view+json" not in data, sorted(data)
+
+    def test_widget_mode_keeps_the_widget_view(self):
+        """web.inline='widget' keeps today's behaviour — the live widget-view plus the html fallback."""
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        digitalearth.set_option("web.inline", "widget")
+        bundle = WebMap().basemap("OSM")._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert "application/vnd.jupyter.widget-view+json" in data, sorted(data)
+        assert "text/html" in data, sorted(data)

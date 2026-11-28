@@ -37,10 +37,16 @@ def _valid_off_screen(value: Any) -> bool:
     return isinstance(value, bool) or value == "auto"
 
 
+def _valid_web_inline(value: Any) -> bool:
+    """Whether ``value`` is an accepted ``web.inline`` setting (``"widget"``, ``"static"`` or ``"auto"``)."""
+    return value in ("widget", "static", "auto")
+
+
 #: Each option's validator and default. The dotted name is the public key; a new option is one row here plus
 #: the tier code that reads it — no new top-level function.
 _REGISTRY: dict[str, tuple[Callable[[Any], bool], Any]] = {
     "three_d.off_screen": (_valid_off_screen, "auto"),
+    "web.inline": (_valid_web_inline, "auto"),
 }
 
 #: The live values, seeded from the registry's defaults. :func:`set_option` writes here; :func:`get_option`
@@ -81,7 +87,7 @@ def set_option(name: str, value: Any) -> None:
             >>> digitalearth.set_option("three_d.nope", True)
             Traceback (most recent call last):
                 ...
-            ValueError: 'three_d.nope' is not a digitalearth option; known options: three_d.off_screen
+            ValueError: 'three_d.nope' is not a digitalearth option; known options: three_d.off_screen, web.inline
 
             ```
     """
