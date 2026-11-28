@@ -117,3 +117,21 @@ class TestReprHonoursInlineMode:
         data = bundle[0] if isinstance(bundle, tuple) else bundle
         assert "application/vnd.jupyter.widget-view+json" in data, sorted(data)
         assert "text/html" in data, sorted(data)
+
+    def test_a_failing_mode_resolution_degrades_to_the_widget(self, monkeypatch):
+        """If inline_mode() raises, the repr falls back to the live widget rather than raising out of it.
+
+        Test scenario:
+            A diagnostic must never break the map's repr. Patch inline_mode to raise; the mimebundle must
+            still come back (degraded to the widget-view path), not propagate the exception.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        def boom():
+            raise RuntimeError("inline-mode blew up")
+
+        monkeypatch.setattr(_DOCTOR, "inline_mode", boom)
+        bundle = WebMap().basemap("OSM")._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert "application/vnd.jupyter.widget-view+json" in data, sorted(data)
