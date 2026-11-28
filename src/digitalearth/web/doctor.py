@@ -11,10 +11,9 @@ It is **best-effort and advisory**: it reads the extension registry and installe
 so it detects the common on-disk *causes* but can never assert the widget *will* render. It does not
 intentionally change the environment — though reading the registry goes through JupyterLab's own tooling, which
 may run JupyterLab's standard one-time settings migration (the doctor itself writes nothing). When it cannot
-introspect JupyterLab at all it says so rather than inventing problems. The
-guaranteed-render path when a stack is broken is to write the map to a standalone page —
-:meth:`~digitalearth.web.map.WebMap.save` — which renders in any browser with no widget manager. (A static
-*inline* representation, ``web.inline="static"``, is tracked separately in #575, not yet shipped.)
+introspect JupyterLab at all it says so rather than inventing problems. Two render paths need no working widget
+manager when a stack is broken: ``set_option("web.inline", "static")`` embeds the map inline as self-contained
+HTML (#575), and :meth:`~digitalearth.web.map.WebMap.save` writes a standalone page that renders in any browser.
 
 The split is deliberate: :func:`_gather` does the impure introspection (best-effort, wrapped), and :func:`_analyze`
 is a pure function of the gathered :class:`WidgetStackState`, so every verdict is unit-tested against a synthetic
@@ -44,13 +43,13 @@ _FLOORS: dict[str, str] = {
     "anywidget": "0.9",
 }
 
-#: The one-line escape hatch appended to every non-clean report: a remedy that works today, with no widget
-#: manager. (It points at ``WebMap.save`` rather than ``web.inline="static"`` because the latter is #575's
-#: not-yet-shipped inline option — advising a command that raises would be worse than no advice, H1.)
+#: The one-line escape hatch appended to every non-clean report: the two remedies that render with no widget
+#: manager — ``set_option("web.inline", "static")`` embeds the map inline as static HTML (#575), and
+#: ``WebMap.save`` writes a standalone page. Both shipped; neither raises.
 _STATIC_HINT = (
-    "To see the map regardless of the widget stack, write it to a standalone page — call "
-    '.save("map.html") on the map (m.save("map.html")) and open that file in a browser; it renders with no '
-    'widget manager. (A static inline representation, web.inline="static", is tracked in #575 but not yet shipped.)'
+    "To see the map regardless of the widget stack, render it without a widget manager: either "
+    'digitalearth.set_option("web.inline", "static") to embed the map inline as self-contained HTML, or call '
+    '.save("map.html") on the map and open that standalone file in a browser.'
 )
 
 #: Appended to a problem report: the doctor reads the *kernel's* environment, but a JupyterLab server is often
