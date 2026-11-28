@@ -376,5 +376,5 @@ def _warn_once() -> None:
             message = f'plot(backend="web") may not render inline — {report}'
             warnings.warn(message, stacklevel=2)
             logger.warning(message)
-    except Exception:  # noqa: BLE001 - the repr must survive a failing doctor
+    except Exception:  # noqa: BLE001  # nosec B110 - the repr must survive a failing doctor
         pass
