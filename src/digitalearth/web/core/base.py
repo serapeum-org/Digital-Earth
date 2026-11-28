@@ -3647,7 +3647,7 @@ class WebMapBase:
             from digitalearth.web.doctor import _warn_once
 
             _warn_once()
-        except Exception:  # noqa: BLE001  # nosec B110 - a diagnostic must never break the map's repr
+        except Exception:  # nosec B110  # noqa: BLE001
             pass
         hook = getattr(widget, "_repr_mimebundle_", None)
         # The Jupyter protocol passes include/exclude as keywords; the maplibre widget (ipywidgets) only

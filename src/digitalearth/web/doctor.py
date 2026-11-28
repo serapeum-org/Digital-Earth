@@ -223,36 +223,29 @@ def _is_ext_disabled(name: str, disabled: Mapping[str, bool]) -> bool:
     return False
 
 
-def _analyze(state: WidgetStackState) -> WidgetStackReport:
-    """Turn gathered facts into a verdict — a pure function, so it is tested without a live JupyterLab.
-
-    Args:
-        state: The facts :func:`_gather` read (or a synthetic one in a test).
-
-    Returns:
-        The report: unchecked when ``state`` carries an ``inspect_error``, else one problem line per detected
-        fault (incompatible extension, missing/disabled widget manager, below-floor package).
-    """
-    if state.inspect_error is not None:
-        return WidgetStackReport(checked=False)
-
+def _incompatible_problems(state: WidgetStackState) -> list[str]:
+    """One line per extension the registry flags incompatible with the running JupyterLab (the ``X``)."""
     problems: list[str] = []
-    names = {e.name for e in state.extensions}
-
     for ext in state.extensions:
-        if ext.incompatible:
-            detail = f" ({ext.detail})" if ext.detail else ""
-            problems.append(
-                f"{ext.name} {ext.version} is incompatible with JupyterLab "
-                f"{state.jupyterlab_version or '?'}{detail}, at {ext.ext_dir} — update or remove it; a broken "
-                "extension stops the widget manager activating, which is what 'model not found' is."
-            )
+        if not ext.incompatible:
+            continue
+        detail = f" ({ext.detail})" if ext.detail else ""
+        problems.append(
+            f"{ext.name} {ext.version} is incompatible with JupyterLab "
+            f"{state.jupyterlab_version or '?'}{detail}, at {ext.ext_dir} — update or remove it; a broken "
+            "extension stops the widget manager activating, which is what 'model not found' is."
+        )
+    return problems
 
+
+def _manager_problems(names: set[str], disabled: Mapping[str, bool]) -> list[str]:
+    """One line per required widget extension (jupyterlab-manager, anywidget) that is disabled or absent."""
+    problems: list[str] = []
     for needed, why in (
         (_WIDGET_MANAGER, "the ipywidgets widget manager"),
         (_ANYWIDGET, "anywidget, which maplibre's widget is built on"),
     ):
-        if _is_ext_disabled(needed, state.disabled):
+        if _is_ext_disabled(needed, disabled):
             problems.append(
                 f"{needed} ({why}) is disabled — re-enable it so the web widget can bind."
             )
@@ -261,14 +254,40 @@ def _analyze(state: WidgetStackState) -> WidgetStackReport:
                 f"{needed} ({why}) is not installed as a JupyterLab extension — install it into the "
                 "environment JupyterLab runs from."
             )
+    return problems
 
+
+def _floor_problems(versions: Mapping[str, str | None]) -> list[str]:
+    """One line per kernel-side widget package installed below its required floor."""
+    problems: list[str] = []
     for pkg, floor in _FLOORS.items():
-        if _below_floor(state.versions.get(pkg), floor):
-            have = state.versions.get(pkg) or "missing"
+        if _below_floor(versions.get(pkg), floor):
+            have = versions.get(pkg) or "missing"
             problems.append(
                 f"{pkg} is {have}; the web widget needs >= {floor} on a JupyterLab-4 / Notebook-7 front-end."
             )
+    return problems
 
+
+def _analyze(state: WidgetStackState) -> WidgetStackReport:
+    """Turn gathered facts into a verdict — a pure function, so it is tested without a live JupyterLab.
+
+    Args:
+        state: The facts :func:`_gather` read (or a synthetic one in a test).
+
+    Returns:
+        The report: unchecked when ``state`` carries an ``inspect_error``, else one problem line per detected
+        fault — an incompatible extension (:func:`_incompatible_problems`), a missing/disabled widget manager
+        (:func:`_manager_problems`), or a below-floor package (:func:`_floor_problems`).
+    """
+    if state.inspect_error is not None:
+        return WidgetStackReport(checked=False)
+    names = {e.name for e in state.extensions}
+    problems = (
+        _incompatible_problems(state)
+        + _manager_problems(names, state.disabled)
+        + _floor_problems(state.versions)
+    )
     return WidgetStackReport(checked=True, problems=tuple(problems))
 
 
@@ -376,5 +395,5 @@ def _warn_once() -> None:
             message = f'plot(backend="web") may not render inline — {report}'
             warnings.warn(message, stacklevel=2)
             logger.warning(message)
-    except Exception:  # noqa: BLE001  # nosec B110 - the repr must survive a failing doctor
+    except Exception:  # nosec B110  # noqa: BLE001
         pass
