@@ -10,7 +10,9 @@ missing/disabled widget manager.
 It is **best-effort and advisory**: it reads the extension registry and installed versions, never the browser,
 so it detects the common on-disk *causes* but can never assert the widget *will* render — and it never changes
 the environment. When it cannot introspect JupyterLab at all it says so rather than inventing problems. The
-guaranteed-render path when a stack is broken is :func:`digitalearth.set_option` ``("web.inline", "static")``.
+guaranteed-render path when a stack is broken is to write the map to a standalone page —
+:meth:`~digitalearth.web.map.WebMap.save` — which renders in any browser with no widget manager. (A static
+*inline* representation, ``web.inline="static"``, is tracked separately in #575, not yet shipped.)
 
 The split is deliberate: :func:`_gather` does the impure introspection (best-effort, wrapped), and :func:`_analyze`
 is a pure function of the gathered :class:`WidgetStackState`, so every verdict is unit-tested against a synthetic
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from loguru import logger
@@ -39,11 +42,21 @@ _FLOORS: dict[str, str] = {
     "anywidget": "0.9",
 }
 
-#: The one-line escape hatch appended to every non-clean report: render without the widget at all.
+#: The one-line escape hatch appended to every non-clean report: a remedy that works today, with no widget
+#: manager. (It points at ``WebMap.save`` rather than ``web.inline="static"`` because the latter is #575's
+#: not-yet-shipped inline option — advising a command that raises would be worse than no advice, H1.)
 _STATIC_HINT = (
-    "To render regardless of the widget stack, set "
-    'digitalearth.set_option("web.inline", "static") — it emits the self-contained HTML map, so no '
-    "widget manager is needed."
+    "To see the map regardless of the widget stack, write it to a standalone page — "
+    'WebMap.save("map.html") — and open that file in a browser; it renders with no widget manager. '
+    '(A static inline representation, web.inline="static", is tracked in #575 but not yet shipped.)'
+)
+
+#: Appended to a problem report: the doctor reads the *kernel's* environment, but a JupyterLab server is often
+#: launched from a different one, where "model not found" actually lives — so a user is not sent to fix the
+#: wrong environment (review L1).
+_KERNEL_ENV_CAVEAT = (
+    "Note: this inspects the kernel's environment; if JupyterLab is served from a different environment, "
+    "check the extensions there too."
 )
 
 
@@ -73,9 +86,13 @@ class WidgetStackState:
 
     Attributes:
         extensions: Every federated extension found, in registry order.
-        disabled: The names JupyterLab has disabled.
-        env_labextensions_dir: This interpreter's own ``share/jupyter/labextensions`` — the dir an extension
-            *should* load from; anything else is a user/system install that is searched first and shadows it.
+        disabled: JupyterLab's merged ``disabledExtensions`` mapping — key (extension name or ``name:plugin``
+            id) to a bool, where ``False`` is an explicit re-enable. Not a bare name set, so the boolean and
+            plugin granularity are honoured (see :func:`_is_ext_disabled`).
+        env_labextensions_dir: This interpreter's own ``share/jupyter/labextensions``, reported for context.
+            It is informational only: the doctor does **not** infer a "shadow" from a path mismatch, because
+            the search order (``prefer_environment_over_user``) and true-duplicate detection are not reliably
+            available here, and a user-only extension is not a shadow (review M1).
         jupyterlab_version: The running JupyterLab version, or ``None`` when it could not be read.
         versions: Installed versions of the kernel-side widget packages (``None`` for a missing one).
         inspect_error: ``None`` on a successful gather, else why introspection failed — which makes the report
@@ -83,7 +100,7 @@ class WidgetStackState:
     """
 
     extensions: tuple[ExtensionInfo, ...]
-    disabled: frozenset[str]
+    disabled: Mapping[str, bool]
     env_labextensions_dir: str
     jupyterlab_version: str | None
     versions: dict[str, str | None]
@@ -156,6 +173,8 @@ class WidgetStackReport:
             f'{len(self.problems)} problem(s) that can stop plot(backend="web") rendering:\n'
             + "\n".join(lines)
             + "\n"
+            + _KERNEL_ENV_CAVEAT
+            + "\n"
             + _STATIC_HINT
         )
 
@@ -172,6 +191,28 @@ def _below_floor(version: str | None, floor: str) -> bool:
         return False
 
 
+def _as_disabled_map(disabled: object) -> dict[str, bool]:
+    """Normalise JupyterLab's ``disabledExtensions`` to a ``{key: bool}`` map, whatever shape it arrives in.
+
+    ``get_app_info`` returns a mapping ``{key: bool}``, but older/other shapes hand back a list of names. A
+    list is read as "all True"; a mapping is kept as-is so an explicit ``False`` (a re-enable) is preserved.
+    """
+    if isinstance(disabled, Mapping):
+        return {str(k): bool(v) for k, v in disabled.items()}
+    if isinstance(disabled, (list, tuple, set, frozenset)):
+        return {str(k): True for k in disabled}
+    return {}
+
+
+def _is_ext_disabled(name: str, disabled: Mapping[str, bool]) -> bool:
+    """Whether ``name`` is disabled, the way JupyterLab's own ``_is_disabled`` reads it.
+
+    A match is the bare extension name or any ``name:plugin`` id (partition on ``":"``), and only when the
+    value is truthy — so a key present with ``False`` (an explicit re-enable) is **not** treated as disabled.
+    """
+    return any(key.partition(":")[0] == name and off for key, off in disabled.items())
+
+
 def _analyze(state: WidgetStackState) -> WidgetStackReport:
     """Turn gathered facts into a verdict — a pure function, so it is tested without a live JupyterLab.
 
@@ -180,7 +221,7 @@ def _analyze(state: WidgetStackState) -> WidgetStackReport:
 
     Returns:
         The report: unchecked when ``state`` carries an ``inspect_error``, else one problem line per detected
-        fault (incompatible extension, user-level shadow, missing/disabled widget manager, below-floor package).
+        fault (incompatible extension, missing/disabled widget manager, below-floor package).
     """
     if state.inspect_error is not None:
         return WidgetStackReport(checked=False)
@@ -196,20 +237,12 @@ def _analyze(state: WidgetStackState) -> WidgetStackReport:
                 f"{state.jupyterlab_version or '?'}{detail}, at {ext.ext_dir} — update or remove it; a broken "
                 "extension stops the widget manager activating, which is what 'model not found' is."
             )
-        elif os.path.normpath(ext.ext_dir) != os.path.normpath(
-            state.env_labextensions_dir
-        ):
-            problems.append(
-                f"{ext.name} loads from {ext.ext_dir}, not this environment "
-                f"({state.env_labextensions_dir}) — a user/system dir is searched first, so it shadows the "
-                "env's copy; remove the stray install so only the env's extension loads."
-            )
 
     for needed, why in (
         (_WIDGET_MANAGER, "the ipywidgets widget manager"),
         (_ANYWIDGET, "anywidget, which maplibre's widget is built on"),
     ):
-        if needed in state.disabled:
+        if _is_ext_disabled(needed, state.disabled):
             problems.append(
                 f"{needed} ({why}) is disabled — re-enable it so the web widget can bind."
             )
@@ -253,6 +286,11 @@ def _gather() -> WidgetStackState:
 
         options = AppOptions(labextensions_path=jupyter_path("labextensions"))
         info = get_app_info(options)
+        # A second handler for the compat map is deliberate (review L3): `get_app_info` post-processes the
+        # `disabled` map that a bare `_AppHandler(...).info` lacks, so we keep it for `info`, and the compat
+        # read needs a handler of its own. `_get_extension_compat()` returns {name: [compat-error tuples]} —
+        # a non-empty list means incompatible (the `X`). It is a private API; any shape change is absorbed by
+        # the broad `except` below, which turns it into an "unchecked" report rather than a raise (review N1).
         compat = _AppHandler(options)._get_extension_compat()
         federated = info.get("federated_extensions", {})
         exts = tuple(
@@ -267,7 +305,7 @@ def _gather() -> WidgetStackState:
         )
         return WidgetStackState(
             extensions=exts,
-            disabled=frozenset(info.get("disabled", {})),
+            disabled=_as_disabled_map(info.get("disabled")),
             env_labextensions_dir=env_dir,
             jupyterlab_version=_ver("jupyterlab"),
             versions=versions,
@@ -275,7 +313,7 @@ def _gather() -> WidgetStackState:
     except Exception as error:  # noqa: BLE001 - any introspection failure becomes an "unchecked" report
         return WidgetStackState(
             extensions=(),
-            disabled=frozenset(),
+            disabled={},
             env_labextensions_dir=env_dir,
             jupyterlab_version=_ver("jupyterlab"),
             versions=versions,

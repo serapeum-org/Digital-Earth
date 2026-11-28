@@ -1,9 +1,9 @@
 """The web-tier widget-stack doctor (#576) — detect a broken/shadowing JupyterLab extension stack.
 
 The analysis is a pure function of a gathered :class:`WidgetStackState`, so every verdict is tested against a
-synthetic state (a clean stack, an incompatible extension, a user-level shadow, a missing widget manager, a
-below-floor version) with no live browser or JupyterLab build. One test also runs the real ``doctor()`` against
-this env to prove the gather path does not raise.
+synthetic state (a clean stack, an incompatible extension, a missing/disabled widget manager, a below-floor
+version) with no live browser or JupyterLab build. One test also runs the real ``doctor()`` against this env to
+prove the gather path does not raise.
 """
 
 import sys
@@ -20,11 +20,11 @@ from digitalearth.web.doctor import (
 _ENV = "/env/share/jupyter/labextensions"
 
 
-def _state(exts=(), disabled=frozenset(), versions=None, jlver="4.6.6", err=None):
+def _state(exts=(), disabled=None, versions=None, jlver="4.6.6", err=None):
     """Build a WidgetStackState for a verdict test, defaulting the parts a case does not exercise."""
     return WidgetStackState(
         extensions=tuple(exts),
-        disabled=frozenset(disabled),
+        disabled=dict(disabled or {}),
         env_labextensions_dir=_ENV,
         jupyterlab_version=jlver,
         versions=versions
@@ -71,8 +71,13 @@ class TestAnalyzeFlagsTheRealFailures:
         assert "@jupyter-notebook/lab-extension" in joined
         assert "incompatible" in joined.lower()
 
-    def test_a_user_level_shadow_is_flagged(self):
-        """An extension loaded from a user dir (searched before the env) shadows the env's copy."""
+    def test_a_user_only_compatible_extension_is_not_flagged(self):
+        """A compatible extension in a user dir is NOT a problem — a path mismatch is not a shadow (review M1).
+
+        Test scenario:
+            The old heuristic flagged any non-env ``ext_dir`` as a shadow, which false-flags a legitimate
+            user-only extension. A compatible extension, wherever it loads from, must leave the report clean.
+        """
         exts = _healthy_exts() + (
             ExtensionInfo(
                 "jupyterlab_pygments",
@@ -83,11 +88,7 @@ class TestAnalyzeFlagsTheRealFailures:
             ),
         )
         report = _analyze(_state(exts=exts))
-        assert report.ok is False
-        assert any(
-            "shadow" in p.lower() and "jupyterlab_pygments" in p
-            for p in report.problems
-        )
+        assert report.ok is True, report.problems
 
     def test_a_missing_widget_manager_is_flagged(self):
         report = _analyze(
@@ -99,11 +100,33 @@ class TestAnalyzeFlagsTheRealFailures:
     def test_a_disabled_widget_manager_is_flagged(self):
         report = _analyze(
             _state(
-                exts=_healthy_exts(), disabled={"@jupyter-widgets/jupyterlab-manager"}
+                exts=_healthy_exts(),
+                disabled={"@jupyter-widgets/jupyterlab-manager": True},
             )
         )
         assert report.ok is False
         assert any("disabled" in p.lower() for p in report.problems)
+
+    def test_a_plugin_granular_disable_is_detected(self):
+        """A disable at ``name:plugin`` granularity is matched, not only the bare name (review M2, FN)."""
+        report = _analyze(
+            _state(
+                exts=_healthy_exts(),
+                disabled={"@jupyter-widgets/jupyterlab-manager:plugin": True},
+            )
+        )
+        assert report.ok is False
+        assert any("disabled" in p.lower() for p in report.problems)
+
+    def test_an_explicit_reenable_is_not_treated_as_disabled(self):
+        """A key present with value ``False`` (a re-enable) must NOT be read as disabled (review M2, FP)."""
+        report = _analyze(
+            _state(
+                exts=_healthy_exts(),
+                disabled={"@jupyter-widgets/jupyterlab-manager": False},
+            )
+        )
+        assert report.ok is True, report.problems
 
     def test_a_below_floor_ipywidgets_is_flagged(self):
         report = _analyze(
@@ -124,11 +147,29 @@ class TestAnalyzeFlagsTheRealFailures:
         )
         assert "could not inspect" in str(report).lower()
 
-    def test_the_summary_points_at_the_static_fallback(self):
+    def test_the_remedy_points_at_a_mechanism_that_exists_today(self):
+        """The advertised remedy must be a command that works now, not a set_option that raises (review H1).
+
+        Test scenario:
+            The report names ``WebMap.save`` (which renders a standalone page with no widget manager today),
+            and does NOT instruct a bare ``set_option(...)`` call — ``web.inline`` is #575's unshipped option,
+            so advising it would raise ValueError.
+        """
         report = _analyze(
             _state(exts=(ExtensionInfo("anywidget", "0.11.0", _ENV, False, ""),))
         )
-        assert "web.inline" in str(report)
+        text = str(report)
+        assert "WebMap.save" in text
+        assert "set_option(" not in text, (
+            "must not advertise a set_option call that raises today"
+        )
+
+    def test_the_report_caveats_the_kernel_environment(self):
+        """A problem report warns that it read the kernel env, which may differ from the server's (review L1)."""
+        report = _analyze(
+            _state(exts=(ExtensionInfo("anywidget", "0.11.0", _ENV, False, ""),))
+        )
+        assert "kernel's environment" in str(report)
 
 
 class TestDoctorRunsLive:
@@ -286,3 +327,22 @@ class TestWarnOnce:
 
         monkeypatch.setattr(d, "doctor", boom)
         d._warn_once()
+
+
+class TestDisabledMapHelpers:
+    """`_as_disabled_map` / `_is_ext_disabled` — the disabled-extension normalisation (review M2)."""
+
+    def test_as_disabled_map_normalises_each_shape(self):
+        """A mapping is kept (bools preserved); a list becomes all-True; anything else is empty."""
+        d = sys.modules["digitalearth.web.doctor"]
+        assert d._as_disabled_map({"a": True, "b": False}) == {"a": True, "b": False}
+        assert d._as_disabled_map(["a", "b"]) == {"a": True, "b": True}
+        assert d._as_disabled_map(None) == {}
+
+    def test_is_ext_disabled_matches_name_and_plugin_and_honours_bool(self):
+        """A match is the bare name or a ``name:plugin`` id, and only when the value is truthy."""
+        d = sys.modules["digitalearth.web.doctor"]
+        assert d._is_ext_disabled("ext", {"ext": True}) is True
+        assert d._is_ext_disabled("ext", {"ext:plugin": True}) is True
+        assert d._is_ext_disabled("ext", {"ext": False}) is False
+        assert d._is_ext_disabled("ext", {"other": True}) is False
