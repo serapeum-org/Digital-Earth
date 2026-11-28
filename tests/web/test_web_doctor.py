@@ -6,6 +6,8 @@ below-floor version) with no live browser or JupyterLab build. One test also run
 this env to prove the gather path does not raise.
 """
 
+import sys
+
 import pytest
 
 from digitalearth.web.doctor import (
@@ -137,3 +139,150 @@ class TestDoctorRunsLive:
         report = doctor()
         assert hasattr(report, "ok")
         assert isinstance(report.problems, tuple)
+
+
+class TestBelowFloor:
+    """`_below_floor` — the version-floor comparison, including the inputs that must NOT count as a breach."""
+
+    @pytest.mark.parametrize(
+        "version, floor, expected",
+        [
+            (None, "8", True),
+            ("7.7.0", "8", True),
+            ("8", "8", False),
+            ("8.1.9", "8", False),
+            ("0.9.21", "0.9", False),
+            ("not-a-pep440", "8", False),
+        ],
+    )
+    def test_below_floor(self, version, floor, expected):
+        """A missing or older version is below the floor; equal/newer/unparseable are not.
+
+        Args:
+            version: The installed version string (or None for missing).
+            floor: The minimum acceptable version.
+            expected: Whether `_below_floor` should report a breach.
+
+        Test scenario:
+            None and an older version breach; equal and newer do not; a non-PEP440 string cannot be proven a
+            breach, so it returns False rather than raising.
+        """
+        from digitalearth.web.doctor import _below_floor
+
+        assert _below_floor(version, floor) is expected, f"{version} vs {floor}"
+
+
+class TestReportStr:
+    """`WidgetStackReport.__str__` — the three shapes: healthy, unchecked, and a problem list."""
+
+    def test_a_healthy_checked_report_says_healthy(self):
+        """A checked report with no problems renders the single healthy line."""
+        report = _analyze(_state(exts=_healthy_exts()))
+        assert "healthy" in str(report).lower()
+
+
+class TestGatherDegradesGracefully:
+    """`_gather` must never raise; an introspection failure becomes an unchecked report."""
+
+    def test_a_failing_registry_read_sets_inspect_error(self, monkeypatch):
+        """When the JupyterLab registry read raises, `_gather` returns a state flagged inspect_error.
+
+        Test scenario:
+            Patch `jupyterlab.commands.get_app_info` to raise; `_gather` catches it and the resulting state
+            carries an `inspect_error`, which `_analyze` turns into an unchecked (not broken) report.
+        """
+        pytest.importorskip("jupyterlab")
+        import jupyterlab.commands as jc
+
+        from digitalearth.web.doctor import _gather
+
+        monkeypatch.setattr(
+            jc,
+            "get_app_info",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        state = _gather()
+        assert state.inspect_error is not None
+        assert _analyze(state).checked is False
+
+    def test_a_missing_package_version_is_none_not_an_error(self, monkeypatch):
+        """`_gather` records None for a widget package whose version lookup raises, without failing."""
+        pytest.importorskip("jupyterlab")
+        import importlib.metadata as md
+
+        d = sys.modules["digitalearth.web.doctor"]
+
+        real = md.version
+
+        def fake(pkg):
+            if pkg == "ipywidgets":
+                raise md.PackageNotFoundError(pkg)
+            return real(pkg)
+
+        monkeypatch.setattr(d, "md", md, raising=False)
+        monkeypatch.setattr(md, "version", fake)
+        state = d._gather()
+        assert state.versions.get("ipywidgets") is None
+
+
+class TestWarnOnce:
+    """`_warn_once` — fires once when the stack is broken, caches, and never raises."""
+
+    @pytest.fixture(autouse=True)
+    def _reset(self):
+        """Clear the once-per-process latch before and after each test so cases don't bleed."""
+        d = sys.modules["digitalearth.web.doctor"]
+
+        if hasattr(d._warn_once, "_done"):
+            delattr(d._warn_once, "_done")
+        yield
+        if hasattr(d._warn_once, "_done"):
+            delattr(d._warn_once, "_done")
+
+    def test_warns_when_broken_and_caches(self, monkeypatch):
+        """A broken report logs one warning; a second call is a no-op (the gather must not run per-plot)."""
+        d = sys.modules["digitalearth.web.doctor"]
+
+        calls = {"doctor": 0, "warn": 0}
+        broken = d.WidgetStackReport(checked=True, problems=("x is incompatible",))
+
+        def fake_doctor():
+            calls["doctor"] += 1
+            return broken
+
+        monkeypatch.setattr(d, "doctor", fake_doctor)
+        monkeypatch.setattr(
+            d.logger,
+            "warning",
+            lambda *a, **k: calls.__setitem__("warn", calls["warn"] + 1),
+        )
+        d._warn_once()
+        d._warn_once()
+        assert calls["doctor"] == 1, "gather must run at most once per process"
+        assert calls["warn"] == 1, "exactly one warning for a broken stack"
+
+    def test_does_not_warn_when_healthy(self, monkeypatch):
+        """A healthy report emits no warning."""
+        d = sys.modules["digitalearth.web.doctor"]
+
+        warned = {"n": 0}
+        monkeypatch.setattr(
+            d, "doctor", lambda: d.WidgetStackReport(checked=True, problems=())
+        )
+        monkeypatch.setattr(
+            d.logger,
+            "warning",
+            lambda *a, **k: warned.__setitem__("n", warned["n"] + 1),
+        )
+        d._warn_once()
+        assert warned["n"] == 0, "a healthy stack must not warn"
+
+    def test_swallows_a_raising_doctor(self, monkeypatch):
+        """A diagnostic that raises must never propagate out of the repr hook."""
+        d = sys.modules["digitalearth.web.doctor"]
+
+        def boom():
+            raise RuntimeError("doctor blew up")
+
+        monkeypatch.setattr(d, "doctor", boom)
+        d._warn_once()
