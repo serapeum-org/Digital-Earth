@@ -3639,18 +3639,6 @@ class WebMapBase:
             widget = self.render()
         except ImportError:
             return {}
-        # Warn once per process if the JupyterLab widget stack looks broken (an incompatible extension, a
-        # missing/disabled widget manager) — so a "model not found" failure arrives with its cause and a
-        # working remedy, rather than a silent blank cell (#576). Cached, and guarded here including the
-        # import, so a diagnostic can never raise out of the repr (review L4).
-        try:
-            from digitalearth.web.doctor import _warn_once
-
-            _warn_once()
-        except (
-            Exception
-        ) as error:  # a diagnostic may never break the repr; log, never swallow
-            logger.debug("web-doctor preflight check failed: {}", error)
         # web.inline (#575) decides whether to serve the live widget or the static HTML map. "auto" (the
         # default) asks the doctor whether the widget stack is detectably broken; a failure to resolve it
         # degrades to the live widget, never out of the repr.
@@ -3658,20 +3646,30 @@ class WebMapBase:
             from digitalearth.web.doctor import inline_mode
 
             mode = inline_mode()
-        except (
-            Exception
-        ) as error:  # a diagnostic may never break the repr; log, never swallow
+        except Exception as error:
+            # a diagnostic may never break the repr; log, never swallow
             logger.debug("web-doctor inline-mode check failed: {}", error)
             mode = "widget"
+        # Warn once per process only when the LIVE widget is about to be served on a stack that looks broken —
+        # then it may fail to bind and the "model not found" cause/remedy should arrive with it (#576). In
+        # static mode the HTML map renders inline regardless, so that warning would contradict what just
+        # happened (review M1); skip it. Guarded (incl. the import) so a diagnostic never raises out of the repr.
+        if mode == "widget":
+            try:
+                from digitalearth.web.doctor import _warn_once
+
+                _warn_once()
+            except Exception as error:
+                # a diagnostic may never break the repr; log, never swallow
+                logger.debug("web-doctor preflight check failed: {}", error)
         if mode == "static":
             # Drop the widget-view and serve only the self-contained text/html map, so a front-end with no
             # working widget manager renders the map instead of "model not found" (#575). The text/html is
-            # added by the shared fallback block below; keep a plain-text stand-in for a bare repr.
-            data, metadata, was_tuple = (
-                {"text/plain": "<WebMap: static inline map>"},
-                None,
-                False,
-            )
+            # added by the shared fallback block below; a plain-text stand-in — routed through the same
+            # include/exclude negotiation as any other representation (review L1) — covers a bare repr.
+            data, metadata, was_tuple = {}, None, False
+            if self._wants_mime("text/plain", include, exclude):
+                data["text/plain"] = "<WebMap: static inline map>"
         else:
             data, metadata, was_tuple = self._widget_mimebundle(
                 widget, include, exclude

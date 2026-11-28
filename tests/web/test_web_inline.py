@@ -222,3 +222,73 @@ class TestReprHonoursInlineMode:
         bundle = WebMap().basemap("OSM")._repr_mimebundle_(include={_WIDGET_VIEW})
         data = bundle[0] if isinstance(bundle, tuple) else bundle
         assert _WIDGET_VIEW in data, sorted(data)
+
+    def test_static_mode_honours_a_text_plain_exclusion(self):
+        """Static mode routes its text/plain stand-in through include/exclude like any other representation (L1).
+
+        Test scenario:
+            A front-end excluding text/plain still gets the static map (text/html) but not the stand-in — static
+            mode is the only path that injects a mime itself, so it must respect the negotiation too.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        digitalearth.set_option("web.inline", "static")
+        bundle = WebMap().basemap("OSM")._repr_mimebundle_(exclude={"text/plain"})
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert "text/plain" not in data, sorted(data)
+        assert "text/html" in data, sorted(data)
+
+    def test_static_auto_downgrade_does_not_warn_may_not_render_inline(
+        self, monkeypatch
+    ):
+        """auto→static (broken stack) renders the map inline, so the 'may not render inline' warning is skipped (M1).
+
+        Test scenario:
+            On default 'auto' with a broken-stack verdict, inline_mode()='static' and the HTML map renders in the
+            cell; emitting a preflight warning that the widget 'may not render inline' would contradict what just
+            happened, so no such warning is raised.
+        """
+        pytest.importorskip("maplibre")
+        import warnings
+
+        from digitalearth.web import WebMap
+
+        monkeypatch.setattr(
+            _DOCTOR,
+            "_report_once",
+            lambda: _DOCTOR.WidgetStackReport(
+                checked=True, problems=("x is incompatible",)
+            ),
+        )
+        _DOCTOR._warned_once = False
+        digitalearth.set_option("web.inline", "auto")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            WebMap().basemap("OSM")._repr_mimebundle_()
+        offenders = [
+            str(w.message) for w in caught if "may not render inline" in str(w.message)
+        ]
+        assert not offenders, offenders
+
+    def test_forced_widget_on_a_broken_stack_still_warns(self, monkeypatch):
+        """Forcing web.inline='widget' on a broken stack keeps the 'may not render inline' warning (M1 complement).
+
+        Test scenario:
+            When the user opts into the live widget on a broken stack, the widget really may fail to bind, so the
+            preflight warning must still fire — only the static path suppresses it.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        monkeypatch.setattr(
+            _DOCTOR,
+            "_report_once",
+            lambda: _DOCTOR.WidgetStackReport(
+                checked=True, problems=("x is incompatible",)
+            ),
+        )
+        _DOCTOR._warned_once = False
+        digitalearth.set_option("web.inline", "widget")
+        with pytest.warns(UserWarning, match="may not render inline"):
+            WebMap().basemap("OSM")._repr_mimebundle_()
