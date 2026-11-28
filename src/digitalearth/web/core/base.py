@@ -3617,23 +3617,30 @@ class WebMapBase:
         self.close()
 
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
-        """Render the map inline in a notebook — the live widget, plus a static HTML fallback for export (#559).
+        """Render the map inline in a notebook, honouring the ``web.inline`` option (#559, #575).
 
-        The returned mimebundle carries two rich representations. The MapLibre widget's own
-        ``application/vnd.jupyter.widget-view+json`` keeps the live, interactive map in a front-end that has the
-        widget manager (Jupyter ranks the widget-view above ``text/html``, so it wins there). Alongside it, a
-        self-contained ``text/html`` fallback — the standalone map page wrapped in an isolating ``<iframe
-        srcdoc>`` — is embedded so the map still renders in a notebook saved/exported without live widget state
-        (``nbconvert --execute``, ``mkdocs-jupyter`` with ``execute: false``), where the widget-view is dropped.
-        A plain ``plot(backend="web")`` therefore survives a static export with no caller-side ``to_html`` plumbing.
+        The ``web.inline`` option (via :func:`~digitalearth.web.doctor.inline_mode`) chooses what the bundle
+        leads with. In ``"widget"`` mode it carries the MapLibre widget's own
+        ``application/vnd.jupyter.widget-view+json`` — the live, interactive map a front-end with the widget
+        manager renders (Jupyter ranks the widget-view above ``text/html``, so it wins there) — and a preflight
+        warning fires when the widget stack looks broken. In ``"static"`` mode the widget-view is dropped so a
+        front-end with no working widget manager renders the map instead of "model not found". The default
+        ``"auto"`` picks ``"static"`` only when the stack is detectably broken, else ``"widget"``.
+
+        Either way a self-contained ``text/html`` map — the standalone page wrapped in an isolating ``<iframe
+        srcdoc>`` — is embedded (honouring ``include``/``exclude``), so the map still renders in a notebook
+        saved/exported without live widget state (``nbconvert --execute``, ``mkdocs-jupyter`` with
+        ``execute: false``) and so ``"static"`` mode has a map to show. If that export is unavailable in static
+        mode, the live widget-view is restored as a last resort so the cell is never emptier than widget mode.
 
         Args:
             include: The mime types Jupyter asks for, passed through untouched.
             exclude: The mime types Jupyter asks to be left out, passed through untouched.
 
         Returns:
-            The mimebundle: the widget's representations plus a ``text/html`` export fallback, or an empty dict
-            when the engine is missing (so a bare repr in a notebook degrades gracefully instead of raising).
+            The mimebundle for the resolved mode (the widget-view and/or the ``text/html`` map, plus a
+            ``text/plain`` stand-in), or an empty dict when the engine is missing (so a bare repr in a notebook
+            degrades gracefully instead of raising).
         """
         try:
             widget = self.render()
