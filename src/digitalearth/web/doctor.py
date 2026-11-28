@@ -389,6 +389,10 @@ def _report_once() -> WidgetStackReport:
 
     Both the repr-time warning and ``web.inline="auto"`` consult the stack, and each ``doctor`` call scans the
     extension registry, so the scan must not repeat per plot. The cache holds a frozen report.
+
+    Because the verdict is frozen for the process, repairing the widget stack mid-session (re-enabling an
+    extension, upgrading a package) does not change what ``auto`` or the warning see until the kernel restarts;
+    call :func:`doctor` directly for a fresh scan, or restart the kernel to re-seed the cache.
     """
     global _cached_report
     if _cached_report is None:
