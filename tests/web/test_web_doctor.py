@@ -279,12 +279,14 @@ class TestWarnOnce:
 
     @pytest.fixture(autouse=True)
     def _reset(self):
-        """Clear the once-per-process latch before and after each test so cases don't bleed."""
+        """Clear the once-per-process latch and the cached report before/after each test so cases don't bleed."""
         d = sys.modules["digitalearth.web.doctor"]
 
         d._warned_once = False
+        d._cached_report = None
         yield
         d._warned_once = False
+        d._cached_report = None
 
     def test_warns_when_broken_and_caches(self, monkeypatch):
         """A broken report logs one warning; a second call is a no-op (the gather must not run per-plot)."""
