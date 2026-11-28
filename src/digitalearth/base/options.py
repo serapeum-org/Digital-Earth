@@ -99,7 +99,7 @@ def set_option(name: str, value: Any) -> None:
     validator, _, remedy = _REGISTRY[name]
     if not validator(value):
         raise ValueError(
-            f"{value!r} is not a valid value for option {name!r}; {name} takes {remedy}"
+            f"{value!r} is not a valid value for option {name!r}; {name!r} takes {remedy}"
         )
     _VALUES[name] = value
 

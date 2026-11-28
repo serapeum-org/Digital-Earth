@@ -56,7 +56,7 @@ class TestWebInlineOption:
             digitalearth.set_option("web.inline", "nope")
         message = str(excinfo.value)
         assert "not a valid value for option 'web.inline'" in message
-        assert "'widget', 'static' or 'auto'" in message
+        assert "'web.inline' takes 'widget', 'static' or 'auto'" in message
         assert "three_d.off_screen" not in message, (
             "the remedy must describe the failing option, not a different one"
         )
