@@ -184,7 +184,7 @@ def _below_floor(version: str | None, floor: str) -> bool:
         from packaging.version import Version
 
         return Version(version) < Version(floor)
-    except Exception:  # noqa: BLE001 - a non-PEP440 version is not a floor breach we can prove
+    except Exception:  # a non-PEP440 version is not a floor breach we can prove
         return False
 
 
@@ -303,7 +303,7 @@ def _gather() -> WidgetStackState:
     def _ver(pkg: str) -> str | None:
         try:
             return md.version(pkg)
-        except Exception:  # noqa: BLE001 - a missing package is a fact, not an error to raise
+        except Exception:  # a missing package is a fact, not an error to raise
             return None
 
     versions = {pkg: _ver(pkg) for pkg in _FLOORS}
@@ -342,7 +342,9 @@ def _gather() -> WidgetStackState:
             jupyterlab_version=_ver("jupyterlab"),
             versions=versions,
         )
-    except Exception as error:  # noqa: BLE001 - any introspection failure becomes an "unchecked" report
+    except (
+        Exception
+    ) as error:  # any introspection failure becomes an "unchecked" report
         return WidgetStackState(
             extensions=(),
             disabled={},
@@ -395,5 +397,7 @@ def _warn_once() -> None:
             message = f'plot(backend="web") may not render inline — {report}'
             warnings.warn(message, stacklevel=2)
             logger.warning(message)
-    except Exception:  # nosec B110  # noqa: BLE001
-        pass
+    except (
+        Exception
+    ) as error:  # a diagnostic may never raise out of the repr; log, never swallow
+        logger.debug("web-doctor preflight check failed: {}", error)
