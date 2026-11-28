@@ -149,6 +149,24 @@ class TestReprHonoursInlineMode:
         data = bundle[0] if isinstance(bundle, tuple) else bundle
         assert "application/vnd.jupyter.widget-view+json" in data, sorted(data)
 
+    def test_a_failing_preflight_warning_does_not_break_the_repr(self, monkeypatch):
+        """If the preflight _warn_once() raises, the repr still returns the widget rather than propagating.
+
+        Test scenario:
+            The repr-time doctor warning is a diagnostic; a failure in it must be logged and swallowed, never
+            escape _repr_mimebundle_. Patch _warn_once to raise and assert the mimebundle still comes back.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        def boom():
+            raise RuntimeError("warn-once blew up")
+
+        monkeypatch.setattr(_DOCTOR, "_warn_once", boom)
+        bundle = WebMap().basemap("OSM")._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert _WIDGET_VIEW in data, sorted(data)
+
     def test_static_export_failure_restores_the_widget_view(self, monkeypatch):
         """In static mode, a failing HTML export restores the live widget-view instead of an empty cell (M2).
 
@@ -166,6 +184,29 @@ class TestReprHonoursInlineMode:
         bundle = m._repr_mimebundle_()
         data = bundle[0] if isinstance(bundle, tuple) else bundle
         assert _WIDGET_VIEW in data, sorted(data)
+
+    def test_static_with_failed_export_and_empty_widget_degrades_to_the_text_stand_in(
+        self, monkeypatch
+    ):
+        """If the static export fails AND the widget yields nothing, the repr returns the text stand-in, no crash.
+
+        Test scenario:
+            The static last-resort restores the widget-view only when the widget actually produced one. With
+            both the HTML export raising and an empty widget bundle, the repr returns just the text/plain
+            stand-in rather than raising.
+        """
+        pytest.importorskip("maplibre")
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap("OSM")
+        monkeypatch.setattr(type(m), "_export_fallback_html", _raises_export_error)
+        monkeypatch.setattr(
+            type(m), "_widget_mimebundle", lambda self, w, inc, exc: ({}, None, False)
+        )
+        digitalearth.set_option("web.inline", "static")
+        bundle = m._repr_mimebundle_()
+        data = bundle[0] if isinstance(bundle, tuple) else bundle
+        assert data == {"text/plain": "<WebMap: static inline map>"}, sorted(data)
 
     def test_static_mode_with_html_excluded_restores_the_widget_view(self):
         """When the front-end excludes text/html, static mode falls back to the widget-view, not an empty cell (M2).
