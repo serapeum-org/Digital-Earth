@@ -8,8 +8,10 @@ missing/disabled widget manager.
 
 :func:`doctor` inspects that state and returns a :class:`WidgetStackReport` naming each problem with its remedy.
 It is **best-effort and advisory**: it reads the extension registry and installed versions, never the browser,
-so it detects the common on-disk *causes* but can never assert the widget *will* render — and it never changes
-the environment. When it cannot introspect JupyterLab at all it says so rather than inventing problems. The
+so it detects the common on-disk *causes* but can never assert the widget *will* render. It does not
+intentionally change the environment — though reading the registry goes through JupyterLab's own tooling, which
+may run JupyterLab's standard one-time settings migration (the doctor itself writes nothing). When it cannot
+introspect JupyterLab at all it says so rather than inventing problems. The
 guaranteed-render path when a stack is broken is to write the map to a standalone page —
 :meth:`~digitalearth.web.map.WebMap.save` — which renders in any browser with no widget manager. (A static
 *inline* representation, ``web.inline="static"``, is tracked separately in #575, not yet shipped.)
@@ -21,8 +23,8 @@ state with no live JupyterLab (#576 DoD).
 
 from __future__ import annotations
 
-import os
-import sys
+import re
+import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -46,9 +48,9 @@ _FLOORS: dict[str, str] = {
 #: manager. (It points at ``WebMap.save`` rather than ``web.inline="static"`` because the latter is #575's
 #: not-yet-shipped inline option — advising a command that raises would be worse than no advice, H1.)
 _STATIC_HINT = (
-    "To see the map regardless of the widget stack, write it to a standalone page — "
-    'WebMap.save("map.html") — and open that file in a browser; it renders with no widget manager. '
-    '(A static inline representation, web.inline="static", is tracked in #575 but not yet shipped.)'
+    "To see the map regardless of the widget stack, write it to a standalone page — call "
+    '.save("map.html") on the map (m.save("map.html")) and open that file in a browser; it renders with no '
+    'widget manager. (A static inline representation, web.inline="static", is tracked in #575 but not yet shipped.)'
 )
 
 #: Appended to a problem report: the doctor reads the *kernel's* environment, but a JupyterLab server is often
@@ -89,10 +91,6 @@ class WidgetStackState:
         disabled: JupyterLab's merged ``disabledExtensions`` mapping — key (extension name or ``name:plugin``
             id) to a bool, where ``False`` is an explicit re-enable. Not a bare name set, so the boolean and
             plugin granularity are honoured (see :func:`_is_ext_disabled`).
-        env_labextensions_dir: This interpreter's own ``share/jupyter/labextensions``, reported for context.
-            It is informational only: the doctor does **not** infer a "shadow" from a path mismatch, because
-            the search order (``prefer_environment_over_user``) and true-duplicate detection are not reliably
-            available here, and a user-only extension is not a shadow (review M1).
         jupyterlab_version: The running JupyterLab version, or ``None`` when it could not be read.
         versions: Installed versions of the kernel-side widget packages (``None`` for a missing one).
         inspect_error: ``None`` on a successful gather, else why introspection failed — which makes the report
@@ -101,7 +99,6 @@ class WidgetStackState:
 
     extensions: tuple[ExtensionInfo, ...]
     disabled: Mapping[str, bool]
-    env_labextensions_dir: str
     jupyterlab_version: str | None
     versions: dict[str, str | None]
     inspect_error: str | None = None
@@ -205,12 +202,25 @@ def _as_disabled_map(disabled: object) -> dict[str, bool]:
 
 
 def _is_ext_disabled(name: str, disabled: Mapping[str, bool]) -> bool:
-    """Whether ``name`` is disabled, the way JupyterLab's own ``_is_disabled`` reads it.
+    """Whether ``name`` is disabled, following JupyterLab's own ``_is_disabled`` semantics.
 
-    A match is the bare extension name or any ``name:plugin`` id (partition on ``":"``), and only when the
-    value is truthy — so a key present with ``False`` (an explicit re-enable) is **not** treated as disabled.
+    For each key whose value is not literally ``False``, the extension is disabled when the key — or its
+    ``name:plugin`` head — equals ``name`` or, as JupyterLab does, matches it as a **regular expression** (so a
+    pattern disable such as ``"@jupyter-widgets/.*"`` is honoured). A key present with ``False`` (an explicit
+    re-enable) never disables.
     """
-    return any(key.partition(":")[0] == name and off for key, off in disabled.items())
+    for key, off in disabled.items():
+        if off is False:
+            continue
+        head = key.partition(":")[0]
+        if head == name:
+            return True
+        try:
+            if re.match(key, name) or re.match(head, name):
+                return True
+        except re.error:
+            continue
+    return False
 
 
 def _analyze(state: WidgetStackState) -> WidgetStackReport:
@@ -278,20 +288,24 @@ def _gather() -> WidgetStackState:
             return None
 
     versions = {pkg: _ver(pkg) for pkg in _FLOORS}
-    env_dir = os.path.join(sys.prefix, "share", "jupyter", "labextensions")
 
     try:
         from jupyter_core.paths import jupyter_path
-        from jupyterlab.commands import AppOptions, _AppHandler, get_app_info
+        from jupyterlab.commands import AppOptions, _AppHandler
 
         options = AppOptions(labextensions_path=jupyter_path("labextensions"))
-        info = get_app_info(options)
-        # A second handler for the compat map is deliberate (review L3): `get_app_info` post-processes the
-        # `disabled` map that a bare `_AppHandler(...).info` lacks, so we keep it for `info`, and the compat
-        # read needs a handler of its own. `_get_extension_compat()` returns {name: [compat-error tuples]} —
-        # a non-empty list means incompatible (the `X`). It is a private API; any shape change is absorbed by
-        # the broad `except` below, which turns it into an "unchecked" report rather than a raise (review N1).
-        compat = _AppHandler(options)._get_extension_compat()
+        # One handler yields all three facts (review L1): `_ensure_disabled_info()` populates
+        # `info["disabled"]` (which a bare `.info` lacks), and `_get_extension_compat()` reuses the same
+        # registry scan — so the earlier two-handler form was an avoidable double scan. `_get_extension_compat`
+        # returns {name: [compat-error tuples]}; a non-empty list means incompatible (the `X`). These are
+        # private JupyterLab APIs; any shape change is absorbed by the broad `except` below, which turns it
+        # into an "unchecked" report rather than a raise (review N1). Reading the registry this way runs
+        # JupyterLab's own tooling, which may perform its standard one-time settings migration (module
+        # docstring, review M1); the doctor itself writes nothing.
+        handler = _AppHandler(options)
+        handler._ensure_disabled_info()
+        info = handler.info
+        compat = handler._get_extension_compat()
         federated = info.get("federated_extensions", {})
         exts = tuple(
             ExtensionInfo(
@@ -306,7 +320,6 @@ def _gather() -> WidgetStackState:
         return WidgetStackState(
             extensions=exts,
             disabled=_as_disabled_map(info.get("disabled")),
-            env_labextensions_dir=env_dir,
             jupyterlab_version=_ver("jupyterlab"),
             versions=versions,
         )
@@ -314,7 +327,6 @@ def _gather() -> WidgetStackState:
         return WidgetStackState(
             extensions=(),
             disabled={},
-            env_labextensions_dir=env_dir,
             jupyterlab_version=_ver("jupyterlab"),
             versions=versions,
             inspect_error=f"{type(error).__name__}: {error}",
@@ -325,8 +337,9 @@ def doctor() -> WidgetStackReport:
     """Diagnose the JupyterLab widget stack behind ``plot(backend="web")`` and return the verdict.
 
     Reads the extension registry and installed versions (never the browser), so it flags the on-disk causes of
-    a "model not found" failure — an incompatible or shadowing extension, a missing/disabled widget manager, a
-    below-floor package — without claiming the widget will render. It changes nothing.
+    a "model not found" failure — an incompatible extension, a missing/disabled widget manager, a below-floor
+    package — without claiming the widget will render. It does not intentionally change the environment, though
+    reading the registry uses JupyterLab's own tooling, which may run JupyterLab's one-time settings migration.
 
     Returns:
         A :class:`WidgetStackReport`; print it (``print(digitalearth.web.doctor())``) for the remedies. When the
@@ -350,7 +363,9 @@ def _warn_once() -> None:
     """Warn once per process if the widget stack looks broken — called from the web map's repr.
 
     Kept cheap and cached (the gather scans the extension registry, so it must never run per-plot), and fully
-    guarded: a diagnostic may never raise out of a ``_repr_mimebundle_``.
+    guarded: a diagnostic may never raise out of a ``_repr_mimebundle_``. The notice goes to **both**
+    :mod:`warnings` (so it surfaces in the notebook even if the host removed loguru's sinks — review L3) and
+    the loguru ``logger`` (the repo convention).
     """
     if getattr(_warn_once, "_done", False):
         return
@@ -358,8 +373,8 @@ def _warn_once() -> None:
     try:
         report = doctor()
         if report.checked and not report.ok:
-            logger.warning(
-                'plot(backend="web") may not render inline — {}', str(report)
-            )
+            message = f'plot(backend="web") may not render inline — {report}'
+            warnings.warn(message, stacklevel=2)
+            logger.warning(message)
     except Exception:  # noqa: BLE001 - the repr must survive a failing doctor
         pass

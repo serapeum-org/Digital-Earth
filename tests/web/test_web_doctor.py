@@ -25,7 +25,6 @@ def _state(exts=(), disabled=None, versions=None, jlver="4.6.6", err=None):
     return WidgetStackState(
         extensions=tuple(exts),
         disabled=dict(disabled or {}),
-        env_labextensions_dir=_ENV,
         jupyterlab_version=jlver,
         versions=versions
         or {
@@ -128,6 +127,14 @@ class TestAnalyzeFlagsTheRealFailures:
         )
         assert report.ok is True, report.problems
 
+    def test_a_regex_pattern_disable_is_detected(self):
+        """JupyterLab treats disabled keys as regexes; a pattern matching the manager is honoured (review L2)."""
+        report = _analyze(
+            _state(exts=_healthy_exts(), disabled={"@jupyter-widgets/.*": True})
+        )
+        assert report.ok is False
+        assert any("disabled" in p.lower() for p in report.problems)
+
     def test_a_below_floor_ipywidgets_is_flagged(self):
         report = _analyze(
             _state(
@@ -151,15 +158,15 @@ class TestAnalyzeFlagsTheRealFailures:
         """The advertised remedy must be a command that works now, not a set_option that raises (review H1).
 
         Test scenario:
-            The report names ``WebMap.save`` (which renders a standalone page with no widget manager today),
-            and does NOT instruct a bare ``set_option(...)`` call — ``web.inline`` is #575's unshipped option,
-            so advising it would raise ValueError.
+            The report names the instance ``.save("map.html")`` call (which renders a standalone page with no
+            widget manager today), and does NOT instruct a bare ``set_option(...)`` call — ``web.inline`` is
+            #575's unshipped option, so advising it would raise ValueError.
         """
         report = _analyze(
             _state(exts=(ExtensionInfo("anywidget", "0.11.0", _ENV, False, ""),))
         )
         text = str(report)
-        assert "WebMap.save" in text
+        assert '.save("map.html")' in text
         assert "set_option(" not in text, (
             "must not advertise a set_option call that raises today"
         )
@@ -229,8 +236,9 @@ class TestGatherDegradesGracefully:
         """When the JupyterLab registry read raises, `_gather` returns a state flagged inspect_error.
 
         Test scenario:
-            Patch `jupyterlab.commands.get_app_info` to raise; `_gather` catches it and the resulting state
-            carries an `inspect_error`, which `_analyze` turns into an unchecked (not broken) report.
+            Patch `jupyterlab.commands._AppHandler` (which `_gather` now constructs directly) to raise;
+            `_gather` catches it and the resulting state carries an `inspect_error`, which `_analyze` turns
+            into an unchecked (not broken) report.
         """
         pytest.importorskip("jupyterlab")
         import jupyterlab.commands as jc
@@ -239,7 +247,7 @@ class TestGatherDegradesGracefully:
 
         monkeypatch.setattr(
             jc,
-            "get_app_info",
+            "_AppHandler",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
         )
         state = _gather()
@@ -328,6 +336,18 @@ class TestWarnOnce:
         monkeypatch.setattr(d, "doctor", boom)
         d._warn_once()
 
+    def test_warns_via_python_warnings_when_broken(self, monkeypatch):
+        """A broken stack also raises a Python warning, so the notice survives a removed loguru sink (L3)."""
+        d = sys.modules["digitalearth.web.doctor"]
+        monkeypatch.setattr(
+            d,
+            "doctor",
+            lambda: d.WidgetStackReport(checked=True, problems=("x is incompatible",)),
+        )
+        monkeypatch.setattr(d.logger, "warning", lambda *a, **k: None)
+        with pytest.warns(UserWarning, match="may not render inline"):
+            d._warn_once()
+
 
 class TestDisabledMapHelpers:
     """`_as_disabled_map` / `_is_ext_disabled` — the disabled-extension normalisation (review M2)."""
@@ -346,3 +366,5 @@ class TestDisabledMapHelpers:
         assert d._is_ext_disabled("ext", {"ext:plugin": True}) is True
         assert d._is_ext_disabled("ext", {"ext": False}) is False
         assert d._is_ext_disabled("ext", {"other": True}) is False
+        assert d._is_ext_disabled("@scope/ext", {"@scope/.*": True}) is True
+        assert d._is_ext_disabled("ext", {"(": True}) is False
